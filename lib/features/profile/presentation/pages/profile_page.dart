@@ -22,7 +22,7 @@ class ProfilePage extends StatelessWidget {
           final user = state is AuthAuthenticated ? state.user : null;
           final displayName = user?.displayName ?? 'User';
           final email = user?.email ?? '';
-          final photoUrl = user?.photoURL;
+          final photoUrl = user?.avatarUrl;
 
           return Scaffold(
             appBar: AppBar(
@@ -44,13 +44,21 @@ class ProfilePage extends StatelessWidget {
                     // Avatar
                     CircleAvatar(
                       radius: 50,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
+                      backgroundImage:
+                          photoUrl != null ? NetworkImage(photoUrl) : null,
                       child: photoUrl == null
                           ? Text(
-                              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-                              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
+                              displayName.isNotEmpty
+                                  ? displayName[0].toUpperCase()
+                                  : 'U',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineLarge
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
                                   ),
                             )
                           : null,
@@ -60,9 +68,10 @@ class ProfilePage extends StatelessWidget {
                     // Display name
                     Text(
                       displayName,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -74,7 +83,7 @@ class ProfilePage extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // Stats
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         _StatItem(
@@ -172,7 +181,7 @@ class _SignOutButton extends StatelessWidget {
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              context.read<AuthBloc>().add(AuthSignOutRequested());
+              context.read<AuthBloc>().add(const AuthSignOutRequested());
             },
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,

@@ -80,11 +80,12 @@ class ProximityService {
   // ============== Initialization ==============
 
   /// Initializes the proximity service.
-  Future<bool> initialize(String oderId) async {
+  Future<bool> initialize(String userId) async {
     if (_state != ProximityServiceState.idle) return true;
 
     _setState(ProximityServiceState.initializing);
-    _currentUserId = oderId    _firestoreService.setCurrentUserId(userId);
+    _currentUserId = userId;
+    _firestoreService.setCurrentUserId(userId);
 
     try {
       // Initialize Bluetooth
@@ -291,7 +292,7 @@ class ProximityService {
   }
 
   /// Checks if a specific user is currently nearby.
-  bool isUserNearby(String oderId) {
+  bool isUserNearby(String userId) {
     final user = _cache.getUserById(userId);
     return user?.isCurrentlyNearby ?? false;
   }

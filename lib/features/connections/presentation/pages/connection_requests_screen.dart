@@ -144,7 +144,7 @@ class _ReceivedRequestsTab extends StatelessWidget {
         final requests = state.receivedRequests;
 
         if (requests.isEmpty) {
-          return _EmptyState(
+          return const _EmptyState(
             icon: Icons.inbox_outlined,
             title: 'No pending requests',
             message: 'When someone sends you a connection request,\nit will appear here.',
@@ -227,7 +227,7 @@ class _SentRequestsTab extends StatelessWidget {
         final requests = state.sentRequests;
 
         if (requests.isEmpty) {
-          return _EmptyState(
+          return const _EmptyState(
             icon: Icons.send_outlined,
             title: 'No pending requests',
             message: 'Requests you\'ve sent that are\nwaiting for a response will appear here.',

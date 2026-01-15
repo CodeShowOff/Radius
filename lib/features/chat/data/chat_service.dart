@@ -10,13 +10,13 @@ import 'models/conversation_model.dart';
 import 'models/message_model.dart';
 
 /// Service for managing real-time chat functionality.
-/// 
+///
 /// Optimized for low latency with:
 /// - Optimistic UI updates
 /// - Batched writes
 /// - Efficient pagination
 /// - Server timestamps
-/// 
+///
 /// Firestore Structure:
 /// ```
 /// conversations/{conversationId}
@@ -76,12 +76,15 @@ class ChatService {
         otherUserPhotoUrl: otherUserPhotoUrl,
       );
 
-      await _conversationsRef.doc(conversationId).set(conversation.toFirestore());
+      await _conversationsRef
+          .doc(conversationId)
+          .set(conversation.toFirestore());
 
       _logger.i('Created conversation: $conversationId');
       return conversation.toEntity();
     } catch (e, stack) {
-      _logger.e('Error getting/creating conversation', error: e, stackTrace: stack);
+      _logger.e('Error getting/creating conversation',
+          error: e, stackTrace: stack);
       rethrow;
     }
   }
@@ -112,12 +115,8 @@ class ChatService {
 
   /// Stream of a single conversation for real-time updates.
   Stream<Conversation?> getConversationStream(String conversationId) {
-    return _conversationsRef
-        .doc(conversationId)
-        .snapshots()
-        .map((doc) => doc.exists
-            ? ConversationModel.fromFirestore(doc).toEntity()
-            : null);
+    return _conversationsRef.doc(conversationId).snapshots().map((doc) =>
+        doc.exists ? ConversationModel.fromFirestore(doc).toEntity() : null);
   }
 
   /// Gets total unread message count across all conversations.
@@ -138,7 +137,7 @@ class ChatService {
   // ==================== MESSAGES ====================
 
   /// Sends a message with optimistic update support.
-  /// 
+  ///
   /// Returns the optimistic message immediately for UI update.
   /// The actual message is written to Firestore asynchronously.
   Future<Message> sendMessage({
@@ -163,11 +162,11 @@ class ChatService {
 
     try {
       // Write to Firestore
-      final messagesRef = _conversationsRef
-          .doc(conversationId)
-          .collection('messages');
+      final messagesRef =
+          _conversationsRef.doc(conversationId).collection('messages');
 
-      final messageData = MessageModel.fromEntity(optimisticMessage).toFirestore();
+      final messageData =
+          MessageModel.fromEntity(optimisticMessage).toFirestore();
       final docRef = await messagesRef.add(messageData);
 
       // Update conversation metadata in a batch
@@ -202,7 +201,7 @@ class ChatService {
   }
 
   /// Stream of messages for a conversation with real-time updates.
-  /// 
+  ///
   /// Messages are ordered by sentAt descending for efficient pagination.
   Stream<List<Message>> getMessagesStream(
     String conversationId, {
@@ -215,7 +214,8 @@ class ChatService {
         .limit(limit)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => MessageModel.fromFirestore(doc, conversationId).toEntity())
+            .map((doc) =>
+                MessageModel.fromFirestore(doc, conversationId).toEntity())
             .toList()
             .reversed // Return in chronological order
             .toList());
@@ -237,7 +237,8 @@ class ChatService {
           .get();
 
       return snapshot.docs
-          .map((doc) => MessageModel.fromFirestore(doc, conversationId).toEntity())
+          .map((doc) =>
+              MessageModel.fromFirestore(doc, conversationId).toEntity())
           .toList()
           .reversed
           .toList();
@@ -250,7 +251,7 @@ class ChatService {
   // ==================== READ RECEIPTS ====================
 
   /// Marks messages as read and resets unread count.
-  /// 
+  ///
   /// This is optimized to batch update multiple messages at once.
   Future<void> markMessagesAsRead({
     required String conversationId,
@@ -319,9 +320,11 @@ class ChatService {
 
       await batch.commit();
 
-      _logger.d('Marked ${undeliveredMessages.docs.length} messages as delivered');
+      _logger
+          .d('Marked ${undeliveredMessages.docs.length} messages as delivered');
     } catch (e, stack) {
-      _logger.e('Error marking messages as delivered', error: e, stackTrace: stack);
+      _logger.e('Error marking messages as delivered',
+          error: e, stackTrace: stack);
     }
   }
 
@@ -404,6 +407,59 @@ class ChatService {
       });
     } catch (e, stack) {
       _logger.e('Error updating participant info', error: e, stackTrace: stack);
+    }
+  }
+
+  // ==================== CONVENIENCE METHODS ====================
+
+  /// Marks a conversation as read for a user.
+  /// Wrapper for markMessagesAsRead.
+  Future<void> markConversationAsRead(
+      String conversationId, String userId) async {
+    await markMessagesAsRead(conversationId: conversationId, userId: userId);
+  }
+
+  /// Archives or unarchives a conversation.
+  /// Wrapper for setArchived.
+  Future<void> archiveConversation(
+    String conversationId,
+    String userId, {
+    required bool archive,
+  }) async {
+    await setArchived(
+      conversationId: conversationId,
+      userId: userId,
+      archived: archive,
+    );
+  }
+
+  /// Mutes or unmutes a conversation.
+  /// Wrapper for setMuted.
+  Future<void> muteConversation(
+    String conversationId,
+    String userId, {
+    required bool mute,
+  }) async {
+    await setMuted(
+      conversationId: conversationId,
+      userId: userId,
+      muted: mute,
+    );
+  }
+
+  /// Deletes a conversation for a user (soft delete via archive + clear).
+  Future<void> deleteConversation(String conversationId, String userId) async {
+    try {
+      // Archive the conversation for this user
+      await setArchived(
+        conversationId: conversationId,
+        userId: userId,
+        archived: true,
+      );
+      _logger.d('Conversation deleted (archived) for user: $userId');
+    } catch (e, stack) {
+      _logger.e('Error deleting conversation', error: e, stackTrace: stack);
+      rethrow;
     }
   }
 

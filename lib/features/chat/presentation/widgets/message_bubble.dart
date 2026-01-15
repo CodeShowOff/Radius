@@ -95,9 +95,7 @@ class _MessageText extends StatelessWidget {
     return Text(
       message.text,
       style: theme.textTheme.bodyMedium?.copyWith(
-        color: isMe
-            ? theme.colorScheme.onPrimary
-            : theme.colorScheme.onSurface,
+        color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
         height: 1.3,
       ),
     );
@@ -122,7 +120,7 @@ class _DeletedMessage extends StatelessWidget {
           Icons.block,
           size: 14,
           color: isMe
-              ? theme.colorScheme.onPrimary.withOpacity(0.7)
+              ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
               : theme.colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: 6),
@@ -130,7 +128,7 @@ class _DeletedMessage extends StatelessWidget {
           'Message deleted',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: isMe
-                ? theme.colorScheme.onPrimary.withOpacity(0.7)
+                ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
                 : theme.colorScheme.onSurfaceVariant,
             fontStyle: FontStyle.italic,
           ),
@@ -274,9 +272,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
               children: List.generate(3, (index) {
                 final delay = index * 0.2;
                 final value = (_controller.value + delay) % 1.0;
-                final bounce = (value < 0.5)
-                    ? value * 2
-                    : 2 - (value * 2);
+                final bounce = (value < 0.5) ? value * 2 : 2 - (value * 2);
 
                 return Container(
                   margin: EdgeInsets.only(left: index > 0 ? 4 : 0),
@@ -287,7 +283,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
                       height: 8,
                       decoration: BoxDecoration(
                         color: theme.colorScheme.onSurfaceVariant
-                            .withOpacity(0.6),
+                            .withValues(alpha: 0.6),
                         shape: BoxShape.circle,
                       ),
                     ),

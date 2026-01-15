@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -37,8 +38,8 @@ class BleScanner {
     _startStaleDeviceTimer();
 
     // Configure scan settings
-    final scanDuration = duration ??
-        Duration(seconds: BleConstants.scanDurationSeconds);
+    final scanDuration =
+        duration ?? const Duration(seconds: BleConstants.scanDurationSeconds);
 
     try {
       // Set up scan result listener
@@ -115,7 +116,7 @@ class BleScanner {
       final ourData = manufacturerData[0xFFFF];
       if (ourData != null) {
         anonymousId = BleIdGenerator.parseAnonymousIdFromManufacturerData(
-          ourData,
+          Uint8List.fromList(ourData),
         );
       }
     }
@@ -166,7 +167,7 @@ class BleScanner {
   /// Removes devices that haven't been seen recently.
   void _removeStaleDevices() {
     final now = DateTime.now();
-    final staleThreshold = Duration(
+    const staleThreshold = Duration(
       seconds: BleConstants.deviceStaleTimeoutSeconds,
     );
 

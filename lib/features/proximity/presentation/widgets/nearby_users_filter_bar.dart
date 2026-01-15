@@ -81,8 +81,8 @@ class _FilterChip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? theme.colorScheme.onPrimary.withOpacity(0.2)
-                    : theme.colorScheme.primary.withOpacity(0.1),
+                    ? theme.colorScheme.onPrimary.withValues(alpha: 0.2)
+                    : theme.colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

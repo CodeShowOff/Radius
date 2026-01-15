@@ -122,7 +122,7 @@ class ConversationModel extends Conversation {
       participantIds: participants,
       createdAt: DateTime.now(),
       unreadCounts: {currentUserId: 0, otherUserId: 0},
-      mutedBy: {},
+      mutedBy: const {},
       participantInfo: {
         currentUserId: ParticipantInfo(
           displayName: currentUserName,
@@ -133,7 +133,7 @@ class ConversationModel extends Conversation {
           photoUrl: otherUserPhotoUrl,
         ),
       },
-      archivedBy: {},
+      archivedBy: const {},
     );
   }
 

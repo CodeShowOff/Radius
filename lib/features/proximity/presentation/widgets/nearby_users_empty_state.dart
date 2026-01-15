@@ -143,7 +143,7 @@ class _RadarAnimationState extends State<_RadarAnimation>
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: theme.colorScheme.primary
-                          .withOpacity(_opacityAnimation.value),
+                          .withValues(alpha: _opacityAnimation.value),
                       width: 2,
                     ),
                   ),
@@ -166,7 +166,8 @@ class _RadarAnimationState extends State<_RadarAnimation>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: theme.colorScheme.primary.withOpacity(opacity),
+                      color:
+                          theme.colorScheme.primary.withValues(alpha: opacity),
                       width: 2,
                     ),
                   ),
@@ -207,7 +208,7 @@ class _Tips extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -230,15 +231,15 @@ class _Tips extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _TipItem(
+          const _TipItem(
             icon: Icons.bluetooth,
             text: 'Make sure Bluetooth is enabled',
           ),
-          _TipItem(
+          const _TipItem(
             icon: Icons.location_on_outlined,
             text: 'Location services help improve detection',
           ),
-          _TipItem(
+          const _TipItem(
             icon: Icons.visibility,
             text: 'Others need to have visibility enabled',
           ),

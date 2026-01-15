@@ -328,7 +328,7 @@ class RequestExpirationBanner extends StatelessWidget {
       bgColor = theme.colorScheme.tertiaryContainer;
     } else if (timeLeft.inHours >= 1) {
       text = 'Expires in ${timeLeft.inHours}h';
-      bgColor = theme.colorScheme.errorContainer.withOpacity(0.5);
+      bgColor = theme.colorScheme.errorContainer.withValues(alpha: 0.5);
     } else {
       text = 'Expires soon';
       bgColor = theme.colorScheme.errorContainer;

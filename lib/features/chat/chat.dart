@@ -1,6 +1,7 @@
 /// Chat feature barrel file.
 /// 
 /// Export all chat-related classes for easy importing.
+library;
 
 // Domain entities
 export 'domain/entities/message.dart';

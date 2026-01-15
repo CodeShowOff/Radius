@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../core/services/bluetooth/ble_device.dart';
 import '../domain/entities/nearby_user.dart';
 
 /// Handles Firestore operations for proximity and encounters.
@@ -27,8 +26,9 @@ class ProximityFirestoreService {
   }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   /// Sets the current user ID.
-  void setCurrentUserId(String oderId) {
-    _currentUserId = oderId  }
+  void setCurrentUserId(String userId) {
+    _currentUserId = userId;
+  }
 
   // ============== BLE ID Mapping ==============
 

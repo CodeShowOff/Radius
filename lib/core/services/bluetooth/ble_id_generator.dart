@@ -59,7 +59,7 @@ class BleIdGenerator {
   void _startRotationTimer() {
     _rotationTimer?.cancel();
     _rotationTimer = Timer.periodic(
-      Duration(minutes: BleConstants.idRotationMinutes),
+      const Duration(minutes: BleConstants.idRotationMinutes),
       (_) => _rotateId(),
     );
   }
@@ -72,7 +72,7 @@ class BleIdGenerator {
   /// Gets time until next rotation.
   Duration get timeUntilNextRotation {
     final elapsed = DateTime.now().difference(_lastRotation);
-    final rotationDuration = Duration(minutes: BleConstants.idRotationMinutes);
+    const rotationDuration = Duration(minutes: BleConstants.idRotationMinutes);
     final remaining = rotationDuration - elapsed;
     return remaining.isNegative ? Duration.zero : remaining;
   }

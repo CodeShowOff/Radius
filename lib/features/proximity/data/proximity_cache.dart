@@ -30,7 +30,7 @@ class ProximityCache {
   final Duration staleThreshold;
 
   /// Callback when a user becomes stale (for encounter logging).
-  final void Function(NearbyUser user, int peakRssi, BleProximity closestProximity)?
+  void Function(NearbyUser user, int peakRssi, BleProximity closestProximity)?
       onUserStale;
 
   ProximityCache({
@@ -50,11 +50,11 @@ class ProximityCache {
   int get userCount => _userCache.length;
 
   /// Gets a user by Firebase user ID.
-  NearbyUser? getUserById(String oderId) => _userCache[userId];
+  NearbyUser? getUserById(String userId) => _userCache[userId];
 
   /// Gets a user by BLE anonymous ID.
   NearbyUser? getUserByBleId(String bleId) {
-    final oderId = _bleToUserIdMap[bleId];
+    final userId = _bleToUserIdMap[bleId];
     if (userId == null) return null;
     return _userCache[userId];
   }
@@ -66,14 +66,15 @@ class ProximityCache {
   bool isBleIdKnown(String bleId) => _bleToUserIdMap.containsKey(bleId);
 
   /// Adds or updates a BLE ID to user ID mapping.
-  void mapBleIdToUserId(String bleId, String oderId) {
+  void mapBleIdToUserId(String bleId, String userId) {
     // Remove old BLE ID mapping if user had a different one
     final oldBleId = _userIdToBleMap[userId];
     if (oldBleId != null && oldBleId != bleId) {
       _bleToUserIdMap.remove(oldBleId);
     }
 
-    _bleToUserIdMap[bleId] = oderId    _userIdToBleMap[userId] = bleId;
+    _bleToUserIdMap[bleId] = userId;
+    _userIdToBleMap[userId] = bleId;
   }
 
   /// Adds or updates a nearby user in the cache.
@@ -108,7 +109,7 @@ class ProximityCache {
   }
 
   /// Removes a user from the cache.
-  void removeUser(String oderId) {
+  void removeUser(String userId) {
     final user = _userCache.remove(userId);
     if (user != null) {
       _bleToUserIdMap.remove(user.bleAnonymousId);
@@ -126,7 +127,7 @@ class ProximityCache {
 
   /// Updates a user with new BLE detection data.
   void updateUserDetection(
-    String oderId, {
+    String userId, {
     required String bleAnonymousId,
     required int rssi,
     required BleProximity proximity,
@@ -167,8 +168,7 @@ class ProximityCache {
     // Log encounters for all users before clearing
     for (final user in _userCache.values) {
       final peakRssi = _peakRssi[user.userId] ?? user.rssi;
-      final closestProximity =
-          _closestProximity[user.userId] ?? user.proximity;
+      final closestProximity = _closestProximity[user.userId] ?? user.proximity;
       onUserStale?.call(user, peakRssi, closestProximity);
     }
 
@@ -200,7 +200,7 @@ class ProximityCache {
       }
     }
 
-    for (final oderId in staleUserIds) {
+    for (final userId in staleUserIds) {
       removeUser(userId);
     }
   }

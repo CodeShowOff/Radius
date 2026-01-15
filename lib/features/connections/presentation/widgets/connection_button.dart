@@ -27,8 +27,7 @@ class ConnectionButton extends StatelessWidget {
     return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
       builder: (context, state) {
         final connectionState = state.getStateForUser(userId);
-        final isLoading =
-            state.isActionLoading && state.processingId == userId;
+        final isLoading = state.isActionLoading && state.processingId == userId;
 
         // Check if there's a pending request from this user
         final receivedRequest = state.getReceivedRequestFrom(userId);
@@ -49,7 +48,7 @@ class ConnectionButton extends StatelessWidget {
   Widget _buildButton({
     required BuildContext context,
     required ConnectionBlocState state,
-    required ConnectionState connectionState,
+    required UserConnectionState connectionState,
     required bool isLoading,
     required bool receivedRequest,
     Object? sentRequest,
@@ -72,7 +71,8 @@ class ConnectionButton extends StatelessWidget {
     }
 
     // If we received a request from this user, show accept/decline
-    if (receivedRequest || connectionState == ConnectionState.requestReceived) {
+    if (receivedRequest ||
+        connectionState == UserConnectionState.requestReceived) {
       return _RequestReceivedButton(
         userId: userId,
         compact: compact,
@@ -80,26 +80,26 @@ class ConnectionButton extends StatelessWidget {
     }
 
     return switch (connectionState) {
-      ConnectionState.notConnected => _ConnectButton(
+      UserConnectionState.notConnected => _ConnectButton(
           userId: userId,
           displayName: displayName,
           photoUrl: photoUrl,
           source: source,
           compact: compact,
         ),
-      ConnectionState.requestSent => _RequestSentButton(
+      UserConnectionState.requestSent => _RequestSentButton(
           userId: userId,
           compact: compact,
         ),
-      ConnectionState.requestReceived => _RequestReceivedButton(
+      UserConnectionState.requestReceived => _RequestReceivedButton(
           userId: userId,
           compact: compact,
         ),
-      ConnectionState.connected => _ConnectedButton(
+      UserConnectionState.connected => _ConnectedButton(
           userId: userId,
           compact: compact,
         ),
-      ConnectionState.blocked => _BlockedButton(
+      UserConnectionState.blocked => _BlockedButton(
           userId: userId,
           compact: compact,
         ),

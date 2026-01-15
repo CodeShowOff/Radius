@@ -31,7 +31,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authState = context.read<AuthBloc>().state;
       if (authState is AuthAuthenticated) {
-        context.read<ProfileBloc>().add(ProfileLoadRequested(authState.user.id));
+        context
+            .read<ProfileBloc>()
+            .add(ProfileLoadRequested(authState.user.id));
       }
     });
   }
@@ -80,7 +82,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Discard changes?'),
-        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        content: const Text(
+            'You have unsaved changes. Are you sure you want to leave?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -297,7 +300,8 @@ class _ProfilePhotoSection extends StatelessWidget {
             child: CircleAvatar(
               radius: 60,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+              backgroundImage:
+                  photoUrl != null ? NetworkImage(photoUrl!) : null,
               child: photoUrl == null
                   ? Icon(
                       Icons.person,
@@ -374,7 +378,10 @@ class _ProfileTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         filled: true,
-        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        fillColor: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.3),
       ),
     );
   }
@@ -451,7 +458,10 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+      color: Theme.of(context)
+          .colorScheme
+          .secondaryContainer
+          .withValues(alpha: 0.5),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -477,7 +487,9 @@ class _InfoCard extends StatelessWidget {
                   Text(
                     'A complete profile helps others connect with you. Add a photo and bio to make a great first impression!',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSecondaryContainer,
                         ),
                   ),
                 ],

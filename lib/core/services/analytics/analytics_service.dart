@@ -111,7 +111,7 @@ class AnalyticsService {
       name: AnalyticsEvents.messageSent,
       parameters: {
         'conversation_id': conversationId,
-        'message_length': messageLength,
+        if (messageLength != null) 'message_length': messageLength,
       },
     );
   }
@@ -200,7 +200,7 @@ class AnalyticsService {
   /// Log a custom event.
   Future<void> logEvent({
     required String name,
-    Map<String, dynamic>? parameters,
+    Map<String, Object>? parameters,
   }) async {
     await _analytics.logEvent(name: name, parameters: parameters);
   }

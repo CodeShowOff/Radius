@@ -181,11 +181,11 @@ class BluetoothService {
   void _startIntervalScanning() {
     _scanIntervalTimer?.cancel();
     _scanIntervalTimer = Timer.periodic(
-      Duration(seconds: BleConstants.scanIntervalSeconds),
+      const Duration(seconds: BleConstants.scanIntervalSeconds),
       (_) async {
         if (_state == BluetoothServiceState.active) {
           await _scanner.startScan(
-            duration: Duration(seconds: BleConstants.scanDurationSeconds),
+            duration: const Duration(seconds: BleConstants.scanDurationSeconds),
           );
         }
       },

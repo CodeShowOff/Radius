@@ -24,16 +24,15 @@ import 'routes.dart';
 
 /// Analytics observer for tracking screen views.
 /// Only active when analytics is enabled in the current environment.
-final _analyticsObserver = AppConfig.enableAnalytics
-    ? getIt<AnalyticsService>().observer
-    : null;
+final _analyticsObserver =
+    AppConfig.enableAnalytics ? getIt<AnalyticsService>().observer : null;
 
 /// Application router configuration using GoRouter.
-/// 
+///
 /// Defines all navigation routes and their corresponding pages.
 final GoRouter appRouter = GoRouter(
   initialLocation: Routes.splash,
-  debugLogDiagnostics: AppConfig.enableLogging,
+  debugLogDiagnostics: AppConfig.enableDebugLogging,
   observers: [
     if (_analyticsObserver != null) _analyticsObserver!,
   ],
@@ -44,7 +43,7 @@ final GoRouter appRouter = GoRouter(
       name: 'splash',
       builder: (context, state) => const SplashPage(),
     ),
-    
+
     // Authentication routes
     GoRoute(
       path: Routes.login,
@@ -56,7 +55,7 @@ final GoRouter appRouter = GoRouter(
       name: 'register',
       builder: (context, state) => const RegisterPage(),
     ),
-    
+
     // Main app routes (authenticated)
     GoRoute(
       path: Routes.home,
@@ -84,7 +83,7 @@ final GoRouter appRouter = GoRouter(
         child: const EditProfilePage(),
       ),
     ),
-    
+
     // Connection routes
     GoRoute(
       path: Routes.connections,
@@ -102,7 +101,7 @@ final GoRouter appRouter = GoRouter(
         child: const ConnectionRequestsScreen(),
       ),
     ),
-    
+
     // Chat routes
     GoRoute(
       path: Routes.conversations,
@@ -111,15 +110,17 @@ final GoRouter appRouter = GoRouter(
         // currentUserId should be passed via extra or retrieved from auth state
         final extra = state.extra as Map<String, dynamic>?;
         final currentUserId = extra?['currentUserId'] as String? ?? '';
-        
+
         return BlocProvider(
           create: (_) => getIt<ConversationsBloc>(),
           child: ConversationsScreen(
             currentUserId: currentUserId,
             onConversationTap: (conversation) {
-              final otherUserId = conversation.getOtherParticipantId(currentUserId);
-              final otherInfo = conversation.getOtherParticipantInfo(currentUserId);
-              
+              final otherUserId =
+                  conversation.getOtherParticipantId(currentUserId);
+              final otherInfo =
+                  conversation.getOtherParticipantInfo(currentUserId);
+
               context.push(
                 Routes.chatWith(conversation.id),
                 extra: {
@@ -140,7 +141,7 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final conversationId = state.pathParameters['conversationId']!;
         final extra = state.extra as Map<String, dynamic>?;
-        
+
         return BlocProvider(
           create: (_) => getIt<ChatBloc>(),
           child: ChatScreen(
@@ -154,13 +155,13 @@ final GoRouter appRouter = GoRouter(
       },
     ),
   ],
-  
+
   // TODO: Add redirect logic for authentication
   // redirect: (context, state) {
   //   final isAuthenticated = // check auth state
-  //   final isAuthRoute = state.matchedLocation == Routes.login || 
+  //   final isAuthRoute = state.matchedLocation == Routes.login ||
   //                       state.matchedLocation == Routes.register;
-  //   
+  //
   //   if (!isAuthenticated && !isAuthRoute) {
   //     return Routes.login;
   //   }

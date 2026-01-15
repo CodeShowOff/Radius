@@ -26,7 +26,7 @@ class ConnectionBlocState extends Equatable {
   final List<ConnectionRequest> sentRequests;
 
   /// Connection states with specific users (cached for UI).
-  final Map<String, ConnectionState> userConnectionStates;
+  final Map<String, UserConnectionState> userConnectionStates;
 
   /// Error message if any.
   final String? errorMessage;
@@ -53,8 +53,9 @@ class ConnectionBlocState extends Equatable {
   int get pendingRequestCount => receivedRequests.length;
 
   /// Gets connection state for a specific user.
-  ConnectionState getStateForUser(String otherUserId) {
-    return userConnectionStates[otherUserId] ?? ConnectionState.notConnected;
+  UserConnectionState getStateForUser(String otherUserId) {
+    return userConnectionStates[otherUserId] ??
+        UserConnectionState.notConnected;
   }
 
   /// Checks if connected with a user.
@@ -95,7 +96,7 @@ class ConnectionBlocState extends Equatable {
     List<Connection>? connections,
     List<ConnectionRequest>? receivedRequests,
     List<ConnectionRequest>? sentRequests,
-    Map<String, ConnectionState>? userConnectionStates,
+    Map<String, UserConnectionState>? userConnectionStates,
     String? errorMessage,
     bool? isActionLoading,
     String? processingId,

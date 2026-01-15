@@ -38,13 +38,13 @@ enum ConnectionErrorType {
 }
 
 /// Service for managing user connections via Firestore.
-/// 
+///
 /// Implements:
 /// - Mutual consent connection system
 /// - Rate limiting for spam prevention
 /// - Cooldown periods for rejected requests
 /// - Connection blocking
-/// 
+///
 /// Firestore Collections:
 /// - `connections` - Mutual connections between users
 /// - `connection_requests` - Pending/historical requests
@@ -70,7 +70,7 @@ class ConnectionService {
   // ==================== CONNECTION REQUESTS ====================
 
   /// Sends a connection request to another user.
-  /// 
+  ///
   /// Validates:
   /// - Not self-request
   /// - Not already connected
@@ -137,10 +137,10 @@ class ConnectionService {
         if (existingRequest.status == ConnectionRequestStatus.rejected &&
             existingRequest.respondedAt != null) {
           final cooldownEnd = existingRequest.respondedAt!.add(
-            Duration(hours: ConnectionRateLimits.rejectionCooldownHours),
+            const Duration(hours: ConnectionRateLimits.rejectionCooldownHours),
           );
           if (DateTime.now().isBefore(cooldownEnd)) {
-            return ConnectionFailure(
+            return const ConnectionFailure(
               'Please wait before sending another request',
               ConnectionErrorType.cooldownActive,
             );
@@ -164,7 +164,7 @@ class ConnectionService {
         status: ConnectionRequestStatus.pending,
         sentAt: now,
         expiresAt: now.add(
-          Duration(days: ConnectionRateLimits.requestExpirationDays),
+          const Duration(days: ConnectionRateLimits.requestExpirationDays),
         ),
         message: message,
         source: source,
@@ -179,7 +179,8 @@ class ConnectionService {
       _logger.i('Connection request sent: $senderId -> $receiverId');
       return ConnectionSuccess(request.toEntity());
     } catch (e, stack) {
-      _logger.e('Error sending connection request', error: e, stackTrace: stack);
+      _logger.e('Error sending connection request',
+          error: e, stackTrace: stack);
       return ConnectionFailure(
         'Failed to send request: ${e.toString()}',
         ConnectionErrorType.networkError,
@@ -263,7 +264,8 @@ class ConnectionService {
           'respondedAt': Timestamp.fromDate(now),
         });
 
-        _logger.i('Connection accepted: ${request.senderId} <-> ${request.receiverId}');
+        _logger.i(
+            'Connection accepted: ${request.senderId} <-> ${request.receiverId}');
         return ConnectionSuccess(connection.toEntity());
       });
     } catch (e, stack) {
@@ -305,7 +307,8 @@ class ConnectionService {
         'respondedAt': Timestamp.fromDate(DateTime.now()),
       });
 
-      _logger.i('Connection rejected: ${request.senderId} -> ${request.receiverId}');
+      _logger.i(
+          'Connection rejected: ${request.senderId} -> ${request.receiverId}');
       return const ConnectionSuccess(null);
     } catch (e, stack) {
       _logger.e('Error rejecting request', error: e, stackTrace: stack);
@@ -354,7 +357,8 @@ class ConnectionService {
         'respondedAt': Timestamp.fromDate(DateTime.now()),
       });
 
-      _logger.i('Connection cancelled: ${request.senderId} -> ${request.receiverId}');
+      _logger.i(
+          'Connection cancelled: ${request.senderId} -> ${request.receiverId}');
       return const ConnectionSuccess(null);
     } catch (e, stack) {
       _logger.e('Error cancelling request', error: e, stackTrace: stack);
@@ -571,7 +575,7 @@ class ConnectionService {
   // ==================== QUERIES ====================
 
   /// Gets connection status between current user and another user.
-  Future<ConnectionState> getConnectionState({
+  Future<UserConnectionState> getConnectionState({
     required String currentUserId,
     required String otherUserId,
   }) async {
@@ -580,9 +584,9 @@ class ConnectionService {
       final connection = await getConnection(currentUserId, otherUserId);
       if (connection != null) {
         return switch (connection.status) {
-          ConnectionStatus.connected => ConnectionState.connected,
-          ConnectionStatus.blocked => ConnectionState.blocked,
-          ConnectionStatus.disconnected => ConnectionState.notConnected,
+          ConnectionStatus.connected => UserConnectionState.connected,
+          ConnectionStatus.blocked => UserConnectionState.blocked,
+          ConnectionStatus.disconnected => UserConnectionState.notConnected,
         };
       }
 
@@ -595,7 +599,7 @@ class ConnectionService {
           .get();
 
       if (sentRequest.docs.isNotEmpty) {
-        return ConnectionState.requestSent;
+        return UserConnectionState.requestSent;
       }
 
       // Check for pending request from other user
@@ -607,13 +611,13 @@ class ConnectionService {
           .get();
 
       if (receivedRequest.docs.isNotEmpty) {
-        return ConnectionState.requestReceived;
+        return UserConnectionState.requestReceived;
       }
 
-      return ConnectionState.notConnected;
+      return UserConnectionState.notConnected;
     } catch (e, stack) {
       _logger.e('Error getting connection state', error: e, stackTrace: stack);
-      return ConnectionState.notConnected;
+      return UserConnectionState.notConnected;
     }
   }
 
@@ -801,7 +805,7 @@ class ConnectionService {
 }
 
 /// Represents the connection state between two users.
-enum ConnectionState {
+enum UserConnectionState {
   /// No connection or request exists.
   notConnected,
 

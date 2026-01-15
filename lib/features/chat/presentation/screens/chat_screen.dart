@@ -38,12 +38,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Open the chat
     context.read<ChatBloc>().add(ChatOpen(
-      conversationId: widget.conversationId,
-      currentUserId: widget.currentUserId,
-      otherUserId: widget.otherUserId,
-      otherUserName: widget.otherUserName,
-      otherUserPhotoUrl: widget.otherUserPhotoUrl,
-    ));
+          conversationId: widget.conversationId,
+          currentUserId: widget.currentUserId,
+          otherUserId: widget.otherUserId,
+          otherUserName: widget.otherUserName,
+          otherUserPhotoUrl: widget.otherUserPhotoUrl,
+        ));
   }
 
   @override
@@ -68,7 +68,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendMessage(String text) {
-    context.read<ChatBloc>().add(ChatSendMessage(text: text));
+    context.read<ChatBloc>().add(ChatSendMessage(text));
 
     // Scroll to bottom after sending
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -83,7 +83,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onTypingChanged(bool isTyping) {
-    context.read<ChatBloc>().add(ChatSetTyping(isTyping: isTyping));
+    context.read<ChatBloc>().add(ChatSetTyping(isTyping));
   }
 
   @override
@@ -126,12 +126,12 @@ class _ChatScreenState extends State<ChatScreen> {
                         ElevatedButton(
                           onPressed: () {
                             context.read<ChatBloc>().add(ChatOpen(
-                              conversationId: widget.conversationId,
-                              currentUserId: widget.currentUserId,
-                              otherUserId: widget.otherUserId,
-                              otherUserName: widget.otherUserName,
-                              otherUserPhotoUrl: widget.otherUserPhotoUrl,
-                            ));
+                                  conversationId: widget.conversationId,
+                                  currentUserId: widget.currentUserId,
+                                  otherUserId: widget.otherUserId,
+                                  otherUserName: widget.otherUserName,
+                                  otherUserPhotoUrl: widget.otherUserPhotoUrl,
+                                ));
                           },
                           child: const Text('Retry'),
                         ),
@@ -143,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 return _MessagesList(
                   messages: state.allMessages,
                   currentUserId: state.currentUserId ?? widget.currentUserId,
-                  isTyping: state.isOtherTyping,
+                  isTyping: state.isOtherUserTyping,
                   hasMore: state.hasMore,
                   scrollController: _scrollController,
                 );
@@ -277,15 +277,15 @@ class _MessagesList extends StatelessWidget {
             Text(
               'No messages yet',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               'Say hello! 👋',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
             ),
           ],
         ),

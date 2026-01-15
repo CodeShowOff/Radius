@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'ble_constants.dart';
 import 'ble_id_generator.dart';

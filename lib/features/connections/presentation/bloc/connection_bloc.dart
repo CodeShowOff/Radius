@@ -110,8 +110,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       case ConnectionSuccess<ConnectionRequest>():
         // Update connection state for this user
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[event.receiverId] = ConnectionState.requestSent;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[event.receiverId] = UserConnectionState.requestSent;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -154,8 +154,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
 
         // Update connection state for this user
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[request.senderId] = ConnectionState.connected;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[request.senderId] = UserConnectionState.connected;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -230,8 +230,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
 
         // Update connection state for this user
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[request.receiverId] = ConnectionState.notConnected;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[request.receiverId] = UserConnectionState.notConnected;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -276,8 +276,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
 
         // Update connection state for this user
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[otherUserId] = ConnectionState.notConnected;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[otherUserId] = UserConnectionState.notConnected;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -313,8 +313,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     switch (result) {
       case ConnectionSuccess<void>():
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[event.userId] = ConnectionState.blocked;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[event.userId] = UserConnectionState.blocked;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -350,8 +350,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     switch (result) {
       case ConnectionSuccess<void>():
         final updatedStates =
-            Map<String, ConnectionState>.from(state.userConnectionStates);
-        updatedStates[event.userId] = ConnectionState.notConnected;
+            Map<String, UserConnectionState>.from(state.userConnectionStates);
+        updatedStates[event.userId] = UserConnectionState.notConnected;
 
         emit(state.copyWith(
           isActionLoading: false,
@@ -380,7 +380,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     );
 
     final updatedStates =
-        Map<String, ConnectionState>.from(state.userConnectionStates);
+        Map<String, UserConnectionState>.from(state.userConnectionStates);
     updatedStates[event.otherUserId] = connectionState;
 
     emit(state.copyWith(userConnectionStates: updatedStates));

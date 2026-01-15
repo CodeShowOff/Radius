@@ -136,7 +136,7 @@ class _ConnectionTile extends StatelessWidget {
                 ),
               ),
       ),
-      title: Text(displayName),
+      title: const Text(displayName),
       subtitle: Text(
         'Connected ${_formatDate(connection.connectedAt)}',
         style: theme.textTheme.bodySmall?.copyWith(
