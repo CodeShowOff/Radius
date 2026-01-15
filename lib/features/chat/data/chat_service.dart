@@ -1,0 +1,458 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
+
+import '../domain/entities/conversation.dart';
+import '../domain/entities/message.dart';
+import 'models/conversation_model.dart';
+import 'models/message_model.dart';
+
+/// Service for managing real-time chat functionality.
+/// 
+/// Optimized for low latency with:
+/// - Optimistic UI updates
+/// - Batched writes
+/// - Efficient pagination
+/// - Server timestamps
+/// 
+/// Firestore Structure:
+/// ```
+/// conversations/{conversationId}
+///   - metadata (participants, last message, unread counts)
+///   /messages/{messageId}
+///     - message data
+/// ```
+class ChatService {
+  final FirebaseFirestore _firestore;
+  final Logger _logger;
+  final Uuid _uuid;
+
+  // Collection references
+  late final CollectionReference<Map<String, dynamic>> _conversationsRef;
+
+  // Message pagination config
+  static const int _messagesPerPage = 50;
+
+  ChatService({
+    FirebaseFirestore? firestore,
+    Logger? logger,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _logger = logger ?? Logger(),
+        _uuid = const Uuid() {
+    _conversationsRef = _firestore.collection('conversations');
+  }
+
+  // ==================== CONVERSATIONS ====================
+
+  /// Gets or creates a conversation between two users.
+  Future<Conversation> getOrCreateConversation({
+    required String currentUserId,
+    required String otherUserId,
+    required String currentUserName,
+    required String otherUserName,
+    String? currentUserPhotoUrl,
+    String? otherUserPhotoUrl,
+  }) async {
+    final conversationId =
+        Conversation.createConversationId(currentUserId, otherUserId);
+
+    try {
+      // Check if conversation exists
+      final doc = await _conversationsRef.doc(conversationId).get();
+
+      if (doc.exists) {
+        return ConversationModel.fromFirestore(doc).toEntity();
+      }
+
+      // Create new conversation
+      final conversation = ConversationModel.create(
+        currentUserId: currentUserId,
+        otherUserId: otherUserId,
+        currentUserName: currentUserName,
+        otherUserName: otherUserName,
+        currentUserPhotoUrl: currentUserPhotoUrl,
+        otherUserPhotoUrl: otherUserPhotoUrl,
+      );
+
+      await _conversationsRef.doc(conversationId).set(conversation.toFirestore());
+
+      _logger.i('Created conversation: $conversationId');
+      return conversation.toEntity();
+    } catch (e, stack) {
+      _logger.e('Error getting/creating conversation', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  /// Stream of user's conversations ordered by last message.
+  Stream<List<Conversation>> getConversationsStream(String userId) {
+    return _conversationsRef
+        .where('participantIds', arrayContains: userId)
+        .orderBy('lastMessageAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => ConversationModel.fromFirestore(doc).toEntity())
+            .where((c) => !c.isArchivedBy(userId))
+            .toList());
+  }
+
+  /// Gets a single conversation.
+  Future<Conversation?> getConversation(String conversationId) async {
+    try {
+      final doc = await _conversationsRef.doc(conversationId).get();
+      if (!doc.exists) return null;
+      return ConversationModel.fromFirestore(doc).toEntity();
+    } catch (e, stack) {
+      _logger.e('Error getting conversation', error: e, stackTrace: stack);
+      return null;
+    }
+  }
+
+  /// Stream of a single conversation for real-time updates.
+  Stream<Conversation?> getConversationStream(String conversationId) {
+    return _conversationsRef
+        .doc(conversationId)
+        .snapshots()
+        .map((doc) => doc.exists
+            ? ConversationModel.fromFirestore(doc).toEntity()
+            : null);
+  }
+
+  /// Gets total unread message count across all conversations.
+  Stream<int> getTotalUnreadCountStream(String userId) {
+    return _conversationsRef
+        .where('participantIds', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
+      int total = 0;
+      for (final doc in snapshot.docs) {
+        final conversation = ConversationModel.fromFirestore(doc);
+        total += conversation.getUnreadCount(userId);
+      }
+      return total;
+    });
+  }
+
+  // ==================== MESSAGES ====================
+
+  /// Sends a message with optimistic update support.
+  /// 
+  /// Returns the optimistic message immediately for UI update.
+  /// The actual message is written to Firestore asynchronously.
+  Future<Message> sendMessage({
+    required String conversationId,
+    required String senderId,
+    required String text,
+    String? recipientId,
+  }) async {
+    final localId = _uuid.v4();
+    final now = DateTime.now();
+
+    // Create optimistic message for immediate UI
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      text: text.trim(),
+      sentAt: now,
+      status: MessageStatus.sending,
+      localId: localId,
+    );
+
+    try {
+      // Write to Firestore
+      final messagesRef = _conversationsRef
+          .doc(conversationId)
+          .collection('messages');
+
+      final messageData = MessageModel.fromEntity(optimisticMessage).toFirestore();
+      final docRef = await messagesRef.add(messageData);
+
+      // Update conversation metadata in a batch
+      final batch = _firestore.batch();
+
+      // Update last message info
+      batch.update(_conversationsRef.doc(conversationId), {
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastMessageText': text.trim().length > 100
+            ? '${text.trim().substring(0, 100)}...'
+            : text.trim(),
+        'lastMessageSenderId': senderId,
+        // Increment unread count for recipient
+        if (recipientId != null)
+          'unreadCounts.$recipientId': FieldValue.increment(1),
+      });
+
+      await batch.commit();
+
+      _logger.d('Message sent: ${docRef.id}');
+
+      // Return with real ID
+      return optimisticMessage.copyWith(
+        id: docRef.id,
+        status: MessageStatus.sent,
+      );
+    } catch (e, stack) {
+      _logger.e('Error sending message', error: e, stackTrace: stack);
+      // Return failed message
+      return optimisticMessage.copyWith(status: MessageStatus.failed);
+    }
+  }
+
+  /// Stream of messages for a conversation with real-time updates.
+  /// 
+  /// Messages are ordered by sentAt descending for efficient pagination.
+  Stream<List<Message>> getMessagesStream(
+    String conversationId, {
+    int limit = _messagesPerPage,
+  }) {
+    return _conversationsRef
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('sentAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => MessageModel.fromFirestore(doc, conversationId).toEntity())
+            .toList()
+            .reversed // Return in chronological order
+            .toList());
+  }
+
+  /// Loads older messages for pagination.
+  Future<List<Message>> loadMoreMessages(
+    String conversationId, {
+    required DateTime before,
+    int limit = _messagesPerPage,
+  }) async {
+    try {
+      final snapshot = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('sentAt', descending: true)
+          .where('sentAt', isLessThan: Timestamp.fromDate(before))
+          .limit(limit)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => MessageModel.fromFirestore(doc, conversationId).toEntity())
+          .toList()
+          .reversed
+          .toList();
+    } catch (e, stack) {
+      _logger.e('Error loading more messages', error: e, stackTrace: stack);
+      return [];
+    }
+  }
+
+  // ==================== READ RECEIPTS ====================
+
+  /// Marks messages as read and resets unread count.
+  /// 
+  /// This is optimized to batch update multiple messages at once.
+  Future<void> markMessagesAsRead({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      final batch = _firestore.batch();
+
+      // Reset unread count for this user
+      batch.update(_conversationsRef.doc(conversationId), {
+        'unreadCounts.$userId': 0,
+      });
+
+      // Get unread messages sent by the other user
+      final unreadMessages = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .where('senderId', isNotEqualTo: userId)
+          .where('readAt', isNull: true)
+          .limit(100) // Batch limit
+          .get();
+
+      final now = Timestamp.now();
+
+      for (final doc in unreadMessages.docs) {
+        batch.update(doc.reference, {
+          'readAt': now,
+          'status': MessageStatus.read.name,
+        });
+      }
+
+      await batch.commit();
+
+      _logger.d('Marked ${unreadMessages.docs.length} messages as read');
+    } catch (e, stack) {
+      _logger.e('Error marking messages as read', error: e, stackTrace: stack);
+    }
+  }
+
+  /// Marks messages as delivered when app opens conversation.
+  Future<void> markMessagesAsDelivered({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      // Get undelivered messages sent by the other user
+      final undeliveredMessages = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .where('senderId', isNotEqualTo: userId)
+          .where('deliveredAt', isNull: true)
+          .limit(100)
+          .get();
+
+      if (undeliveredMessages.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      final now = Timestamp.now();
+
+      for (final doc in undeliveredMessages.docs) {
+        batch.update(doc.reference, {
+          'deliveredAt': now,
+          'status': MessageStatus.delivered.name,
+        });
+      }
+
+      await batch.commit();
+
+      _logger.d('Marked ${undeliveredMessages.docs.length} messages as delivered');
+    } catch (e, stack) {
+      _logger.e('Error marking messages as delivered', error: e, stackTrace: stack);
+    }
+  }
+
+  // ==================== CONVERSATION ACTIONS ====================
+
+  /// Mutes/unmutes a conversation for a user.
+  Future<void> setMuted({
+    required String conversationId,
+    required String userId,
+    required bool muted,
+  }) async {
+    try {
+      await _conversationsRef.doc(conversationId).update({
+        'mutedBy.$userId': muted,
+      });
+    } catch (e, stack) {
+      _logger.e('Error setting muted status', error: e, stackTrace: stack);
+    }
+  }
+
+  /// Archives/unarchives a conversation for a user.
+  Future<void> setArchived({
+    required String conversationId,
+    required String userId,
+    required bool archived,
+  }) async {
+    try {
+      await _conversationsRef.doc(conversationId).update({
+        'archivedBy.$userId': archived,
+      });
+    } catch (e, stack) {
+      _logger.e('Error setting archived status', error: e, stackTrace: stack);
+    }
+  }
+
+  /// Deletes a message (soft delete).
+  Future<void> deleteMessage({
+    required String conversationId,
+    required String messageId,
+    required String userId,
+  }) async {
+    try {
+      // Verify user is the sender
+      final messageDoc = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .get();
+
+      if (!messageDoc.exists) return;
+
+      final message = MessageModel.fromFirestore(messageDoc, conversationId);
+      if (message.senderId != userId) {
+        _logger.w('User $userId attempted to delete message they did not send');
+        return;
+      }
+
+      await messageDoc.reference.update({
+        'isDeleted': true,
+        'text': '', // Clear text content
+      });
+
+      _logger.d('Message deleted: $messageId');
+    } catch (e, stack) {
+      _logger.e('Error deleting message', error: e, stackTrace: stack);
+    }
+  }
+
+  /// Updates participant info in a conversation (call when user updates profile).
+  Future<void> updateParticipantInfo({
+    required String conversationId,
+    required String userId,
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    try {
+      await _conversationsRef.doc(conversationId).update({
+        'participantInfo.$userId.displayName': displayName,
+        'participantInfo.$userId.photoUrl': photoUrl,
+      });
+    } catch (e, stack) {
+      _logger.e('Error updating participant info', error: e, stackTrace: stack);
+    }
+  }
+
+  // ==================== TYPING INDICATORS (Optional) ====================
+
+  /// Sets typing status (writes to a separate collection for efficiency).
+  Future<void> setTyping({
+    required String conversationId,
+    required String userId,
+    required bool isTyping,
+  }) async {
+    try {
+      final typingRef = _conversationsRef
+          .doc(conversationId)
+          .collection('typing')
+          .doc(userId);
+
+      if (isTyping) {
+        await typingRef.set({
+          'isTyping': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await typingRef.delete();
+      }
+    } catch (e) {
+      // Typing indicator errors are non-critical
+      _logger.d('Typing indicator error: $e');
+    }
+  }
+
+  /// Stream of typing status for the other user.
+  Stream<bool> getTypingStream(String conversationId, String otherUserId) {
+    return _conversationsRef
+        .doc(conversationId)
+        .collection('typing')
+        .doc(otherUserId)
+        .snapshots()
+        .map((doc) {
+      if (!doc.exists) return false;
+      final data = doc.data();
+      if (data == null) return false;
+
+      // Check if typing indicator is stale (> 5 seconds)
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp == null) return false;
+
+      final age = DateTime.now().difference(timestamp.toDate());
+      return age.inSeconds < 5 && (data['isTyping'] as bool? ?? false);
+    });
+  }
+}

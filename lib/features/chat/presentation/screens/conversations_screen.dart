@@ -1,0 +1,328 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../domain/entities/conversation.dart';
+import '../bloc/conversations_bloc.dart';
+
+/// Screen showing the list of conversations for a user.
+class ConversationsScreen extends StatefulWidget {
+  final String currentUserId;
+  final void Function(Conversation conversation) onConversationTap;
+
+  const ConversationsScreen({
+    super.key,
+    required this.currentUserId,
+    required this.onConversationTap,
+  });
+
+  @override
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ConversationsBloc>().add(
+      ConversationsLoad(userId: widget.currentUserId),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Messages'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              // TODO: Implement search
+            },
+          ),
+        ],
+      ),
+      body: BlocBuilder<ConversationsBloc, ConversationsState>(
+        builder: (context, state) {
+          if (state.status == ConversationsStatus.loading &&
+              state.conversations.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state.status == ConversationsStatus.error &&
+              state.conversations.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48),
+                  const SizedBox(height: 16),
+                  Text(state.errorMessage ?? 'Failed to load conversations'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      context.read<ConversationsBloc>().add(
+                        ConversationsLoad(userId: widget.currentUserId),
+                      );
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (state.conversations.isEmpty) {
+            return _EmptyState(theme: theme);
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<ConversationsBloc>().add(
+                const ConversationsRefresh(),
+              );
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            child: ListView.builder(
+              itemCount: state.conversations.length,
+              itemBuilder: (context, index) {
+                final conversation = state.conversations[index];
+                return _ConversationTile(
+                  conversation: conversation,
+                  currentUserId: widget.currentUserId,
+                  onTap: () => widget.onConversationTap(conversation),
+                  onDismissed: (direction) {
+                    if (direction == DismissDirection.endToStart) {
+                      // Delete
+                      context.read<ConversationsBloc>().add(
+                        ConversationsDelete(conversationId: conversation.id),
+                      );
+                    } else {
+                      // Archive
+                      context.read<ConversationsBloc>().add(
+                        ConversationsArchive(conversationId: conversation.id),
+                      );
+                    }
+                  },
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final ThemeData theme;
+
+  const _EmptyState({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 80,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No conversations yet',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start a chat with people nearby to begin messaging',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationTile extends StatelessWidget {
+  final Conversation conversation;
+  final String currentUserId;
+  final VoidCallback onTap;
+  final void Function(DismissDirection) onDismissed;
+
+  const _ConversationTile({
+    required this.conversation,
+    required this.currentUserId,
+    required this.onTap,
+    required this.onDismissed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final otherParticipant = conversation.getOtherParticipantInfo(currentUserId);
+    final unreadCount = conversation.getUnreadCount(currentUserId);
+    final isMuted = conversation.isMutedBy(currentUserId);
+
+    return Dismissible(
+      key: Key(conversation.id),
+      background: Container(
+        color: theme.colorScheme.secondary,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 16),
+        child: Icon(
+          Icons.archive_outlined,
+          color: theme.colorScheme.onSecondary,
+        ),
+      ),
+      secondaryBackground: Container(
+        color: theme.colorScheme.error,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 16),
+        child: Icon(
+          Icons.delete_outline,
+          color: theme.colorScheme.onError,
+        ),
+      ),
+      onDismissed: onDismissed,
+      child: ListTile(
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundImage: otherParticipant?.photoUrl != null
+                  ? NetworkImage(otherParticipant!.photoUrl!)
+                  : null,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: otherParticipant?.photoUrl == null
+                  ? Text(
+                      (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    )
+                  : null,
+            ),
+            // Unread indicator
+            if (unreadCount > 0)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                otherParticipant?.displayName ?? 'Unknown',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight:
+                      unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (isMuted)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.notifications_off,
+                  size: 16,
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+          ],
+        ),
+        subtitle: Row(
+          children: [
+            if (conversation.lastMessageSenderId == currentUserId)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  Icons.done_all,
+                  size: 14,
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            Expanded(
+              child: Text(
+                conversation.lastMessageText ?? 'No messages yet',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: unreadCount > 0
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.outline,
+                  fontWeight:
+                      unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        trailing: Text(
+          _formatTime(conversation.lastMessageAt),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: unreadCount > 0
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+            fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  String _formatTime(DateTime? time) {
+    if (time == null) return '';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(time.year, time.month, time.day);
+
+    if (messageDate == today) {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    } else if (messageDate == today.subtract(const Duration(days: 1))) {
+      return 'Yesterday';
+    } else if (now.difference(time).inDays < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[time.weekday - 1];
+    } else {
+      return '${time.day}/${time.month}';
+    }
+  }
+}

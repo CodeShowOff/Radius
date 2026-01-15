@@ -1,0 +1,110 @@
+part of 'chat_bloc.dart';
+
+/// Base class for chat events.
+sealed class ChatEvent extends Equatable {
+  const ChatEvent();
+
+  @override
+  List<Object?> get props => [];
+}
+
+/// Open a chat with a user.
+class ChatOpen extends ChatEvent {
+  final String conversationId;
+  final String currentUserId;
+  final String otherUserId;
+  final String? otherUserName;
+  final String? otherUserPhotoUrl;
+
+  const ChatOpen({
+    required this.conversationId,
+    required this.currentUserId,
+    required this.otherUserId,
+    this.otherUserName,
+    this.otherUserPhotoUrl,
+  });
+
+  @override
+  List<Object?> get props => [
+        conversationId,
+        currentUserId,
+        otherUserId,
+        otherUserName,
+        otherUserPhotoUrl,
+      ];
+}
+
+/// Close the chat (cleanup).
+class ChatClose extends ChatEvent {
+  const ChatClose();
+}
+
+/// Send a message.
+class ChatSendMessage extends ChatEvent {
+  final String text;
+
+  const ChatSendMessage(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
+/// Load more (older) messages.
+class ChatLoadMore extends ChatEvent {
+  const ChatLoadMore();
+}
+
+/// Mark messages as read.
+class ChatMarkAsRead extends ChatEvent {
+  const ChatMarkAsRead();
+}
+
+/// Update typing status.
+class ChatSetTyping extends ChatEvent {
+  final bool isTyping;
+
+  const ChatSetTyping(this.isTyping);
+
+  @override
+  List<Object?> get props => [isTyping];
+}
+
+/// Delete a message.
+class ChatDeleteMessage extends ChatEvent {
+  final String messageId;
+
+  const ChatDeleteMessage(this.messageId);
+
+  @override
+  List<Object?> get props => [messageId];
+}
+
+/// Internal: Messages updated from stream.
+class _ChatMessagesUpdated extends ChatEvent {
+  final List<Message> messages;
+
+  const _ChatMessagesUpdated(this.messages);
+
+  @override
+  List<Object?> get props => [messages];
+}
+
+/// Internal: Conversation updated from stream.
+class _ChatConversationUpdated extends ChatEvent {
+  final Conversation? conversation;
+
+  const _ChatConversationUpdated(this.conversation);
+
+  @override
+  List<Object?> get props => [conversation];
+}
+
+/// Internal: Typing status updated.
+class _ChatTypingUpdated extends ChatEvent {
+  final bool isOtherUserTyping;
+
+  const _ChatTypingUpdated(this.isOtherUserTyping);
+
+  @override
+  List<Object?> get props => [isOtherUserTyping];
+}
