@@ -1,7 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/routes.dart';
+import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 
@@ -23,7 +26,7 @@ class ConnectionsListScreen extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.mail_outline),
                     onPressed: () {
-                      // TODO: Navigate to requests screen
+                      context.push(Routes.connectionRequests);
                     },
                     tooltip: 'Requests',
                   ),
@@ -69,7 +72,7 @@ class ConnectionsListScreen extends StatelessWidget {
           if (connections.isEmpty) {
             return _EmptyConnectionsState(
               onFindPeople: () {
-                // TODO: Navigate to nearby screen
+                context.push(Routes.nearby);
               },
             );
           }
@@ -205,7 +208,18 @@ class _ConnectionTile extends StatelessWidget {
       BuildContext context, String action, String otherUserId) {
     switch (action) {
       case 'message':
-        // TODO: Navigate to chat
+        // Create conversation ID and navigate to chat
+        final conversationId =
+            Conversation.createConversationId(currentUserId, otherUserId);
+        context.push(
+          Routes.chatWith(conversationId),
+          extra: {
+            'currentUserId': currentUserId,
+            'otherUserId': otherUserId,
+            'otherUserName': 'User', // TODO: Get actual name from profile
+            'otherUserPhotoUrl': null,
+          },
+        );
         break;
       case 'remove':
         _confirmRemove(context);

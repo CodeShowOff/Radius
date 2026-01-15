@@ -93,10 +93,21 @@ class BluetoothService {
   // ============== Initialization ==============
 
   /// Initializes the Bluetooth service.
-  Future<bool> initialize() async {
-    if (_state != BluetoothServiceState.uninitialized) {
-      return _state == BluetoothServiceState.ready ||
-          _state == BluetoothServiceState.active;
+  /// Set [forceReinit] to true to reset and reinitialize even if already initialized.
+  Future<bool> initialize({bool forceReinit = false}) async {
+    // Allow reinitialization if in error/bluetoothOff state or if forced
+    if (!forceReinit && _state != BluetoothServiceState.uninitialized) {
+      // If already ready or active, return true
+      if (_state == BluetoothServiceState.ready ||
+          _state == BluetoothServiceState.active) {
+        return true;
+      }
+      // If in error or bluetoothOff state, allow re-initialization
+      if (_state != BluetoothServiceState.error &&
+          _state != BluetoothServiceState.bluetoothOff &&
+          _state != BluetoothServiceState.permissionDenied) {
+        return false;
+      }
     }
 
     _setState(BluetoothServiceState.initializing);
@@ -113,14 +124,30 @@ class BluetoothService {
       final permissionStatus =
           await _permissionHandler.checkAndRequestPermissions();
 
-      if (permissionStatus != BlePermissionStatus.granted) {
+      if (permissionStatus == BlePermissionStatus.bluetoothOff) {
+        // Bluetooth is off, try to turn it on (shows system dialog on Android)
         _setError(_permissionHandler.getPermissionMessage(permissionStatus));
+        _setState(BluetoothServiceState.bluetoothOff);
 
-        if (permissionStatus == BlePermissionStatus.bluetoothOff) {
-          _setState(BluetoothServiceState.bluetoothOff);
-        } else {
-          _setState(BluetoothServiceState.permissionDenied);
+        // Request user to turn on Bluetooth
+        final turnedOn = await _permissionHandler.requestBluetoothOn();
+        if (!turnedOn) {
+          return false;
         }
+
+        // Wait a moment for Bluetooth to fully initialize
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Re-check Bluetooth state
+        final isOn = await _permissionHandler.isBluetoothOn();
+        if (!isOn) {
+          return false;
+        }
+
+        // Bluetooth is now on, continue initialization
+      } else if (permissionStatus != BlePermissionStatus.granted) {
+        _setError(_permissionHandler.getPermissionMessage(permissionStatus));
+        _setState(BluetoothServiceState.permissionDenied);
         return false;
       }
 
@@ -162,7 +189,7 @@ class BluetoothService {
 
       return true;
     } catch (e) {
-      _setError('Failed to start scanning: $e');
+      _setError(_scanner.lastError ?? 'Failed to start scanning: $e');
       return false;
     }
   }
@@ -206,6 +233,8 @@ class BluetoothService {
       final started = await _advertiser.startAdvertising();
       if (started) {
         _setState(BluetoothServiceState.active);
+      } else {
+        _setError(_advertiser.lastError ?? 'Failed to start advertising');
       }
       return started;
     } catch (e) {
@@ -228,8 +257,18 @@ class BluetoothService {
   /// Starts both scanning and advertising.
   Future<bool> startDiscovery() async {
     final scanResult = await startScanning();
+    if (!scanResult) {
+      _setError(_lastError ?? 'Failed to start scanning');
+      return false;
+    }
+
     final advertiseResult = await startAdvertising();
-    return scanResult && advertiseResult;
+    if (!advertiseResult) {
+      _setError(_lastError ?? 'Failed to start advertising');
+      return false;
+    }
+
+    return true;
   }
 
   /// Stops both scanning and advertising.
@@ -300,6 +339,23 @@ class BluetoothService {
     }
 
     return status;
+  }
+
+  /// Resets the service state to allow reinitialization.
+  /// Use this when retrying after an error.
+  void reset() {
+    _scanIntervalTimer?.cancel();
+    _adapterStateSubscription?.cancel();
+    _adapterStateSubscription = null;
+    _scanner.stopScan();
+    _advertiser.stopAdvertising();
+    _state = BluetoothServiceState.uninitialized;
+    _lastError = null;
+  }
+
+  /// Checks if Bluetooth is currently enabled.
+  Future<bool> isBluetoothEnabled() async {
+    return await _permissionHandler.isBluetoothOn();
   }
 
   /// Opens app settings for permission management.

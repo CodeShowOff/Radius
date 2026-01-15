@@ -57,3 +57,8 @@ class NearbyUsersFilterChanged extends NearbyUsersEvent {
 class NearbyUsersRefresh extends NearbyUsersEvent {
   const NearbyUsersRefresh();
 }
+
+/// Event when initial search timeout occurs.
+class NearbyUsersInitialSearchTimeout extends NearbyUsersEvent {
+  const NearbyUsersInitialSearchTimeout();
+}

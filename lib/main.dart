@@ -6,7 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
-import 'core/config/firebase_options.dart';
+import 'firebase_options.dart';
 import 'core/di/injection.dart';
 import 'core/services/crash/crash_service.dart';
 

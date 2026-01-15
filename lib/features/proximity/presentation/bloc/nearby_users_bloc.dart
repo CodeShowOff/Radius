@@ -14,8 +14,13 @@ part 'nearby_users_state.dart';
 class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   final ProximityService _proximityService;
 
+  /// Duration to wait before showing "no one nearby" message.
+  static const Duration _initialSearchTimeout = Duration(seconds: 10);
+
   StreamSubscription<List<NearbyUser>>? _nearbyUsersSubscription;
   StreamSubscription<ProximityServiceState>? _serviceStateSubscription;
+  Timer? _initialSearchTimer;
+  bool _hasFoundUsers = false;
 
   NearbyUsersBloc({required ProximityService proximityService})
       : _proximityService = proximityService,
@@ -26,21 +31,40 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     on<NearbyUsersServiceStateChanged>(_onServiceStateChanged);
     on<NearbyUsersFilterChanged>(_onFilterChanged);
     on<NearbyUsersRefresh>(_onRefresh);
+    on<NearbyUsersInitialSearchTimeout>(_onInitialSearchTimeout);
   }
 
   Future<void> _onStartDiscovery(
     NearbyUsersStartDiscovery event,
     Emitter<NearbyUsersState> emit,
   ) async {
-    emit(state.copyWith(status: NearbyUsersStatus.loading));
+    emit(state.copyWith(status: NearbyUsersStatus.loading, errorMessage: null));
+
+    // Check current service state
+    final currentServiceState = _proximityService.state;
+    final isInErrorState = currentServiceState == ProximityServiceState.error;
+    final needsInit =
+        currentServiceState == ProximityServiceState.idle || isInErrorState;
+
+    // Reset service if in error state to allow fresh initialization
+    if (isInErrorState) {
+      _proximityService.reset();
+    }
 
     // Initialize proximity service if needed
-    if (_proximityService.state == ProximityServiceState.idle) {
-      final initialized = await _proximityService.initialize(event.userId);
+    if (needsInit) {
+      final initialized = await _proximityService.initialize(
+        event.userId,
+        forceReinit: isInErrorState,
+      );
       if (!initialized) {
+        // Get the actual error from the service's lastError property
+        final errorMessage = _proximityService.lastError ??
+            'Failed to initialize proximity service';
+
         emit(state.copyWith(
           status: NearbyUsersStatus.error,
-          errorMessage: 'Failed to initialize proximity service',
+          errorMessage: errorMessage,
         ));
         return;
       }
@@ -61,12 +85,25 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     // Start discovery
     final started = await _proximityService.startDiscovery();
     if (!started) {
+      // Get the actual error from the service's lastError property
+      final errorMessage = _proximityService.lastError ??
+          'Failed to start discovery. Check Bluetooth and location permissions.';
+
       emit(state.copyWith(
         status: NearbyUsersStatus.error,
-        errorMessage: 'Failed to start discovery. Check Bluetooth permissions.',
+        errorMessage: errorMessage,
       ));
       return;
     }
+
+    // Reset tracking flags and start the initial search timer
+    _hasFoundUsers = false;
+    _initialSearchTimer?.cancel();
+    _initialSearchTimer = Timer(_initialSearchTimeout, () {
+      if (!_hasFoundUsers) {
+        add(const NearbyUsersInitialSearchTimeout());
+      }
+    });
 
     emit(state.copyWith(
       status: NearbyUsersStatus.discovering,
@@ -78,6 +115,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     NearbyUsersStopDiscovery event,
     Emitter<NearbyUsersState> emit,
   ) async {
+    _initialSearchTimer?.cancel();
     await _proximityService.stopDiscovery();
     emit(state.copyWith(
       status: NearbyUsersStatus.idle,
@@ -91,6 +129,12 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   ) {
     final filteredUsers = _applyFilter(event.users, state.filter);
 
+    // Track if we've found any users - cancel the timeout timer
+    if (event.users.isNotEmpty) {
+      _hasFoundUsers = true;
+      _initialSearchTimer?.cancel();
+    }
+
     emit(state.copyWith(
       status: filteredUsers.isEmpty && state.isDiscovering
           ? NearbyUsersStatus.empty
@@ -98,6 +142,19 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
       users: event.users,
       filteredUsers: filteredUsers,
     ));
+  }
+
+  void _onInitialSearchTimeout(
+    NearbyUsersInitialSearchTimeout event,
+    Emitter<NearbyUsersState> emit,
+  ) {
+    // Only change state if still discovering and no users found
+    if (state.isDiscovering && state.users.isEmpty) {
+      emit(state.copyWith(
+        status: NearbyUsersStatus.empty,
+        isDiscovering: false, // Stop showing "searching" animation
+      ));
+    }
   }
 
   void _onServiceStateChanged(
@@ -145,10 +202,37 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     NearbyUsersRefresh event,
     Emitter<NearbyUsersState> emit,
   ) async {
+    // Reset search state
+    _hasFoundUsers = false;
+    _initialSearchTimer?.cancel();
+
+    emit(state.copyWith(
+      status: NearbyUsersStatus.discovering,
+      isDiscovering: true,
+    ));
+
     // Clear and restart discovery
     await _proximityService.stopDiscovery();
     await Future.delayed(const Duration(milliseconds: 500));
-    await _proximityService.startDiscovery();
+
+    final started = await _proximityService.startDiscovery();
+    if (!started) {
+      final errorMessage = _proximityService.lastError ??
+          'Failed to restart discovery. Check Bluetooth and permissions.';
+      emit(state.copyWith(
+        status: NearbyUsersStatus.error,
+        errorMessage: errorMessage,
+        isDiscovering: false,
+      ));
+      return;
+    }
+
+    // Start new timeout timer
+    _initialSearchTimer = Timer(_initialSearchTimeout, () {
+      if (!_hasFoundUsers) {
+        add(const NearbyUsersInitialSearchTimeout());
+      }
+    });
   }
 
   List<NearbyUser> _applyFilter(
@@ -175,6 +259,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   Future<void> close() {
     _nearbyUsersSubscription?.cancel();
     _serviceStateSubscription?.cancel();
+    _initialSearchTimer?.cancel();
     return super.close();
   }
 }

@@ -15,6 +15,7 @@ class BleScanner {
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   Timer? _staleDeviceTimer;
   bool _isScanning = false;
+  String? _lastError;
 
   /// Stream of discovered nearby devices.
   Stream<List<BleDevice>> get devicesStream => _devicesController.stream;
@@ -25,6 +26,9 @@ class BleScanner {
   /// Whether scanning is currently active.
   bool get isScanning => _isScanning;
 
+  /// Last error message from scanning operations.
+  String? get lastError => _lastError;
+
   /// Starts scanning for nearby BLE devices.
   Future<void> startScan({
     Duration? duration,
@@ -33,6 +37,7 @@ class BleScanner {
     if (_isScanning) return;
 
     _isScanning = true;
+    _lastError = null;
 
     // Start the stale device cleanup timer
     _startStaleDeviceTimer();
@@ -42,10 +47,14 @@ class BleScanner {
         duration ?? const Duration(seconds: BleConstants.scanDurationSeconds);
 
     try {
+      // Cancel any existing subscription first
+      _scanSubscription?.cancel();
+
       // Set up scan result listener
       _scanSubscription = FlutterBluePlus.onScanResults.listen(
         _handleScanResults,
         onError: (error) {
+          _lastError = 'Scan error: $error';
           _isScanning = false;
         },
       );
@@ -71,6 +80,7 @@ class BleScanner {
         await stopScan();
       }
     } catch (e) {
+      _lastError = 'Failed to start scan: $e';
       _isScanning = false;
       rethrow;
     }
@@ -82,6 +92,8 @@ class BleScanner {
 
     try {
       await FlutterBluePlus.stopScan();
+      _scanSubscription?.cancel();
+      _scanSubscription = null;
     } finally {
       _isScanning = false;
       _staleDeviceTimer?.cancel();

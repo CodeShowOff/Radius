@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -23,19 +24,35 @@ class BlePermissionHandler {
       return BlePermissionStatus.restricted;
     }
 
-    // Check Bluetooth adapter state
-    final adapterState = await FlutterBluePlus.adapterState.first;
-    if (adapterState != BluetoothAdapterState.on) {
+    // Check Bluetooth adapter state FIRST (before requesting permissions)
+    // This ensures we detect if Bluetooth is off immediately
+    final bluetoothEnabled = await isBluetoothOn();
+    if (!bluetoothEnabled) {
       return BlePermissionStatus.bluetoothOff;
     }
 
+    // Request permissions
+    BlePermissionStatus permissionStatus;
     if (Platform.isAndroid) {
-      return _checkAndroidPermissions();
+      permissionStatus = await _checkAndroidPermissions();
     } else if (Platform.isIOS) {
-      return _checkIOSPermissions();
+      permissionStatus = await _checkIOSPermissions();
+    } else {
+      return BlePermissionStatus.denied;
     }
 
-    return BlePermissionStatus.denied;
+    // If permissions weren't granted, return that status
+    if (permissionStatus != BlePermissionStatus.granted) {
+      return permissionStatus;
+    }
+
+    // Double-check Bluetooth is still on after permission requests
+    final stillOn = await isBluetoothOn();
+    if (!stillOn) {
+      return BlePermissionStatus.bluetoothOff;
+    }
+
+    return BlePermissionStatus.granted;
   }
 
   /// Checks Android-specific permissions.
@@ -43,15 +60,14 @@ class BlePermissionHandler {
     // Android 12+ requires BLUETOOTH_SCAN and BLUETOOTH_ADVERTISE
     // Android 11 and below requires location permission
 
-    final permissions = <Permission>[];
-
-    // Bluetooth permissions (Android 12+)
-    permissions.add(Permission.bluetoothScan);
-    permissions.add(Permission.bluetoothAdvertise);
-    permissions.add(Permission.bluetoothConnect);
-
-    // Location permission (required for BLE scanning on Android)
-    permissions.add(Permission.locationWhenInUse);
+    final permissions = <Permission>[
+      // Bluetooth permissions (Android 12+)
+      Permission.bluetoothScan,
+      Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect,
+      // Location permission (required for BLE scanning on Android)
+      Permission.locationWhenInUse,
+    ];
 
     // Request all permissions
     final statuses = await permissions.request();
@@ -68,6 +84,8 @@ class BlePermissionHandler {
         statuses[Permission.bluetoothScan]?.isGranted ?? false;
     final bluetoothAdvertiseGranted =
         statuses[Permission.bluetoothAdvertise]?.isGranted ?? false;
+    final bluetoothConnectGranted =
+        statuses[Permission.bluetoothConnect]?.isGranted ?? false;
     final locationGranted =
         statuses[Permission.locationWhenInUse]?.isGranted ?? false;
 
@@ -79,7 +97,10 @@ class BlePermissionHandler {
       }
     }
 
-    if (bluetoothScanGranted && bluetoothAdvertiseGranted && locationGranted) {
+    if (bluetoothScanGranted &&
+        bluetoothAdvertiseGranted &&
+        bluetoothConnectGranted &&
+        locationGranted) {
       return BlePermissionStatus.granted;
     }
 
@@ -112,16 +133,59 @@ class BlePermissionHandler {
   }
 
   /// Checks if Bluetooth is currently on.
+  /// Uses multiple methods for reliability.
   Future<bool> isBluetoothOn() async {
-    final state = await FlutterBluePlus.adapterState.first;
-    return state == BluetoothAdapterState.on;
+    try {
+      // Method 1: Try to get the current adapter state directly
+      // On Android, this is the most reliable method
+      if (Platform.isAndroid) {
+        try {
+          // FlutterBluePlus.adapterState is a broadcast stream that emits the current state
+          final state = await FlutterBluePlus.adapterState.first
+              .timeout(const Duration(seconds: 1), onTimeout: () {
+            return BluetoothAdapterState.unknown;
+          });
+
+          // If we got a definitive answer, use it
+          if (state == BluetoothAdapterState.on) {
+            return true;
+          } else if (state == BluetoothAdapterState.off ||
+              state == BluetoothAdapterState.turningOff) {
+            return false;
+          }
+          // For unknown/turningOn, wait a bit longer
+        } catch (_) {
+          // Continue to fallback method
+        }
+      }
+
+      // Method 2: Wait for a non-unknown state with timeout
+      final state = await FlutterBluePlus.adapterState
+          .where((s) => s != BluetoothAdapterState.unknown)
+          .first
+          .timeout(const Duration(seconds: 2), onTimeout: () {
+        return BluetoothAdapterState.off;
+      });
+      return state == BluetoothAdapterState.on;
+    } catch (e) {
+      return false;
+    }
   }
 
   /// Requests the user to turn on Bluetooth (Android only).
-  Future<void> requestBluetoothOn() async {
+  /// Returns true if successfully requested (user may still decline).
+  Future<bool> requestBluetoothOn() async {
     if (Platform.isAndroid) {
-      await FlutterBluePlus.turnOn();
+      try {
+        await FlutterBluePlus.turnOn();
+        return true;
+      } catch (e) {
+        // User declined or error occurred
+        return false;
+      }
     }
+    // On iOS, Bluetooth must be enabled via system settings
+    return false;
   }
 
   /// Stream of Bluetooth adapter state changes.

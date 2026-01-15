@@ -1,40 +1,41 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:flutter/services.dart';
 
 import 'ble_constants.dart';
 import 'ble_id_generator.dart';
 
 /// Handles BLE advertising to broadcast presence to nearby devices.
-/// 
-/// Note: flutter_blue_plus primarily supports central role (scanning).
-/// For peripheral role (advertising), platform-specific solutions are needed.
-/// This class provides the foundation and will work on supported platforms.
+///
+/// Uses native platform channels for Android and iOS BLE advertising.
 class BleAdvertiser {
   final BleIdGenerator _idGenerator;
+  static const MethodChannel _channel =
+      MethodChannel('com.example.radius/ble_advertiser');
 
   bool _isAdvertising = false;
+  String? _lastError;
   StreamSubscription<String>? _idRotationSubscription;
 
   BleAdvertiser({required BleIdGenerator idGenerator})
-      : _idGenerator = idGenerator;
+      : _idGenerator = idGenerator {
+    // Listen for errors from native side
+    _channel.setMethodCallHandler(_handleNativeCallback);
+  }
 
   /// Whether advertising is currently active.
   bool get isAdvertising => _isAdvertising;
+
+  /// Last error message from advertising operations.
+  String? get lastError => _lastError;
 
   /// The current anonymous ID being advertised.
   String get currentAdvertisedId => _idGenerator.currentAnonymousId;
 
   /// Starts BLE advertising.
-  /// 
-  /// Note: Full BLE peripheral mode advertising requires platform-specific
-  /// implementation. flutter_blue_plus has limited advertising support.
-  /// 
-  /// For production, consider:
-  /// - Android: Use Android's BluetoothLeAdvertiser API via platform channels
-  /// - iOS: Use CoreBluetooth's CBPeripheralManager via platform channels
   Future<bool> startAdvertising() async {
     if (_isAdvertising) return true;
+    _lastError = null;
 
     try {
       // Listen for ID rotations to update advertisement
@@ -42,15 +43,19 @@ class BleAdvertiser {
         (_) => _updateAdvertisement(),
       );
 
-      // Platform-specific advertising setup
-      if (Platform.isAndroid) {
-        return await _startAndroidAdvertising();
-      } else if (Platform.isIOS) {
-        return await _startIOSAdvertising();
-      }
+      // Call native platform code
+      final result = await _channel.invokeMethod<bool>('startAdvertising', {
+        'anonymousId': _idGenerator.currentAnonymousId,
+        'serviceUuid': BleConstants.radiusServiceUuid,
+      });
 
-      return false;
+      _isAdvertising = result ?? false;
+      if (!_isAdvertising) {
+        _lastError = 'Native advertising returned false';
+      }
+      return _isAdvertising;
     } catch (e) {
+      _lastError = 'Failed to start advertising: $e';
       _isAdvertising = false;
       return false;
     }
@@ -61,75 +66,39 @@ class BleAdvertiser {
     if (!_isAdvertising) return;
 
     _idRotationSubscription?.cancel();
+
+    try {
+      await _channel.invokeMethod('stopAdvertising');
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+
     _isAdvertising = false;
-
-    // Platform-specific stop logic would go here
-  }
-
-  /// Android-specific advertising implementation.
-  Future<bool> _startAndroidAdvertising() async {
-    // flutter_blue_plus doesn't have full advertising support on Android.
-    // This is a placeholder for platform channel implementation.
-    //
-    // In production, you would:
-    // 1. Create a MethodChannel to native Android code
-    // 2. Use BluetoothLeAdvertiser to start advertising
-    // 3. Configure AdvertiseSettings and AdvertiseData
-    //
-    // Example native Android code structure:
-    // ```kotlin
-    // val advertiser = bluetoothAdapter.bluetoothLeAdvertiser
-    // val settings = AdvertiseSettings.Builder()
-    //     .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
-    //     .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
-    //     .setConnectable(false)
-    //     .build()
-    //
-    // val data = AdvertiseData.Builder()
-    //     .setIncludeDeviceName(false)
-    //     .addServiceUuid(ParcelUuid.fromString(RADIUS_SERVICE_UUID))
-    //     .addManufacturerData(0xFFFF, anonymousIdBytes)
-    //     .build()
-    //
-    // advertiser.startAdvertising(settings, data, callback)
-    // ```
-
-    _isAdvertising = true;
-    return true; // Placeholder - actual implementation needed
-  }
-
-  /// iOS-specific advertising implementation.
-  Future<bool> _startIOSAdvertising() async {
-    // flutter_blue_plus doesn't have full advertising support on iOS.
-    // This is a placeholder for platform channel implementation.
-    //
-    // In production, you would:
-    // 1. Create a MethodChannel to native iOS code
-    // 2. Use CBPeripheralManager to start advertising
-    // 3. Configure the advertisement data
-    //
-    // Example native iOS code structure:
-    // ```swift
-    // let peripheralManager = CBPeripheralManager()
-    //
-    // let advertisementData: [String: Any] = [
-    //     CBAdvertisementDataServiceUUIDsKey: [CBUUID(string: radiusServiceUUID)],
-    //     CBAdvertisementDataLocalNameKey: anonymousId
-    // ]
-    //
-    // peripheralManager.startAdvertising(advertisementData)
-    // ```
-
-    _isAdvertising = true;
-    return true; // Placeholder - actual implementation needed
   }
 
   /// Updates the advertisement with new ID after rotation.
-  void _updateAdvertisement() {
+  Future<void> _updateAdvertisement() async {
     if (!_isAdvertising) return;
 
-    // Restart advertising with new ID
-    // This would trigger platform-specific update
+    try {
+      await _channel.invokeMethod('updateAdvertisement', {
+        'anonymousId': _idGenerator.currentAnonymousId,
+        'serviceUuid': BleConstants.radiusServiceUuid,
+      });
+    } catch (e) {
+      // Log error but don't stop advertising
+    }
+  }
+
+  /// Handles callbacks from native platform code.
+  Future<void> _handleNativeCallback(MethodCall call) async {
+    switch (call.method) {
+      case 'onAdvertisingError':
+        // Error from native advertising
+        _isAdvertising = false;
+        // Error message available in call.arguments if needed for logging
+        break;
+    }
   }
 
   /// Gets the advertisement data for the current ID.

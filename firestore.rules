@@ -59,25 +59,11 @@ service cloud.firestore {
     
     /// Check rate limit for requests (10/hour, 30/day)
     function canSendRequest() {
-      let rateLimitPath = /databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests;
-      
-      // Allow if no rate limit doc exists
-      if (!exists(rateLimitPath)) {
-        return true;
-      }
-      
-      let rateLimitDoc = get(rateLimitPath);
-      let now = request.time;
-      let hourlyCount = rateLimitDoc.data.hourlyCount;
-      let hourlyReset = rateLimitDoc.data.hourlyResetAt;
-      let dailyCount = rateLimitDoc.data.dailyCount;
-      let dailyReset = rateLimitDoc.data.dailyResetAt;
-      
-      // Check hourly limit (10) and daily limit (30)
-      let hourlyOk = now > hourlyReset || hourlyCount < 10;
-      let dailyOk = now > dailyReset || dailyCount < 30;
-      
-      return hourlyOk && dailyOk;
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests)
+        || (request.time > get(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests).data.hourlyResetAt 
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests).data.hourlyCount < 10)
+        && (request.time > get(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests).data.dailyResetAt 
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests).data.dailyCount < 30);
     }
     
     // ============================================================

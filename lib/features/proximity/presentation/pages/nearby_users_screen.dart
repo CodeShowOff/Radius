@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/ble_device.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/nearby_user.dart';
 import '../bloc/nearby_users_bloc.dart';
 import '../widgets/nearby_user_card.dart';
@@ -62,8 +66,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         actions: [
           // Scanning indicator
           BlocBuilder<NearbyUsersBloc, NearbyUsersState>(
-            buildWhen: (prev, curr) =>
-                prev.isDiscovering != curr.isDiscovering,
+            buildWhen: (prev, curr) => prev.isDiscovering != curr.isDiscovering,
             builder: (context, state) {
               if (state.isDiscovering) {
                 return const Padding(
@@ -95,8 +98,9 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                 content: Text(state.errorMessage!),
                 action: SnackBarAction(
                   label: 'Settings',
-                  onPressed: () {
+                  onPressed: () async {
                     // Open app settings for permissions
+                    await openAppSettings();
                   },
                 ),
               ),
@@ -327,6 +331,12 @@ class _ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Check if error message suggests Bluetooth or permission issue
+    final isBluetoothOrPermissionIssue =
+        message.toLowerCase().contains('bluetooth') ||
+            message.toLowerCase().contains('permission') ||
+            message.toLowerCase().contains('location');
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -359,6 +369,16 @@ class _ErrorState extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               label: const Text('Try Again'),
             ),
+            if (isBluetoothOrPermissionIssue) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await openAppSettings();
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('Open Settings'),
+              ),
+            ],
           ],
         ),
       ),
@@ -517,13 +537,36 @@ class _UserDetailsSheet extends StatelessWidget {
                   label: const Text('Connect'),
                 )
               else
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // TODO: Navigate to chat/profile
+                Builder(
+                  builder: (context) {
+                    // Get current user ID from AuthBloc
+                    final authState = context.read<AuthBloc>().state;
+                    final currentUserId =
+                        authState is AuthAuthenticated ? authState.user.id : '';
+
+                    return OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to chat
+                        final conversationId =
+                            Conversation.createConversationId(
+                          currentUserId,
+                          user.userId,
+                        );
+                        context.push(
+                          Routes.chatWith(conversationId),
+                          extra: {
+                            'currentUserId': currentUserId,
+                            'otherUserId': user.userId,
+                            'otherUserName': user.displayName ?? 'Unknown',
+                            'otherUserPhotoUrl': user.photoUrl,
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text('Message'),
+                    );
                   },
-                  icon: const Icon(Icons.chat_outlined),
-                  label: const Text('Message'),
                 ),
             ],
           ),

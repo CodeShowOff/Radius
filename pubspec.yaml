@@ -1,4 +1,4 @@
-name: radius
+name: Radius
 description: A proximity-based social connection app using Bluetooth LE.
 publish_to: 'none'
 version: 1.0.0+1

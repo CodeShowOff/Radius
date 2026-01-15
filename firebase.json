@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "radiusapp-ecfcd",
+          "appId": "1:486551872927:android:e368a91d01ed3f84dcc9aa",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "radiusapp-ecfcd",
+          "configurations": {
+            "android": "1:486551872927:android:e368a91d01ed3f84dcc9aa",
+            "ios": "1:486551872927:ios:e614a39413d0b1a7dcc9aa",
+            "macos": "1:486551872927:ios:e614a39413d0b1a7dcc9aa",
+            "web": "1:486551872927:web:756fd15799f804eedcc9aa",
+            "windows": "1:486551872927:web:777b028085c1bbc1dcc9aa"
+          }
+        }
+      }
+    }
+  }
+}

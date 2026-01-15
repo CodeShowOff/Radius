@@ -30,9 +30,11 @@ class ProximityService {
   final _errorController = StreamController<String>.broadcast();
 
   ProximityServiceState _state = ProximityServiceState.idle;
+  String? _lastError;
   StreamSubscription<List<BleDevice>>? _bleDevicesSubscription;
   StreamSubscription<List<NearbyUser>>? _cacheSubscription;
   StreamSubscription<String>? _bleIdRotationSubscription;
+  StreamSubscription<BluetoothServiceState>? _bleStateSubscription;
 
   String? _currentUserId;
 
@@ -58,6 +60,9 @@ class ProximityService {
   /// Current service state.
   ProximityServiceState get state => _state;
 
+  /// Last error message.
+  String? get lastError => _lastError;
+
   /// Stream of state changes.
   Stream<ProximityServiceState> get stateStream => _stateController.stream;
 
@@ -80,23 +85,55 @@ class ProximityService {
   // ============== Initialization ==============
 
   /// Initializes the proximity service.
-  Future<bool> initialize(String userId) async {
-    if (_state != ProximityServiceState.idle) return true;
+  /// Set [forceReinit] to true to reset and reinitialize even if already initialized.
+  Future<bool> initialize(String userId, {bool forceReinit = false}) async {
+    // Allow reinitialization if in error state or forced
+    if (!forceReinit && _state != ProximityServiceState.idle) {
+      if (_state == ProximityServiceState.error) {
+        // Reset state to allow retry
+        _state = ProximityServiceState.idle;
+      } else {
+        return true;
+      }
+    }
 
     _setState(ProximityServiceState.initializing);
     _currentUserId = userId;
     _firestoreService.setCurrentUserId(userId);
+    _lastError = null; // Clear any previous error
 
     try {
-      // Initialize Bluetooth
-      final bleInitialized = await _bluetoothService.initialize();
+      // Check if Bluetooth is enabled first
+      var isBluetoothOn = await _bluetoothService.isBluetoothEnabled();
+      if (!isBluetoothOn) {
+        // Try to request Bluetooth to be turned on (shows system dialog on Android)
+        await _bluetoothService.requestBluetoothOn();
+
+        // Wait a moment for Bluetooth to fully initialize
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Check again after request
+        isBluetoothOn = await _bluetoothService.isBluetoothEnabled();
+        if (!isBluetoothOn) {
+          _setError('Please turn on Bluetooth to discover nearby users');
+          _setState(ProximityServiceState.error);
+          return false;
+        }
+      }
+
+      // Initialize Bluetooth service
+      final bleInitialized =
+          await _bluetoothService.initialize(forceReinit: forceReinit);
       if (!bleInitialized) {
-        _setError('Failed to initialize Bluetooth');
+        final error =
+            _bluetoothService.lastError ?? 'Failed to initialize Bluetooth';
+        _setError(error);
         _setState(ProximityServiceState.error);
         return false;
       }
 
       // Subscribe to cache updates
+      _cacheSubscription?.cancel();
       _cacheSubscription = _cache.cacheUpdates.listen((users) {
         _nearbyUsersController.add(users);
         _firestoreService.updateNearbyUsers(users);
@@ -111,6 +148,20 @@ class ProximityService {
     }
   }
 
+  /// Resets the service to allow reinitialization.
+  void reset() {
+    _bleDevicesSubscription?.cancel();
+    _cacheSubscription?.cancel();
+    _bleIdRotationSubscription?.cancel();
+    _bleStateSubscription?.cancel();
+    _bluetoothService.reset();
+    _cache.clear();
+    _userLookupCache.clear();
+    _pendingLookups.clear();
+    _state = ProximityServiceState.idle;
+    _lastError = null;
+  }
+
   // ============== Discovery ==============
 
   /// Starts proximity discovery (scanning and advertising).
@@ -123,14 +174,17 @@ class ProximityService {
     }
 
     try {
+      // Cancel any existing subscriptions first
+      _bleDevicesSubscription?.cancel();
+      _bleStateSubscription?.cancel();
+
       // Subscribe to BLE device updates
       _bleDevicesSubscription = _bluetoothService.devicesStream.listen(
         _onBleDevicesUpdated,
       );
 
-      // Subscribe to BLE ID rotation to update Firestore
-      // This ensures other users can look up our new ID
-      _bluetoothService.stateStream.listen((_) {
+      // Subscribe to BLE state changes to update Firestore with current ID
+      _bleStateSubscription = _bluetoothService.stateStream.listen((_) {
         _firestoreService.updateCurrentUserBleId(
           _bluetoothService.currentAnonymousId,
         );
@@ -139,7 +193,9 @@ class ProximityService {
       // Start BLE discovery
       final started = await _bluetoothService.startDiscovery();
       if (!started) {
-        _setError('Failed to start BLE discovery');
+        final error =
+            _bluetoothService.lastError ?? 'Failed to start BLE discovery';
+        _setError(error);
         return false;
       }
 
@@ -160,6 +216,7 @@ class ProximityService {
   Future<void> stopDiscovery() async {
     await _bluetoothService.stopDiscovery();
     _bleDevicesSubscription?.cancel();
+    _bleStateSubscription?.cancel();
 
     // Clear nearby users from Firestore
     await _firestoreService.clearNearbyUsers();
@@ -316,6 +373,7 @@ class ProximityService {
   }
 
   void _setError(String error) {
+    _lastError = error;
     _errorController.add(error);
   }
 
@@ -336,6 +394,7 @@ class ProximityService {
     _bleDevicesSubscription?.cancel();
     _cacheSubscription?.cancel();
     _bleIdRotationSubscription?.cancel();
+    _bleStateSubscription?.cancel();
     _cache.dispose();
     _firestoreService.dispose();
     _stateController.close();

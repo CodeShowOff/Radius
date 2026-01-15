@@ -1,4 +1,4 @@
-# Performance Optimization Guide
+dart pub global activate flutterfire_cli# Performance Optimization Guide
 
 This guide covers optimization techniques for Radius to ensure smooth UX, minimize costs, and extend battery life.
 
