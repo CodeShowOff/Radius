@@ -82,42 +82,29 @@ class BleIdGenerator {
   }
 
   /// Creates manufacturer data for BLE advertising.
-  /// Format: [Company ID (2 bytes)] + [Anonymous ID bytes]
+  /// Note: For Android native advertising, we only return the anonymous ID bytes.
+  /// The company ID is set separately in the native code via addManufacturerData().
   Uint8List createManufacturerData() {
-    // Using a custom company ID (0xFFFF is reserved for testing)
-    // In production, you'd use your registered Bluetooth SIG company ID
-    const companyId = 0xFFFF;
-
-    final idBytes = currentIdAsBytes;
-    final data = Uint8List(2 + idBytes.length);
-
-    // Company ID (little-endian)
-    data[0] = companyId & 0xFF;
-    data[1] = (companyId >> 8) & 0xFF;
-
-    // Anonymous ID
-    data.setRange(2, 2 + idBytes.length, idBytes);
-
-    return data;
+    // Just return the anonymous ID bytes - the company ID is handled by native code
+    return currentIdAsBytes;
   }
 
-  /// Parses an anonymous ID from manufacturer data.
+  /// Parses an anonymous ID from manufacturer data value.
+  /// Note: In flutter_blue_plus, the manufacturerData map key is the company ID,
+  /// so the value (data parameter) contains ONLY the anonymous ID bytes.
   /// Returns null if data is invalid or malformed.
   static String? parseAnonymousIdFromManufacturerData(Uint8List data) {
-    // Minimum: 2 byte company ID + at least 8 bytes for valid ID
-    if (data.length < 10) return null;
+    // The data should contain just the anonymous ID (no company ID prefix)
+    // Our IDs are 16 characters (8 UUID + 8 random hex)
+    if (data.isEmpty || data.length < 8) return null;
 
-    // Skip the 2-byte company ID
-    final idBytes = data.sublist(2);
-
-    // Validate length - our IDs are 16 characters (8 UUID + 8 random hex)
-    if (idBytes.length < 8 ||
-        idBytes.length > BleConstants.maxAnonymousIdLength) {
+    // Validate length
+    if (data.length > BleConstants.maxAnonymousIdLength) {
       return null;
     }
 
     try {
-      final decoded = utf8.decode(idBytes);
+      final decoded = utf8.decode(data);
 
       // Validate the ID format: should be uppercase alphanumeric
       if (!RegExp(r'^[A-F0-9]{8,20}$').hasMatch(decoded)) {

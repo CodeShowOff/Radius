@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'ble_constants.dart';
@@ -59,19 +59,21 @@ class BleScanner {
         },
       );
 
-      // Start scanning with filters
+      // Start scanning - we use manufacturer data filter only
+      // Note: withServices requires the peripheral to actively advertise the UUID
+      // which may not work reliably with native Android advertising.
+      // We filter for our manufacturer ID and validate in _parseDevice.
       await FlutterBluePlus.startScan(
-        // Filter by our service UUID to only find Radius users
-        withServices: [Guid(BleConstants.radiusServiceUuid)],
-        // Also scan for devices with our manufacturer data
-        withMsd: [MsdFilter(0xFFFF)], // Our company ID
+        // Filter by manufacturer data with our company ID (0xFFFF)
+        // This is more reliable than service UUID filtering for our use case
+        withMsd: [MsdFilter(BleConstants.manufacturerId)],
         // Scan duration
         timeout: continuous ? null : scanDuration,
-        // Android-specific settings
-        androidScanMode: AndroidScanMode.balanced,
-        // Remove duplicates (we handle this ourselves for RSSI updates)
+        // Android-specific settings - use low latency for better discovery
+        androidScanMode: AndroidScanMode.lowLatency,
+        // Get continuous updates for RSSI changes
         continuousUpdates: true,
-        continuousDivisor: 2, // Report every 2nd packet for battery saving
+        continuousDivisor: 1, // Report every packet for better discovery
       );
 
       if (!continuous) {
@@ -102,9 +104,28 @@ class BleScanner {
 
   /// Handles incoming scan results.
   void _handleScanResults(List<ScanResult> results) {
+    if (kDebugMode && results.isNotEmpty) {
+      debugPrint('[BLE Scanner] Received ${results.length} scan results');
+    }
+
     for (final result in results) {
+      // Log all devices with manufacturer data in debug mode
+      if (kDebugMode) {
+        final mfgData = result.advertisementData.manufacturerData;
+        if (mfgData.isNotEmpty) {
+          debugPrint('[BLE Scanner] Device: ${result.device.remoteId}, '
+              'Name: ${result.advertisementData.advName}, '
+              'RSSI: ${result.rssi}, '
+              'MfgData keys: ${mfgData.keys.map((k) => '0x${k.toRadixString(16)}').toList()}');
+        }
+      }
+
       final device = _parseDevice(result);
       if (device != null) {
+        if (kDebugMode) {
+          debugPrint(
+              '[BLE Scanner] ✓ Found Radius device: ${device.anonymousId}');
+        }
         _discoveredDevices[device.anonymousId] = device;
       }
     }
@@ -113,6 +134,7 @@ class BleScanner {
   }
 
   /// Parses a ScanResult into a BleDevice.
+  /// Returns null if device is not a valid Radius device.
   BleDevice? _parseDevice(ScanResult result) {
     // Skip devices with very weak signals
     if (result.rssi < BleConstants.minimumRssiThreshold) {
@@ -121,37 +143,30 @@ class BleScanner {
 
     // Try to extract anonymous ID from manufacturer data
     String? anonymousId;
+    bool isRadiusDevice = false;
     final manufacturerData = result.advertisementData.manufacturerData;
 
     if (manufacturerData.isNotEmpty) {
-      // Look for our company ID (0xFFFF)
-      final ourData = manufacturerData[0xFFFF];
-      if (ourData != null) {
+      // Look for our company ID
+      final ourData = manufacturerData[BleConstants.manufacturerId];
+      if (ourData != null && ourData.isNotEmpty) {
         anonymousId = BleIdGenerator.parseAnonymousIdFromManufacturerData(
           Uint8List.fromList(ourData),
         );
+        if (anonymousId != null) {
+          isRadiusDevice = true;
+        }
       }
     }
 
-    // If no anonymous ID found, check service data
+    // If no anonymous ID found from manufacturer data, this is not a Radius device
+    // We filter by manufacturer ID in scan, so if we get here without valid data,
+    // the device had our manufacturer ID but invalid data format
     if (anonymousId == null) {
-      final serviceData = result.advertisementData.serviceData;
-      final radiusData = serviceData[Guid(BleConstants.radiusServiceUuid)];
-      if (radiusData != null && radiusData.isNotEmpty) {
-        anonymousId = String.fromCharCodes(radiusData);
-      }
+      return null; // Not a valid Radius device
     }
-
-    // If still no ID, use device ID as fallback (less private but functional)
-    anonymousId ??= result.device.remoteId.str.hashCode.toRadixString(16);
 
     final proximity = BleDevice.calculateProximity(result.rssi);
-
-    // Only include devices within our proximity threshold
-    if (result.rssi < BleConstants.nearbyRssiThreshold &&
-        proximity == BleProximity.far) {
-      // Device is too far, but still track it
-    }
 
     return BleDevice(
       anonymousId: anonymousId,
@@ -159,8 +174,7 @@ class BleScanner {
       rssi: result.rssi,
       proximity: proximity,
       lastSeen: DateTime.now(),
-      isRadiusDevice: result.advertisementData.serviceUuids
-          .contains(Guid(BleConstants.radiusServiceUuid)),
+      isRadiusDevice: isRadiusDevice,
       deviceName: result.advertisementData.advName.isNotEmpty
           ? result.advertisementData.advName
           : null,

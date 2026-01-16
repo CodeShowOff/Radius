@@ -45,6 +45,9 @@ dependencies:
   # Permissions
   permission_handler: ^11.1.0
 
+  # Device Info
+  device_info_plus: ^10.1.0
+
   # Image Loading
   cached_network_image: ^3.3.1
   

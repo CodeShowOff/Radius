@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -55,19 +56,35 @@ class BlePermissionHandler {
     return BlePermissionStatus.granted;
   }
 
+  /// Gets the Android SDK version.
+  Future<int> _getAndroidSdkVersion() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      final androidInfo = await deviceInfo.androidInfo;
+      return androidInfo.version.sdkInt;
+    } catch (e) {
+      return 30; // Default to Android 11 if we can't determine
+    }
+  }
+
   /// Checks Android-specific permissions.
   Future<BlePermissionStatus> _checkAndroidPermissions() async {
-    // Android 12+ requires BLUETOOTH_SCAN and BLUETOOTH_ADVERTISE
-    // Android 11 and below requires location permission
+    // Get Android SDK version to determine permission requirements
+    final sdkVersion = await _getAndroidSdkVersion();
+    final isAndroid12OrHigher = sdkVersion >= 31;
 
+    // Android 12+ (API 31+): Only need Bluetooth permissions (with neverForLocation flag in manifest)
+    // Android 11 and below: Also need location permission for BLE scanning
     final permissions = <Permission>[
-      // Bluetooth permissions (Android 12+)
       Permission.bluetoothScan,
       Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
-      // Location permission (required for BLE scanning on Android)
-      Permission.locationWhenInUse,
     ];
+
+    // Only request location on Android 11 and below
+    if (!isAndroid12OrHigher) {
+      permissions.add(Permission.locationWhenInUse);
+    }
 
     // Request all permissions
     final statuses = await permissions.request();
@@ -86,11 +103,17 @@ class BlePermissionHandler {
         statuses[Permission.bluetoothAdvertise]?.isGranted ?? false;
     final bluetoothConnectGranted =
         statuses[Permission.bluetoothConnect]?.isGranted ?? false;
-    final locationGranted =
-        statuses[Permission.locationWhenInUse]?.isGranted ?? false;
 
-    // Location must be enabled for BLE scanning on Android
-    if (locationGranted) {
+    // For Android 11 and below, also check location
+    if (!isAndroid12OrHigher) {
+      final locationGranted =
+          statuses[Permission.locationWhenInUse]?.isGranted ?? false;
+
+      if (!locationGranted) {
+        return BlePermissionStatus.denied;
+      }
+
+      // Location service must be enabled for BLE scanning on Android 11 and below
       final locationServiceEnabled = await Permission.location.serviceStatus;
       if (!locationServiceEnabled.isEnabled) {
         return BlePermissionStatus.locationOff;
@@ -99,8 +122,14 @@ class BlePermissionHandler {
 
     if (bluetoothScanGranted &&
         bluetoothAdvertiseGranted &&
-        bluetoothConnectGranted &&
-        locationGranted) {
+        bluetoothConnectGranted) {
+      // IMPORTANT: Android requires Location Services to be ENABLED for BLE scanning
+      // to work, even on Android 12+ with neverForLocation flag.
+      // This is a platform limitation, not a permission issue.
+      final locationServiceEnabled = await Permission.location.serviceStatus;
+      if (!locationServiceEnabled.isEnabled) {
+        return BlePermissionStatus.locationOff;
+      }
       return BlePermissionStatus.granted;
     }
 
@@ -130,6 +159,22 @@ class BlePermissionHandler {
   /// Opens app settings for the user to manually grant permissions.
   Future<bool> openSettings() async {
     return await openAppSettings();
+  }
+
+  /// Opens location settings for the user to enable Location Services.
+  Future<bool> openLocationSettings() async {
+    if (Platform.isAndroid) {
+      // Use Geolocator or direct intent - for now use app settings
+      // The user can navigate to Location from there
+      return await openAppSettings();
+    }
+    return false;
+  }
+
+  /// Checks if Location Services are enabled.
+  Future<bool> isLocationServiceEnabled() async {
+    final status = await Permission.location.serviceStatus;
+    return status.isEnabled;
   }
 
   /// Checks if Bluetooth is currently on.

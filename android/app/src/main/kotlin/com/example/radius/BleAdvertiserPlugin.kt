@@ -104,14 +104,16 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         try {
             // Configure advertising settings
             val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)  // Changed for better discovery
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)      // Changed for better range
                 .setConnectable(false)
                 .setTimeout(0) // Advertise indefinitely
                 .build()
 
             // Convert anonymous ID to bytes
             val idBytes = anonymousId.toByteArray(Charsets.UTF_8)
+            
+            android.util.Log.d("BleAdvertiser", "Starting advertising with ID: $anonymousId (${idBytes.size} bytes)")
 
             // Configure advertising data
             val data = AdvertiseData.Builder()
@@ -120,6 +122,8 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 .addServiceUuid(ParcelUuid.fromString(serviceUuid))
                 .addManufacturerData(MANUFACTURER_ID, idBytes)
                 .build()
+            
+            android.util.Log.d("BleAdvertiser", "Advertising data configured with service UUID: $serviceUuid, manufacturer ID: 0x${MANUFACTURER_ID.toString(16)}")
 
             // Start advertising
             advertiser?.startAdvertising(settings, data, advertisingCallback)
@@ -145,6 +149,7 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private val advertisingCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
+            android.util.Log.d("BleAdvertiser", "✓ Advertising started successfully! Mode: ${settingsInEffect.mode}, TxPower: ${settingsInEffect.txPowerLevel}")
             isAdvertising = true
         }
 
@@ -159,6 +164,7 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 else -> "Unknown error: $errorCode"
             }
             
+            android.util.Log.e("BleAdvertiser", "✗ Advertising failed: $errorMessage (code: $errorCode)")
             channel.invokeMethod("onAdvertisingError", errorMessage)
         }
     }

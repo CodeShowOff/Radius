@@ -377,6 +377,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
   Future<void> _unblockUser(String blockedId, BuildContext sheetContext) async {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // Capture messenger before async gap to avoid use_build_context_synchronously
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(sheetContext);
+
       try {
         final connectionService = getIt<ConnectionService>();
         await connectionService.unblockUser(
@@ -388,14 +392,14 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
           setState(() {
             _blockedUserIds.remove(blockedId);
           });
-          Navigator.pop(sheetContext);
-          ScaffoldMessenger.of(context).showSnackBar(
+          navigator.pop();
+          messenger.showSnackBar(
             const SnackBar(content: Text('User unblocked')),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(content: Text('Failed to unblock user: $e')),
           );
         }

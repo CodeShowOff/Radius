@@ -118,8 +118,9 @@ class ProfileModel {
     if (photoUrl != null) map['photoUrl'] = photoUrl;
     if (isVisible != null) map['isVisible'] = isVisible;
     if (showOnlineStatus != null) map['showOnlineStatus'] = showOnlineStatus;
-    if (allowConnectionRequests != null)
+    if (allowConnectionRequests != null) {
       map['allowConnectionRequests'] = allowConnectionRequests;
+    }
     if (showLastSeen != null) map['showLastSeen'] = showLastSeen;
 
     return map;

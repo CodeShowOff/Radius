@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'ble_advertiser.dart';
@@ -31,6 +32,9 @@ enum BluetoothServiceState {
 
   /// Required permissions not granted.
   permissionDenied,
+
+  /// Location Services are required but turned off.
+  locationServicesOff,
 }
 
 /// Main Bluetooth service coordinating scanning and advertising.
@@ -113,6 +117,12 @@ class BluetoothService {
     _setState(BluetoothServiceState.initializing);
 
     try {
+      // Enable verbose logging in debug mode
+      if (kDebugMode) {
+        FlutterBluePlus.setLogLevel(LogLevel.verbose, color: false);
+        debugPrint('[BLE] Initializing Bluetooth service...');
+      }
+
       // Check if Bluetooth is supported
       if (!await FlutterBluePlus.isSupported) {
         _setError('Bluetooth is not supported on this device');
@@ -145,6 +155,11 @@ class BluetoothService {
         }
 
         // Bluetooth is now on, continue initialization
+      } else if (permissionStatus == BlePermissionStatus.locationOff) {
+        // Location Services are required for BLE scanning on Android
+        _setError(_permissionHandler.getPermissionMessage(permissionStatus));
+        _setState(BluetoothServiceState.locationServicesOff);
+        return false;
       } else if (permissionStatus != BlePermissionStatus.granted) {
         _setError(_permissionHandler.getPermissionMessage(permissionStatus));
         _setState(BluetoothServiceState.permissionDenied);
@@ -334,7 +349,8 @@ class BluetoothService {
     final status = await _permissionHandler.checkAndRequestPermissions();
 
     if (status == BlePermissionStatus.granted &&
-        _state == BluetoothServiceState.permissionDenied) {
+        (_state == BluetoothServiceState.permissionDenied ||
+            _state == BluetoothServiceState.locationServicesOff)) {
       _setState(BluetoothServiceState.ready);
     }
 
@@ -358,9 +374,19 @@ class BluetoothService {
     return await _permissionHandler.isBluetoothOn();
   }
 
+  /// Checks if Location Services are enabled.
+  Future<bool> isLocationServiceEnabled() async {
+    return await _permissionHandler.isLocationServiceEnabled();
+  }
+
   /// Opens app settings for permission management.
   Future<bool> openSettings() async {
     return await _permissionHandler.openSettings();
+  }
+
+  /// Opens location settings (for enabling Location Services).
+  Future<bool> openLocationSettings() async {
+    return await _permissionHandler.openLocationSettings();
   }
 
   /// Requests to turn on Bluetooth.

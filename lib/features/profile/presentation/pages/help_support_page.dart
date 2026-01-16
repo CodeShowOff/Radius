@@ -175,7 +175,7 @@ class HelpSupportPage extends StatelessWidget {
                   const Text('Category:'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: selectedCategory,
+                    initialValue: selectedCategory,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding:

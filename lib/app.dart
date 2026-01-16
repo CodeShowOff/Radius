@@ -7,6 +7,7 @@ import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
+import 'features/profile/presentation/bloc/profile_bloc.dart';
 
 /// Root widget of the Radius application.
 ///
@@ -32,6 +33,10 @@ class RadiusApp extends StatelessWidget {
           // Connection BLoC for managing user connections app-wide
           BlocProvider<ConnectionBloc>(
             create: (_) => getIt<ConnectionBloc>(),
+          ),
+          // Profile BLoC for managing user profile app-wide
+          BlocProvider<ProfileBloc>(
+            create: (_) => getIt<ProfileBloc>(),
           ),
         ],
         child: MaterialApp.router(

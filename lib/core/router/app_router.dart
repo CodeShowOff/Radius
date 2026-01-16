@@ -13,7 +13,6 @@ import '../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
 import '../../features/connections/presentation/pages/connections_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
-import '../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
@@ -138,10 +137,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: Routes.editProfile,
       name: 'editProfile',
-      builder: (context, state) => BlocProvider(
-        create: (_) => getIt<ProfileBloc>(),
-        child: const EditProfilePage(),
-      ),
+      builder: (context, state) => const EditProfilePage(),
     ),
     GoRoute(
       path: Routes.bluetoothSettings,
