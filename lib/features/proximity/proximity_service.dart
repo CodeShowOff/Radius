@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import '../../core/services/bluetooth/ble_device.dart';
+import '../../core/services/bluetooth/ble_diagnostics.dart';
+import '../../core/services/bluetooth/ble_range_mode.dart';
 import '../../core/services/bluetooth/bluetooth_service.dart';
 import '../../core/utils/input_sanitizer.dart';
 import 'data/proximity_cache.dart';
@@ -83,6 +85,9 @@ class ProximityService {
   /// Whether discovery is active.
   bool get isDiscovering => _state == ProximityServiceState.discovering;
 
+  /// Best-effort BLE diagnostics snapshot.
+  BleDiagnosticsSnapshot get bleDiagnostics => _bluetoothService.diagnostics;
+
   // ============== Initialization ==============
 
   /// Initializes the proximity service.
@@ -133,6 +138,21 @@ class ProximityService {
         return false;
       }
 
+      // Keep the current user's BLE ID synced to Firestore while the app is in
+      // use (even if we're only advertising and not scanning).
+      await _bleIdRotationSubscription?.cancel();
+      _bleIdRotationSubscription = _bluetoothService.idRotationStream.listen(
+        (newId) {
+          clearLookupCache();
+          _firestoreService.updateCurrentUserBleId(newId);
+        },
+      );
+
+      // Ensure Firestore has the current ID immediately.
+      await _firestoreService.updateCurrentUserBleId(
+        _bluetoothService.currentAnonymousId,
+      );
+
       // Subscribe to cache updates
       _cacheSubscription?.cancel();
       _cacheSubscription = _cache.cacheUpdates.listen((users) {
@@ -165,8 +185,60 @@ class ProximityService {
 
   // ============== Discovery ==============
 
+  /// Runs a single foreground scan session.
+  ///
+  /// This does NOT start advertising (advertising is managed app-wide in the
+  /// foreground). It scans for [duration], then stops and leaves the latest
+  /// results in-memory for the UI to show.
+  Future<bool> scanOnce(
+    String userId, {
+    BleRangeMode rangeMode = BleRangeMode.large,
+    Duration duration = const Duration(seconds: 15),
+  }) async {
+    // Ensure initialized with the current user.
+    final initialized = await initialize(userId);
+    if (!initialized) return false;
+
+    try {
+      // Fresh scan results.
+      _cache.clear();
+      _userLookupCache.clear();
+      _pendingLookups.clear();
+
+      // Cancel and re-subscribe to BLE devices stream for this scan.
+      _bleDevicesSubscription?.cancel();
+      _bleDevicesSubscription = _bluetoothService.devicesStream.listen(
+        _onBleDevicesUpdated,
+      );
+
+      _setState(ProximityServiceState.discovering);
+
+      final started = await _bluetoothService.startScanning(
+        continuous: false,
+        rangeMode: rangeMode,
+        duration: duration,
+        intervalScan: false,
+      );
+      if (!started) {
+        final error = _bluetoothService.lastError ?? 'Failed to start scan';
+        _setError(error);
+        _setState(ProximityServiceState.error);
+        return false;
+      }
+
+      // After the scan duration completes, scanner stops itself. Mark idle.
+      _setState(ProximityServiceState.idle);
+      return true;
+    } catch (e) {
+      _setError('Scan failed: $e');
+      _setState(ProximityServiceState.error);
+      return false;
+    }
+  }
+
   /// Starts proximity discovery (scanning and advertising).
-  Future<bool> startDiscovery() async {
+  Future<bool> startDiscovery(
+      {BleRangeMode rangeMode = BleRangeMode.large}) async {
     if (_state == ProximityServiceState.discovering) return true;
 
     if (_currentUserId == null) {
@@ -184,15 +256,13 @@ class ProximityService {
         _onBleDevicesUpdated,
       );
 
-      // Subscribe to BLE state changes to update Firestore with current ID
-      _bleStateSubscription = _bluetoothService.stateStream.listen((_) {
-        _firestoreService.updateCurrentUserBleId(
-          _bluetoothService.currentAnonymousId,
-        );
-      });
-
       // Start BLE discovery
-      final started = await _bluetoothService.startDiscovery();
+      final started = await _bluetoothService.startDiscovery(
+        rangeMode: rangeMode,
+        // User chose Nearby: run continuous foreground scanning.
+        // This prevents scan-status flicker from duty-cycled scanning.
+        continuousScan: true,
+      );
       if (!started) {
         final error =
             _bluetoothService.lastError ?? 'Failed to start BLE discovery';
@@ -215,15 +285,11 @@ class ProximityService {
 
   /// Stops proximity discovery.
   Future<void> stopDiscovery() async {
-    await _bluetoothService.stopDiscovery();
+    // Stop scanning when leaving Nearby, but keep advertising active while
+    // the app is in the foreground.
+    await _bluetoothService.stopScanning();
     _bleDevicesSubscription?.cancel();
     _bleStateSubscription?.cancel();
-
-    // Clear nearby users from Firestore
-    await _firestoreService.clearNearbyUsers();
-
-    // Clear local cache (will trigger encounter logging)
-    _cache.clear();
 
     _setState(ProximityServiceState.idle);
   }

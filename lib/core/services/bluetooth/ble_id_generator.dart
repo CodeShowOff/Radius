@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:uuid/uuid.dart';
@@ -9,8 +8,9 @@ import 'ble_constants.dart';
 
 /// Generates and manages rotating anonymous BLE IDs for privacy.
 class BleIdGenerator {
+  static const List<int> _radiusMagic = <int>[0x52, 0x44, 0x01];
+
   final Uuid _uuid = const Uuid();
-  final Random _random = Random.secure();
 
   String _currentAnonymousId = '';
   DateTime _lastRotation = DateTime.now();
@@ -34,17 +34,13 @@ class BleIdGenerator {
   /// Generates a new anonymous ID.
   /// The ID is a truncated UUID combined with random bytes for uniqueness.
   String _generateAnonymousId() {
-    // Generate a UUID v4
-    final uuid = _uuid.v4();
-
-    // Add some random bytes for additional entropy
-    final randomBytes = List<int>.generate(4, (_) => _random.nextInt(256));
-    final randomHex =
-        randomBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-    // Combine and truncate to create a compact ID
-    // Format: first 8 chars of UUID + 8 random hex chars = 16 chars
-    return '${uuid.substring(0, 8)}$randomHex'.toUpperCase();
+    // Generate a UUID v4 and strip dashes.
+    // This yields exactly 32 hex characters (16 bytes when packed) which is:
+    // - stable length
+    // - safe for manufacturer data transport
+    // - easy to represent as uppercase hex in-app
+    final uuid = _uuid.v4().replaceAll('-', '');
+    return uuid.toUpperCase();
   }
 
   /// Rotates to a new anonymous ID.
@@ -78,15 +74,25 @@ class BleIdGenerator {
 
   /// Converts the current ID to bytes for BLE advertising.
   Uint8List get currentIdAsBytes {
+    // Kept for backward compatibility only; the active advertising format uses
+    // packed bytes (see [currentIdAsPackedBytes]).
     return Uint8List.fromList(utf8.encode(_currentAnonymousId));
+  }
+
+  /// Converts the current anonymous ID (hex string) into compact bytes.
+  ///
+  /// Our anonymous IDs are uppercase hex; packing them prevents advertising
+  /// payload overflow (Android legacy ADV payload is limited to 31 bytes).
+  Uint8List get currentIdAsPackedBytes {
+    return _hexToBytes(_currentAnonymousId);
   }
 
   /// Creates manufacturer data for BLE advertising.
   /// Note: For Android native advertising, we only return the anonymous ID bytes.
   /// The company ID is set separately in the native code via addManufacturerData().
   Uint8List createManufacturerData() {
-    // Just return the anonymous ID bytes - the company ID is handled by native code
-    return currentIdAsBytes;
+    // Return compact bytes; the company ID is handled by native code.
+    return currentIdAsPackedBytes;
   }
 
   /// Parses an anonymous ID from manufacturer data value.
@@ -94,27 +100,108 @@ class BleIdGenerator {
   /// so the value (data parameter) contains ONLY the anonymous ID bytes.
   /// Returns null if data is invalid or malformed.
   static String? parseAnonymousIdFromManufacturerData(Uint8List data) {
-    // The data should contain just the anonymous ID (no company ID prefix)
-    // Our IDs are 16 characters (8 UUID + 8 random hex)
-    if (data.isEmpty || data.length < 8) return null;
+    if (data.isEmpty) return null;
 
-    // Validate length
-    if (data.length > BleConstants.maxAnonymousIdLength) {
-      return null;
-    }
-
-    try {
-      final decoded = utf8.decode(data);
-
-      // Validate the ID format: should be uppercase alphanumeric
-      if (!RegExp(r'^[A-F0-9]{8,20}$').hasMatch(decoded)) {
-        return null;
+    // 1) Back-compat: some builds advertised ASCII hex directly.
+    if (data.length <= BleConstants.maxAnonymousIdLength) {
+      try {
+        final decoded = utf8.decode(data);
+        final upper = decoded.toUpperCase();
+        if (RegExp(r'^[A-F0-9]{8,40}$').hasMatch(upper)) {
+          return upper;
+        }
+      } catch (_) {
+        // Fall through to packed-bytes decoding.
       }
+    }
 
-      return decoded;
-    } catch (_) {
+    // New format: magic header + packed anonymous id bytes.
+    //
+    // On Android scan records, manufacturerData[companyId] usually returns only
+    // the manufacturer-specific bytes (company ID already stripped).
+    // On iOS/CoreBluetooth, some stacks expose manufacturer data including the
+    // 2-byte company ID prefix. We only strip that prefix when it's followed by
+    // the Radius magic header to avoid corrupting random payloads.
+    // IMPORTANT: require the Radius magic header for packed payloads.
+    // We filter scans by manufacturer ID (0xFFFF) which is commonly used for testing,
+    // so without a signature we would accidentally treat unrelated devices as Radius.
+    if (!_hasRadiusMagic(data)) return null;
+
+    final Uint8List normalized =
+        _stripRadiusMagicIfPresent(_stripCompanyIdPrefixIfPresent(data));
+
+    // 2) Preferred: packed bytes -> hex string.
+    // e.g. 8 bytes -> 16 hex chars.
+    final hex = _bytesToHex(normalized);
+    if (!RegExp(r'^[A-F0-9]{8,40}$').hasMatch(hex)) return null;
+
+    // Keep within our max ID size.
+    if (hex.length > BleConstants.maxAnonymousIdLength) {
       return null;
     }
+    return hex;
+  }
+
+  static bool _hasRadiusMagic(Uint8List data) {
+    // Either:
+    // - starts with magic directly (common on Android scan manufacturerData value)
+    // - starts with companyId 0xFFFF then magic (some iOS/CoreBluetooth exposures)
+    if (_startsWithRadiusMagic(data, startIndex: 0)) return true;
+    if (data.length >= 2 && data[0] == 0xFF && data[1] == 0xFF) {
+      return _startsWithRadiusMagic(data, startIndex: 2);
+    }
+    return false;
+  }
+
+  static bool _startsWithRadiusMagic(Uint8List data,
+      {required int startIndex}) {
+    if (data.length < startIndex + _radiusMagic.length) return false;
+    for (int i = 0; i < _radiusMagic.length; i++) {
+      if (data[startIndex + i] != _radiusMagic[i]) return false;
+    }
+    return true;
+  }
+
+  static Uint8List _stripRadiusMagicIfPresent(Uint8List data) {
+    if (data.length < _radiusMagic.length) return data;
+    for (int i = 0; i < _radiusMagic.length; i++) {
+      if (data[i] != _radiusMagic[i]) return data;
+    }
+    return Uint8List.fromList(data.sublist(_radiusMagic.length));
+  }
+
+  static Uint8List _stripCompanyIdPrefixIfPresent(Uint8List data) {
+    // Only strip 0xFFFF if immediately followed by the Radius magic header.
+    const int companyIdLo = 0xFF;
+    const int companyIdHi = 0xFF;
+    if (data.length < 2 + _radiusMagic.length) return data;
+    if (data[0] != companyIdLo || data[1] != companyIdHi) return data;
+
+    for (int i = 0; i < _radiusMagic.length; i++) {
+      if (data[2 + i] != _radiusMagic[i]) return data;
+    }
+
+    return Uint8List.fromList(data.sublist(2));
+  }
+
+  static Uint8List _hexToBytes(String hex) {
+    final normalized = hex.trim();
+    if (normalized.length.isOdd) {
+      throw const FormatException('Hex string must have even length');
+    }
+    final out = Uint8List(normalized.length ~/ 2);
+    for (var i = 0; i < normalized.length; i += 2) {
+      out[i ~/ 2] = int.parse(normalized.substring(i, i + 2), radix: 16);
+    }
+    return out;
+  }
+
+  static String _bytesToHex(Uint8List bytes) {
+    final sb = StringBuffer();
+    for (final b in bytes) {
+      sb.write(b.toRadixString(16).padLeft(2, '0'));
+    }
+    return sb.toString().toUpperCase();
   }
 
   /// Disposes resources.

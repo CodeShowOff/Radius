@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/entities/nearby_user.dart';
 
@@ -57,6 +58,9 @@ class ProximityFirestoreService {
         'isVisible': data['isDiscoverable'] ?? true,
       };
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ProximityFirestoreService] lookupUserByBleId failed: $e');
+      }
       return null;
     }
   }
@@ -71,6 +75,10 @@ class ProximityFirestoreService {
         'bleIdUpdatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+            '[ProximityFirestoreService] updateCurrentUserBleId failed: $e');
+      }
       // Ignore errors - not critical
     }
   }

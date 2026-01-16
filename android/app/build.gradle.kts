@@ -29,7 +29,7 @@ android {
         applicationId = "com.example.radius"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion  // Required for Firebase Auth and BLE (Android 12+ permissions)
+        minSdk = 31 // Android 12+ only (no legacy Bluetooth/location permissions)
         targetSdk = 35  // Android 15+ for latest features
         versionCode = flutter.versionCode
         versionName = flutter.versionName

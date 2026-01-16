@@ -56,35 +56,21 @@ class BlePermissionHandler {
     return BlePermissionStatus.granted;
   }
 
-  /// Gets the Android SDK version.
-  Future<int> _getAndroidSdkVersion() async {
-    try {
-      final deviceInfo = DeviceInfoPlugin();
-      final androidInfo = await deviceInfo.androidInfo;
-      return androidInfo.version.sdkInt;
-    } catch (e) {
-      return 30; // Default to Android 11 if we can't determine
-    }
-  }
-
   /// Checks Android-specific permissions.
   Future<BlePermissionStatus> _checkAndroidPermissions() async {
-    // Get Android SDK version to determine permission requirements
-    final sdkVersion = await _getAndroidSdkVersion();
-    final isAndroid12OrHigher = sdkVersion >= 31;
+    // Android 12+ (API 31+) no longer requires Location permission for BLE scanning
+    // when using the Bluetooth runtime permissions.
+    //
+    // However, Android 6-11 typically require Location permission AND Location
+    // services enabled, otherwise scans may return zero results.
+    final sdkInt = await _getAndroidSdkInt();
 
-    // Android 12+ (API 31+): Only need Bluetooth permissions (with neverForLocation flag in manifest)
-    // Android 11 and below: Also need location permission for BLE scanning
     final permissions = <Permission>[
       Permission.bluetoothScan,
       Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
+      if (sdkInt != null && sdkInt < 31) Permission.location,
     ];
-
-    // Only request location on Android 11 and below
-    if (!isAndroid12OrHigher) {
-      permissions.add(Permission.locationWhenInUse);
-    }
 
     // Request all permissions
     final statuses = await permissions.request();
@@ -96,6 +82,17 @@ class BlePermissionHandler {
       }
     }
 
+    // Only require Location services for pre-Android 12 devices.
+    if (sdkInt != null && sdkInt < 31) {
+      // Location service must be enabled (Android < 12). If it's off, scanning often
+      // yields zero devices without throwing.
+      final locationServiceEnabled =
+          await Permission.location.serviceStatus.isEnabled;
+      if (!locationServiceEnabled) {
+        return BlePermissionStatus.locationOff;
+      }
+    }
+
     // Check if all required permissions are granted
     final bluetoothScanGranted =
         statuses[Permission.bluetoothScan]?.isGranted ?? false;
@@ -103,37 +100,28 @@ class BlePermissionHandler {
         statuses[Permission.bluetoothAdvertise]?.isGranted ?? false;
     final bluetoothConnectGranted =
         statuses[Permission.bluetoothConnect]?.isGranted ?? false;
-
-    // For Android 11 and below, also check location
-    if (!isAndroid12OrHigher) {
-      final locationGranted =
-          statuses[Permission.locationWhenInUse]?.isGranted ?? false;
-
-      if (!locationGranted) {
-        return BlePermissionStatus.denied;
-      }
-
-      // Location service must be enabled for BLE scanning on Android 11 and below
-      final locationServiceEnabled = await Permission.location.serviceStatus;
-      if (!locationServiceEnabled.isEnabled) {
-        return BlePermissionStatus.locationOff;
-      }
-    }
+    final locationGranted = (sdkInt != null && sdkInt < 31)
+        ? (statuses[Permission.location]?.isGranted ?? false)
+        : true;
 
     if (bluetoothScanGranted &&
         bluetoothAdvertiseGranted &&
-        bluetoothConnectGranted) {
-      // IMPORTANT: Android requires Location Services to be ENABLED for BLE scanning
-      // to work, even on Android 12+ with neverForLocation flag.
-      // This is a platform limitation, not a permission issue.
-      final locationServiceEnabled = await Permission.location.serviceStatus;
-      if (!locationServiceEnabled.isEnabled) {
-        return BlePermissionStatus.locationOff;
-      }
+        bluetoothConnectGranted &&
+        locationGranted) {
       return BlePermissionStatus.granted;
     }
 
     return BlePermissionStatus.denied;
+  }
+
+  Future<int?> _getAndroidSdkInt() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return info.version.sdkInt;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Checks iOS-specific permissions.
@@ -159,22 +147,6 @@ class BlePermissionHandler {
   /// Opens app settings for the user to manually grant permissions.
   Future<bool> openSettings() async {
     return await openAppSettings();
-  }
-
-  /// Opens location settings for the user to enable Location Services.
-  Future<bool> openLocationSettings() async {
-    if (Platform.isAndroid) {
-      // Use Geolocator or direct intent - for now use app settings
-      // The user can navigate to Location from there
-      return await openAppSettings();
-    }
-    return false;
-  }
-
-  /// Checks if Location Services are enabled.
-  Future<bool> isLocationServiceEnabled() async {
-    final status = await Permission.location.serviceStatus;
-    return status.isEnabled;
   }
 
   /// Checks if Bluetooth is currently on.
@@ -251,7 +223,12 @@ class BlePermissionHandler {
       case BlePermissionStatus.bluetoothOff:
         return 'Please turn on Bluetooth to discover nearby users';
       case BlePermissionStatus.locationOff:
-        return 'Please enable Location Services for Bluetooth scanning';
+        return 'Please turn on Location services to discover nearby users';
     }
+  }
+
+  /// Short, user-facing rationale that can be shown before requesting permissions.
+  String getPermissionRationale() {
+    return 'Radius uses Bluetooth to discover nearby users. On some Android versions (especially Android 11 and below), the system may require Location permission and Location services enabled for BLE scanning (no GPS data is collected).';
   }
 }

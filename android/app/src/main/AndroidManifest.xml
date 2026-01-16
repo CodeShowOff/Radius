@@ -8,18 +8,19 @@
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    
-    <!-- Bluetooth permissions for Android 11 and below -->
-    <uses-permission android:name="android.permission.BLUETOOTH" 
+
+    <!-- Android 11 and lower: Location permission may be required for BLE scanning.
+         Android 12+ (API 31+): not required when using BLUETOOTH_SCAN with neverForLocation.
+         (See Android Developers: Bluetooth permissions.) -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" 
-        android:maxSdkVersion="30" />
-    
-    <!-- Location permission (required for BLE scanning on Android 11 and below) -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="30" />
+
+    <!-- Foreground service to keep BLE advertising active/reliable. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+        tools:targetApi="34" />
     
     <!-- Internet permission for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -54,6 +55,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".BleForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            tools:targetApi="q" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

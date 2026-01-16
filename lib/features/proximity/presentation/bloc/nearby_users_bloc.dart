@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/services/bluetooth/ble_device.dart';
+import '../../../../core/services/bluetooth/ble_range_mode.dart';
 import '../../domain/entities/nearby_user.dart';
 import '../../proximity_service.dart';
 
@@ -14,12 +15,14 @@ part 'nearby_users_state.dart';
 class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   final ProximityService _proximityService;
 
-  /// Duration to wait before showing "no one nearby" message.
-  static const Duration _initialSearchTimeout = Duration(seconds: 10);
+  /// Duration to wait before showing a "no one nearby yet" hint.
+  /// Discovery continues in foreground; this only affects UI messaging.
+  static const Duration _initialSearchTimeout = Duration(seconds: 15);
 
   StreamSubscription<List<NearbyUser>>? _nearbyUsersSubscription;
   StreamSubscription<ProximityServiceState>? _serviceStateSubscription;
   Timer? _initialSearchTimer;
+  Timer? _bleDiagnosticsTimer;
   bool _hasFoundUsers = false;
 
   NearbyUsersBloc({required ProximityService proximityService})
@@ -32,6 +35,22 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     on<NearbyUsersFilterChanged>(_onFilterChanged);
     on<NearbyUsersRefresh>(_onRefresh);
     on<NearbyUsersInitialSearchTimeout>(_onInitialSearchTimeout);
+    on<NearbyUsersBleDiagnosticsTick>(_onBleDiagnosticsTick);
+    on<NearbyUsersScanOnceRequested>(_onScanOnceRequested);
+    on<NearbyUsersScanOnceCompleted>(_onScanOnceCompleted);
+  }
+
+  void _startBleDiagnosticsTimer() {
+    _bleDiagnosticsTimer?.cancel();
+    _bleDiagnosticsTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => add(const NearbyUsersBleDiagnosticsTick()),
+    );
+  }
+
+  void _stopBleDiagnosticsTimer() {
+    _bleDiagnosticsTimer?.cancel();
+    _bleDiagnosticsTimer = null;
   }
 
   Future<void> _onStartDiscovery(
@@ -70,6 +89,10 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
       }
     }
 
+    // Remember the last initialized user for subsequent explicit scan requests.
+    // (Nearby no longer auto-scans.)
+    _lastInitializedUserId = event.userId;
+
     // Subscribe to nearby users stream
     _nearbyUsersSubscription?.cancel();
     _nearbyUsersSubscription = _proximityService.nearbyUsersStream.listen(
@@ -82,44 +105,137 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
       (serviceState) => add(NearbyUsersServiceStateChanged(serviceState)),
     );
 
-    // Start discovery
-    final started = await _proximityService.startDiscovery();
-    if (!started) {
-      // Get the actual error from the service's lastError property
-      final errorMessage = _proximityService.lastError ??
-          'Failed to start discovery. Check Bluetooth and location permissions.';
+    // IMPORTANT: opening Nearby should not start scanning automatically.
+    emit(state.copyWith(
+      status: NearbyUsersStatus.idle,
+      isDiscovering: false,
+      searchTimedOut: false,
+      clearErrorMessage: true,
+    ));
+  }
 
-      emit(state.copyWith(
-        status: NearbyUsersStatus.error,
-        errorMessage: errorMessage,
-      ));
-      return;
+  Future<void> _onScanOnceRequested(
+    NearbyUsersScanOnceRequested event,
+    Emitter<NearbyUsersState> emit,
+  ) async {
+    _lastInitializedUserId = event.userId;
+
+    // Ensure the service is initialized and streams are wired.
+    final currentServiceState = _proximityService.state;
+    final isInErrorState = currentServiceState == ProximityServiceState.error;
+    final needsInit =
+        currentServiceState == ProximityServiceState.idle || isInErrorState;
+
+    if (isInErrorState) {
+      _proximityService.reset();
     }
 
-    // Reset tracking flags and start the initial search timer
+    if (needsInit) {
+      final initialized = await _proximityService.initialize(
+        event.userId,
+        forceReinit: isInErrorState,
+      );
+      if (!initialized) {
+        emit(state.copyWith(
+          status: NearbyUsersStatus.error,
+          errorMessage:
+              _proximityService.lastError ?? 'Failed to initialize Bluetooth',
+          isDiscovering: false,
+        ));
+        return;
+      }
+    }
+
+    // Subscribe to nearby users stream
+    _nearbyUsersSubscription?.cancel();
+    _nearbyUsersSubscription = _proximityService.nearbyUsersStream.listen(
+      (users) => add(NearbyUsersUpdated(users)),
+    );
+
+    // Subscribe to service state
+    _serviceStateSubscription?.cancel();
+    _serviceStateSubscription = _proximityService.stateStream.listen(
+      (serviceState) => add(NearbyUsersServiceStateChanged(serviceState)),
+    );
+
     _hasFoundUsers = false;
     _initialSearchTimer?.cancel();
+    _stopBleDiagnosticsTimer();
+
+    emit(state.copyWith(
+      status: NearbyUsersStatus.discovering,
+      isDiscovering: true,
+      searchTimedOut: false,
+      rangeMode: event.rangeMode,
+      clearErrorMessage: true,
+    ));
+
+    // UI hint if nothing is found partway through.
     _initialSearchTimer = Timer(_initialSearchTimeout, () {
       if (!_hasFoundUsers) {
         add(const NearbyUsersInitialSearchTimeout());
       }
     });
 
+    _startBleDiagnosticsTimer();
+
+    // IMPORTANT: do not await the whole scan duration here.
+    // If we await, the bloc can't process NearbyUsersUpdated events during the scan,
+    // making it appear like discovery "never finds" anything until the scan ends.
+    // Run scanOnce asynchronously and update UI via NearbyUsersScanOnceCompleted.
+    unawaited(
+      _proximityService
+          .scanOnce(
+            event.userId,
+            rangeMode: event.rangeMode,
+            duration: const Duration(seconds: 15),
+          )
+          .then((ok) => add(NearbyUsersScanOnceCompleted(ok))),
+    );
+  }
+
+  void _onScanOnceCompleted(
+    NearbyUsersScanOnceCompleted event,
+    Emitter<NearbyUsersState> emit,
+  ) {
+    _stopBleDiagnosticsTimer();
+    _initialSearchTimer?.cancel();
+
+    if (!event.ok) {
+      emit(state.copyWith(
+        status: NearbyUsersStatus.error,
+        errorMessage: _proximityService.lastError ?? 'Scan failed',
+        isDiscovering: false,
+      ));
+      return;
+    }
+
+    final hasUsers = state.users.isNotEmpty;
     emit(state.copyWith(
-      status: NearbyUsersStatus.discovering,
-      isDiscovering: true,
+      status:
+          hasUsers ? NearbyUsersStatus.discovering : NearbyUsersStatus.empty,
+      isDiscovering: false,
+      searchTimedOut: !hasUsers,
     ));
   }
+
+  String? _lastInitializedUserId;
 
   Future<void> _onStopDiscovery(
     NearbyUsersStopDiscovery event,
     Emitter<NearbyUsersState> emit,
   ) async {
     _initialSearchTimer?.cancel();
+    _stopBleDiagnosticsTimer();
     await _proximityService.stopDiscovery();
+
     emit(state.copyWith(
-      status: NearbyUsersStatus.idle,
+      // Keep last scan results; just stop the scanning indicator.
+      status: state.users.isEmpty
+          ? NearbyUsersStatus.idle
+          : NearbyUsersStatus.discovering,
       isDiscovering: false,
+      clearBleDebugInfo: true,
     ));
   }
 
@@ -141,6 +257,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
           : NearbyUsersStatus.discovering,
       users: event.users,
       filteredUsers: filteredUsers,
+      searchTimedOut: state.searchTimedOut && event.users.isEmpty,
     ));
   }
 
@@ -152,7 +269,9 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     if (state.isDiscovering && state.users.isEmpty) {
       emit(state.copyWith(
         status: NearbyUsersStatus.empty,
-        isDiscovering: false, // Stop showing "searching" animation
+        // Keep discovery active; just switch messaging to "no one nearby yet".
+        isDiscovering: true,
+        searchTimedOut: true,
       ));
     }
   }
@@ -164,7 +283,9 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     switch (event.serviceState) {
       case ProximityServiceState.idle:
         emit(state.copyWith(
-          status: NearbyUsersStatus.idle,
+          status: state.users.isEmpty
+              ? NearbyUsersStatus.idle
+              : NearbyUsersStatus.discovering,
           isDiscovering: false,
         ));
         break;
@@ -202,37 +323,31 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     NearbyUsersRefresh event,
     Emitter<NearbyUsersState> emit,
   ) async {
-    // Reset search state
-    _hasFoundUsers = false;
-    _initialSearchTimer?.cancel();
-
-    emit(state.copyWith(
-      status: NearbyUsersStatus.discovering,
-      isDiscovering: true,
+    // Refresh is now equivalent to an explicit scan request.
+    final userId = _lastInitializedUserId;
+    if (userId == null || userId.isEmpty) return;
+    add(NearbyUsersScanOnceRequested(
+      userId: userId,
+      rangeMode: event.rangeMode ?? state.rangeMode,
     ));
+  }
 
-    // Clear and restart discovery
-    await _proximityService.stopDiscovery();
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    final started = await _proximityService.startDiscovery();
-    if (!started) {
-      final errorMessage = _proximityService.lastError ??
-          'Failed to restart discovery. Check Bluetooth and permissions.';
-      emit(state.copyWith(
-        status: NearbyUsersStatus.error,
-        errorMessage: errorMessage,
-        isDiscovering: false,
-      ));
-      return;
-    }
-
-    // Start new timeout timer
-    _initialSearchTimer = Timer(_initialSearchTimeout, () {
-      if (!_hasFoundUsers) {
-        add(const NearbyUsersInitialSearchTimeout());
-      }
-    });
+  void _onBleDiagnosticsTick(
+    NearbyUsersBleDiagnosticsTick event,
+    Emitter<NearbyUsersState> emit,
+  ) {
+    final d = _proximityService.bleDiagnostics;
+    emit(state.copyWith(
+      bleDebugInfo: BleDebugInfo(
+        isScanning: d.isScanning,
+        isAdvertising: d.isAdvertising,
+        lastError: d.lastError,
+        rawScanResults: d.rawScanResultCount,
+        parsedRadiusDevices: d.parsedRadiusCount,
+        filteredOut:
+            (d.rawScanResultCount - d.parsedRadiusCount).clamp(0, 1 << 30),
+      ),
+    ));
   }
 
   List<NearbyUser> _applyFilter(
@@ -260,6 +375,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     _nearbyUsersSubscription?.cancel();
     _serviceStateSubscription?.cancel();
     _initialSearchTimer?.cancel();
+    _stopBleDiagnosticsTimer();
     return super.close();
   }
 }

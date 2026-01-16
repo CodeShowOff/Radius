@@ -46,6 +46,13 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
+	<!-- Keep BLE scanning/advertising alive as much as iOS allows -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+	</array>
+	
 	<!-- Bluetooth Usage Descriptions (required for BLE) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Radius uses Bluetooth to discover and connect with nearby users.</string>

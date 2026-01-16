@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/ble_device.dart';
+import '../../../../core/services/bluetooth/ble_range_mode.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/nearby_user.dart';
@@ -27,12 +29,18 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _startDiscovery();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Ensure scanning stops when user leaves the Nearby screen.
+    // Advertising is managed app-wide while in foreground.
+    try {
+      context.read<NearbyUsersBloc>().add(const NearbyUsersStopDiscovery());
+    } catch (_) {
+      // Ignore if the bloc is already disposed.
+    }
     super.dispose();
   }
 
@@ -41,21 +49,73 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     final bloc = context.read<NearbyUsersBloc>();
 
     if (state == AppLifecycleState.paused) {
-      // Stop discovery when app goes to background
+      // Stop scanning when app goes to background.
       bloc.add(const NearbyUsersStopDiscovery());
-    } else if (state == AppLifecycleState.resumed) {
-      // Resume discovery when app comes to foreground
-      _startDiscovery();
     }
   }
 
-  void _startDiscovery() {
+  Future<void> _promptRangeAndScan() async {
+    final bloc = context.read<NearbyUsersBloc>();
+    final current = bloc.state.rangeMode;
+
+    final selected = await showModalBottomSheet<BleRangeMode>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Search range',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'BLE range depends on environment. These presets adjust transmit power (Android) and RSSI filtering.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                RadioGroup<BleRangeMode>(
+                  groupValue: current,
+                  onChanged: (v) {
+                    if (v != null) {
+                      Navigator.of(context).pop(v);
+                    }
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final mode in BleRangeMode.values)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Radio<BleRangeMode>(value: mode),
+                          title: Text(mode.label),
+                          subtitle: Text(mode.description),
+                          onTap: () => Navigator.of(context).pop(mode),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+
     final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
-      context.read<NearbyUsersBloc>().add(
-            NearbyUsersStartDiscovery(authState.user.id),
-          );
-    }
+    if (authState is! AuthAuthenticated) return;
+
+    bloc.add(NearbyUsersScanOnceRequested(
+      userId: authState.user.id,
+      rangeMode: selected,
+    ));
   }
 
   @override
@@ -64,26 +124,26 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       appBar: AppBar(
         title: const Text('Nearby'),
         actions: [
-          // Scanning indicator
           BlocBuilder<NearbyUsersBloc, NearbyUsersState>(
             buildWhen: (prev, curr) => prev.isDiscovering != curr.isDiscovering,
             builder: (context, state) {
-              if (state.isDiscovering) {
-                return const Padding(
-                  padding: EdgeInsets.only(right: 16),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+              return Row(
+                children: [
+                  if (state.isDiscovering)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.bluetooth_searching),
+                    onPressed: () => _promptRangeAndScan(),
+                    tooltip: state.isDiscovering ? 'Scanning…' : 'Scan',
                   ),
-                );
-              }
-              return IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: () => context
-                    .read<NearbyUsersBloc>()
-                    .add(const NearbyUsersRefresh()),
-                tooltip: 'Refresh',
+                ],
               );
             },
           ),
@@ -140,55 +200,113 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
   }
 
   Widget _buildContent(BuildContext context, NearbyUsersState state) {
+    Widget content;
+
     switch (state.status) {
       case NearbyUsersStatus.loading:
-        return const Center(
+        content = const Center(
           child: CircularProgressIndicator(),
         );
+        break;
 
       case NearbyUsersStatus.error:
-        return _ErrorState(
+        content = _ErrorState(
           message: state.errorMessage ?? 'An error occurred',
-          onRetry: _startDiscovery,
+          onRetry: () => _promptRangeAndScan(),
         );
-
-      case NearbyUsersStatus.empty:
-        return NearbyUsersEmptyState(
-          isScanning: state.isDiscovering,
-          onRetry: state.isDiscovering
-              ? null
-              : () => context
-                  .read<NearbyUsersBloc>()
-                  .add(const NearbyUsersRefresh()),
-        );
+        break;
 
       case NearbyUsersStatus.idle:
+        content = NearbyUsersEmptyState(
+          isScanning: false,
+          hasSearchedAwhile: false,
+          onRetry: () => _promptRangeAndScan(),
+        );
+        break;
+
+      case NearbyUsersStatus.empty:
+        content = NearbyUsersEmptyState(
+          isScanning: state.isDiscovering,
+          hasSearchedAwhile: state.searchTimedOut,
+          onRetry: () => _promptRangeAndScan(),
+        );
+        break;
+
       case NearbyUsersStatus.discovering:
         if (state.filteredUsers.isEmpty && state.users.isNotEmpty) {
-          // Users exist but filter hides them
-          return _NoFilterResults(
+          // Users exist but filter hides them.
+          content = _NoFilterResults(
             onClearFilter: () => context
                 .read<NearbyUsersBloc>()
                 .add(const NearbyUsersFilterChanged(NearbyUsersFilter.all)),
           );
-        }
-
-        if (state.filteredUsers.isEmpty) {
-          return NearbyUsersEmptyState(
+        } else if (state.filteredUsers.isEmpty) {
+          content = NearbyUsersEmptyState(
             isScanning: state.isDiscovering,
-            onRetry: state.isDiscovering
-                ? null
-                : () => context
-                    .read<NearbyUsersBloc>()
-                    .add(const NearbyUsersRefresh()),
+            hasSearchedAwhile: state.searchTimedOut,
+            onRetry: () => _promptRangeAndScan(),
+          );
+        } else {
+          content = _NearbyUsersList(
+            users: state.filteredUsers,
+            isDiscovering: state.isDiscovering,
           );
         }
-
-        return _NearbyUsersList(
-          users: state.filteredUsers,
-          isDiscovering: state.isDiscovering,
-        );
+        break;
     }
+
+    return _withBleDebugPanel(content, state);
+  }
+
+  Widget _withBleDebugPanel(Widget child, NearbyUsersState state) {
+    if (!kDebugMode) return child;
+    final d = state.bleDebugInfo;
+    if (d == null) return child;
+
+    final error = (d.lastError ?? '').trim();
+    final errorText = error.isEmpty ? 'none' : error;
+
+    return Column(
+      children: [
+        Expanded(child: child),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).dividerColor.withAlpha(64),
+              ),
+            ),
+          ),
+          child: DefaultTextStyle(
+            style: Theme.of(context).textTheme.bodySmall!,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'BLE Diagnostics (debug)',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Scanning: ${d.isScanning} | Advertising: ${d.isAdvertising}',
+                ),
+                Text(
+                  'Scan results: raw=${d.rawScanResults} parsed=${d.parsedRadiusDevices} filtered=${d.filteredOut}',
+                ),
+                Text(
+                  'Last error: $errorText',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -206,9 +324,17 @@ class _NearbyUsersList extends StatelessWidget {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: () async {
-        context.read<NearbyUsersBloc>().add(const NearbyUsersRefresh());
-        // Wait a bit for UI feedback
-        await Future.delayed(const Duration(seconds: 1));
+        final bloc = context.read<NearbyUsersBloc>();
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          bloc.add(NearbyUsersScanOnceRequested(
+            userId: authState.user.id,
+            rangeMode: bloc.state.rangeMode,
+          ));
+
+          // Keep the indicator visible for the scan duration.
+          await Future.delayed(const Duration(seconds: 15));
+        }
       },
       child: ListView.builder(
         // Performance optimizations

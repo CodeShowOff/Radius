@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'ble_constants.dart';
 import 'ble_id_generator.dart';
+import 'ble_range_mode.dart';
 
 /// Handles BLE advertising to broadcast presence to nearby devices.
 ///
@@ -16,6 +17,7 @@ class BleAdvertiser {
   bool _isAdvertising = false;
   String? _lastError;
   StreamSubscription<String>? _idRotationSubscription;
+  BleRangeMode _currentRangeMode = BleRangeMode.large;
 
   BleAdvertiser({required BleIdGenerator idGenerator})
       : _idGenerator = idGenerator {
@@ -33,31 +35,58 @@ class BleAdvertiser {
   String get currentAdvertisedId => _idGenerator.currentAnonymousId;
 
   /// Starts BLE advertising.
-  Future<bool> startAdvertising() async {
+  Future<bool> startAdvertising(
+      {BleRangeMode rangeMode = BleRangeMode.large}) async {
     if (_isAdvertising) return true;
     _lastError = null;
+    _currentRangeMode = rangeMode;
+
+    // Ensure we don't leak an old subscription if startAdvertising is retried.
+    await _idRotationSubscription?.cancel();
+    _idRotationSubscription = null;
 
     try {
-      // Listen for ID rotations to update advertisement
-      _idRotationSubscription = _idGenerator.idRotationStream.listen(
-        (_) => _updateAdvertisement(),
-      );
-
       // Call native platform code
       final result = await _channel.invokeMethod<bool>('startAdvertising', {
         'anonymousId': _idGenerator.currentAnonymousId,
         'serviceUuid': BleConstants.radiusServiceUuid,
+        'androidTxPowerLevel': rangeMode.androidTxPowerLevel,
+        'androidAdvertiseMode': rangeMode.androidAdvertiseMode,
       });
 
       _isAdvertising = result ?? false;
       if (!_isAdvertising) {
         _lastError = 'Native advertising returned false';
+        return false;
       }
+
+      // Only listen for ID rotations once advertising is confirmed active.
+      _idRotationSubscription = _idGenerator.idRotationStream.listen(
+        (_) => _updateAdvertisement(),
+      );
       return _isAdvertising;
     } catch (e) {
       _lastError = 'Failed to start advertising: $e';
       _isAdvertising = false;
+      await _idRotationSubscription?.cancel();
+      _idRotationSubscription = null;
       return false;
+    }
+  }
+
+  /// Best-effort capabilities snapshot from native platform.
+  ///
+  /// On Android, this includes whether BLE advertising is supported and whether
+  /// multiple advertisement is supported.
+  Future<Map<String, dynamic>> getCapabilities() async {
+    try {
+      final raw = await _channel.invokeMethod<dynamic>('getCapabilities');
+      if (raw is Map) {
+        return Map<String, dynamic>.from(raw);
+      }
+      return const <String, dynamic>{};
+    } catch (_) {
+      return const <String, dynamic>{};
     }
   }
 
@@ -65,7 +94,8 @@ class BleAdvertiser {
   Future<void> stopAdvertising() async {
     if (!_isAdvertising) return;
 
-    _idRotationSubscription?.cancel();
+    await _idRotationSubscription?.cancel();
+    _idRotationSubscription = null;
 
     try {
       await _channel.invokeMethod('stopAdvertising');
@@ -84,6 +114,8 @@ class BleAdvertiser {
       await _channel.invokeMethod('updateAdvertisement', {
         'anonymousId': _idGenerator.currentAnonymousId,
         'serviceUuid': BleConstants.radiusServiceUuid,
+        'androidTxPowerLevel': _currentRangeMode.androidTxPowerLevel,
+        'androidAdvertiseMode': _currentRangeMode.androidAdvertiseMode,
       });
     } catch (e) {
       // Log error but don't stop advertising
@@ -96,7 +128,14 @@ class BleAdvertiser {
       case 'onAdvertisingError':
         // Error from native advertising
         _isAdvertising = false;
-        // Error message available in call.arguments if needed for logging
+        await _idRotationSubscription?.cancel();
+        _idRotationSubscription = null;
+        final message = call.arguments?.toString();
+        if (message != null && message.isNotEmpty) {
+          _lastError = message;
+        } else {
+          _lastError = 'Advertising failed';
+        }
         break;
     }
   }
@@ -114,5 +153,6 @@ class BleAdvertiser {
   void dispose() {
     stopAdvertising();
     _idRotationSubscription?.cancel();
+    _idRotationSubscription = null;
   }
 }

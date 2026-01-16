@@ -16,6 +16,17 @@ class BleScanner {
   Timer? _staleDeviceTimer;
   bool _isScanning = false;
   String? _lastError;
+  int _minRssiThreshold = BleConstants.minimumRssiThreshold;
+
+  // Diagnostics counters (best-effort, for debugging only)
+  int _scanBatchCount = 0;
+  int _rawScanResultCount = 0;
+  int _msdMatchedCount = 0;
+  int _parsedRadiusCount = 0;
+  int _filteredByRssiCount = 0;
+  int _filteredInvalidPayloadCount = 0;
+  DateTime? _lastScanStartedAt;
+  DateTime? _lastScanStoppedAt;
 
   /// Stream of discovered nearby devices.
   Stream<List<BleDevice>> get devicesStream => _devicesController.stream;
@@ -29,15 +40,41 @@ class BleScanner {
   /// Last error message from scanning operations.
   String? get lastError => _lastError;
 
+  // ============== Diagnostics (best-effort) ==============
+
+  int get scanBatchCount => _scanBatchCount;
+  int get rawScanResultCount => _rawScanResultCount;
+  int get msdMatchedCount => _msdMatchedCount;
+  int get parsedRadiusCount => _parsedRadiusCount;
+  int get filteredByRssiCount => _filteredByRssiCount;
+  int get filteredInvalidPayloadCount => _filteredInvalidPayloadCount;
+  DateTime? get lastScanStartedAt => _lastScanStartedAt;
+  DateTime? get lastScanStoppedAt => _lastScanStoppedAt;
+
+  void resetDiagnostics() {
+    _scanBatchCount = 0;
+    _rawScanResultCount = 0;
+    _msdMatchedCount = 0;
+    _parsedRadiusCount = 0;
+    _filteredByRssiCount = 0;
+    _filteredInvalidPayloadCount = 0;
+    _lastScanStartedAt = null;
+    _lastScanStoppedAt = null;
+  }
+
   /// Starts scanning for nearby BLE devices.
   Future<void> startScan({
     Duration? duration,
     bool continuous = false,
+    AndroidScanMode androidScanMode = AndroidScanMode.lowPower,
+    int? minRssiThreshold,
   }) async {
     if (_isScanning) return;
 
     _isScanning = true;
     _lastError = null;
+    _minRssiThreshold = minRssiThreshold ?? BleConstants.minimumRssiThreshold;
+    _lastScanStartedAt = DateTime.now();
 
     // Start the stale device cleanup timer
     _startStaleDeviceTimer();
@@ -60,17 +97,30 @@ class BleScanner {
       );
 
       // Start scanning - we use manufacturer data filter only
-      // Note: withServices requires the peripheral to actively advertise the UUID
-      // which may not work reliably with native Android advertising.
-      // We filter for our manufacturer ID and validate in _parseDevice.
+      // IMPORTANT: do NOT rely on service UUID scan filters.
+      // On Android, our native advertiser places the service UUID in the *scan response*
+      // to stay under the 31-byte legacy ADV limit. Many platform-level scan filters
+      // (and some OEM stacks) do not match service UUIDs present only in scan responses,
+      // which can lead to consistently finding zero devices.
+      //
+      // We therefore filter only by manufacturer ID and validate Radius packets in-app
+      // via the magic header + anonymous-id parsing.
       await FlutterBluePlus.startScan(
         // Filter by manufacturer data with our company ID (0xFFFF)
-        // This is more reliable than service UUID filtering for our use case
-        withMsd: [MsdFilter(BleConstants.manufacturerId)],
+        // This is more reliable than service UUID filtering for our use case.
+        // We also filter on the first 3 bytes ("RD\x01") to avoid collisions with
+        // other apps/devices that use the testing company ID 0xFFFF.
+        withMsd: [
+          MsdFilter(
+            BleConstants.manufacturerId,
+            data: <int>[0x52, 0x44, 0x01],
+            mask: <int>[0xFF, 0xFF, 0xFF],
+          ),
+        ],
         // Scan duration
         timeout: continuous ? null : scanDuration,
-        // Android-specific settings - use low latency for better discovery
-        androidScanMode: AndroidScanMode.lowLatency,
+        // Android-specific scan mode (battery vs latency)
+        androidScanMode: androidScanMode,
         // Get continuous updates for RSSI changes
         continuousUpdates: true,
         continuousDivisor: 1, // Report every packet for better discovery
@@ -98,30 +148,50 @@ class BleScanner {
       _scanSubscription = null;
     } finally {
       _isScanning = false;
+      _lastScanStoppedAt = DateTime.now();
       _staleDeviceTimer?.cancel();
     }
   }
 
   /// Handles incoming scan results.
   void _handleScanResults(List<ScanResult> results) {
+    _scanBatchCount++;
+    _rawScanResultCount += results.length;
+
     if (kDebugMode && results.isNotEmpty) {
       debugPrint('[BLE Scanner] Received ${results.length} scan results');
     }
 
     for (final result in results) {
+      final manufacturerData = result.advertisementData.manufacturerData;
+      if (manufacturerData.containsKey(BleConstants.manufacturerId)) {
+        _msdMatchedCount++;
+      }
+
       // Log all devices with manufacturer data in debug mode
       if (kDebugMode) {
-        final mfgData = result.advertisementData.manufacturerData;
+        final mfgData = manufacturerData;
         if (mfgData.isNotEmpty) {
+          // Print first bytes of our manufacturer payload if present.
+          // Expected: 0x52 0x44 0x01 ... ("RD\x01") + packed anonymous ID.
+          final our = mfgData[BleConstants.manufacturerId];
+          final prefix = (our == null || our.isEmpty)
+              ? ''
+              : our
+                  .take(6)
+                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                  .join(' ');
           debugPrint('[BLE Scanner] Device: ${result.device.remoteId}, '
               'Name: ${result.advertisementData.advName}, '
               'RSSI: ${result.rssi}, '
-              'MfgData keys: ${mfgData.keys.map((k) => '0x${k.toRadixString(16)}').toList()}');
+              'MfgData keys: ${mfgData.keys.map((k) => '0x${k.toRadixString(16)}').toList()}, '
+              'RadiusPayloadPrefix: ${prefix.isEmpty ? 'n/a' : prefix}');
         }
       }
 
       final device = _parseDevice(result);
       if (device != null) {
+        _parsedRadiusCount++;
         if (kDebugMode) {
           debugPrint(
               '[BLE Scanner] ✓ Found Radius device: ${device.anonymousId}');
@@ -137,7 +207,8 @@ class BleScanner {
   /// Returns null if device is not a valid Radius device.
   BleDevice? _parseDevice(ScanResult result) {
     // Skip devices with very weak signals
-    if (result.rssi < BleConstants.minimumRssiThreshold) {
+    if (result.rssi < _minRssiThreshold) {
+      _filteredByRssiCount++;
       return null;
     }
 
@@ -147,7 +218,7 @@ class BleScanner {
     final manufacturerData = result.advertisementData.manufacturerData;
 
     if (manufacturerData.isNotEmpty) {
-      // Look for our company ID
+      // Look for our company ID.
       final ourData = manufacturerData[BleConstants.manufacturerId];
       if (ourData != null && ourData.isNotEmpty) {
         anonymousId = BleIdGenerator.parseAnonymousIdFromManufacturerData(
@@ -163,6 +234,7 @@ class BleScanner {
     // We filter by manufacturer ID in scan, so if we get here without valid data,
     // the device had our manufacturer ID but invalid data format
     if (anonymousId == null) {
+      _filteredInvalidPayloadCount++;
       return null; // Not a valid Radius device
     }
 

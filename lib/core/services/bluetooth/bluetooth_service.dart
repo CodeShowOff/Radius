@@ -5,9 +5,11 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'ble_advertiser.dart';
 import 'ble_constants.dart';
+import 'ble_diagnostics.dart';
 import 'ble_device.dart';
 import 'ble_id_generator.dart';
 import 'ble_permission_handler.dart';
+import 'ble_range_mode.dart';
 import 'ble_scanner.dart';
 
 /// BLE service state.
@@ -32,9 +34,6 @@ enum BluetoothServiceState {
 
   /// Required permissions not granted.
   permissionDenied,
-
-  /// Location Services are required but turned off.
-  locationServicesOff,
 }
 
 /// Main Bluetooth service coordinating scanning and advertising.
@@ -90,6 +89,24 @@ class BluetoothService {
 
   /// Last error message.
   String? get lastError => _lastError;
+
+  /// Stream of anonymous ID rotations.
+  ///
+  /// Useful for updating the user's current BLE identifier in Firestore.
+  Stream<String> get idRotationStream => _idGenerator.idRotationStream;
+
+  /// Best-effort diagnostics snapshot for debugging discovery.
+  BleDiagnosticsSnapshot get diagnostics => BleDiagnosticsSnapshot(
+        isScanning: _scanner.isScanning,
+        isAdvertising: _advertiser.isAdvertising,
+        lastError: _lastError,
+        scanBatchCount: _scanner.scanBatchCount,
+        rawScanResultCount: _scanner.rawScanResultCount,
+        msdMatchedCount: _scanner.msdMatchedCount,
+        parsedRadiusCount: _scanner.parsedRadiusCount,
+        filteredByRssiCount: _scanner.filteredByRssiCount,
+        filteredInvalidPayloadCount: _scanner.filteredInvalidPayloadCount,
+      );
 
   /// Number of nearby devices.
   int get nearbyDeviceCount => _scanner.nearbyDeviceCount;
@@ -155,11 +172,6 @@ class BluetoothService {
         }
 
         // Bluetooth is now on, continue initialization
-      } else if (permissionStatus == BlePermissionStatus.locationOff) {
-        // Location Services are required for BLE scanning on Android
-        _setError(_permissionHandler.getPermissionMessage(permissionStatus));
-        _setState(BluetoothServiceState.locationServicesOff);
-        return false;
       } else if (permissionStatus != BlePermissionStatus.granted) {
         _setError(_permissionHandler.getPermissionMessage(permissionStatus));
         _setState(BluetoothServiceState.permissionDenied);
@@ -168,6 +180,17 @@ class BluetoothService {
 
       // Initialize ID generator
       _idGenerator.initialize();
+
+      // Best-effort diagnostics: advertising support varies by device.
+      // We don't hard-fail initialization if advertising isn't supported,
+      // because scanning can still work and the user can still discover others.
+      final caps = await _advertiser.getCapabilities();
+      final advertisingSupported = caps['isAdvertisingSupported'];
+      if (advertisingSupported is bool && advertisingSupported == false) {
+        if (kDebugMode) {
+          debugPrint('[BLE] Advertising not supported on this device');
+        }
+      }
 
       // Listen for Bluetooth adapter state changes
       _adapterStateSubscription = _permissionHandler.adapterStateStream.listen(
@@ -186,7 +209,12 @@ class BluetoothService {
   // ============== Scanning ==============
 
   /// Starts scanning for nearby devices.
-  Future<bool> startScanning({bool continuous = false}) async {
+  Future<bool> startScanning({
+    bool continuous = false,
+    BleRangeMode rangeMode = BleRangeMode.large,
+    Duration? duration,
+    bool intervalScan = false,
+  }) async {
     if (_state != BluetoothServiceState.ready &&
         _state != BluetoothServiceState.active) {
       final initialized = await initialize();
@@ -194,12 +222,18 @@ class BluetoothService {
     }
 
     try {
-      await _scanner.startScan(continuous: continuous);
+      await _scanner.startScan(
+        duration: duration,
+        continuous: continuous,
+        androidScanMode:
+            continuous ? AndroidScanMode.lowLatency : AndroidScanMode.balanced,
+        minRssiThreshold: rangeMode.minRssiThreshold,
+      );
       _setState(BluetoothServiceState.active);
 
-      if (!continuous) {
-        // Start interval scanning for battery optimization
-        _startIntervalScanning();
+      if (!continuous && intervalScan) {
+        // Optional interval scanning for battery optimization.
+        _startIntervalScanning(rangeMode);
       }
 
       return true;
@@ -220,14 +254,17 @@ class BluetoothService {
   }
 
   /// Starts interval-based scanning for battery optimization.
-  void _startIntervalScanning() {
+  void _startIntervalScanning(BleRangeMode rangeMode) {
     _scanIntervalTimer?.cancel();
     _scanIntervalTimer = Timer.periodic(
       const Duration(seconds: BleConstants.scanIntervalSeconds),
       (_) async {
         if (_state == BluetoothServiceState.active) {
           await _scanner.startScan(
-            duration: const Duration(seconds: BleConstants.scanDurationSeconds),
+            duration: const Duration(
+                seconds: BleConstants.intervalScanDurationSeconds),
+            androidScanMode: AndroidScanMode.lowPower,
+            minRssiThreshold: rangeMode.minRssiThreshold,
           );
         }
       },
@@ -237,7 +274,9 @@ class BluetoothService {
   // ============== Advertising ==============
 
   /// Starts advertising presence to nearby devices.
-  Future<bool> startAdvertising() async {
+  Future<bool> startAdvertising({
+    BleRangeMode rangeMode = BleRangeMode.large,
+  }) async {
     if (_state != BluetoothServiceState.ready &&
         _state != BluetoothServiceState.active) {
       final initialized = await initialize();
@@ -245,7 +284,7 @@ class BluetoothService {
     }
 
     try {
-      final started = await _advertiser.startAdvertising();
+      final started = await _advertiser.startAdvertising(rangeMode: rangeMode);
       if (started) {
         _setState(BluetoothServiceState.active);
       } else {
@@ -270,20 +309,43 @@ class BluetoothService {
   // ============== Combined Operations ==============
 
   /// Starts both scanning and advertising.
-  Future<bool> startDiscovery() async {
-    final scanResult = await startScanning();
+  Future<bool> startDiscovery({
+    BleRangeMode rangeMode = BleRangeMode.large,
+    bool continuousScan = false,
+  }) async {
+    final scanResult = await startScanning(
+      rangeMode: rangeMode,
+      continuous: continuousScan,
+    );
     if (!scanResult) {
       _setError(_lastError ?? 'Failed to start scanning');
       return false;
     }
 
-    final advertiseResult = await startAdvertising();
+    final advertiseResult = await startAdvertising(rangeMode: rangeMode);
     if (!advertiseResult) {
-      _setError(_lastError ?? 'Failed to start advertising');
+      final message = _lastError ?? 'Failed to start advertising';
+
+      // Some devices support BLE scanning but not peripheral advertising.
+      // In that case, keep scanning active so the user can still *find others*.
+      if (_isNonFatalAdvertisingError(message)) {
+        _setError('Advertising disabled: $message');
+        return true;
+      }
+
+      _setError(message);
       return false;
     }
 
     return true;
+  }
+
+  bool _isNonFatalAdvertisingError(String message) {
+    final m = message.toLowerCase();
+    return m.contains('advertising not supported') ||
+        m.contains('feature unsupported') ||
+        m.contains('ble_unavailable') ||
+        m.contains('ble unavailable');
   }
 
   /// Stops both scanning and advertising.
@@ -349,8 +411,7 @@ class BluetoothService {
     final status = await _permissionHandler.checkAndRequestPermissions();
 
     if (status == BlePermissionStatus.granted &&
-        (_state == BluetoothServiceState.permissionDenied ||
-            _state == BluetoothServiceState.locationServicesOff)) {
+        _state == BluetoothServiceState.permissionDenied) {
       _setState(BluetoothServiceState.ready);
     }
 
@@ -374,19 +435,9 @@ class BluetoothService {
     return await _permissionHandler.isBluetoothOn();
   }
 
-  /// Checks if Location Services are enabled.
-  Future<bool> isLocationServiceEnabled() async {
-    return await _permissionHandler.isLocationServiceEnabled();
-  }
-
   /// Opens app settings for permission management.
   Future<bool> openSettings() async {
     return await _permissionHandler.openSettings();
-  }
-
-  /// Opens location settings (for enabling Location Services).
-  Future<bool> openLocationSettings() async {
-    return await _permissionHandler.openLocationSettings();
   }
 
   /// Requests to turn on Bluetooth.

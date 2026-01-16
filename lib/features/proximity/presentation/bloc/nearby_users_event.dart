@@ -8,6 +8,37 @@ abstract class NearbyUsersEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class NearbyUsersBleDiagnosticsTick extends NearbyUsersEvent {
+  const NearbyUsersBleDiagnosticsTick();
+
+  @override
+  List<Object?> get props => [];
+}
+
+/// User explicitly requests a single scan session.
+class NearbyUsersScanOnceRequested extends NearbyUsersEvent {
+  final String userId;
+  final BleRangeMode rangeMode;
+
+  const NearbyUsersScanOnceRequested({
+    required this.userId,
+    required this.rangeMode,
+  });
+
+  @override
+  List<Object?> get props => [userId, rangeMode];
+}
+
+/// Internal event fired when an async scanOnce call completes.
+class NearbyUsersScanOnceCompleted extends NearbyUsersEvent {
+  final bool ok;
+
+  const NearbyUsersScanOnceCompleted(this.ok);
+
+  @override
+  List<Object?> get props => [ok];
+}
+
 /// Event to start discovering nearby users.
 class NearbyUsersStartDiscovery extends NearbyUsersEvent {
   final String userId;
@@ -55,7 +86,12 @@ class NearbyUsersFilterChanged extends NearbyUsersEvent {
 
 /// Event to refresh/restart discovery.
 class NearbyUsersRefresh extends NearbyUsersEvent {
-  const NearbyUsersRefresh();
+  final BleRangeMode? rangeMode;
+
+  const NearbyUsersRefresh({this.rangeMode});
+
+  @override
+  List<Object?> get props => [rangeMode];
 }
 
 /// Event when initial search timeout occurs.

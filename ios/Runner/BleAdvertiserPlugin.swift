@@ -16,6 +16,11 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     
     private static let channelName = "com.example.radius/ble_advertiser"
     private static let radiusServiceUUID = "00001234-0000-1000-8000-00805f9b34fb"
+    private static let manufacturerId: UInt16 = 0xFFFF
+
+    // Signature to distinguish Radius packets from other apps that also use 0xFFFF.
+    // Format: ['R','D', version=1] + packedAnonymousIdBytes
+    private static let radiusMagic: [UInt8] = [0x52, 0x44, 0x01]
     
     static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -117,16 +122,46 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     
     private func performAdvertising(anonymousId: String) {
         guard let serviceUUID = currentServiceUUID else { return }
-        
+
+        // Manufacturer payload format (Apple): first 2 bytes are company ID (little-endian),
+        // followed by manufacturer-specific bytes. We pack the anonymous ID hex into bytes
+        // to keep payload small and consistent with Android.
+        let idBytes = hexToBytes(anonymousId)
+        var manufacturer = Data()
+        manufacturer.append(UInt8(BleAdvertiserPlugin.manufacturerId & 0x00FF))
+        manufacturer.append(UInt8((BleAdvertiserPlugin.manufacturerId & 0xFF00) >> 8))
+        manufacturer.append(contentsOf: BleAdvertiserPlugin.radiusMagic)
+        manufacturer.append(contentsOf: idBytes)
+
         // Configure advertisement data
         let advertisementData: [String: Any] = [
-            CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
-            CBAdvertisementDataLocalNameKey: anonymousId
+            CBAdvertisementDataManufacturerDataKey: manufacturer,
+            CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
         ]
         
         // Start advertising
         peripheralManager?.startAdvertising(advertisementData)
         isAdvertising = true
+    }
+
+    private func hexToBytes(_ hex: String) -> [UInt8] {
+        let normalized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.count % 2 != 0 { return [] }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(normalized.count / 2)
+
+        var index = normalized.startIndex
+        while index < normalized.endIndex {
+            let nextIndex = normalized.index(index, offsetBy: 2)
+            let byteString = normalized[index..<nextIndex]
+            if let num = UInt8(byteString, radix: 16) {
+                bytes.append(num)
+            } else {
+                return []
+            }
+            index = nextIndex
+        }
+        return bytes
     }
     
     private func stopAdvertising() {

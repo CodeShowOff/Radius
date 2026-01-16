@@ -355,7 +355,7 @@ class _FAQsPage extends StatelessWidget {
             question: 'Does Radius drain my battery?',
             answer:
                 'Radius is optimized for battery efficiency. It uses BLE which consumes minimal power, '
-                'and implements intermittent scanning (10 seconds of scanning every 30 seconds) to preserve battery. '
+                'and implements intermittent scanning (about 3 seconds of scanning every 15 seconds) to preserve battery. '
                 'Most users report less than 5% additional battery drain per day.',
           ),
           _FAQItem(
@@ -368,10 +368,10 @@ class _FAQsPage extends StatelessWidget {
                 '• We never sell your data to third parties',
           ),
           _FAQItem(
-            question: 'Why do I need location permissions?',
+            question: 'Do I need location permissions for Bluetooth?',
             answer:
-                'Android requires location permissions for BLE scanning. This is a system requirement, not our choice. '
-                'We do NOT track your GPS location. The permission is only used to enable Bluetooth scanning.',
+                'No. Radius uses Android 12+ Bluetooth permissions (Scan/Connect/Advertise) and does not request location permissions. '
+                'We do NOT access GPS or collect your location.',
           ),
           _FAQItem(
             question: 'Can I chat without internet?',
@@ -491,7 +491,7 @@ class _UserGuidePage extends StatelessWidget {
             icon: Icons.rocket_launch,
             steps: [
               'Create your account with email or Google',
-              'Grant Bluetooth and Location permissions',
+              'Grant Bluetooth permissions when prompted',
               'Complete your profile with a photo and bio',
               'You\'re ready to discover nearby users!',
             ],

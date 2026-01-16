@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 /// Empty state widget for nearby users screen.
 class NearbyUsersEmptyState extends StatelessWidget {
   final bool isScanning;
+  final bool hasSearchedAwhile;
   final VoidCallback? onRetry;
 
   const NearbyUsersEmptyState({
     super.key,
     this.isScanning = false,
+    this.hasSearchedAwhile = false,
     this.onRetry,
   });
 
@@ -27,7 +29,11 @@ class NearbyUsersEmptyState extends StatelessWidget {
 
             // Title
             Text(
-              isScanning ? 'Searching for people...' : 'No one nearby',
+              isScanning
+                  ? (hasSearchedAwhile
+                      ? 'No one nearby yet'
+                      : 'Searching for people...')
+                  : 'No one nearby',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -38,7 +44,9 @@ class NearbyUsersEmptyState extends StatelessWidget {
             // Description
             Text(
               isScanning
-                  ? 'Looking for other Radius users within range.\nThis may take a moment.'
+                  ? (hasSearchedAwhile
+                      ? 'Still scanning in the foreground.\nTry restarting the scan or ask the other phone to open Nearby too.'
+                      : 'Looking for other Radius users within range.\nThis may take a moment.')
                   : 'There are no Radius users nearby right now.\nTry again later or move to a different location.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -47,12 +55,12 @@ class NearbyUsersEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Retry button (only when not scanning)
-            if (!isScanning && onRetry != null)
+            // Retry/restart scan button.
+            if (onRetry != null && (!isScanning || hasSearchedAwhile))
               FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Scan Again'),
+                label: Text(isScanning ? 'Restart Scan' : 'Scan Again'),
               ),
 
             // Tips
@@ -236,8 +244,8 @@ class _Tips extends StatelessWidget {
             text: 'Make sure Bluetooth is enabled',
           ),
           const _TipItem(
-            icon: Icons.location_on_outlined,
-            text: 'Location services help improve detection',
+            icon: Icons.phone_iphone,
+            text: 'Keep the app open for scanning',
           ),
           const _TipItem(
             icon: Icons.visibility,

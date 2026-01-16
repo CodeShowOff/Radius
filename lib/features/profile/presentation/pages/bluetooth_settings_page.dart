@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -29,37 +31,44 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
 
     final bluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
 
-    // Check all required BLE permissions
-    final bluetoothScanStatus = await Permission.bluetoothScan.status;
-    final bluetoothAdvertiseStatus = await Permission.bluetoothAdvertise.status;
-    final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
-    final locationStatus = await Permission.location.status;
+    // Android 12+ (API 31+): scan/connect/advertise are the only runtime perms.
+    // iOS: Bluetooth permission only.
+    bool hasBlePermissions;
+    if (Platform.isAndroid) {
+      final bluetoothScanStatus = await Permission.bluetoothScan.status;
+      final bluetoothAdvertiseStatus =
+          await Permission.bluetoothAdvertise.status;
+      final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
 
-    // Consider permissions granted if the essential ones are granted
-    // On Android 12+, we need scan, advertise, and connect permissions
-    final hasBlePermissions = bluetoothScanStatus.isGranted &&
-        bluetoothAdvertiseStatus.isGranted &&
-        bluetoothConnectStatus.isGranted;
-
-    // On older Android versions, we may only need location
-    final hasLocationPermission =
-        locationStatus.isGranted || locationStatus.isLimited;
+      hasBlePermissions = bluetoothScanStatus.isGranted &&
+          bluetoothAdvertiseStatus.isGranted &&
+          bluetoothConnectStatus.isGranted;
+    } else if (Platform.isIOS) {
+      hasBlePermissions = (await Permission.bluetooth.status).isGranted;
+    } else {
+      hasBlePermissions = false;
+    }
 
     setState(() {
       _isBluetoothEnabled = bluetoothEnabled;
-      _hasPermissions = hasBlePermissions || hasLocationPermission;
+      _hasPermissions = hasBlePermissions;
       _isLoading = false;
     });
   }
 
   Future<void> _requestPermissions() async {
-    final statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
+    late final Map<Permission, PermissionStatus> statuses;
+    if (Platform.isAndroid) {
+      statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+      ].request();
+    } else if (Platform.isIOS) {
+      statuses = await [Permission.bluetooth].request();
+    } else {
+      statuses = const {};
+    }
 
     await _checkStatus();
 
