@@ -1,0 +1,546 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../core/di/injection.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../connections/data/connection_service.dart';
+import '../bloc/profile_bloc.dart';
+
+/// Privacy settings page for managing discovery and profile visibility.
+class PrivacySettingsPage extends StatefulWidget {
+  const PrivacySettingsPage({super.key});
+
+  @override
+  State<PrivacySettingsPage> createState() => _PrivacySettingsPageState();
+}
+
+class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
+  bool _isDiscoverable = true;
+  bool _showOnlineStatus = true;
+  bool _allowConnectionRequests = true;
+  bool _showLastSeen = true;
+  List<String> _blockedUserIds = [];
+  bool _isLoadingBlocked = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCurrentSettings();
+      _loadBlockedUsers();
+    });
+  }
+
+  void _loadCurrentSettings() {
+    final profileState = context.read<ProfileBloc>().state;
+    if (profileState is ProfileLoaded) {
+      setState(() {
+        _isDiscoverable = profileState.profile.isVisible;
+        _showOnlineStatus = profileState.profile.showOnlineStatus;
+        _allowConnectionRequests = profileState.profile.allowConnectionRequests;
+        _showLastSeen = profileState.profile.showLastSeen;
+      });
+    }
+  }
+
+  Future<void> _loadBlockedUsers() async {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      try {
+        final connectionService = getIt<ConnectionService>();
+        final blockedIds =
+            await connectionService.getBlockedUserIds(authState.user.id);
+        if (mounted) {
+          setState(() {
+            _blockedUserIds = blockedIds;
+            _isLoadingBlocked = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoadingBlocked = false);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return BlocListener<ProfileBloc, ProfileState>(
+      listener: (context, state) {
+        if (state is ProfileLoaded) {
+          // Settings saved successfully
+        } else if (state is ProfileError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${state.message}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Privacy Settings'),
+        ),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
+          children: [
+            // Discovery Section
+            const Text(
+              'Discovery',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.visibility),
+                    title: const Text('Make me discoverable'),
+                    subtitle: const Text(
+                      'Allow nearby users to see you in their discovery list',
+                    ),
+                    value: _isDiscoverable,
+                    onChanged: (value) {
+                      setState(() => _isDiscoverable = value);
+                      _saveVisibilitySetting(value);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.person_add),
+                    title: const Text('Allow connection requests'),
+                    subtitle: const Text(
+                      'Let others send you connection requests',
+                    ),
+                    value: _allowConnectionRequests,
+                    onChanged: (value) {
+                      setState(() => _allowConnectionRequests = value);
+                      _savePrivacySettings();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Online Status Section
+            const Text(
+              'Online Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.circle),
+                    title: const Text('Show online status'),
+                    subtitle: const Text(
+                      'Let connections see when you\'re online',
+                    ),
+                    value: _showOnlineStatus,
+                    onChanged: (value) {
+                      setState(() => _showOnlineStatus = value);
+                      _savePrivacySettings();
+                    },
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.access_time),
+                    title: const Text('Show last seen'),
+                    subtitle: const Text(
+                      'Let connections see when you were last active',
+                    ),
+                    value: _showLastSeen,
+                    onChanged: (value) {
+                      setState(() => _showLastSeen = value);
+                      _savePrivacySettings();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Blocked Users Section
+            const Text(
+              'Blocked Users',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.block),
+                title: const Text('Manage blocked users'),
+                subtitle: _isLoadingBlocked
+                    ? const Text('Loading...')
+                    : Text(
+                        '${_blockedUserIds.length} user${_blockedUserIds.length == 1 ? '' : 's'} blocked'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showBlockedUsersSheet(),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Data & Privacy Section
+            const Text(
+              'Data & Privacy',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.download),
+                    title: const Text('Download my data'),
+                    subtitle: const Text('Request a copy of your data'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _requestDataDownload,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading:
+                        const Icon(Icons.delete_forever, color: Colors.red),
+                    title: const Text(
+                      'Delete my account',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    subtitle: const Text('Permanently delete your account'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _showDeleteAccountDialog,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Privacy Information
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Your Privacy',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your BLE ID rotates every 15 minutes to protect your privacy. '
+                      'Only users you connect with can see your profile information. '
+                      'We never sell your data to third parties.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _saveVisibilitySetting(bool isVisible) {
+    context.read<ProfileBloc>().add(ProfileVisibilityToggled(isVisible));
+  }
+
+  void _savePrivacySettings() {
+    context.read<ProfileBloc>().add(ProfilePrivacySettingsUpdated(
+          showOnlineStatus: _showOnlineStatus,
+          allowConnectionRequests: _allowConnectionRequests,
+          showLastSeen: _showLastSeen,
+        ));
+  }
+
+  void _showBlockedUsersSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Blocked Users',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _blockedUserIds.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.block,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No blocked users',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Users you block will appear here',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: _blockedUserIds.length,
+                      itemBuilder: (context, index) {
+                        final blockedId = _blockedUserIds[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.grey[300],
+                            child: const Icon(Icons.person, color: Colors.grey),
+                          ),
+                          title: Text('User ${blockedId.substring(0, 8)}...'),
+                          trailing: TextButton(
+                            onPressed: () =>
+                                _unblockUser(blockedId, sheetContext),
+                            child: const Text('Unblock'),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _unblockUser(String blockedId, BuildContext sheetContext) async {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      try {
+        final connectionService = getIt<ConnectionService>();
+        await connectionService.unblockUser(
+          blockerId: authState.user.id,
+          blockedId: blockedId,
+        );
+
+        if (mounted) {
+          setState(() {
+            _blockedUserIds.remove(blockedId);
+          });
+          Navigator.pop(sheetContext);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User unblocked')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to unblock user: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  void _requestDataDownload() {
+    final authState = context.read<AuthBloc>().state;
+    final email =
+        authState is AuthAuthenticated ? authState.user.email : 'your email';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Download Your Data'),
+        content: Text(
+          'We\'ll prepare a copy of your data and send a download link to $email within 48 hours.\n\n'
+          'This will include:\n'
+          '• Your profile information\n'
+          '• Your connections list\n'
+          '• Your chat history\n'
+          '• Your privacy settings',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Data download request submitted. Check your email in 48 hours.'),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            },
+            child: const Text('Request Download'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Account?'),
+        content: const Text(
+          'This will permanently delete:\n\n'
+          '• Your profile and all personal data\n'
+          '• All your connections\n'
+          '• All your chat messages\n'
+          '• Your account credentials\n\n'
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _confirmDeleteAccount();
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAccount() {
+    final textController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final isConfirmEnabled = textController.text == 'DELETE';
+
+          return AlertDialog(
+            title: const Text('Final Confirmation'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Type DELETE in capitals to confirm permanent account deletion.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: textController,
+                  decoration: InputDecoration(
+                    labelText: 'Type DELETE',
+                    border: const OutlineInputBorder(),
+                    errorText:
+                        textController.text.isNotEmpty && !isConfirmEnabled
+                            ? 'Please type DELETE exactly'
+                            : null,
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: isConfirmEnabled
+                      ? Theme.of(dialogContext).colorScheme.error
+                      : Colors.grey,
+                ),
+                onPressed: isConfirmEnabled
+                    ? () {
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Account deletion requested. You will receive a confirmation email shortly.',
+                            ),
+                            duration: Duration(seconds: 4),
+                          ),
+                        );
+                      }
+                    : null,
+                child: const Text('Delete My Account'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

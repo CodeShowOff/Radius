@@ -19,9 +19,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
       final profileModel = await _profileService.getProfile(userId);
       return Right(profileModel?.toEntity());
     } on ProfileServiceException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure('Unexpected error: $e'));
+      return Left(ServerFailure(message: 'Unexpected error: $e'));
     }
   }
 
@@ -42,9 +42,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
 
       return const Right(null);
     } on ProfileServiceException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure('Unexpected error: $e'));
+      return Left(ServerFailure(message: 'Unexpected error: $e'));
     }
   }
 
@@ -67,9 +67,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
       await _profileService.updateProfile(userId, updateMap);
       return const Right(null);
     } on ProfileServiceException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure('Unexpected error: $e'));
+      return Left(ServerFailure(message: 'Unexpected error: $e'));
     }
   }
 
@@ -82,9 +82,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
       await _profileService.updateVisibility(userId, isVisible);
       return const Right(null);
     } on ProfileServiceException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure('Unexpected error: $e'));
+      return Left(ServerFailure(message: 'Unexpected error: $e'));
     }
   }
 
@@ -94,9 +94,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
       await _profileService.deleteProfile(userId);
       return const Right(null);
     } on ProfileServiceException catch (e) {
-      return Left(ServerFailure(e.message));
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure('Unexpected error: $e'));
+      return Left(ServerFailure(message: 'Unexpected error: $e'));
     }
   }
 

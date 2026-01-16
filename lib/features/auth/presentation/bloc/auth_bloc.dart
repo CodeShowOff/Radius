@@ -12,9 +12,16 @@ part 'auth_state.dart';
 /// BLoC for managing authentication state.
 ///
 /// Handles sign in, sign out, and registration flows.
+/// Uses an operation flag to prevent auth state stream from racing
+/// with in-progress manual auth operations.
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final IAuthRepository _authRepository;
   StreamSubscription<User?>? _authStateSubscription;
+
+  /// Flag to indicate an auth operation is in progress.
+  /// When true, external auth state changes from the stream are ignored
+  /// to prevent race conditions.
+  bool _operationInProgress = false;
 
   AuthBloc({required IAuthRepository authRepository})
       : _authRepository = authRepository,
@@ -27,7 +34,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthPasswordResetRequested>(_onPasswordResetRequested);
     on<AuthStateChanged>(_onAuthStateChanged);
 
-    // Listen to auth state changes
+    // Listen to auth state changes from Firebase
+    // This handles external auth changes (e.g., token expiry, account deletion)
     _authStateSubscription = _authRepository.authStateChanges.listen(
       (user) => add(AuthStateChanged(user)),
     );
@@ -52,81 +60,118 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthSignInRequested event,
     Emitter<AuthState> emit,
   ) async {
+    _operationInProgress = true;
     emit(AuthLoading());
 
-    final result = await _authRepository.signInWithEmail(
-      email: event.email,
-      password: event.password,
-    );
+    try {
+      final result = await _authRepository.signInWithEmail(
+        email: event.email,
+        password: event.password,
+      );
 
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+      result.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    } finally {
+      _operationInProgress = false;
+    }
   }
 
   Future<void> _onSignInWithGoogleRequested(
     AuthSignInWithGoogleRequested event,
     Emitter<AuthState> emit,
   ) async {
+    _operationInProgress = true;
     emit(AuthLoading());
 
-    final result = await _authRepository.signInWithGoogle();
+    try {
+      final result = await _authRepository.signInWithGoogle();
 
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+      result.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    } finally {
+      _operationInProgress = false;
+    }
   }
 
   Future<void> _onRegisterRequested(
     AuthRegisterRequested event,
     Emitter<AuthState> emit,
   ) async {
+    _operationInProgress = true;
     emit(AuthLoading());
 
-    final result = await _authRepository.registerWithEmail(
-      email: event.email,
-      password: event.password,
-      displayName: event.displayName,
-    );
+    try {
+      final result = await _authRepository.registerWithEmail(
+        email: event.email,
+        password: event.password,
+        displayName: event.displayName,
+      );
 
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+      result.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    } finally {
+      _operationInProgress = false;
+    }
   }
 
   Future<void> _onSignOutRequested(
     AuthSignOutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    _operationInProgress = true;
     emit(AuthLoading());
 
-    final result = await _authRepository.signOut();
+    try {
+      final result = await _authRepository.signOut();
 
-    result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (_) => emit(AuthUnauthenticated()),
-    );
+      result.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (_) => emit(AuthUnauthenticated()),
+      );
+    } finally {
+      _operationInProgress = false;
+    }
   }
 
   Future<void> _onPasswordResetRequested(
     AuthPasswordResetRequested event,
     Emitter<AuthState> emit,
   ) async {
-    // Don't emit loading state to avoid UI disruption
-    await _authRepository.sendPasswordResetEmail(event.email);
-    // Password reset doesn't change auth state, so no emit needed
+    final result = await _authRepository.sendPasswordResetEmail(event.email);
+
+    result.fold(
+      (failure) => emit(AuthPasswordResetFailed(failure.message)),
+      (_) => emit(AuthPasswordResetSent(event.email)),
+    );
   }
 
   void _onAuthStateChanged(
     AuthStateChanged event,
     Emitter<AuthState> emit,
   ) {
+    // Ignore stream events during active operations to prevent races
+    if (_operationInProgress) {
+      return;
+    }
+
+    // Check if we're already in the correct state to prevent redundant emissions
+    final currentState = state;
     if (event.user != null) {
+      if (currentState is AuthAuthenticated &&
+          currentState.user.id == event.user!.id) {
+        return; // Already authenticated with the same user
+      }
       emit(AuthAuthenticated(event.user!));
     } else {
+      if (currentState is AuthUnauthenticated) {
+        return; // Already unauthenticated
+      }
       emit(AuthUnauthenticated());
     }
   }

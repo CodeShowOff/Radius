@@ -11,6 +11,9 @@ class ProfileModel {
   final String bio;
   final String? photoUrl;
   final bool isVisible;
+  final bool showOnlineStatus;
+  final bool allowConnectionRequests;
+  final bool showLastSeen;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +24,9 @@ class ProfileModel {
     required this.bio,
     this.photoUrl,
     required this.isVisible,
+    this.showOnlineStatus = true,
+    this.allowConnectionRequests = true,
+    this.showLastSeen = true,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -35,6 +41,9 @@ class ProfileModel {
       bio: data['bio'] as String? ?? '',
       photoUrl: data['photoUrl'] as String?,
       isVisible: data['isVisible'] as bool? ?? true,
+      showOnlineStatus: data['showOnlineStatus'] as bool? ?? true,
+      allowConnectionRequests: data['allowConnectionRequests'] as bool? ?? true,
+      showLastSeen: data['showLastSeen'] as bool? ?? true,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -49,6 +58,9 @@ class ProfileModel {
       bio: profile.bio,
       photoUrl: profile.photoUrl,
       isVisible: profile.isVisible,
+      showOnlineStatus: profile.showOnlineStatus,
+      allowConnectionRequests: profile.allowConnectionRequests,
+      showLastSeen: profile.showLastSeen,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     );
@@ -62,6 +74,9 @@ class ProfileModel {
       'bio': bio,
       'photoUrl': photoUrl,
       'isVisible': isVisible,
+      'showOnlineStatus': showOnlineStatus,
+      'allowConnectionRequests': allowConnectionRequests,
+      'showLastSeen': showLastSeen,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -76,6 +91,9 @@ class ProfileModel {
       bio: bio,
       photoUrl: photoUrl,
       isVisible: isVisible,
+      showOnlineStatus: showOnlineStatus,
+      allowConnectionRequests: allowConnectionRequests,
+      showLastSeen: showLastSeen,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -87,6 +105,9 @@ class ProfileModel {
     String? bio,
     String? photoUrl,
     bool? isVisible,
+    bool? showOnlineStatus,
+    bool? allowConnectionRequests,
+    bool? showLastSeen,
   }) {
     final map = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -96,6 +117,10 @@ class ProfileModel {
     if (bio != null) map['bio'] = bio;
     if (photoUrl != null) map['photoUrl'] = photoUrl;
     if (isVisible != null) map['isVisible'] = isVisible;
+    if (showOnlineStatus != null) map['showOnlineStatus'] = showOnlineStatus;
+    if (allowConnectionRequests != null)
+      map['allowConnectionRequests'] = allowConnectionRequests;
+    if (showLastSeen != null) map['showLastSeen'] = showLastSeen;
 
     return map;
   }

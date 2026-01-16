@@ -1,4 +1,4 @@
-name: Radius
+name: radius
 description: A proximity-based social connection app using Bluetooth LE.
 publish_to: 'none'
 version: 1.0.0+1
@@ -47,6 +47,13 @@ dependencies:
 
   # Image Loading
   cached_network_image: ^3.3.1
+  
+  # Image Handling
+  image_picker: ^1.0.7
+  http: ^1.2.0
+  
+  # URL Launcher
+  url_launcher: ^6.2.4
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +64,7 @@ dev_dependencies:
   hive_generator: ^2.0.1
   bloc_test: ^9.1.5
   mocktail: ^1.0.1
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -64,3 +72,22 @@ flutter:
   # assets:
   #   - assets/images/
   #   - assets/icons/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"  # You'll need to add your icon here
+  # Optionally customize for different platforms:
+  # image_path_android: "assets/icon/icon_android.png"
+  # image_path_ios: "assets/icon/icon_ios.png"
+  adaptive_icon_background: "#FFFFFF"  # Customize the background color for Android
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+  macos:
+    generate: true
+    image_path: "assets/icon/app_icon.png"

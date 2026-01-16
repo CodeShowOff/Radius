@@ -42,7 +42,20 @@ class AuthRepositoryImpl implements IAuthRepository {
         if (doc == null) return null;
 
         return UserModel.fromFirestore(doc).toEntity();
-      } catch (_) {
+      } on ArgumentError {
+        // Invalid document structure - treat as no user profile
+        return null;
+      } on DatabaseException {
+        // Database error - treat as no user profile available
+        return null;
+      } catch (e) {
+        // Unexpected error - log for debugging but don't crash
+        // In production, this should be logged to crash reporting
+        assert(() {
+          // ignore: avoid_print
+          print('AuthRepository.authStateChanges unexpected error: $e');
+          return true;
+        }());
         return null;
       }
     });
@@ -65,6 +78,12 @@ class AuthRepositoryImpl implements IAuthRepository {
       }
 
       return Right(UserModel.fromFirestore(doc).toEntity());
+    } on ArgumentError catch (e) {
+      // Invalid document structure in Firestore
+      return Left(DatabaseFailure(
+        message: 'Invalid user profile data: ${e.message}',
+        code: 'invalid-data',
+      ));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -90,12 +109,18 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       if (doc == null) {
         // User exists in Auth but not in Firestore - create profile
-        return _createUserProfile(firebaseUser.uid, email, firebaseUser.displayName);
+        return _createUserProfile(
+            firebaseUser.uid, email, firebaseUser.displayName);
       }
 
       return Right(UserModel.fromFirestore(doc).toEntity());
     } on AuthException catch (e) {
       return Left(AuthFailure(message: e.message, code: e.code));
+    } on ArgumentError catch (e) {
+      return Left(DatabaseFailure(
+        message: 'Invalid user profile data: ${e.message}',
+        code: 'invalid-data',
+      ));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -126,6 +151,11 @@ class AuthRepositoryImpl implements IAuthRepository {
       return Right(UserModel.fromFirestore(doc).toEntity());
     } on AuthException catch (e) {
       return Left(AuthFailure(message: e.message, code: e.code));
+    } on ArgumentError catch (e) {
+      return Left(DatabaseFailure(
+        message: 'Invalid user profile data: ${e.message}',
+        code: 'invalid-data',
+      ));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -202,17 +232,33 @@ class AuthRepositoryImpl implements IAuthRepository {
         displayName: displayName,
         avatarUrl: avatarUrl,
         bleIdentifier: bleIdentifier,
-        createdAt: DateTime.now(),
+        createdAt: null, // Will be set by server timestamp
         isDiscoverable: true,
       );
 
+      // Use server timestamp for createdAt to satisfy Firestore rules
       await _firestoreService.setDocument(
         path: '${FirestoreCollections.users}/$uid',
-        data: userModel.toFirestore(),
+        data: userModel.toFirestore(useServerTimestamp: true),
         merge: false,
       );
 
-      return Right(userModel.toEntity());
+      // Read back the document to get the server-set timestamp
+      final doc = await _firestoreService.getDocument(
+        '${FirestoreCollections.users}/$uid',
+      );
+
+      if (doc == null) {
+        return const Left(
+            DatabaseFailure(message: 'Failed to create user profile'));
+      }
+
+      return Right(UserModel.fromFirestore(doc).toEntity());
+    } on ArgumentError catch (e) {
+      return Left(DatabaseFailure(
+        message: 'Invalid user profile data: ${e.message}',
+        code: 'invalid-data',
+      ));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(message: e.message, code: e.code));
     } catch (e) {

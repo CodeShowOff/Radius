@@ -23,8 +23,11 @@ class AuthSignInRequested extends AuthEvent {
     required this.password,
   });
 
+  // Note: Password intentionally excluded from props for security.
+  // Including passwords in Equatable props can lead to them being logged
+  // or appearing in debug output.
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [email];
 }
 
 /// Event to request sign in with Google.
@@ -44,8 +47,11 @@ class AuthRegisterRequested extends AuthEvent {
     this.displayName,
   });
 
+  // Note: Password intentionally excluded from props for security.
+  // Including passwords in Equatable props can lead to them being logged
+  // or appearing in debug output.
   @override
-  List<Object?> get props => [email, password, displayName];
+  List<Object?> get props => [email, displayName];
 }
 
 /// Event to request sign out.

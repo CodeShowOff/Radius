@@ -231,6 +231,9 @@ class _ConnectionTile extends StatelessWidget {
   }
 
   void _confirmRemove(BuildContext context) {
+    // Capture BLoC reference before showing dialog
+    final bloc = context.read<ConnectionBloc>();
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -247,9 +250,7 @@ class _ConnectionTile extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ConnectionBloc>().add(
-                    ConnectionRemove(connection.id),
-                  );
+              bloc.add(ConnectionRemove(connection.id));
             },
             child: const Text('Remove'),
           ),
@@ -259,6 +260,10 @@ class _ConnectionTile extends StatelessWidget {
   }
 
   void _confirmBlock(BuildContext context, String otherUserId) {
+    // Capture BLoC and theme reference before showing dialog
+    final bloc = context.read<ConnectionBloc>();
+    final errorColor = Theme.of(context).colorScheme.error;
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -275,12 +280,10 @@ class _ConnectionTile extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ConnectionBloc>().add(
-                    ConnectionBlockUser(otherUserId),
-                  );
+              bloc.add(ConnectionBlockUser(otherUserId));
             },
             style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: errorColor,
             ),
             child: const Text('Block'),
           ),

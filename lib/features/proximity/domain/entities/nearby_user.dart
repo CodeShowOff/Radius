@@ -74,11 +74,17 @@ class NearbyUser extends Equatable {
   }
 
   /// Creates a copy with updated fields.
+  /// Use explicit null values wrapped in [Optional] to clear nullable fields:
+  /// - Pass the value directly to keep or update
+  /// - Pass [clearDisplayName], [clearPhotoUrl], [clearBio] as true to set to null
   NearbyUser copyWith({
     String? userId,
     String? displayName,
+    bool clearDisplayName = false,
     String? photoUrl,
+    bool clearPhotoUrl = false,
     String? bio,
+    bool clearBio = false,
     String? bleAnonymousId,
     int? rssi,
     BleProximity? proximity,
@@ -91,9 +97,9 @@ class NearbyUser extends Equatable {
   }) {
     return NearbyUser(
       userId: userId ?? this.userId,
-      displayName: displayName ?? this.displayName,
-      photoUrl: photoUrl ?? this.photoUrl,
-      bio: bio ?? this.bio,
+      displayName: clearDisplayName ? null : (displayName ?? this.displayName),
+      photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
+      bio: clearBio ? null : (bio ?? this.bio),
       bleAnonymousId: bleAnonymousId ?? this.bleAnonymousId,
       rssi: rssi ?? this.rssi,
       proximity: proximity ?? this.proximity,
@@ -187,13 +193,42 @@ class Encounter extends Equatable {
   }
 
   factory Encounter.fromFirestore(Map<String, dynamic> data) {
+    // Validate required fields
+    final userId = data['userId'];
+    final otherUserId = data['otherUserId'];
+    final timestamp = data['timestamp'];
+    final durationSeconds = data['durationSeconds'];
+    final closestProximity = data['closestProximity'];
+    final peakRssi = data['peakRssi'];
+
+    if (userId is! String || userId.isEmpty) {
+      throw ArgumentError('Invalid or missing userId in Encounter data');
+    }
+    if (otherUserId is! String || otherUserId.isEmpty) {
+      throw ArgumentError('Invalid or missing otherUserId in Encounter data');
+    }
+    if (timestamp is! String) {
+      throw ArgumentError('Invalid or missing timestamp in Encounter data');
+    }
+    if (durationSeconds is! int) {
+      throw ArgumentError(
+          'Invalid or missing durationSeconds in Encounter data');
+    }
+    if (closestProximity is! String) {
+      throw ArgumentError(
+          'Invalid or missing closestProximity in Encounter data');
+    }
+    if (peakRssi is! int) {
+      throw ArgumentError('Invalid or missing peakRssi in Encounter data');
+    }
+
     return Encounter(
-      userId: data['userId'] as String,
-      otherUserId: data['otherUserId'] as String,
-      timestamp: DateTime.parse(data['timestamp'] as String),
-      durationSeconds: data['durationSeconds'] as int,
-      closestProximity: data['closestProximity'] as String,
-      peakRssi: data['peakRssi'] as int,
+      userId: userId,
+      otherUserId: otherUserId,
+      timestamp: DateTime.parse(timestamp),
+      durationSeconds: durationSeconds,
+      closestProximity: closestProximity,
+      peakRssi: peakRssi,
       wasConnected: data['wasConnected'] as bool? ?? false,
     );
   }

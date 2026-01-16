@@ -39,9 +39,8 @@ class BleIdGenerator {
 
     // Add some random bytes for additional entropy
     final randomBytes = List<int>.generate(4, (_) => _random.nextInt(256));
-    final randomHex = randomBytes
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
+    final randomHex =
+        randomBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
     // Combine and truncate to create a compact ID
     // Format: first 8 chars of UUID + 8 random hex chars = 16 chars
@@ -103,14 +102,29 @@ class BleIdGenerator {
   }
 
   /// Parses an anonymous ID from manufacturer data.
+  /// Returns null if data is invalid or malformed.
   static String? parseAnonymousIdFromManufacturerData(Uint8List data) {
-    if (data.length < 3) return null;
+    // Minimum: 2 byte company ID + at least 8 bytes for valid ID
+    if (data.length < 10) return null;
 
     // Skip the 2-byte company ID
     final idBytes = data.sublist(2);
 
+    // Validate length - our IDs are 16 characters (8 UUID + 8 random hex)
+    if (idBytes.length < 8 ||
+        idBytes.length > BleConstants.maxAnonymousIdLength) {
+      return null;
+    }
+
     try {
-      return utf8.decode(idBytes);
+      final decoded = utf8.decode(idBytes);
+
+      // Validate the ID format: should be uppercase alphanumeric
+      if (!RegExp(r'^[A-F0-9]{8,20}$').hasMatch(decoded)) {
+        return null;
+      }
+
+      return decoded;
     } catch (_) {
       return null;
     }

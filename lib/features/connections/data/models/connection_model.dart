@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/connection.dart';
 
 /// Firestore model for Connection entity.
-/// 
+///
 /// Firestore Schema:
 /// ```
 /// connections/{connectionId}
@@ -32,17 +32,42 @@ class ConnectionModel extends Connection {
   });
 
   /// Creates model from Firestore document.
+  /// Throws [FormatException] if required fields are missing.
   factory ConnectionModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>?;
+
+    if (data == null) {
+      throw FormatException('Connection document ${doc.id} has no data');
+    }
+
+    final userId1 = data['userId1'] as String?;
+    final userId2 = data['userId2'] as String?;
+    final statusStr = data['status'] as String?;
+    final connectedAt = data['connectedAt'] as Timestamp?;
+    final updatedAt = data['updatedAt'] as Timestamp?;
+    final initiatedBy = data['initiatedBy'] as String?;
+
+    if (userId1 == null ||
+        userId2 == null ||
+        statusStr == null ||
+        connectedAt == null ||
+        updatedAt == null ||
+        initiatedBy == null) {
+      throw FormatException(
+        'Connection document ${doc.id} missing required fields: '
+        'userId1=$userId1, userId2=$userId2, status=$statusStr, '
+        'connectedAt=$connectedAt, updatedAt=$updatedAt, initiatedBy=$initiatedBy',
+      );
+    }
 
     return ConnectionModel(
       id: doc.id,
-      userId1: data['userId1'] as String,
-      userId2: data['userId2'] as String,
-      status: _parseStatus(data['status'] as String),
-      connectedAt: (data['connectedAt'] as Timestamp).toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-      initiatedBy: data['initiatedBy'] as String,
+      userId1: userId1,
+      userId2: userId2,
+      status: _parseStatus(statusStr),
+      connectedAt: connectedAt.toDate(),
+      updatedAt: updatedAt.toDate(),
+      initiatedBy: initiatedBy,
       blockedBy: data['blockedBy'] as String?,
       canMessage: data['canMessage'] as bool? ?? true,
       shareLocation: data['shareLocation'] as bool? ?? false,

@@ -41,6 +41,7 @@ class NearbyUsersState extends Equatable {
     NearbyUsersFilter? filter,
     bool? isDiscovering,
     String? errorMessage,
+    bool clearErrorMessage = false,
   }) {
     return NearbyUsersState(
       status: status ?? this.status,
@@ -48,7 +49,8 @@ class NearbyUsersState extends Equatable {
       filteredUsers: filteredUsers ?? this.filteredUsers,
       filter: filter ?? this.filter,
       isDiscovering: isDiscovering ?? this.isDiscovering,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage:
+          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
     );
   }
 

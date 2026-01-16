@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/connection_request.dart';
 
 /// Firestore model for ConnectionRequest entity.
-/// 
+///
 /// Firestore Schema:
 /// ```
 /// connection_requests/{requestId}
@@ -19,7 +19,7 @@ import '../../domain/entities/connection_request.dart';
 ///   - senderPhotoUrl: string?
 ///   - receiverDisplayName: string?
 ///   - receiverPhotoUrl: string?
-/// 
+///
 /// Indexes needed:
 ///   - receiverId + status + sentAt (for inbox queries)
 ///   - senderId + status + sentAt (for sent requests)
@@ -86,12 +86,16 @@ class ConnectionRequestModel extends ConnectionRequest {
   }
 
   /// Converts to Firestore document data.
-  Map<String, dynamic> toFirestore() {
+  /// When [useServerTimestamp] is true, sentAt will use FieldValue.serverTimestamp()
+  /// which is required by Firestore security rules for document creation.
+  Map<String, dynamic> toFirestore({bool useServerTimestamp = false}) {
     return {
       'senderId': senderId,
       'receiverId': receiverId,
       'status': status.name,
-      'sentAt': Timestamp.fromDate(sentAt),
+      'sentAt': useServerTimestamp
+          ? FieldValue.serverTimestamp()
+          : Timestamp.fromDate(sentAt),
       'respondedAt':
           respondedAt != null ? Timestamp.fromDate(respondedAt!) : null,
       'expiresAt': Timestamp.fromDate(expiresAt),
@@ -132,7 +136,7 @@ class ConnectionRequestModel extends ConnectionRequest {
 }
 
 /// Model for tracking user's request rate limits.
-/// 
+///
 /// Firestore Schema:
 /// ```
 /// users/{userId}/rate_limits/connection_requests

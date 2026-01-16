@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/utils/input_sanitizer.dart';
 import '../bloc/auth_bloc.dart';
 import '../widgets/auth_error_dialog.dart';
 import '../widgets/social_sign_in_button.dart';
@@ -101,7 +102,8 @@ class _RegisterPageState extends State<RegisterPage> {
                         Text(
                           'Already have an account?',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         TextButton(
@@ -155,8 +157,20 @@ class _RegisterPageState extends State<RegisterPage> {
         if (value == null || value.isEmpty) {
           return 'Please enter your name';
         }
-        if (value.length < 2) {
+        // Sanitize and check the result
+        final sanitized = InputSanitizer.sanitizeDisplayName(value);
+        if (sanitized == null) {
+          return 'Please enter a valid name';
+        }
+        if (sanitized.length < 2) {
           return 'Name must be at least 2 characters';
+        }
+        if (sanitized.length > 50) {
+          return 'Name must be 50 characters or less';
+        }
+        // Check for suspicious patterns
+        if (RegExp(r'[<>{}|\\^~\[\]`]').hasMatch(value)) {
+          return 'Name contains invalid characters';
         }
         return null;
       },
@@ -177,9 +191,16 @@ class _RegisterPageState extends State<RegisterPage> {
         if (value == null || value.isEmpty) {
           return 'Please enter your email';
         }
-        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+        // RFC 5322 compliant email regex - allows +, longer TLDs, and more special chars
+        final emailRegex = RegExp(
+          r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?)*$",
+        );
         if (!emailRegex.hasMatch(value)) {
           return 'Please enter a valid email';
+        }
+        // Additional length check to prevent DoS via very long strings
+        if (value.length > 254) {
+          return 'Email address is too long';
         }
         return null;
       },
@@ -204,18 +225,53 @@ class _RegisterPageState extends State<RegisterPage> {
             setState(() => _obscurePassword = !_obscurePassword);
           },
         ),
-        helperText: 'At least 6 characters',
+        helperText: 'At least 8 characters with letters and numbers',
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter a password';
-        }
-        if (value.length < 6) {
-          return 'Password must be at least 6 characters';
-        }
-        return null;
-      },
+      validator: _validatePassword,
     );
+  }
+
+  /// Validates password strength.
+  ///
+  /// Requires:
+  /// - At least 8 characters
+  /// - At least one letter
+  /// - At least one number
+  /// - No more than 128 characters (prevent DoS)
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a password';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (value.length > 128) {
+      return 'Password is too long';
+    }
+    if (!RegExp(r'[a-zA-Z]').hasMatch(value)) {
+      return 'Password must contain at least one letter';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Password must contain at least one number';
+    }
+    // Check for common weak passwords
+    final lowerValue = value.toLowerCase();
+    const weakPasswords = [
+      'password',
+      '12345678',
+      'qwerty12',
+      'letmein1',
+      'welcome1',
+      'admin123',
+      'abc12345',
+      'password1',
+      'iloveyou1',
+      'sunshine1',
+    ];
+    if (weakPasswords.any((weak) => lowerValue.contains(weak))) {
+      return 'Please choose a stronger password';
+    }
+    return null;
   }
 
   Widget _buildConfirmPasswordField() {
@@ -348,18 +404,32 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please accept the Terms of Service and Privacy Policy'),
+          content:
+              Text('Please accept the Terms of Service and Privacy Policy'),
         ),
       );
       return;
     }
 
     if (_formKey.currentState?.validate() ?? false) {
+      // Sanitize inputs before sending to the bloc
+      final sanitizedEmail =
+          InputSanitizer.sanitizeEmail(_emailController.text);
+      final sanitizedDisplayName =
+          InputSanitizer.sanitizeDisplayName(_nameController.text);
+
+      if (sanitizedEmail == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid email')),
+        );
+        return;
+      }
+
       context.read<AuthBloc>().add(
             AuthRegisterRequested(
-              email: _emailController.text.trim(),
+              email: sanitizedEmail,
               password: _passwordController.text,
-              displayName: _nameController.text.trim(),
+              displayName: sanitizedDisplayName,
             ),
           );
     }
@@ -369,7 +439,8 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please accept the Terms of Service and Privacy Policy'),
+          content:
+              Text('Please accept the Terms of Service and Privacy Policy'),
         ),
       );
       return;

@@ -13,7 +13,7 @@ enum ConnectionStatus {
 }
 
 /// Entity representing a mutual connection between two users.
-/// 
+///
 /// A connection is only created after both users consent.
 /// The connection document is stored with a canonical ID (sorted user IDs)
 /// to ensure only one connection document exists between two users.
@@ -76,6 +76,9 @@ class Connection extends Equatable {
   /// Checks if a user is part of this connection.
   bool hasUser(String userId) => userId1 == userId || userId2 == userId;
 
+  /// Sentinel value for explicitly setting nullable fields to null in copyWith.
+  static const _sentinel = Object();
+
   Connection copyWith({
     String? id,
     String? userId1,
@@ -84,7 +87,7 @@ class Connection extends Equatable {
     DateTime? connectedAt,
     DateTime? updatedAt,
     String? initiatedBy,
-    String? blockedBy,
+    Object? blockedBy = _sentinel,
     bool? canMessage,
     bool? shareLocation,
   }) {
@@ -96,7 +99,7 @@ class Connection extends Equatable {
       connectedAt: connectedAt ?? this.connectedAt,
       updatedAt: updatedAt ?? this.updatedAt,
       initiatedBy: initiatedBy ?? this.initiatedBy,
-      blockedBy: blockedBy ?? this.blockedBy,
+      blockedBy: blockedBy == _sentinel ? this.blockedBy : blockedBy as String?,
       canMessage: canMessage ?? this.canMessage,
       shareLocation: shareLocation ?? this.shareLocation,
     );

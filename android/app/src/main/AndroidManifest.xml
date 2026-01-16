@@ -23,7 +23,7 @@
         android:required="true" />
     
     <application
-        android:label="radius"
+        android:label="Radius"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -77,13 +77,16 @@ class Conversation extends Equatable {
     return participantInfo[otherId];
   }
 
+  /// Sentinel value for explicitly setting nullable fields to null in copyWith.
+  static const _sentinel = Object();
+
   Conversation copyWith({
     String? id,
     List<String>? participantIds,
     DateTime? createdAt,
-    DateTime? lastMessageAt,
-    String? lastMessageText,
-    String? lastMessageSenderId,
+    Object? lastMessageAt = _sentinel,
+    Object? lastMessageText = _sentinel,
+    Object? lastMessageSenderId = _sentinel,
     Map<String, int>? unreadCounts,
     Map<String, bool>? mutedBy,
     Map<String, ParticipantInfo>? participantInfo,
@@ -93,9 +96,15 @@ class Conversation extends Equatable {
       id: id ?? this.id,
       participantIds: participantIds ?? this.participantIds,
       createdAt: createdAt ?? this.createdAt,
-      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
-      lastMessageText: lastMessageText ?? this.lastMessageText,
-      lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      lastMessageAt: lastMessageAt == _sentinel
+          ? this.lastMessageAt
+          : lastMessageAt as DateTime?,
+      lastMessageText: lastMessageText == _sentinel
+          ? this.lastMessageText
+          : lastMessageText as String?,
+      lastMessageSenderId: lastMessageSenderId == _sentinel
+          ? this.lastMessageSenderId
+          : lastMessageSenderId as String?,
       unreadCounts: unreadCounts ?? this.unreadCounts,
       mutedBy: mutedBy ?? this.mutedBy,
       participantInfo: participantInfo ?? this.participantInfo,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../core/services/bluetooth/ble_device.dart';
 import '../../core/services/bluetooth/bluetooth_service.dart';
+import '../../core/utils/input_sanitizer.dart';
 import 'data/proximity_cache.dart';
 import 'data/proximity_firestore_service.dart';
 import 'domain/entities/nearby_user.dart';
@@ -230,7 +231,13 @@ class ProximityService {
   // ============== BLE Device Processing ==============
 
   /// Handles updates from BLE scanning.
-  void _onBleDevicesUpdated(List<BleDevice> devices) async {
+  void _onBleDevicesUpdated(List<BleDevice> devices) {
+    // Process devices sequentially to avoid race conditions
+    _processDevicesSequentially(devices);
+  }
+
+  /// Process devices one at a time to prevent race conditions
+  Future<void> _processDevicesSequentially(List<BleDevice> devices) async {
     for (final device in devices) {
       await _processDiscoveredDevice(device);
     }
@@ -238,14 +245,18 @@ class ProximityService {
 
   /// Processes a discovered BLE device.
   Future<void> _processDiscoveredDevice(BleDevice device) async {
+    // Validate device ID to prevent processing invalid data
+    final bleId = device.anonymousId;
+    if (bleId.isEmpty || bleId.length < 8) return;
+
     // Check if we already have this BLE ID mapped
-    final existingUser = _cache.getUserByBleId(device.anonymousId);
+    final existingUser = _cache.getUserByBleId(bleId);
 
     if (existingUser != null) {
       // Update existing user with new detection data
       _cache.updateUserDetection(
         existingUser.userId,
-        bleAnonymousId: device.anonymousId,
+        bleAnonymousId: bleId,
         rssi: device.rssi,
         proximity: device.proximity,
         estimatedDistance: device.estimatedDistanceMeters,
@@ -254,7 +265,7 @@ class ProximityService {
     }
 
     // Check lookup cache first
-    final cachedLookup = _userLookupCache[device.anonymousId];
+    final cachedLookup = _userLookupCache[bleId];
     if (cachedLookup != null) {
       if (cachedLookup.isValid && cachedLookup.userData != null) {
         _createNearbyUserFromLookup(device, cachedLookup.userData!);
@@ -262,18 +273,16 @@ class ProximityService {
       return;
     }
 
-    // Prevent duplicate lookups
-    if (_pendingLookups.contains(device.anonymousId)) return;
-    _pendingLookups.add(device.anonymousId);
+    // Prevent duplicate lookups - synchronous check and add
+    if (_pendingLookups.contains(bleId)) return;
+    _pendingLookups.add(bleId);
 
     try {
       // Look up user in Firestore
-      final userData = await _firestoreService.lookupUserByBleId(
-        device.anonymousId,
-      );
+      final userData = await _firestoreService.lookupUserByBleId(bleId);
 
       // Cache the result (even if null, to prevent repeated queries)
-      _userLookupCache[device.anonymousId] = _UserLookupResult(
+      _userLookupCache[bleId] = _UserLookupResult(
         userData: userData,
         timestamp: DateTime.now(),
       );
@@ -282,7 +291,7 @@ class ProximityService {
         _createNearbyUserFromLookup(device, userData);
       }
     } finally {
-      _pendingLookups.remove(device.anonymousId);
+      _pendingLookups.remove(bleId);
     }
   }
 
@@ -294,11 +303,22 @@ class ProximityService {
     // Don't add ourselves
     if (userData['userId'] == _currentUserId) return;
 
+    // Sanitize user input data to prevent XSS
+    final sanitizedDisplayName = InputSanitizer.sanitizeDisplayName(
+      userData['displayName'] as String?,
+    );
+    final sanitizedBio = InputSanitizer.sanitizeBio(
+      userData['bio'] as String?,
+    );
+    final sanitizedPhotoUrl = InputSanitizer.sanitizeUrl(
+      userData['photoUrl'] as String?,
+    );
+
     final nearbyUser = NearbyUser(
       userId: userData['userId'] as String,
-      displayName: userData['displayName'] as String,
-      photoUrl: userData['photoUrl'] as String?,
-      bio: userData['bio'] as String?,
+      displayName: sanitizedDisplayName ?? 'Unknown',
+      photoUrl: sanitizedPhotoUrl,
+      bio: sanitizedBio,
       bleAnonymousId: device.anonymousId,
       rssi: device.rssi,
       proximity: device.proximity,

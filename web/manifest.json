@@ -1,6 +1,6 @@
 {
-    "name": "radius",
-    "short_name": "radius",
+    "name": "Radius",
+    "short_name": "Radius",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

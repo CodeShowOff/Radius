@@ -78,7 +78,7 @@ class ChatService {
 
       await _conversationsRef
           .doc(conversationId)
-          .set(conversation.toFirestore());
+          .set(conversation.toFirestore(useServerTimestamp: true));
 
       _logger.i('Created conversation: $conversationId');
       return conversation.toEntity();
@@ -136,6 +136,18 @@ class ChatService {
 
   // ==================== MESSAGES ====================
 
+  /// Sanitizes message text to prevent XSS and injection attacks.
+  String _sanitizeText(String text) {
+    // Remove null bytes and control characters (except newlines and tabs)
+    var sanitized =
+        text.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '');
+    // Limit length to prevent abuse
+    if (sanitized.length > 5000) {
+      sanitized = sanitized.substring(0, 5000);
+    }
+    return sanitized.trim();
+  }
+
   /// Sends a message with optimistic update support.
   ///
   /// Returns the optimistic message immediately for UI update.
@@ -149,12 +161,26 @@ class ChatService {
     final localId = _uuid.v4();
     final now = DateTime.now();
 
+    // Sanitize input text
+    final sanitizedText = _sanitizeText(text);
+    if (sanitizedText.isEmpty) {
+      return Message(
+        id: localId,
+        conversationId: conversationId,
+        senderId: senderId,
+        text: '',
+        sentAt: now,
+        status: MessageStatus.failed,
+        localId: localId,
+      );
+    }
+
     // Create optimistic message for immediate UI
     final optimisticMessage = Message(
       id: localId,
       conversationId: conversationId,
       senderId: senderId,
-      text: text.trim(),
+      text: sanitizedText,
       sentAt: now,
       status: MessageStatus.sending,
       localId: localId,

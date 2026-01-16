@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:equatable/equatable.dart';
 
 /// Represents a discovered BLE device.
@@ -73,6 +75,7 @@ class BleDevice extends Equatable {
   double get estimatedDistanceMeters {
     // Using the log-distance path loss model
     // RSSI = -10 * n * log10(d) + A
+    // Solving for d: d = 10 ^ ((A - RSSI) / (10 * n))
     // where n = path loss exponent (~2 for free space, ~3-4 indoors)
     // A = RSSI at 1 meter (typically -59 to -65 dBm)
     const double txPower = -59; // Calibrated TX power at 1 meter
@@ -81,8 +84,9 @@ class BleDevice extends Equatable {
     if (rssi == 0) return -1;
 
     final ratio = (txPower - rssi) / (10 * n);
+    final distance = math.pow(10, ratio).toDouble();
     return double.parse(
-      (10.0 * ratio).clamp(0.1, 100.0).toStringAsFixed(1),
+      distance.clamp(0.1, 100.0).toStringAsFixed(1),
     );
   }
 

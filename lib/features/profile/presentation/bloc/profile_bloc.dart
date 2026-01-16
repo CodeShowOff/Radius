@@ -21,6 +21,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     on<ProfileUpdateRequested>(_onUpdateRequested);
     on<ProfileVisibilityToggled>(_onVisibilityToggled);
     on<ProfilePhotoUpdated>(_onPhotoUpdated);
+    on<ProfilePrivacySettingsUpdated>(_onPrivacySettingsUpdated);
     on<ProfileStreamUpdated>(_onStreamUpdated);
   }
 
@@ -121,6 +122,32 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
       userId: currentState.profile.userId,
       photoUrl: event.photoUrl,
     );
+
+    result.fold(
+      (failure) => emit(ProfileError(failure.message)),
+      (_) => emit(ProfileLoaded(updatedProfile)),
+    );
+  }
+
+  Future<void> _onPrivacySettingsUpdated(
+    ProfilePrivacySettingsUpdated event,
+    Emitter<ProfileState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! ProfileLoaded) return;
+
+    final updatedProfile = currentState.profile.copyWith(
+      showOnlineStatus:
+          event.showOnlineStatus ?? currentState.profile.showOnlineStatus,
+      allowConnectionRequests: event.allowConnectionRequests ??
+          currentState.profile.allowConnectionRequests,
+      showLastSeen: event.showLastSeen ?? currentState.profile.showLastSeen,
+      updatedAt: DateTime.now(),
+    );
+
+    emit(ProfileSaving(updatedProfile));
+
+    final result = await _profileRepository.saveProfile(updatedProfile);
 
     result.fold(
       (failure) => emit(ProfileError(failure.message)),

@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/conversation.dart';
 
 /// Firestore model for Conversation entity.
-/// 
+///
 /// Firestore Schema:
 /// ```
 /// conversations/{conversationId}
@@ -44,7 +44,9 @@ class ConversationModel extends Conversation {
       (key, value) => MapEntry(
         key,
         ParticipantInfo(
-          displayName: (value as Map<String, dynamic>)['displayName'] as String? ?? 'Unknown',
+          displayName:
+              (value as Map<String, dynamic>)['displayName'] as String? ??
+                  'Unknown',
           photoUrl: value['photoUrl'] as String?,
           isOnline: value['isOnline'] as bool? ?? false,
           lastSeen: value['lastSeen'] != null
@@ -138,13 +140,16 @@ class ConversationModel extends Conversation {
   }
 
   /// Converts to Firestore document data.
-  Map<String, dynamic> toFirestore() {
+  /// When [useServerTimestamp] is true, createdAt will use FieldValue.serverTimestamp()
+  /// which is required by Firestore security rules for document creation.
+  Map<String, dynamic> toFirestore({bool useServerTimestamp = false}) {
     return {
       'participantIds': participantIds,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'lastMessageAt': lastMessageAt != null
-          ? Timestamp.fromDate(lastMessageAt!)
-          : null,
+      'createdAt': useServerTimestamp
+          ? FieldValue.serverTimestamp()
+          : Timestamp.fromDate(createdAt),
+      'lastMessageAt':
+          lastMessageAt != null ? Timestamp.fromDate(lastMessageAt!) : null,
       'lastMessageText': lastMessageText,
       'lastMessageSenderId': lastMessageSenderId,
       'unreadCounts': unreadCounts,

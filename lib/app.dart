@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:provider/provider.dart';
 
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
@@ -17,10 +16,10 @@ class RadiusApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
+    return MultiRepositoryProvider(
       providers: [
         // Provide BluetoothService for Bluetooth status checking
-        Provider<BluetoothService>.value(
+        RepositoryProvider<BluetoothService>.value(
           value: getIt<BluetoothService>(),
         ),
       ],

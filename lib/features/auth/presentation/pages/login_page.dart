@@ -88,7 +88,8 @@ class _LoginPageState extends State<LoginPage> {
                         Text(
                           "Don't have an account?",
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         TextButton(
@@ -222,9 +223,16 @@ class _LoginPageState extends State<LoginPage> {
     if (value == null || value.isEmpty) {
       return 'Please enter your email';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    // RFC 5322 compliant email regex - allows +, longer TLDs, and more special chars
+    final emailRegex = RegExp(
+      r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?)*$",
+    );
     if (!emailRegex.hasMatch(value)) {
       return 'Please enter a valid email';
+    }
+    // Additional length check to prevent DoS via very long strings
+    if (value.length > 254) {
+      return 'Email address is too long';
     }
     return null;
   }
@@ -236,6 +244,10 @@ class _LoginPageState extends State<LoginPage> {
     if (value.length < 6) {
       return 'Password must be at least 6 characters';
     }
+    // Prevent excessively long passwords (DoS prevention)
+    if (value.length > 128) {
+      return 'Password is too long';
+    }
     return null;
   }
 
@@ -244,6 +256,21 @@ class _LoginPageState extends State<LoginPage> {
       context.go(Routes.home);
     } else if (state is AuthError) {
       showAuthErrorDialog(context, state.message);
+    } else if (state is AuthPasswordResetSent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Password reset email sent to ${state.email}. Check your inbox.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (state is AuthPasswordResetFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(state.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     }
   }
 
@@ -263,50 +290,100 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showForgotPasswordDialog() {
-    final emailController = TextEditingController(text: _emailController.text);
-    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: Column(
+      builder: (dialogContext) => _ForgotPasswordDialog(
+        initialEmail: _emailController.text,
+        onSendPressed: (email) {
+          context.read<AuthBloc>().add(
+                AuthPasswordResetRequested(email: email.trim()),
+              );
+        },
+      ),
+    );
+  }
+}
+
+/// Stateful dialog widget for forgot password to properly dispose controllers.
+class _ForgotPasswordDialog extends StatefulWidget {
+  final String initialEmail;
+  final void Function(String email) onSendPressed;
+
+  const _ForgotPasswordDialog({
+    required this.initialEmail,
+    required this.onSendPressed,
+  });
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final TextEditingController _emailController;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset Password'),
+      content: Form(
+        key: _formKey,
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter your email address to receive a password reset link.'),
+            const Text(
+                'Enter your email address to receive a password reset link.'),
             const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
+            TextFormField(
+              controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 prefixIcon: Icon(Icons.email_outlined),
               ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your email';
+                }
+                final emailRegex = RegExp(
+                  r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,253}[a-zA-Z0-9])?)*$",
+                );
+                if (!emailRegex.hasMatch(value)) {
+                  return 'Please enter a valid email';
+                }
+                return null;
+              },
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (emailController.text.isNotEmpty) {
-                context.read<AuthBloc>().add(
-                      AuthPasswordResetRequested(email: emailController.text.trim()),
-                    );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password reset email sent. Check your inbox.'),
-                  ),
-                );
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_formKey.currentState?.validate() ?? false) {
+              widget.onSendPressed(_emailController.text);
+              Navigator.pop(context);
+            }
+          },
+          child: const Text('Send'),
+        ),
+      ],
     );
   }
 }

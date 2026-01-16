@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/bloc/chat_bloc.dart';
@@ -9,11 +11,14 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
-import '../../features/connections/presentation/pages/connections_list_screen.dart';
+import '../../features/connections/presentation/pages/connections_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
+import '../../features/profile/presentation/pages/privacy_settings_page.dart';
+import '../../features/profile/presentation/pages/help_support_page.dart';
 import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../features/proximity/presentation/pages/nearby_users_screen.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
@@ -27,15 +32,70 @@ import 'routes.dart';
 final _analyticsObserver =
     AppConfig.enableAnalytics ? getIt<AnalyticsService>().observer : null;
 
+/// Routes that don't require authentication.
+const _publicRoutes = {
+  Routes.splash,
+  Routes.login,
+  Routes.register,
+};
+
 /// Application router configuration using GoRouter.
 ///
 /// Defines all navigation routes and their corresponding pages.
+/// Includes authentication redirect logic to protect routes.
 final GoRouter appRouter = GoRouter(
   initialLocation: Routes.splash,
   debugLogDiagnostics: AppConfig.enableDebugLogging,
   observers: [
     if (_analyticsObserver != null) _analyticsObserver!,
   ],
+  redirect: (BuildContext context, GoRouterState state) {
+    // Get the current auth state from the bloc
+    final authBloc = context.read<AuthBloc>();
+    final authState = authBloc.state;
+
+    final currentPath = state.matchedLocation;
+    final isPublicRoute = _publicRoutes.contains(currentPath);
+
+    // During initial load or auth check, don't redirect
+    if (authState is AuthInitial || authState is AuthLoading) {
+      // Only allow splash page during initial state
+      if (currentPath != Routes.splash) {
+        return Routes.splash;
+      }
+      return null;
+    }
+
+    final isAuthenticated = authState is AuthAuthenticated;
+
+    // If user is not authenticated and trying to access protected route
+    if (!isAuthenticated && !isPublicRoute) {
+      // Redirect to login
+      return Routes.login;
+    }
+
+    // If user is authenticated and trying to access auth routes (login/register)
+    if (isAuthenticated &&
+        (currentPath == Routes.login || currentPath == Routes.register)) {
+      // Redirect to home
+      return Routes.home;
+    }
+
+    // If user is authenticated and on splash, redirect to home
+    if (isAuthenticated && currentPath == Routes.splash) {
+      return Routes.home;
+    }
+
+    // If user is not authenticated and on splash (after auth check), go to login
+    if (!isAuthenticated &&
+        currentPath == Routes.splash &&
+        authState is AuthUnauthenticated) {
+      return Routes.login;
+    }
+
+    // No redirect needed
+    return null;
+  },
   routes: [
     // Splash / Loading screen
     GoRoute(
@@ -83,6 +143,21 @@ final GoRouter appRouter = GoRouter(
         child: const EditProfilePage(),
       ),
     ),
+    GoRoute(
+      path: Routes.bluetoothSettings,
+      name: 'bluetoothSettings',
+      builder: (context, state) => const BluetoothSettingsPage(),
+    ),
+    GoRoute(
+      path: Routes.privacySettings,
+      name: 'privacySettings',
+      builder: (context, state) => const PrivacySettingsPage(),
+    ),
+    GoRoute(
+      path: Routes.helpSupport,
+      name: 'helpSupport',
+      builder: (context, state) => const HelpSupportPage(),
+    ),
 
     // Connection routes
     GoRoute(
@@ -90,7 +165,7 @@ final GoRouter appRouter = GoRouter(
       name: 'connections',
       builder: (context, state) => BlocProvider(
         create: (_) => getIt<ConnectionBloc>(),
-        child: const ConnectionsListScreen(),
+        child: const ConnectionsPage(),
       ),
     ),
     GoRoute(
@@ -155,19 +230,4 @@ final GoRouter appRouter = GoRouter(
       },
     ),
   ],
-
-  // TODO: Add redirect logic for authentication
-  // redirect: (context, state) {
-  //   final isAuthenticated = // check auth state
-  //   final isAuthRoute = state.matchedLocation == Routes.login ||
-  //                       state.matchedLocation == Routes.register;
-  //
-  //   if (!isAuthenticated && !isAuthRoute) {
-  //     return Routes.login;
-  //   }
-  //   if (isAuthenticated && isAuthRoute) {
-  //     return Routes.home;
-  //   }
-  //   return null;
-  // },
 );

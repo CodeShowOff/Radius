@@ -46,11 +46,21 @@ class _ChatScreenState extends State<ChatScreen> {
         ));
   }
 
+  late final ChatBloc _chatBloc;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the BLoC reference for safe disposal
+    _chatBloc = context.read<ChatBloc>();
+  }
+
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    context.read<ChatBloc>().add(const ChatClose());
+    // Use cached reference to avoid context access after disposal
+    _chatBloc.add(const ChatClose());
     super.dispose();
   }
 

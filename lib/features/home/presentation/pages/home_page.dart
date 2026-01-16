@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 
 /// Home page - main screen after authentication.
 class HomePage extends StatefulWidget {
@@ -96,43 +97,53 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Welcome card
-                BlocBuilder<AuthBloc, AuthState>(
-                  builder: (context, state) {
-                    String userName = 'there';
-                    if (state is AuthAuthenticated) {
-                      userName = state.user.displayName ?? 'there';
-                    }
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hello, $userName! 👋',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                // Welcome card - now uses ProfileBloc for name
+                BlocBuilder<ProfileBloc, ProfileState>(
+                  builder: (context, profileState) {
+                    return BlocBuilder<AuthBloc, AuthState>(
+                      builder: (context, authState) {
+                        String userName = 'there';
+                        if (authState is AuthAuthenticated) {
+                          // Prefer profile name over auth displayName
+                          if (profileState is ProfileLoaded &&
+                              profileState.profile.name.isNotEmpty) {
+                            userName = profileState.profile.name;
+                          } else {
+                            userName = authState.user.displayName ?? 'there';
+                          }
+                        }
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hello, $userName! 👋',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Ready to discover people nearby?',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Ready to discover people nearby?',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -147,21 +158,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
 
-                // Nearby button
-                FilledButton.icon(
-                  onPressed: () => context.push(Routes.nearby),
-                  icon: const Icon(Icons.radar),
-                  label: const Text('Find Nearby People'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                // Quick action buttons row
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => context.push(Routes.nearby),
+                        icon: const Icon(Icons.radar),
+                        label: const Text('Nearby'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => context.push(Routes.connections),
+                        icon: const Icon(Icons.people),
+                        label: const Text('Connections'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
 
-                // Recent connections section
-                Text(
-                  'Recent Connections',
-                  style: Theme.of(context).textTheme.titleLarge,
+                // Connections section header with "View All" button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Connections',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    TextButton(
+                      onPressed: () => context.push(Routes.connections),
+                      child: const Text('View All'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Expanded(

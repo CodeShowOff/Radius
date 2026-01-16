@@ -48,6 +48,23 @@ class ProfilePhotoUpdated extends ProfileEvent {
   List<Object?> get props => [photoUrl];
 }
 
+/// Event to update privacy settings.
+class ProfilePrivacySettingsUpdated extends ProfileEvent {
+  final bool? showOnlineStatus;
+  final bool? allowConnectionRequests;
+  final bool? showLastSeen;
+
+  const ProfilePrivacySettingsUpdated({
+    this.showOnlineStatus,
+    this.allowConnectionRequests,
+    this.showLastSeen,
+  });
+
+  @override
+  List<Object?> get props =>
+      [showOnlineStatus, allowConnectionRequests, showLastSeen];
+}
+
 /// Internal event for stream updates.
 class ProfileStreamUpdated extends ProfileEvent {
   final Profile? profile;

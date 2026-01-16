@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 /// User entity representing an authenticated user.
-/// 
+///
 /// This is a domain entity - pure Dart with no framework dependencies.
 class User extends Equatable {
   final String id;
@@ -23,6 +23,9 @@ class User extends Equatable {
   });
 
   /// Creates a copy of this user with the given fields replaced.
+  ///
+  /// To explicitly set [displayName] or [avatarUrl] to null, use the
+  /// [clearDisplayName] or [clearAvatarUrl] parameters.
   User copyWith({
     String? id,
     String? email,
@@ -31,12 +34,14 @@ class User extends Equatable {
     String? bleIdentifier,
     DateTime? createdAt,
     bool? isDiscoverable,
+    bool clearDisplayName = false,
+    bool clearAvatarUrl = false,
   }) {
     return User(
       id: id ?? this.id,
       email: email ?? this.email,
-      displayName: displayName ?? this.displayName,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      displayName: clearDisplayName ? null : (displayName ?? this.displayName),
+      avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       bleIdentifier: bleIdentifier ?? this.bleIdentifier,
       createdAt: createdAt ?? this.createdAt,
       isDiscoverable: isDiscoverable ?? this.isDiscoverable,

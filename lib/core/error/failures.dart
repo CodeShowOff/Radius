@@ -108,8 +108,7 @@ class CacheFailure extends Failure {
 
 /// Server-related failures
 class ServerFailure extends Failure {
-  const ServerFailure(String message, {String? code})
-      : super(message: message, code: code);
+  const ServerFailure({required super.message, super.code});
 }
 
 /// Unexpected failures

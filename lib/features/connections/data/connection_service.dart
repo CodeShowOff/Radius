@@ -174,7 +174,9 @@ class ConnectionService {
         receiverPhotoUrl: receiverPhotoUrl,
       );
 
-      await _requestsRef.doc(requestId).set(request.toFirestore());
+      await _requestsRef
+          .doc(requestId)
+          .set(request.toFirestore(useServerTimestamp: true));
 
       _logger.i('Connection request sent: $senderId -> $receiverId');
       return ConnectionSuccess(request.toEntity());
@@ -801,6 +803,91 @@ class ConnectionService {
       _logger.w('Rate limit check failed', error: e);
       return null;
     }
+  }
+
+  // ==================== USER PROFILE FETCHING ====================
+
+  /// Fetches user profile by ID.
+  Future<Map<String, dynamic>?> getUserProfile(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
+      data['id'] = doc.id;
+      return data;
+    } catch (e, stack) {
+      _logger.e('Error fetching user profile', error: e, stackTrace: stack);
+      return null;
+    }
+  }
+
+  /// Fetches multiple user profiles by IDs.
+  Future<Map<String, Map<String, dynamic>>> getUserProfiles(
+      List<String> userIds) async {
+    if (userIds.isEmpty) return {};
+
+    try {
+      final results = <String, Map<String, dynamic>>{};
+
+      // Firestore limits 'in' queries to 30 items
+      final chunks = <List<String>>[];
+      for (var i = 0; i < userIds.length; i += 30) {
+        chunks.add(userIds.sublist(
+          i,
+          i + 30 > userIds.length ? userIds.length : i + 30,
+        ));
+      }
+
+      for (final chunk in chunks) {
+        final snapshot = await _firestore
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          results[doc.id] = data;
+        }
+      }
+
+      return results;
+    } catch (e, stack) {
+      _logger.e('Error fetching user profiles', error: e, stackTrace: stack);
+      return {};
+    }
+  }
+
+  /// Stream of user's connections with user profile data.
+  Stream<List<Map<String, dynamic>>> getConnectionsWithProfilesStream(
+      String userId) {
+    return getConnectionsStream(userId).asyncMap((connections) async {
+      if (connections.isEmpty) return [];
+
+      // Get other user IDs
+      final otherUserIds =
+          connections.map((c) => c.getOtherUserId(userId)).toList();
+
+      // Fetch profiles
+      final profiles = await getUserProfiles(otherUserIds);
+
+      // Combine connection with profile data
+      return connections.map((connection) {
+        final otherUserId = connection.getOtherUserId(userId);
+        final profile = profiles[otherUserId];
+
+        return {
+          'connection': connection,
+          'userId': otherUserId,
+          'displayName': profile?['displayName'] ?? 'User',
+          'avatarUrl': profile?['avatarUrl'],
+          'bio': profile?['bio'],
+          'isOnline': profile?['isOnline'] ?? false,
+          'lastSeen': profile?['lastSeen'],
+        };
+      }).toList();
+    });
   }
 }
 

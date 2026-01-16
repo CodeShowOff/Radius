@@ -8,6 +8,9 @@ class Profile extends Equatable {
   final String bio;
   final String? photoUrl;
   final bool isVisible;
+  final bool showOnlineStatus;
+  final bool allowConnectionRequests;
+  final bool showLastSeen;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -18,6 +21,9 @@ class Profile extends Equatable {
     this.bio = '',
     this.photoUrl,
     this.isVisible = true,
+    this.showOnlineStatus = true,
+    this.allowConnectionRequests = true,
+    this.showLastSeen = true,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -32,6 +38,9 @@ class Profile extends Equatable {
       bio: '',
       photoUrl: null,
       isVisible: true,
+      showOnlineStatus: true,
+      allowConnectionRequests: true,
+      showLastSeen: true,
       createdAt: now,
       updatedAt: now,
     );
@@ -45,6 +54,9 @@ class Profile extends Equatable {
     String? bio,
     String? photoUrl,
     bool? isVisible,
+    bool? showOnlineStatus,
+    bool? allowConnectionRequests,
+    bool? showLastSeen,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -55,6 +67,10 @@ class Profile extends Equatable {
       bio: bio ?? this.bio,
       photoUrl: photoUrl ?? this.photoUrl,
       isVisible: isVisible ?? this.isVisible,
+      showOnlineStatus: showOnlineStatus ?? this.showOnlineStatus,
+      allowConnectionRequests:
+          allowConnectionRequests ?? this.allowConnectionRequests,
+      showLastSeen: showLastSeen ?? this.showLastSeen,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -68,6 +84,9 @@ class Profile extends Equatable {
         bio,
         photoUrl,
         isVisible,
+        showOnlineStatus,
+        allowConnectionRequests,
+        showLastSeen,
         createdAt,
         updatedAt,
       ];

@@ -538,30 +538,39 @@ class _UserDetailsSheet extends StatelessWidget {
                 )
               else
                 Builder(
-                  builder: (context) {
+                  builder: (builderContext) {
                     // Get current user ID from AuthBloc
-                    final authState = context.read<AuthBloc>().state;
+                    final authState = builderContext.read<AuthBloc>().state;
                     final currentUserId =
                         authState is AuthAuthenticated ? authState.user.id : '';
 
                     return OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.pop(context);
-                        // Navigate to chat
+                        // Capture navigation data before popping
                         final conversationId =
                             Conversation.createConversationId(
                           currentUserId,
                           user.userId,
                         );
-                        context.push(
-                          Routes.chatWith(conversationId),
-                          extra: {
-                            'currentUserId': currentUserId,
-                            'otherUserId': user.userId,
-                            'otherUserName': user.displayName ?? 'Unknown',
-                            'otherUserPhotoUrl': user.photoUrl,
-                          },
-                        );
+                        final routeExtra = {
+                          'currentUserId': currentUserId,
+                          'otherUserId': user.userId,
+                          'otherUserName': user.displayName ?? 'Unknown',
+                          'otherUserPhotoUrl': user.photoUrl,
+                        };
+                        final route = Routes.chatWith(conversationId);
+
+                        // Pop first, then navigate using the parent context
+                        Navigator.pop(builderContext);
+
+                        // Use a post-frame callback to ensure navigation happens
+                        // after the bottom sheet is fully dismissed
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          // Check if the parent navigator context is still valid
+                          if (context.mounted) {
+                            context.push(route, extra: routeExtra);
+                          }
+                        });
                       },
                       icon: const Icon(Icons.chat_outlined),
                       label: const Text('Message'),

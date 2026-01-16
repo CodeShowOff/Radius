@@ -75,17 +75,20 @@ class Message extends Equatable {
       status == MessageStatus.delivered ||
       status == MessageStatus.read;
 
+  /// Sentinel value for explicitly setting nullable fields to null in copyWith.
+  static const _sentinel = Object();
+
   Message copyWith({
     String? id,
     String? conversationId,
     String? senderId,
     String? text,
     DateTime? sentAt,
-    DateTime? deliveredAt,
-    DateTime? readAt,
+    Object? deliveredAt = _sentinel,
+    Object? readAt = _sentinel,
     MessageStatus? status,
     bool? isDeleted,
-    String? localId,
+    Object? localId = _sentinel,
   }) {
     return Message(
       id: id ?? this.id,
@@ -93,11 +96,13 @@ class Message extends Equatable {
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
       sentAt: sentAt ?? this.sentAt,
-      deliveredAt: deliveredAt ?? this.deliveredAt,
-      readAt: readAt ?? this.readAt,
+      deliveredAt: deliveredAt == _sentinel
+          ? this.deliveredAt
+          : deliveredAt as DateTime?,
+      readAt: readAt == _sentinel ? this.readAt : readAt as DateTime?,
       status: status ?? this.status,
       isDeleted: isDeleted ?? this.isDeleted,
-      localId: localId ?? this.localId,
+      localId: localId == _sentinel ? this.localId : localId as String?,
     );
   }
 

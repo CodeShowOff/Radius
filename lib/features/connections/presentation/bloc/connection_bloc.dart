@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:logger/logger.dart';
 
 import '../../data/connection_service.dart';
 import '../../domain/entities/connection.dart';
@@ -13,6 +14,7 @@ part 'connection_state.dart';
 /// BLoC for managing user connections.
 class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   final ConnectionService _connectionService;
+  final Logger _logger = Logger();
 
   StreamSubscription<List<Connection>>? _connectionsSubscription;
   StreamSubscription<List<ConnectionRequest>>? _receivedRequestsSubscription;
@@ -147,10 +149,19 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     switch (result) {
       case ConnectionSuccess<Connection>():
         // Find the request to get sender ID
-        final request = state.receivedRequests.firstWhere(
-          (r) => r.id == event.requestId,
-          orElse: () => throw Exception('Request not found'),
-        );
+        final request = state.receivedRequests
+            .where((r) => r.id == event.requestId)
+            .firstOrNull;
+
+        if (request == null) {
+          _logger.w(
+              'Request not found for accepted connection: ${event.requestId}');
+          emit(state.copyWith(
+            isActionLoading: false,
+            processingId: null,
+          ));
+          return;
+        }
 
         // Update connection state for this user
         final updatedStates =
@@ -223,10 +234,19 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     switch (result) {
       case ConnectionSuccess<void>():
         // Find the request to get receiver ID
-        final request = state.sentRequests.firstWhere(
-          (r) => r.id == event.requestId,
-          orElse: () => throw Exception('Request not found'),
-        );
+        final request = state.sentRequests
+            .where((r) => r.id == event.requestId)
+            .firstOrNull;
+
+        if (request == null) {
+          _logger
+              .w('Request not found for cancelled request: ${event.requestId}');
+          emit(state.copyWith(
+            isActionLoading: false,
+            processingId: null,
+          ));
+          return;
+        }
 
         // Update connection state for this user
         final updatedStates =
@@ -267,10 +287,18 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     switch (result) {
       case ConnectionSuccess<void>():
         // Find the connection to get other user ID
-        final connection = state.connections.firstWhere(
-          (c) => c.id == event.connectionId,
-          orElse: () => throw Exception('Connection not found'),
-        );
+        final connection = state.connections
+            .where((c) => c.id == event.connectionId)
+            .firstOrNull;
+
+        if (connection == null) {
+          _logger.w('Connection not found for removal: ${event.connectionId}');
+          emit(state.copyWith(
+            isActionLoading: false,
+            processingId: null,
+          ));
+          return;
+        }
 
         final otherUserId = connection.getOtherUserId(_currentUserId!);
 

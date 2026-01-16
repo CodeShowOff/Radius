@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/services/cloudinary_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../bloc/profile_bloc.dart';
 import '../../domain/entities/profile.dart';
@@ -20,6 +24,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _bioController;
   bool _isVisible = true;
   bool _hasChanges = false;
+  String? _profileImageUrl;
+  File? _selectedImage;
+  bool _isUploadingImage = false;
+  final _cloudinaryService = CloudinaryService();
+  final _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -50,7 +59,108 @@ class _EditProfilePageState extends State<EditProfilePage> {
       _nameController.text = profile.name;
       _bioController.text = profile.bio;
       _isVisible = profile.isVisible;
+      _profileImageUrl = profile.photoUrl;
     }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _hasChanges = true;
+      });
+
+      // Upload to Cloudinary
+      await _uploadImage();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
+  }
+
+  Future<void> _uploadImage() async {
+    if (_selectedImage == null) return;
+
+    setState(() => _isUploadingImage = true);
+
+    try {
+      final url = await _cloudinaryService.uploadImage(
+        _selectedImage!,
+        folder: 'radius/profiles',
+        tags: {'profile_picture': 'true'},
+      );
+
+      setState(() {
+        _profileImageUrl = url;
+        _isUploadingImage = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image uploaded successfully')),
+      );
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $e')),
+      );
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            if (_profileImageUrl != null)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Remove Photo',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _profileImageUrl = null;
+                    _selectedImage = null;
+                    _hasChanges = true;
+                  });
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onFieldChanged() {
@@ -69,6 +179,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       name: _nameController.text.trim(),
       bio: _bioController.text.trim(),
       isVisible: _isVisible,
+      photoUrl: _profileImageUrl,
       updatedAt: DateTime.now(),
     );
 
@@ -164,76 +275,80 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
             body: isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Profile photo section
-                          _ProfilePhotoSection(
-                            photoUrl: profile?.photoUrl,
-                            onPhotoTap: () {
-                              // TODO: Implement photo picker
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Photo picker coming soon'),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 32),
+                : Builder(
+                    builder: (context) {
+                      final bottomPadding =
+                          MediaQuery.of(context).padding.bottom;
+                      return SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                            16, 16, 16, 16 + bottomPadding + 24),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Profile photo section
+                              _ProfilePhotoSection(
+                                photoUrl: _selectedImage != null
+                                    ? null
+                                    : (_profileImageUrl ?? profile?.photoUrl),
+                                imageFile: _selectedImage,
+                                isUploading: _isUploadingImage,
+                                onPhotoTap: _showImageSourceDialog,
+                              ),
+                              const SizedBox(height: 32),
 
-                          // Name field
-                          _ProfileTextField(
-                            controller: _nameController,
-                            label: 'Display Name',
-                            hint: 'Enter your name',
-                            icon: Icons.person_outline,
-                            maxLength: 50,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Name is required';
-                              }
-                              if (value.trim().length < 2) {
-                                return 'Name must be at least 2 characters';
-                              }
-                              return null;
-                            },
-                            onChanged: (_) => _onFieldChanged(),
-                          ),
-                          const SizedBox(height: 16),
+                              // Name field
+                              _ProfileTextField(
+                                controller: _nameController,
+                                label: 'Display Name',
+                                hint: 'Enter your name',
+                                icon: Icons.person_outline,
+                                maxLength: 50,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Name is required';
+                                  }
+                                  if (value.trim().length < 2) {
+                                    return 'Name must be at least 2 characters';
+                                  }
+                                  return null;
+                                },
+                                onChanged: (_) => _onFieldChanged(),
+                              ),
+                              const SizedBox(height: 16),
 
-                          // Bio field
-                          _ProfileTextField(
-                            controller: _bioController,
-                            label: 'Bio',
-                            hint: 'Tell others about yourself',
-                            icon: Icons.info_outline,
-                            maxLength: 200,
-                            maxLines: 4,
-                            onChanged: (_) => _onFieldChanged(),
-                          ),
-                          const SizedBox(height: 24),
+                              // Bio field
+                              _ProfileTextField(
+                                controller: _bioController,
+                                label: 'Bio',
+                                hint: 'Tell others about yourself',
+                                icon: Icons.info_outline,
+                                maxLength: 200,
+                                maxLines: 4,
+                                onChanged: (_) => _onFieldChanged(),
+                              ),
+                              const SizedBox(height: 24),
 
-                          // Visibility toggle
-                          _VisibilityToggle(
-                            isVisible: _isVisible,
-                            onChanged: (value) {
-                              setState(() {
-                                _isVisible = value;
-                                _hasChanges = true;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 32),
+                              // Visibility toggle
+                              _VisibilityToggle(
+                                isVisible: _isVisible,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _isVisible = value;
+                                    _hasChanges = true;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 32),
 
-                          // Info card
-                          _InfoCard(),
-                        ],
-                      ),
-                    ),
+                              // Info card
+                              _InfoCard(),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
           );
         },
@@ -283,26 +398,36 @@ class _SaveButton extends StatelessWidget {
 /// Profile photo section widget.
 class _ProfilePhotoSection extends StatelessWidget {
   final String? photoUrl;
+  final File? imageFile;
+  final bool isUploading;
   final VoidCallback onPhotoTap;
 
   const _ProfilePhotoSection({
     this.photoUrl,
+    this.imageFile,
+    this.isUploading = false,
     required this.onPhotoTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    ImageProvider? backgroundImage;
+    if (imageFile != null) {
+      backgroundImage = FileImage(imageFile!) as ImageProvider;
+    } else if (photoUrl != null) {
+      backgroundImage = NetworkImage(photoUrl!) as ImageProvider;
+    }
+
     return Center(
       child: Stack(
         children: [
           GestureDetector(
-            onTap: onPhotoTap,
+            onTap: isUploading ? null : onPhotoTap,
             child: CircleAvatar(
               radius: 60,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage:
-                  photoUrl != null ? NetworkImage(photoUrl!) : null,
-              child: photoUrl == null
+              backgroundImage: backgroundImage,
+              child: photoUrl == null && imageFile == null
                   ? Icon(
                       Icons.person,
                       size: 60,
@@ -311,29 +436,44 @@ class _ProfilePhotoSection extends StatelessWidget {
                   : null,
             ),
           ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: GestureDetector(
-              onTap: onPhotoTap,
+          if (isUploading)
+            Positioned.fill(
               child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.surface,
-                    width: 2,
-                  ),
                 ),
-                child: Icon(
-                  Icons.camera_alt,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onPrimary,
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
-          ),
+          if (!isUploading)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: onPhotoTap,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.camera_alt,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

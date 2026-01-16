@@ -19,7 +19,7 @@ enum ConnectionRequestStatus {
 }
 
 /// Entity representing a connection request from one user to another.
-/// 
+///
 /// Requests require mutual consent - the recipient must accept for a
 /// connection to be established.
 class ConnectionRequest extends Equatable {
@@ -89,20 +89,23 @@ class ConnectionRequest extends Equatable {
   /// Duration until expiration.
   Duration get timeUntilExpiration => expiresAt.difference(DateTime.now());
 
+  /// Sentinel value for explicitly setting nullable fields to null in copyWith.
+  static const _sentinel = Object();
+
   ConnectionRequest copyWith({
     String? id,
     String? senderId,
     String? receiverId,
     ConnectionRequestStatus? status,
     DateTime? sentAt,
-    DateTime? respondedAt,
+    Object? respondedAt = _sentinel,
     DateTime? expiresAt,
-    String? message,
-    String? source,
-    String? senderDisplayName,
-    String? senderPhotoUrl,
-    String? receiverDisplayName,
-    String? receiverPhotoUrl,
+    Object? message = _sentinel,
+    Object? source = _sentinel,
+    Object? senderDisplayName = _sentinel,
+    Object? senderPhotoUrl = _sentinel,
+    Object? receiverDisplayName = _sentinel,
+    Object? receiverPhotoUrl = _sentinel,
   }) {
     return ConnectionRequest(
       id: id ?? this.id,
@@ -110,14 +113,24 @@ class ConnectionRequest extends Equatable {
       receiverId: receiverId ?? this.receiverId,
       status: status ?? this.status,
       sentAt: sentAt ?? this.sentAt,
-      respondedAt: respondedAt ?? this.respondedAt,
+      respondedAt: respondedAt == _sentinel
+          ? this.respondedAt
+          : respondedAt as DateTime?,
       expiresAt: expiresAt ?? this.expiresAt,
-      message: message ?? this.message,
-      source: source ?? this.source,
-      senderDisplayName: senderDisplayName ?? this.senderDisplayName,
-      senderPhotoUrl: senderPhotoUrl ?? this.senderPhotoUrl,
-      receiverDisplayName: receiverDisplayName ?? this.receiverDisplayName,
-      receiverPhotoUrl: receiverPhotoUrl ?? this.receiverPhotoUrl,
+      message: message == _sentinel ? this.message : message as String?,
+      source: source == _sentinel ? this.source : source as String?,
+      senderDisplayName: senderDisplayName == _sentinel
+          ? this.senderDisplayName
+          : senderDisplayName as String?,
+      senderPhotoUrl: senderPhotoUrl == _sentinel
+          ? this.senderPhotoUrl
+          : senderPhotoUrl as String?,
+      receiverDisplayName: receiverDisplayName == _sentinel
+          ? this.receiverDisplayName
+          : receiverDisplayName as String?,
+      receiverPhotoUrl: receiverPhotoUrl == _sentinel
+          ? this.receiverPhotoUrl
+          : receiverPhotoUrl as String?,
     );
   }
 

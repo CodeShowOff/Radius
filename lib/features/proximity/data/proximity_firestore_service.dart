@@ -36,24 +36,25 @@ class ProximityFirestoreService {
   /// Returns null if no user is found with that BLE ID.
   Future<Map<String, dynamic>?> lookupUserByBleId(String bleId) async {
     try {
-      // Query profiles where bleIdentifier matches
-      // Users store their current BLE ID in their profile
+      // Query users where bleIdentifier matches
+      // Users store their current BLE ID in their user document
       final snapshot = await _firestore
-          .collection('profiles')
+          .collection('users')
           .where('bleIdentifier', isEqualTo: bleId)
-          .where('isVisible', isEqualTo: true)
+          .where('isDiscoverable', isEqualTo: true)
           .limit(1)
           .get();
 
       if (snapshot.docs.isEmpty) return null;
 
       final doc = snapshot.docs.first;
+      final data = doc.data();
       return {
         'userId': doc.id,
-        'displayName': doc.data()['name'] ?? 'Unknown',
-        'photoUrl': doc.data()['photoUrl'],
-        'bio': doc.data()['bio'],
-        'isVisible': doc.data()['isVisible'] ?? true,
+        'displayName': data['displayName'] ?? 'Unknown',
+        'photoUrl': data['avatarUrl'],
+        'bio': data['bio'],
+        'isVisible': data['isDiscoverable'] ?? true,
       };
     } catch (e) {
       return null;
@@ -65,7 +66,7 @@ class ProximityFirestoreService {
     if (_currentUserId == null) return;
 
     try {
-      await _firestore.collection('profiles').doc(_currentUserId).update({
+      await _firestore.collection('users').doc(_currentUserId).update({
         'bleIdentifier': bleId,
         'bleIdUpdatedAt': FieldValue.serverTimestamp(),
       });
@@ -253,14 +254,14 @@ class ProximityFirestoreService {
   }
 
   /// Checks if two users have encountered before.
-  Future<bool> hasEncounteredBefore(String oderId) async {
+  Future<bool> hasEncounteredBefore(String otherId) async {
     if (_currentUserId == null) return false;
 
     try {
       final snapshot = await _firestore
           .collection('encounters')
           .where('userId', isEqualTo: _currentUserId)
-          .where('otherUserId', isEqualTo: oderId)
+          .where('otherUserId', isEqualTo: otherId)
           .limit(1)
           .get();
 
