@@ -7,7 +7,9 @@ import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
+import 'features/connections/presentation/widgets/connection_request_listener.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
+import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
 
 /// Root widget of the Radius application.
 ///
@@ -38,6 +40,10 @@ class RadiusApp extends StatelessWidget {
           BlocProvider<ProfileBloc>(
             create: (_) => getIt<ProfileBloc>(),
           ),
+          // Nearby Users BLoC for BLE advertising (app-wide)
+          BlocProvider<NearbyUsersBloc>(
+            create: (_) => getIt<NearbyUsersBloc>(),
+          ),
         ],
         child: _AuthAwareApp(
           child: MaterialApp.router(
@@ -51,6 +57,13 @@ class RadiusApp extends StatelessWidget {
 
             // Router configuration
             routerConfig: appRouter,
+
+            // Builder to add app-wide listeners (like connection request notifications)
+            builder: (context, child) {
+              return ConnectionRequestListener(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
           ),
         ),
       ),
@@ -58,10 +71,10 @@ class RadiusApp extends StatelessWidget {
   }
 }
 
-/// Listens to auth state and triggers profile loading on authentication.
+/// Listens to auth state and triggers profile loading and BLE advertising on authentication.
 ///
-/// BLE discovery is now fully managed by the Nearby Users screen,
-/// not at the app-wide level.
+/// BLE advertising starts app-wide when user authenticates to be discoverable.
+/// Scanning remains screen-specific (Nearby Users screen).
 class _AuthAwareApp extends StatefulWidget {
   final Widget child;
 
@@ -100,6 +113,24 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
         } catch (_) {
           // Ignore if ProfileBloc isn't available in the tree yet.
         }
+
+        // Initialize ConnectionBloc to listen for connection requests
+        // Profile info will be updated when ProfileBloc loads
+        try {
+          context.read<ConnectionBloc>().add(ConnectionLoadAll(newUserId));
+        } catch (_) {
+          // Ignore if ConnectionBloc isn't available in the tree yet.
+        }
+
+        // Initialize BLE advertising to be discoverable
+        try {
+          context.read<NearbyUsersBloc>().add(NearbyUsersInitialize(
+                userId: newUserId,
+                username: state.user.username,
+              ));
+        } catch (_) {
+          // Ignore if NearbyUsersBloc isn't available in the tree yet.
+        }
       }
       return;
     }
@@ -108,10 +139,32 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
     _currentUserId = null;
   }
 
+  void _onProfileChanged(BuildContext context, ProfileState state) {
+    if (state is ProfileLoaded && _currentUserId != null) {
+      // Update the ConnectionBloc with user info when profile loads
+      try {
+        context.read<ConnectionBloc>().setCurrentUser(
+              userId: _currentUserId!,
+              displayName: state.profile.name,
+              photoUrl: state.profile.photoUrl,
+            );
+      } catch (_) {
+        // Ignore if ConnectionBloc isn't available in the tree yet.
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-      listener: _onAuthChanged,
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<AuthBloc, AuthState>(
+          listener: _onAuthChanged,
+        ),
+        BlocListener<ProfileBloc, ProfileState>(
+          listener: _onProfileChanged,
+        ),
+      ],
       child: widget.child,
     );
   }

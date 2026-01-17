@@ -62,6 +62,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     ));
 
     _currentUserId = event.userId;
+    _currentUserDisplayName = event.displayName;
+    _currentUserPhotoUrl = event.photoUrl;
 
     // Cancel existing subscriptions
     await _connectionsSubscription?.cancel();

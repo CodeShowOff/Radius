@@ -1,0 +1,13 @@
+# Android Keystore Configuration
+# This file contains keystore information for signing your Android app
+# KEEP THIS FILE SECURE - DO NOT COMMIT TO VERSION CONTROL
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=C:/Users/YourUsername/upload-keystore.jks
+
+# Instructions:
+# 1. Create keystore: keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+# 2. Replace the values above with your actual passwords and file path
+# 3. Keep this file secure and never commit it to git

@@ -43,3 +43,16 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Keystore files (sensitive!)
+*.jks
+*.keystore
+**/key.properties
+!**/key.properties.example
+
+# iOS signing
+**/ios/Runner/GoogleService-Info.plist
+**/ios/exportOptions.plist
+
+# Firebase configuration (regenerate for each environment)
+**/google-services.json

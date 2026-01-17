@@ -8,6 +8,13 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Load keystore properties from key.properties file
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = java.util.Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.example.radius"
     compileSdk = flutter.compileSdkVersion
@@ -29,7 +36,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // TODO: Change this to your own unique Application ID
+        // Example: com.yourcompany.radius
         applicationId = "com.example.radius"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -42,6 +50,18 @@ android {
         versionName = flutter.versionName
     }
 
+    // Signing configurations
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             // Enable code shrinking, obfuscation, and optimization
@@ -51,9 +71,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            
+            // Use release signing config if key.properties exists, otherwise use debug
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                // For development: allows `flutter run --release` without keystore
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

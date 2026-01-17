@@ -19,7 +19,6 @@ import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
 import '../diagnostics/presentation/pages/diagnostics_logs_page.dart';
 import '../../features/profile/presentation/pages/privacy_settings_page.dart';
 import '../../features/profile/presentation/pages/help_support_page.dart';
-import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../features/proximity/presentation/pages/nearby_users_screen.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
 import '../config/app_config.dart';
@@ -146,10 +145,7 @@ GoRouter get appRouter {
       GoRoute(
         path: Routes.nearby,
         name: 'nearby',
-        builder: (context, state) => BlocProvider(
-          create: (_) => getIt<NearbyUsersBloc>(),
-          child: const NearbyUsersScreen(),
-        ),
+        builder: (context, state) => const NearbyUsersScreen(),
       ),
       GoRoute(
         path: Routes.profile,

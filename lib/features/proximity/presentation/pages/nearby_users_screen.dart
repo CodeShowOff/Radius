@@ -10,6 +10,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/nearby_user.dart';
 import '../bloc/nearby_users_bloc.dart';
 import '../widgets/ble_diagnostics_panel.dart';
@@ -18,7 +20,7 @@ import '../widgets/nearby_users_empty_state.dart';
 
 /// Screen displaying nearby users discovered via BLE.
 ///
-/// - Advertising starts automatically when screen opens (to be discoverable)
+/// - Advertising is started app-wide when user authenticates (to be discoverable)
 /// - Scanning starts when user taps "Scan" button (runs for 15 seconds)
 /// - Scanning stops when app goes to background
 class NearbyUsersScreen extends StatefulWidget {
@@ -34,44 +36,12 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
   bool _connectPermissionGranted = false;
   bool _blePermissionsLoaded = false;
   bool _bleRationaleShownThisSession = false;
-  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_initializeAndRefreshPermissions());
-  }
-
-  Future<void> _initializeAndRefreshPermissions() async {
-    await _refreshBlePermissions();
-    if (mounted) {
-      _initializeAdvertising();
-    }
-  }
-
-  void _initializeAdvertising() {
-    if (_isInitialized) return;
-
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return;
-
-    final bloc = context.read<NearbyUsersBloc>();
-    bloc.add(NearbyUsersInitialize(
-      userId: authState.user.id,
-      username: authState.user.username,
-    ));
-    _isInitialized = true;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Initialize advertising if not done yet
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _initializeAdvertising();
-    });
+    unawaited(_refreshBlePermissions());
   }
 
   @override
@@ -855,10 +825,54 @@ class _NearbyUsersList extends StatelessWidget {
   }
 
   void _connectWithUser(BuildContext context, NearbyUser user) {
-    // TODO: Implement connection request
+    // Get current user info
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please sign in to send connection requests')),
+      );
+      return;
+    }
+
+    // Get receiver's user ID
+    final receiverId = user.userId;
+    if (receiverId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot connect: User ID not available')),
+      );
+      return;
+    }
+
+    // Get sender's profile info
+    final profileState = context.read<ProfileBloc>().state;
+    String? senderDisplayName;
+    String? senderPhotoUrl;
+    if (profileState is ProfileLoaded) {
+      senderDisplayName = profileState.profile.name;
+      senderPhotoUrl = profileState.profile.photoUrl;
+    }
+
+    // Set current user info on the ConnectionBloc
+    context.read<ConnectionBloc>().setCurrentUser(
+          userId: authState.user.id,
+          displayName: senderDisplayName,
+          photoUrl: senderPhotoUrl,
+        );
+
+    // Send connection request
+    context.read<ConnectionBloc>().add(ConnectionSendRequest(
+          receiverId: receiverId,
+          source: 'nearby',
+          receiverDisplayName: user.displayName,
+          receiverPhotoUrl: user.photoUrl,
+        ));
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Connection request sent to ${user.displayName}'),
+        content:
+            Text('Connection request sent to ${user.displayName ?? 'user'}'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -1095,13 +1109,74 @@ class _UserDetailsSheet extends StatelessWidget {
 
               // Connect button
               if (!user.isConnected)
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // TODO: Send connection request
+                Builder(
+                  builder: (builderContext) {
+                    return FilledButton.icon(
+                      onPressed: () {
+                        // Get current user info
+                        final authState = builderContext.read<AuthBloc>().state;
+                        if (authState is! AuthAuthenticated) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Please sign in to send connection requests')),
+                          );
+                          return;
+                        }
+
+                        // Get receiver's user ID
+                        final receiverId = user.userId;
+                        if (receiverId == null) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Cannot connect: User ID not available')),
+                          );
+                          return;
+                        }
+
+                        // Get sender's profile info
+                        final profileState =
+                            builderContext.read<ProfileBloc>().state;
+                        String? senderDisplayName;
+                        String? senderPhotoUrl;
+                        if (profileState is ProfileLoaded) {
+                          senderDisplayName = profileState.profile.name;
+                          senderPhotoUrl = profileState.profile.photoUrl;
+                        }
+
+                        // Set current user info on the ConnectionBloc
+                        builderContext.read<ConnectionBloc>().setCurrentUser(
+                              userId: authState.user.id,
+                              displayName: senderDisplayName,
+                              photoUrl: senderPhotoUrl,
+                            );
+
+                        // Send connection request
+                        builderContext
+                            .read<ConnectionBloc>()
+                            .add(ConnectionSendRequest(
+                              receiverId: receiverId,
+                              source: 'nearby',
+                              receiverDisplayName: user.displayName,
+                              receiverPhotoUrl: user.photoUrl,
+                            ));
+
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Connection request sent to ${user.displayName ?? 'user'}'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Connect'),
+                    );
                   },
-                  icon: const Icon(Icons.person_add),
-                  label: const Text('Connect'),
                 )
               else
                 Builder(

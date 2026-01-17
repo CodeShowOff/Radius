@@ -11,11 +11,17 @@ sealed class ConnectionEvent extends Equatable {
 /// Load connections and requests for the current user.
 class ConnectionLoadAll extends ConnectionEvent {
   final String userId;
+  final String? displayName;
+  final String? photoUrl;
 
-  const ConnectionLoadAll(this.userId);
+  const ConnectionLoadAll(
+    this.userId, {
+    this.displayName,
+    this.photoUrl,
+  });
 
   @override
-  List<Object?> get props => [userId];
+  List<Object?> get props => [userId, displayName, photoUrl];
 }
 
 /// Send a connection request to another user.

@@ -8,6 +8,7 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 
@@ -40,7 +41,20 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   void _loadConnections() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<ConnectionBloc>().add(ConnectionLoadAll(authState.user.id));
+      // Get profile info if available
+      final profileState = context.read<ProfileBloc>().state;
+      String? displayName;
+      String? photoUrl;
+      if (profileState is ProfileLoaded) {
+        displayName = profileState.profile.name;
+        photoUrl = profileState.profile.photoUrl;
+      }
+
+      context.read<ConnectionBloc>().add(ConnectionLoadAll(
+            authState.user.id,
+            displayName: displayName,
+            photoUrl: photoUrl,
+          ));
     }
   }
 
