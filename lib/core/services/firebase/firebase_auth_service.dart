@@ -22,7 +22,8 @@ class FirebaseAuthService {
   /// Stream of authentication state changes.
   ///
   /// Emits the current user when auth state changes (sign in/out).
-  Stream<firebase.User?> get authStateChanges => _firebaseAuth.authStateChanges();
+  Stream<firebase.User?> get authStateChanges =>
+      _firebaseAuth.authStateChanges();
 
   /// Stream of user changes (more granular than authStateChanges).
   ///
@@ -260,6 +261,59 @@ class FirebaseAuthService {
       throw AuthException(
         message: 'Failed to delete account: ${e.toString()}',
         code: 'delete-failed',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Whether the current user's email is verified.
+  bool get isEmailVerified => currentUser?.emailVerified ?? false;
+
+  /// Send email verification to the current user.
+  ///
+  /// Throws [AuthException] on failure.
+  Future<void> sendEmailVerification() async {
+    final user = currentUser;
+    if (user == null) {
+      throw const AuthException(
+        message: 'No user signed in',
+        code: 'no-user',
+      );
+    }
+
+    try {
+      await user.sendEmailVerification();
+    } on firebase.FirebaseAuthException catch (e) {
+      throw _mapFirebaseAuthException(e);
+    } catch (e) {
+      throw AuthException(
+        message: 'Failed to send verification email: ${e.toString()}',
+        code: 'verification-failed',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Reload the current user to get updated data (e.g., email verification status).
+  ///
+  /// Throws [AuthException] on failure.
+  Future<void> reloadUser() async {
+    final user = currentUser;
+    if (user == null) {
+      throw const AuthException(
+        message: 'No user signed in',
+        code: 'no-user',
+      );
+    }
+
+    try {
+      await user.reload();
+    } on firebase.FirebaseAuthException catch (e) {
+      throw _mapFirebaseAuthException(e);
+    } catch (e) {
+      throw AuthException(
+        message: 'Failed to reload user: ${e.toString()}',
+        code: 'reload-failed',
         originalError: e,
       );
     }

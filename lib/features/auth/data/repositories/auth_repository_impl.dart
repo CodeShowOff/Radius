@@ -1,12 +1,12 @@
 import 'package:dartz/dartz.dart';
 import 'package:injectable/injectable.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/firebase/firebase_auth_service.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
+import '../../../../core/services/firebase/username_service.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 import '../models/user_model.dart';
@@ -18,15 +18,15 @@ import '../models/user_model.dart';
 class AuthRepositoryImpl implements IAuthRepository {
   final FirebaseAuthService _authService;
   final FirestoreService _firestoreService;
-  final Uuid _uuid;
+  final UsernameService _usernameService;
 
   AuthRepositoryImpl({
     required FirebaseAuthService authService,
     required FirestoreService firestoreService,
-    Uuid? uuid,
+    UsernameService? usernameService,
   })  : _authService = authService,
         _firestoreService = firestoreService,
-        _uuid = uuid ?? const Uuid();
+        _usernameService = usernameService ?? UsernameService();
 
   @override
   Stream<User?> get authStateChanges {
@@ -176,6 +176,9 @@ class AuthRepositoryImpl implements IAuthRepository {
         displayName: displayName,
       );
 
+      // Send verification email
+      await _authService.sendEmailVerification();
+
       // Create user profile in Firestore
       return _createUserProfile(
         firebaseUser.uid,
@@ -215,6 +218,33 @@ class AuthRepositoryImpl implements IAuthRepository {
     }
   }
 
+  @override
+  Future<Either<Failure, void>> sendEmailVerification() async {
+    try {
+      await _authService.sendEmailVerification();
+      return const Right(null);
+    } on AuthException catch (e) {
+      return Left(AuthFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return Left(UnexpectedFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, bool>> checkEmailVerified() async {
+    try {
+      await _authService.reloadUser();
+      return Right(_authService.isEmailVerified);
+    } on AuthException catch (e) {
+      return Left(AuthFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return Left(UnexpectedFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  bool get isEmailVerified => _authService.isEmailVerified;
+
   /// Creates a new user profile in Firestore.
   Future<Either<Failure, User>> _createUserProfile(
     String uid,
@@ -223,15 +253,15 @@ class AuthRepositoryImpl implements IAuthRepository {
     String? avatarUrl,
   }) async {
     try {
-      // Generate unique BLE identifier for this user
-      final bleIdentifier = _uuid.v4();
+      // Generate unique username using Firestore transaction
+      final username = await _usernameService.generateUsername();
 
       final userModel = UserModel(
         id: uid,
         email: email,
         displayName: displayName,
         avatarUrl: avatarUrl,
-        bleIdentifier: bleIdentifier,
+        username: username,
         createdAt: null, // Will be set by server timestamp
         isDiscoverable: true,
       );
@@ -242,6 +272,9 @@ class AuthRepositoryImpl implements IAuthRepository {
         data: userModel.toFirestore(useServerTimestamp: true),
         merge: false,
       );
+
+      // Store username-to-userId index for BLE discovery lookups
+      await _usernameService.storeUsernameForUser(uid, username);
 
       // Read back the document to get the server-set timestamp
       final doc = await _firestoreService.getDocument(

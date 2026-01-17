@@ -3,18 +3,18 @@ abstract class AppConstants {
   // App info
   static const String appName = 'Radius';
   static const String appVersion = '1.0.0';
-  
+
   // Bluetooth configuration
   static const int bleScanDurationSeconds = 10;
   static const int bleAdvertiseIntervalMs = 1000;
   static const double proximityThresholdMeters = 10.0;
   static const double closeRangeMeters = 3.0;
   static const double mediumRangeMeters = 7.0;
-  
+
   // Cache configuration
   static const int userCacheTtlMinutes = 30;
   static const int maxCachedUsers = 100;
-  
+
   // UI configuration
   static const int animationDurationMs = 300;
   static const double defaultPadding = 16.0;
@@ -33,11 +33,4 @@ abstract class FirestoreCollections {
   static const String users = 'users';
   static const String connections = 'connections';
   static const String proximityLogs = 'proximity_logs';
-}
-
-/// BLE service UUIDs
-abstract class BleUuids {
-  // Custom service UUID for Radius app
-  static const String radiusServiceUuid = '0000FADE-0000-1000-8000-00805F9B34FB';
-  static const String userIdCharacteristicUuid = '0000FADE-0001-1000-8000-00805F9B34FB';
 }

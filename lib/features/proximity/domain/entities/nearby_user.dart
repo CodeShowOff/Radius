@@ -1,39 +1,70 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../../core/services/bluetooth/ble_device.dart';
+/// Proximity level based on RSSI values.
+enum BleProximity {
+  /// Very close (RSSI > -50 dBm, ~0-1m)
+  immediate,
 
-/// Proximity level categories for UI display.
-enum ProximityLevel {
-  close, // < 3 meters
-  medium, // 3-7 meters
-  far, // 7-10 meters
+  /// Close (RSSI -50 to -70 dBm, ~1-3m)
+  near,
+
+  /// Moderate distance (RSSI -70 to -85 dBm, ~3-10m)
+  far,
+
+  /// Weak signal (RSSI < -85 dBm, >10m)
+  veryFar,
+
+  /// Unknown signal (no valid RSSI)
+  unknown;
+
+  /// Gets the display name for this proximity level.
+  String get displayName {
+    switch (this) {
+      case BleProximity.immediate:
+        return 'Very close';
+      case BleProximity.near:
+        return 'Nearby';
+      case BleProximity.far:
+        return 'Far';
+      case BleProximity.veryFar:
+        return 'Very far';
+      case BleProximity.unknown:
+        return 'Unknown';
+    }
+  }
+
+  /// Determines proximity from RSSI value.
+  static BleProximity fromRssi(int rssi) {
+    if (rssi == 0) return BleProximity.unknown;
+    if (rssi > -50) return BleProximity.immediate;
+    if (rssi > -70) return BleProximity.near;
+    if (rssi > -85) return BleProximity.far;
+    return BleProximity.veryFar;
+  }
 }
 
 /// Entity representing a nearby user detected via BLE.
 class NearbyUser extends Equatable {
-  /// Firebase user ID.
-  final String userId;
+  /// User's 7-character username (unique identifier for BLE).
+  final String username;
 
-  /// User's display name.
+  /// Firebase user ID (for routing to chat, etc.).
+  final String? userId;
+
+  /// User's display name from profile.
   final String? displayName;
 
-  /// User's profile photo URL.
+  /// User's photo URL from profile.
   final String? photoUrl;
 
-  /// User's bio.
+  /// User's bio from profile.
   final String? bio;
 
-  /// The BLE anonymous ID currently being broadcast.
-  final String bleAnonymousId;
-
-  /// Signal strength (RSSI).
+  /// Signal strength (RSSI) in dBm.
   final int rssi;
 
-  /// Calculated proximity category.
-  final BleProximity proximity;
-
-  /// Estimated distance in meters.
-  final double estimatedDistance;
+  /// Whether this user is already connected (friend).
+  final bool isConnected;
 
   /// When this user was first discovered in current session.
   final DateTime firstSeen;
@@ -41,206 +72,80 @@ class NearbyUser extends Equatable {
   /// When this user was last detected.
   final DateTime lastSeen;
 
-  /// Number of times this user has been detected.
-  final int encounterCount;
-
-  /// Whether this user is currently visible (profile visibility setting).
-  final bool isVisible;
-
-  /// Whether we've already connected with this user.
-  final bool isConnected;
-
   const NearbyUser({
-    required this.userId,
+    required this.username,
+    this.userId,
     this.displayName,
     this.photoUrl,
     this.bio,
-    required this.bleAnonymousId,
     required this.rssi,
-    required this.proximity,
-    required this.estimatedDistance,
+    this.isConnected = false,
     required this.firstSeen,
     required this.lastSeen,
-    this.encounterCount = 1,
-    this.isVisible = true,
-    this.isConnected = false,
   });
 
-  /// Returns proximity level based on distance (for UI).
-  ProximityLevel get proximityLevel {
-    if (estimatedDistance < 3) return ProximityLevel.close;
-    if (estimatedDistance < 7) return ProximityLevel.medium;
-    return ProximityLevel.far;
+  /// Proximity based on RSSI.
+  BleProximity get proximity => BleProximity.fromRssi(rssi);
+
+  /// Estimated distance in meters (rough approximation).
+  double get estimatedDistance {
+    // Simple log-distance path loss model
+    // Reference: RSSI at 1m is typically around -59 dBm
+    const int referenceRssi = -59;
+    const double pathLossExponent = 2.0;
+
+    if (rssi >= 0) return 0.1;
+
+    final ratio = (referenceRssi - rssi) / (10 * pathLossExponent);
+    return (ratio > 0) ? 1.0 * (10.0 * ratio / 10).clamp(0.1, 100.0) : 0.5;
+  }
+
+  /// Whether this user was seen recently (within 10 seconds).
+  bool get isCurrentlyNearby {
+    final now = DateTime.now();
+    return now.difference(lastSeen).inSeconds <= 10;
   }
 
   /// Creates a copy with updated fields.
-  /// Use explicit null values wrapped in [Optional] to clear nullable fields:
-  /// - Pass the value directly to keep or update
-  /// - Pass [clearDisplayName], [clearPhotoUrl], [clearBio] as true to set to null
   NearbyUser copyWith({
+    String? username,
     String? userId,
     String? displayName,
-    bool clearDisplayName = false,
     String? photoUrl,
-    bool clearPhotoUrl = false,
     String? bio,
-    bool clearBio = false,
-    String? bleAnonymousId,
     int? rssi,
-    BleProximity? proximity,
-    double? estimatedDistance,
+    bool? isConnected,
     DateTime? firstSeen,
     DateTime? lastSeen,
-    int? encounterCount,
-    bool? isVisible,
-    bool? isConnected,
   }) {
     return NearbyUser(
+      username: username ?? this.username,
       userId: userId ?? this.userId,
-      displayName: clearDisplayName ? null : (displayName ?? this.displayName),
-      photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
-      bio: clearBio ? null : (bio ?? this.bio),
-      bleAnonymousId: bleAnonymousId ?? this.bleAnonymousId,
+      displayName: displayName ?? this.displayName,
+      photoUrl: photoUrl ?? this.photoUrl,
+      bio: bio ?? this.bio,
       rssi: rssi ?? this.rssi,
-      proximity: proximity ?? this.proximity,
-      estimatedDistance: estimatedDistance ?? this.estimatedDistance,
+      isConnected: isConnected ?? this.isConnected,
       firstSeen: firstSeen ?? this.firstSeen,
       lastSeen: lastSeen ?? this.lastSeen,
-      encounterCount: encounterCount ?? this.encounterCount,
-      isVisible: isVisible ?? this.isVisible,
-      isConnected: isConnected ?? this.isConnected,
     );
-  }
-
-  /// Updates with new BLE detection data.
-  NearbyUser updateWithDetection({
-    required String bleAnonymousId,
-    required int rssi,
-    required BleProximity proximity,
-    required double estimatedDistance,
-  }) {
-    return copyWith(
-      bleAnonymousId: bleAnonymousId,
-      rssi: rssi,
-      proximity: proximity,
-      estimatedDistance: estimatedDistance,
-      lastSeen: DateTime.now(),
-      encounterCount: encounterCount + 1,
-    );
-  }
-
-  /// Duration since first seen.
-  Duration get timeNearby => lastSeen.difference(firstSeen);
-
-  /// Whether user was seen recently (within 30 seconds).
-  bool get isCurrentlyNearby {
-    return DateTime.now().difference(lastSeen).inSeconds < 30;
   }
 
   @override
   List<Object?> get props => [
+        username,
         userId,
         displayName,
         photoUrl,
         bio,
-        bleAnonymousId,
         rssi,
-        proximity,
-        estimatedDistance,
+        isConnected,
         firstSeen,
         lastSeen,
-        encounterCount,
-        isVisible,
-        isConnected,
       ];
 
   @override
   String toString() {
-    return 'NearbyUser(userId: $userId, name: $displayName, proximity: ${proximity.displayName})';
+    return 'NearbyUser(username: $username, displayName: $displayName, rssi: $rssi)';
   }
-}
-
-/// Encounter record for Firestore persistence.
-class Encounter extends Equatable {
-  final String userId;
-  final String otherUserId;
-  final DateTime timestamp;
-  final int durationSeconds;
-  final String closestProximity;
-  final int peakRssi;
-  final bool wasConnected;
-
-  const Encounter({
-    required this.userId,
-    required this.otherUserId,
-    required this.timestamp,
-    required this.durationSeconds,
-    required this.closestProximity,
-    required this.peakRssi,
-    this.wasConnected = false,
-  });
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'userId': userId,
-      'otherUserId': otherUserId,
-      'timestamp': timestamp.toIso8601String(),
-      'durationSeconds': durationSeconds,
-      'closestProximity': closestProximity,
-      'peakRssi': peakRssi,
-      'wasConnected': wasConnected,
-    };
-  }
-
-  factory Encounter.fromFirestore(Map<String, dynamic> data) {
-    // Validate required fields
-    final userId = data['userId'];
-    final otherUserId = data['otherUserId'];
-    final timestamp = data['timestamp'];
-    final durationSeconds = data['durationSeconds'];
-    final closestProximity = data['closestProximity'];
-    final peakRssi = data['peakRssi'];
-
-    if (userId is! String || userId.isEmpty) {
-      throw ArgumentError('Invalid or missing userId in Encounter data');
-    }
-    if (otherUserId is! String || otherUserId.isEmpty) {
-      throw ArgumentError('Invalid or missing otherUserId in Encounter data');
-    }
-    if (timestamp is! String) {
-      throw ArgumentError('Invalid or missing timestamp in Encounter data');
-    }
-    if (durationSeconds is! int) {
-      throw ArgumentError(
-          'Invalid or missing durationSeconds in Encounter data');
-    }
-    if (closestProximity is! String) {
-      throw ArgumentError(
-          'Invalid or missing closestProximity in Encounter data');
-    }
-    if (peakRssi is! int) {
-      throw ArgumentError('Invalid or missing peakRssi in Encounter data');
-    }
-
-    return Encounter(
-      userId: userId,
-      otherUserId: otherUserId,
-      timestamp: DateTime.parse(timestamp),
-      durationSeconds: durationSeconds,
-      closestProximity: closestProximity,
-      peakRssi: peakRssi,
-      wasConnected: data['wasConnected'] as bool? ?? false,
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-        userId,
-        otherUserId,
-        timestamp,
-        durationSeconds,
-        closestProximity,
-        peakRssi,
-        wasConnected,
-      ];
 }

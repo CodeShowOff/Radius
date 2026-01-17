@@ -6,11 +6,9 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
+
+        // Foreground-only BLE: only the advertiser plugin is registered.
         // Register BLE Advertiser Plugin
         flutterEngine.plugins.add(BleAdvertiserPlugin())
-
-        // Register BLE Background Scan Plugin (PendingIntent + opt-in FGS).
-        flutterEngine.plugins.add(BleBackgroundScanPlugin())
     }
 }

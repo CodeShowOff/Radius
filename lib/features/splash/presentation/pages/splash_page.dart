@@ -15,52 +15,15 @@ class SplashPage extends StatefulWidget {
   State<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-
+class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    _setupAnimations();
     _checkAuth();
   }
 
-  void _setupAnimations() {
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800), // Reduced from 1500ms
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ),
-    );
-
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
-      ),
-    );
-
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
   Future<void> _checkAuth() async {
-    // Minimal delay - just enough for animation to start
-    await Future.delayed(const Duration(milliseconds: 500));
-
+    // Immediate check - no delay
     if (!mounted) return;
 
     // Check auth state
@@ -73,67 +36,14 @@ class _SplashPageState extends State<SplashPage>
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           context.go(Routes.home);
+        } else if (state is AuthAwaitingEmailVerification) {
+          context.go(Routes.emailVerification);
         } else if (state is AuthUnauthenticated || state is AuthError) {
           context.go(Routes.login);
         }
       },
-      child: Scaffold(
-        body: Center(
-          child: AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return Opacity(
-                opacity: _opacityAnimation.value,
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: child,
-                ),
-              );
-            },
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Animated radar icon
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.secondary,
-                      ],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.radar,
-                    size: 64,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Radius',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Connect with people nearby',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 48),
-                const CircularProgressIndicator(),
-              ],
-            ),
-          ),
-        ),
+      child: const Scaffold(
+        body: SizedBox.shrink(), // No visible content
       ),
     );
   }

@@ -254,6 +254,8 @@ class _LoginPageState extends State<LoginPage> {
   void _authStateListener(BuildContext context, AuthState state) {
     if (state is AuthAuthenticated) {
       context.go(Routes.home);
+    } else if (state is AuthAwaitingEmailVerification) {
+      context.go(Routes.emailVerification);
     } else if (state is AuthError) {
       showAuthErrorDialog(context, state.message);
     } else if (state is AuthPasswordResetSent) {

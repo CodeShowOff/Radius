@@ -810,12 +810,19 @@ class ConnectionService {
   /// Fetches user profile by ID.
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
+      // Privacy: fetch public profile data from `profiles` instead of `users`.
+      final doc = await _firestore.collection('profiles').doc(userId).get();
       if (!doc.exists) return null;
 
       final data = doc.data()!;
-      data['id'] = doc.id;
-      return data;
+      return {
+        'id': doc.id,
+        'displayName': data['name'] ?? 'User',
+        'avatarUrl': data['photoUrl'],
+        'bio': data['bio'],
+        'isOnline': data['isOnline'] ?? false,
+        'lastSeen': data['lastSeen'],
+      };
     } catch (e, stack) {
       _logger.e('Error fetching user profile', error: e, stackTrace: stack);
       return null;
@@ -841,14 +848,20 @@ class ConnectionService {
 
       for (final chunk in chunks) {
         final snapshot = await _firestore
-            .collection('users')
+            .collection('profiles')
             .where(FieldPath.documentId, whereIn: chunk)
             .get();
 
         for (final doc in snapshot.docs) {
           final data = doc.data();
-          data['id'] = doc.id;
-          results[doc.id] = data;
+          results[doc.id] = {
+            'id': doc.id,
+            'displayName': data['name'] ?? 'User',
+            'avatarUrl': data['photoUrl'],
+            'bio': data['bio'],
+            'isOnline': data['isOnline'] ?? false,
+            'lastSeen': data['lastSeen'],
+          };
         }
       }
 

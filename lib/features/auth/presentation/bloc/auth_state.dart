@@ -56,3 +56,27 @@ class AuthPasswordResetFailed extends AuthState {
   @override
   List<Object?> get props => [message];
 }
+
+/// State when awaiting email verification after registration.
+class AuthAwaitingEmailVerification extends AuthState {
+  final String email;
+  final User user;
+
+  const AuthAwaitingEmailVerification({
+    required this.email,
+    required this.user,
+  });
+
+  @override
+  List<Object?> get props => [email, user];
+}
+
+/// State when verification email was resent successfully.
+class AuthVerificationEmailSent extends AuthState {
+  final String email;
+
+  const AuthVerificationEmailSent(this.email);
+
+  @override
+  List<Object?> get props => [email];
+}

@@ -33,6 +33,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignOutRequested>(_onSignOutRequested);
     on<AuthPasswordResetRequested>(_onPasswordResetRequested);
     on<AuthStateChanged>(_onAuthStateChanged);
+    on<AuthResendVerificationRequested>(_onResendVerificationRequested);
+    on<AuthCheckEmailVerificationRequested>(_onCheckEmailVerificationRequested);
 
     // Listen to auth state changes from Firebase
     // This handles external auth changes (e.g., token expiry, account deletion)
@@ -50,9 +52,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await _authRepository.getCurrentUser();
     result.fold(
       (failure) => emit(AuthUnauthenticated()),
-      (user) => user != null
-          ? emit(AuthAuthenticated(user))
-          : emit(AuthUnauthenticated()),
+      (user) {
+        if (user == null) {
+          emit(AuthUnauthenticated());
+        } else if (!_authRepository.isEmailVerified) {
+          // User exists but email not verified
+          emit(AuthAwaitingEmailVerification(email: user.email, user: user));
+        } else {
+          emit(AuthAuthenticated(user));
+        }
+      },
     );
   }
 
@@ -71,7 +80,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       result.fold(
         (failure) => emit(AuthError(failure.message)),
-        (user) => emit(AuthAuthenticated(user)),
+        (user) {
+          // Check if email is verified before allowing sign in
+          if (!_authRepository.isEmailVerified) {
+            emit(AuthAwaitingEmailVerification(email: user.email, user: user));
+          } else {
+            emit(AuthAuthenticated(user));
+          }
+        },
       );
     } finally {
       _operationInProgress = false;
@@ -113,7 +129,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       result.fold(
         (failure) => emit(AuthError(failure.message)),
-        (user) => emit(AuthAuthenticated(user)),
+        (user) => emit(AuthAwaitingEmailVerification(
+          email: event.email,
+          user: user,
+        )),
       );
     } finally {
       _operationInProgress = false;
@@ -151,6 +170,50 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
   }
 
+  Future<void> _onResendVerificationRequested(
+    AuthResendVerificationRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AuthAwaitingEmailVerification) return;
+
+    final result = await _authRepository.sendEmailVerification();
+
+    result.fold(
+      (failure) => emit(AuthError(failure.message)),
+      (_) => emit(AuthVerificationEmailSent(currentState.email)),
+    );
+
+    // Return to awaiting verification state after showing success
+    await Future.delayed(const Duration(seconds: 2));
+    if (state is AuthVerificationEmailSent) {
+      emit(AuthAwaitingEmailVerification(
+        email: currentState.email,
+        user: currentState.user,
+      ));
+    }
+  }
+
+  Future<void> _onCheckEmailVerificationRequested(
+    AuthCheckEmailVerificationRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AuthAwaitingEmailVerification) return;
+
+    final result = await _authRepository.checkEmailVerified();
+
+    result.fold(
+      (failure) => emit(AuthError(failure.message)),
+      (isVerified) {
+        if (isVerified) {
+          emit(AuthAuthenticated(currentState.user));
+        }
+        // If not verified, stay in current state (no change needed)
+      },
+    );
+  }
+
   void _onAuthStateChanged(
     AuthStateChanged event,
     Emitter<AuthState> emit,
@@ -162,12 +225,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     // Check if we're already in the correct state to prevent redundant emissions
     final currentState = state;
+
+    // Don't interrupt awaiting email verification state from external changes
+    if (currentState is AuthAwaitingEmailVerification) {
+      return;
+    }
+
     if (event.user != null) {
       if (currentState is AuthAuthenticated &&
           currentState.user.id == event.user!.id) {
         return; // Already authenticated with the same user
       }
-      emit(AuthAuthenticated(event.user!));
+      // Check email verification for external auth state changes
+      if (!_authRepository.isEmailVerified) {
+        emit(AuthAwaitingEmailVerification(
+          email: event.user!.email,
+          user: event.user!,
+        ));
+      } else {
+        emit(AuthAuthenticated(event.user!));
+      }
     } else {
       if (currentState is AuthUnauthenticated) {
         return; // Already unauthenticated

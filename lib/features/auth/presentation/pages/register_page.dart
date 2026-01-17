@@ -395,6 +395,8 @@ class _RegisterPageState extends State<RegisterPage> {
   void _authStateListener(BuildContext context, AuthState state) {
     if (state is AuthAuthenticated) {
       context.go(Routes.home);
+    } else if (state is AuthAwaitingEmailVerification) {
+      context.go(Routes.emailVerification);
     } else if (state is AuthError) {
       showAuthErrorDialog(context, state.message);
     }

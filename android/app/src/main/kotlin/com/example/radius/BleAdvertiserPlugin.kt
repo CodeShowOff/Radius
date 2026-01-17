@@ -6,10 +6,12 @@ import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
+import android.app.Application
+import android.os.Bundle
 import android.content.Context
-import android.content.Intent
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.os.ParcelUuid
-import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -18,8 +20,8 @@ import java.util.UUID
 /**
  * Native Android BLE Advertiser Plugin
  * 
- * Provides BLE peripheral/advertising functionality using Android's
- * BluetoothLeAdvertiser API.
+ * Simplified BLE advertising using Service Data.
+ * Broadcasts Service UUID (0xBEEF) with username in Service Data.
  */
 class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var channel: MethodChannel
@@ -27,15 +29,11 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var advertiser: BluetoothLeAdvertiser? = null
     private var isAdvertising = false
+    private var componentCallbacks: ComponentCallbacks2? = null
+    private var activityLifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
     companion object {
         private const val CHANNEL_NAME = "com.example.radius/ble_advertiser"
-        private const val RADIUS_SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb"
-        private const val DEBUG_MANUFACTURER_ID = 0xFFFF
-
-        // Signature to distinguish Radius packets from other apps.
-        // Format: ['R','D', version=1] + packedAnonymousIdBytes
-        private val RADIUS_MAGIC = byteArrayOf(0x52, 0x44, 0x01)
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -46,29 +44,104 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
         advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
+
+        // Keep advertising even when UI is hidden to allow discovery.
+        // Only stop on low memory conditions.
+        val callbacks = object : ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                // Only stop advertising if memory is critically low
+                if (level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
+                    stopAdvertising()
+                }
+            }
+
+            override fun onConfigurationChanged(newConfig: Configuration) {
+                // No-op
+            }
+
+            override fun onLowMemory() {
+                stopAdvertising()
+            }
+        }
+        context.registerComponentCallbacks(callbacks)
+        componentCallbacks = callbacks
+
+        // Only stop advertising when app is DESTROYED, not when backgrounded.
+        // This allows advertising to continue while app is in recents/background
+        // so other devices can discover us.
+        val app = context.applicationContext as? Application
+        if (app != null) {
+            val lifecycle = object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: Bundle?) {}
+                override fun onActivityStarted(activity: android.app.Activity) {}
+                override fun onActivityResumed(activity: android.app.Activity) {}
+                override fun onActivityPaused(activity: android.app.Activity) {}
+                override fun onActivityStopped(activity: android.app.Activity) {}
+                override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: Bundle) {}
+                
+                override fun onActivityDestroyed(activity: android.app.Activity) {
+                    // Only stop when activity is fully destroyed
+                    if (activity.isFinishing) {
+                        stopAdvertising()
+                    }
+                }
+            }
+            app.registerActivityLifecycleCallbacks(lifecycle)
+            activityLifecycleCallbacks = lifecycle
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        componentCallbacks?.let {
+            try {
+                context.unregisterComponentCallbacks(it)
+            } catch (_: Exception) {
+                // Ignore unregister failures
+            }
+        }
+        componentCallbacks = null
+
+        val app = context.applicationContext as? Application
+        activityLifecycleCallbacks?.let {
+            try {
+                app?.unregisterActivityLifecycleCallbacks(it)
+            } catch (_: Exception) {
+                // Ignore unregister failures
+            }
+        }
+        activityLifecycleCallbacks = null
+
         stopAdvertising()
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "startAdvertising" -> {
-                val anonymousId = call.argument<String>("anonymousId")
-                val serviceUuid = call.argument<String>("serviceUuid") ?: RADIUS_SERVICE_UUID
-                val txPowerLevel = call.argument<Int>("androidTxPowerLevel") ?: 2
-                val advertiseMode = call.argument<Int>("androidAdvertiseMode") ?: 2
-                val manufacturerId = call.argument<Number>("manufacturerId")?.toInt()
-                    ?: if (BuildConfig.DEBUG) DEBUG_MANUFACTURER_ID else 0
-                
-                if (anonymousId == null) {
-                    result.error("INVALID_ARGUMENT", "anonymousId is required", null)
+                val serviceUuid16 = call.argument<String>("serviceUuid16")
+                val serviceData = call.argument<ByteArray>("serviceData")
+
+                if (serviceUuid16 == null) {
+                    result.error("INVALID_ARGUMENT", "serviceUuid16 is required", null)
                     return
                 }
 
-                startAdvertising(anonymousId, serviceUuid, manufacturerId, txPowerLevel, advertiseMode, result)
+                if (!Regex("^[0-9a-fA-F]{4}$").matches(serviceUuid16)) {
+                    result.error("INVALID_ARGUMENT", "serviceUuid16 must be 4 hex chars (e.g., BEEF)", null)
+                    return
+                }
+
+                if (serviceData == null || serviceData.isEmpty()) {
+                    result.error("INVALID_ARGUMENT", "serviceData (username bytes) is required", null)
+                    return
+                }
+
+                if (serviceData.size != 7) {
+                    result.error("INVALID_ARGUMENT", "serviceData must be exactly 7 bytes", null)
+                    return
+                }
+
+                startAdvertising(serviceUuid16, serviceData, result)
             }
             "stopAdvertising" -> {
                 stopAdvertising()
@@ -88,23 +161,6 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     )
                 )
             }
-            "updateAdvertisement" -> {
-                val anonymousId = call.argument<String>("anonymousId")
-                val serviceUuid = call.argument<String>("serviceUuid") ?: RADIUS_SERVICE_UUID
-                val txPowerLevel = call.argument<Int>("androidTxPowerLevel") ?: 2
-                val advertiseMode = call.argument<Int>("androidAdvertiseMode") ?: 2
-                val manufacturerId = call.argument<Number>("manufacturerId")?.toInt()
-                    ?: if (BuildConfig.DEBUG) DEBUG_MANUFACTURER_ID else 0
-                
-                if (anonymousId == null) {
-                    result.error("INVALID_ARGUMENT", "anonymousId is required", null)
-                    return
-                }
-
-                // Restart advertising with new data
-                stopAdvertising()
-                startAdvertising(anonymousId, serviceUuid, manufacturerId, txPowerLevel, advertiseMode, result)
-            }
             else -> {
                 result.notImplemented()
             }
@@ -112,11 +168,8 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     private fun startAdvertising(
-        anonymousId: String,
-        serviceUuid: String,
-        manufacturerId: Int,
-        txPowerLevel: Int,
-        advertiseMode: Int,
+        serviceUuid16: String,
+        serviceData: ByteArray,
         result: MethodChannel.Result
     ) {
         if (advertiser == null) {
@@ -130,129 +183,57 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
 
         try {
-            // Start a minimal foreground service to keep advertising reliable when
-            // the app is backgrounded (Android often throttles/halts advertising otherwise).
-            startBleForegroundService()
-
-            // Configure advertising settings
-            val mode = when (advertiseMode) {
-                0 -> AdvertiseSettings.ADVERTISE_MODE_LOW_POWER
-                1 -> AdvertiseSettings.ADVERTISE_MODE_BALANCED
-                else -> AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY
-            }
-
-            val txPower = when (txPowerLevel) {
-                0 -> AdvertiseSettings.ADVERTISE_TX_POWER_LOW
-                1 -> AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM
-                else -> AdvertiseSettings.ADVERTISE_TX_POWER_HIGH
-            }
-
+            // Configure advertising settings for low latency (better discoverability)
             val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(mode)
-                .setTxPowerLevel(txPower)
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
                 .setConnectable(false)
                 .setTimeout(0) // Advertise indefinitely
                 .build()
 
-            // Convert anonymous ID (hex string) into compact bytes.
-            // This keeps the advertising payload small enough to fit within the 31-byte legacy ADV limit.
-            val idBytes = hexToBytes(anonymousId)
+            // Build the Bluetooth Base UUID from the 16-bit UUID.
+            // Note: ParcelUuid/UUID are 128-bit objects in code, but Android will
+            // emit the AD structure as 16-bit when using the base UUID form.
+            val baseUuidString = "0000${serviceUuid16.lowercase()}-0000-1000-8000-00805f9b34fb"
+            val uuid = UUID.fromString(baseUuidString)
+            val parcelUuid = ParcelUuid(uuid)
 
-            // Prefix with a small signature to avoid collisions with other 0xFFFF advertisers.
-            val payload = ByteArray(RADIUS_MAGIC.size + idBytes.size)
-            System.arraycopy(RADIUS_MAGIC, 0, payload, 0, RADIUS_MAGIC.size)
-            System.arraycopy(idBytes, 0, payload, RADIUS_MAGIC.size, idBytes.size)
-            
-            android.util.Log.d("BleAdvertiser", "Starting advertising with ID: $anonymousId (${idBytes.size} bytes)")
+            android.util.Log.d(
+                "BleAdvertiser",
+                "Starting advertising with Service UUID16: 0x$serviceUuid16, username: ${String(serviceData)}"
+            )
 
-            // Configure advertising data
-            if (!BuildConfig.DEBUG && (manufacturerId == 0 || manufacturerId == DEBUG_MANUFACTURER_ID)) {
-                android.util.Log.w(
-                    "BleAdvertiser",
-                    "Production manufacturerId is not configured (id=$manufacturerId). " +
-                        "Pass --dart-define=RADIUS_MANUFACTURER_ID=<Bluetooth SIG company id>"
-                )
-            }
+            // Keep payload minimal: only Service Data (UUID16 + 7 bytes).
+            // This fits comfortably in the 31-byte ADV packet and avoids using a
+            // 128-bit Service UUID list which would crowd out the username.
             val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
-                .addManufacturerData(manufacturerId, payload)
+                .addServiceData(parcelUuid, serviceData)
                 .build()
 
-            // Put the service UUID in scan response to avoid exceeding the legacy 31-byte ADV limit.
-            val scanResponse = try {
-                AdvertiseData.Builder()
-                    .setIncludeDeviceName(false)
-                    .setIncludeTxPowerLevel(false)
-                    .addServiceUuid(ParcelUuid(UUID.fromString(serviceUuid)))
-                    .build()
-            } catch (e: Exception) {
-                null
-            }
-            
-            android.util.Log.d(
-                "BleAdvertiser",
-                "Advertising data configured with service UUID: $serviceUuid, manufacturer ID: 0x${manufacturerId.toString(16)}"
-            )
-
-            // Start advertising
-            if (scanResponse != null) {
-                advertiser?.startAdvertising(settings, data, scanResponse, advertisingCallback)
-            } else {
-                advertiser?.startAdvertising(settings, data, advertisingCallback)
-            }
+            // Start advertising (no scan response)
+            advertiser?.startAdvertising(settings, data, advertisingCallback)
 
             isAdvertising = true
             result.success(true)
 
         } catch (e: Exception) {
-            stopBleForegroundService()
+            android.util.Log.e("BleAdvertiser", "Failed to start advertising: ${e.message}")
             result.error("ADVERTISING_FAILED", e.message, null)
         }
-    }
-
-    private fun hexToBytes(hex: String): ByteArray {
-        val normalized = hex.trim()
-        require(normalized.length % 2 == 0) { "Hex string must have even length" }
-        val out = ByteArray(normalized.length / 2)
-        var i = 0
-        while (i < normalized.length) {
-            val byteStr = normalized.substring(i, i + 2)
-            out[i / 2] = byteStr.toInt(16).toByte()
-            i += 2
-        }
-        return out
     }
 
     private fun stopAdvertising() {
         if (isAdvertising && advertiser != null) {
             try {
+                // Mark stopped first to keep callers/lifecycle triggers idempotent.
+                isAdvertising = false
                 advertiser?.stopAdvertising(advertisingCallback)
+                android.util.Log.d("BleAdvertiser", "Advertising stopped")
             } catch (e: Exception) {
                 // Ignore errors when stopping
             }
-            isAdvertising = false
-        }
-
-        stopBleForegroundService()
-    }
-
-    private fun startBleForegroundService() {
-        try {
-            val intent = Intent(context, BleForegroundService::class.java).apply {
-                action = BleForegroundService.ACTION_START
-            }
-            ContextCompat.startForegroundService(context, intent)
-        } catch (_: Exception) {
-            // Best-effort. Advertising may still work without the service.
-        }
-    }
-
-    private fun stopBleForegroundService() {
-        try {
-            context.stopService(Intent(context, BleForegroundService::class.java))
-        } catch (_: Exception) {
-            // Best-effort.
         }
     }
 
@@ -274,7 +255,6 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
             
             android.util.Log.e("BleAdvertiser", "✗ Advertising failed: $errorMessage (code: $errorCode)")
-            stopBleForegroundService()
             channel.invokeMethod("onAdvertisingError", errorMessage)
         }
     }

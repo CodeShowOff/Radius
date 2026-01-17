@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'firestore_write_guard.dart';
+
 /// Batches Firestore writes to reduce costs and improve performance.
-/// 
+///
 /// Instead of writing every update immediately, this batcher collects
 /// writes and flushes them periodically or when the batch is full.
 class FirestoreBatcher {
@@ -29,6 +31,7 @@ class FirestoreBatcher {
     Map<String, dynamic> data, {
     SetOptions? options,
   }) {
+    FirestoreWriteGuard.assertSafe(data, contextPath: ref.path);
     _pendingWrites[ref.path] = _PendingWrite(
       ref: ref,
       type: _WriteType.set,
@@ -44,6 +47,7 @@ class FirestoreBatcher {
     DocumentReference<Map<String, dynamic>> ref,
     Map<String, dynamic> data,
   ) {
+    FirestoreWriteGuard.assertSafe(data, contextPath: ref.path);
     _pendingWrites[ref.path] = _PendingWrite(
       ref: ref,
       type: _WriteType.update,

@@ -17,14 +17,16 @@ import '../../features/chat/data/chat_service.dart' as _i19;
 import '../../features/chat/presentation/bloc/chat_bloc.dart' as _i20;
 import '../../features/chat/presentation/bloc/conversations_bloc.dart' as _i21;
 import '../../features/connections/data/connection_service.dart' as _i17;
-import '../../features/connections/presentation/bloc/connection_bloc.dart' as _i18;
-import '../../features/profile/data/repositories/profile_repository_impl.dart' as _i10;
-import '../../features/profile/domain/repositories/i_profile_repository.dart' as _i9;
+import '../../features/connections/presentation/bloc/connection_bloc.dart'
+    as _i18;
+import '../../features/profile/data/repositories/profile_repository_impl.dart'
+    as _i10;
+import '../../features/profile/domain/repositories/i_profile_repository.dart'
+    as _i9;
 import '../../features/profile/presentation/bloc/profile_bloc.dart' as _i11;
-import '../../features/proximity/data/proximity_cache.dart' as _i14;
-import '../../features/proximity/data/proximity_firestore_service.dart' as _i13;
-import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart' as _i16;
-import '../../features/proximity/proximity_service.dart' as _i15;
+import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart'
+    as _i14;
+import '../../features/proximity/proximity_service.dart' as _i13;
 import '../services/analytics/analytics_service.dart' as _i22;
 import '../services/bluetooth/bluetooth_service.dart' as _i12;
 import '../services/crash/crash_service.dart' as _i23;
@@ -33,6 +35,7 @@ import '../services/firebase/firestore_batcher.dart' as _i24;
 import '../services/firebase/firestore_cache.dart' as _i25;
 import '../services/firebase/firestore_service.dart' as _i4;
 import '../services/firebase/profile_service.dart' as _i8;
+import '../services/firebase/username_service.dart' as _i15;
 
 extension GetItInjectableX on _i1.GetIt {
   // initializes the registration of main-scope dependencies inside of GetIt
@@ -83,27 +86,21 @@ extension GetItInjectableX on _i1.GetIt {
       () => _i8.ProfileService(),
     );
 
+    // Username Service
+    gh.lazySingleton<_i15.UsernameService>(
+      () => _i15.UsernameService(),
+    );
+
     // Bluetooth Service (singleton for app lifecycle)
     gh.lazySingleton<_i12.BluetoothService>(
       () => _i12.BluetoothService(),
     );
 
-    // Proximity Firestore Service
-    gh.lazySingleton<_i13.ProximityFirestoreService>(
-      () => _i13.ProximityFirestoreService(),
-    );
-
-    // Proximity Cache
-    gh.lazySingleton<_i14.ProximityCache>(
-      () => _i14.ProximityCache(),
-    );
-
-    // Proximity Service (depends on Bluetooth and Firestore)
-    gh.lazySingleton<_i15.ProximityService>(
-      () => _i15.ProximityService(
+    // Proximity Service (depends on Bluetooth and UsernameService)
+    gh.lazySingleton<_i13.ProximityService>(
+      () => _i13.ProximityService(
         bluetoothService: gh<_i12.BluetoothService>(),
-        cache: gh<_i14.ProximityCache>(),
-        firestoreService: gh<_i13.ProximityFirestoreService>(),
+        usernameService: gh<_i15.UsernameService>(),
       ),
     );
 
@@ -114,6 +111,7 @@ extension GetItInjectableX on _i1.GetIt {
       () => _i6.AuthRepositoryImpl(
         authService: gh<_i3.FirebaseAuthService>(),
         firestoreService: gh<_i4.FirestoreService>(),
+        usernameService: gh<_i15.UsernameService>(),
       ),
     );
 
@@ -137,8 +135,8 @@ extension GetItInjectableX on _i1.GetIt {
     );
 
     // Nearby Users BLoC
-    gh.factory<_i16.NearbyUsersBloc>(
-      () => _i16.NearbyUsersBloc(proximityService: gh<_i15.ProximityService>()),
+    gh.factory<_i14.NearbyUsersBloc>(
+      () => _i14.NearbyUsersBloc(proximityService: gh<_i13.ProximityService>()),
     );
 
     // Connection Service
@@ -148,7 +146,8 @@ extension GetItInjectableX on _i1.GetIt {
 
     // Connection BLoC
     gh.factory<_i18.ConnectionBloc>(
-      () => _i18.ConnectionBloc(connectionService: gh<_i17.ConnectionService>()),
+      () =>
+          _i18.ConnectionBloc(connectionService: gh<_i17.ConnectionService>()),
     );
 
     // ==================== CHAT ====================

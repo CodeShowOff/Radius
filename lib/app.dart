@@ -4,11 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
-import 'core/services/bluetooth/ble_range_mode.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
-import 'features/proximity/proximity_service.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 
 /// Root widget of the Radius application.
@@ -41,7 +39,7 @@ class RadiusApp extends StatelessWidget {
             create: (_) => getIt<ProfileBloc>(),
           ),
         ],
-        child: _BlePresenceManager(
+        child: _AuthAwareApp(
           child: MaterialApp.router(
             title: 'Radius',
             debugShowCheckedModeBanner: false,
@@ -60,84 +58,31 @@ class RadiusApp extends StatelessWidget {
   }
 }
 
-/// Manages foreground BLE presence.
+/// Listens to auth state and triggers profile loading on authentication.
 ///
-/// Requirements:
-/// - Advertise the device ID while the app is being used (foreground).
-/// - Do NOT scan in the background or app-wide; scanning only happens on Nearby.
-class _BlePresenceManager extends StatefulWidget {
+/// BLE discovery is now fully managed by the Nearby Users screen,
+/// not at the app-wide level.
+class _AuthAwareApp extends StatefulWidget {
   final Widget child;
 
-  const _BlePresenceManager({required this.child});
+  const _AuthAwareApp({required this.child});
 
   @override
-  State<_BlePresenceManager> createState() => _BlePresenceManagerState();
+  State<_AuthAwareApp> createState() => _AuthAwareAppState();
 }
 
-class _BlePresenceManagerState extends State<_BlePresenceManager>
-    with WidgetsBindingObserver {
-  final BluetoothService _bluetoothService = getIt<BluetoothService>();
-  final ProximityService _proximityService = getIt<ProximityService>();
-
+class _AuthAwareAppState extends State<_AuthAwareApp> {
   String? _currentUserId;
-  bool _isForeground = true;
-  bool _starting = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
 
     // If the app starts already authenticated, BlocListener won't fire.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _onAuthChanged(context, context.read<AuthBloc>().state);
     });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // Best-effort stop (don't await in dispose).
-    _bluetoothService.stopAdvertising();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _isForeground = true;
-      _bluetoothService.onAppForegroundChanged(true);
-      _ensureForegroundPresence();
-      return;
-    }
-
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.detached) {
-      _isForeground = false;
-      _bluetoothService.onAppForegroundChanged(false);
-      _bluetoothService.stopAdvertising();
-    }
-  }
-
-  Future<void> _ensureForegroundPresence() async {
-    if (!_isForeground) return;
-    final userId = _currentUserId;
-    if (userId == null) return;
-    if (_starting) return;
-    _starting = true;
-
-    try {
-      // Initialize ProximityService so it can keep Firestore bleIdentifier in-sync
-      // with BluetoothService's rotating anonymous ID.
-      await _proximityService.initialize(userId);
-
-      // Advertising is the only always-on behavior; scanning is user-triggered.
-      await _bluetoothService.startAdvertising(rangeMode: BleRangeMode.large);
-    } finally {
-      _starting = false;
-    }
   }
 
   void _onAuthChanged(BuildContext context, AuthState state) {
@@ -156,14 +101,11 @@ class _BlePresenceManagerState extends State<_BlePresenceManager>
           // Ignore if ProfileBloc isn't available in the tree yet.
         }
       }
-
-      _ensureForegroundPresence();
       return;
     }
 
     // Signed out or unauthenticated.
     _currentUserId = null;
-    _bluetoothService.stopAdvertising();
   }
 
   @override

@@ -8,7 +8,7 @@ class User extends Equatable {
   final String email;
   final String? displayName;
   final String? avatarUrl;
-  final String bleIdentifier;
+  final String username;
   final DateTime createdAt;
   final bool isDiscoverable;
 
@@ -17,7 +17,7 @@ class User extends Equatable {
     required this.email,
     this.displayName,
     this.avatarUrl,
-    required this.bleIdentifier,
+    required this.username,
     required this.createdAt,
     this.isDiscoverable = true,
   });
@@ -31,7 +31,7 @@ class User extends Equatable {
     String? email,
     String? displayName,
     String? avatarUrl,
-    String? bleIdentifier,
+    String? username,
     DateTime? createdAt,
     bool? isDiscoverable,
     bool clearDisplayName = false,
@@ -42,7 +42,7 @@ class User extends Equatable {
       email: email ?? this.email,
       displayName: clearDisplayName ? null : (displayName ?? this.displayName),
       avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
-      bleIdentifier: bleIdentifier ?? this.bleIdentifier,
+      username: username ?? this.username,
       createdAt: createdAt ?? this.createdAt,
       isDiscoverable: isDiscoverable ?? this.isDiscoverable,
     );
@@ -54,7 +54,7 @@ class User extends Equatable {
         email,
         displayName,
         avatarUrl,
-        bleIdentifier,
+        username,
         createdAt,
         isDiscoverable,
       ];

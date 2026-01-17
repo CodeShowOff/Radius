@@ -108,3 +108,13 @@ class _ChatTypingUpdated extends ChatEvent {
   @override
   List<Object?> get props => [isOtherUserTyping];
 }
+
+/// Internal: Any stream/service error surfaced to the bloc.
+class _ChatErrorOccurred extends ChatEvent {
+  final String message;
+
+  const _ChatErrorOccurred(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}

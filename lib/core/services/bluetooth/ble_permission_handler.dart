@@ -28,32 +28,54 @@ enum BlePermissionStatus {
   locationOff,
 }
 
+/// Structured result for foreground BLE permission checks.
+class BleForegroundPermissionResult {
+  final bool granted;
+  final bool deniedPermanently;
+  final List<String> missingPermissions;
+
+  const BleForegroundPermissionResult({
+    required this.granted,
+    required this.deniedPermanently,
+    required this.missingPermissions,
+  });
+}
+
 /// Handles BLE-related permissions for Android and iOS.
 class BlePermissionHandler {
   final Future<int?> Function() _androidSdkIntProvider;
   final Future<Map<Permission, PermissionStatus>> Function(List<Permission>)
       _requestPermissions;
   final Future<bool> Function() _isLocationServiceEnabled;
+  final Future<bool> Function() _isBluetoothSupported;
+  final bool Function() _isAndroid;
+  final bool Function() _isIOS;
 
   BlePermissionHandler({
     Future<int?> Function()? androidSdkIntProvider,
     Future<Map<Permission, PermissionStatus>> Function(List<Permission>)?
         requestPermissions,
     Future<bool> Function()? isLocationServiceEnabled,
-  })  : _androidSdkIntProvider = androidSdkIntProvider ?? _defaultSdkProvider,
+    Future<bool> Function()? isBluetoothSupported,
+    bool Function()? isAndroid,
+    bool Function()? isIOS,
+  })  : _isAndroid = isAndroid ?? (() => Platform.isAndroid),
+        _isIOS = isIOS ?? (() => Platform.isIOS),
+        _androidSdkIntProvider = androidSdkIntProvider ??
+            (() async {
+              if (!(isAndroid ?? (() => Platform.isAndroid))()) return null;
+              try {
+                final info = await DeviceInfoPlugin().androidInfo;
+                return info.version.sdkInt;
+              } catch (_) {
+                return null;
+              }
+            }),
         _requestPermissions = requestPermissions ?? _defaultRequestPermissions,
         _isLocationServiceEnabled =
-            isLocationServiceEnabled ?? _defaultLocationServiceEnabled;
-
-  static Future<int?> _defaultSdkProvider() async {
-    if (!Platform.isAndroid) return null;
-    try {
-      final info = await DeviceInfoPlugin().androidInfo;
-      return info.version.sdkInt;
-    } catch (_) {
-      return null;
-    }
-  }
+            isLocationServiceEnabled ?? _defaultLocationServiceEnabled,
+        _isBluetoothSupported =
+            isBluetoothSupported ?? (() => FlutterBluePlus.isSupported);
 
   static Future<Map<Permission, PermissionStatus>> _defaultRequestPermissions(
     List<Permission> permissions,
@@ -69,7 +91,7 @@ class BlePermissionHandler {
   /// Returns [BlePermissionStatus] indicating the result.
   Future<BlePermissionStatus> checkAndRequestPermissions({
     bool needsScan = true,
-    bool needsConnect = true,
+    bool needsConnect = false,
     bool needsAdvertise = false,
   }) async {
     DeviceLog.instance.debug('ble.perm', 'checkAndRequestPermissions()', data: {
@@ -80,7 +102,7 @@ class BlePermissionHandler {
     });
 
     // First check if Bluetooth is supported
-    if (!await FlutterBluePlus.isSupported) {
+    if (!await _isBluetoothSupported()) {
       DeviceLog.instance.warning('ble.perm', 'Bluetooth not supported');
       return BlePermissionStatus.restricted;
     }
@@ -89,13 +111,13 @@ class BlePermissionHandler {
     // granted before some adapter operations; so request first, then check
     // adapter state).
     BlePermissionStatus permissionStatus;
-    if (Platform.isAndroid) {
+    if (_isAndroid()) {
       permissionStatus = await _checkAndroidPermissions(
         needsScan: needsScan,
         needsConnect: needsConnect,
         needsAdvertise: needsAdvertise,
       );
-    } else if (Platform.isIOS) {
+    } else if (_isIOS()) {
       permissionStatus = await _checkIOSPermissions();
     } else {
       return BlePermissionStatus.denied;
@@ -118,6 +140,115 @@ class BlePermissionHandler {
     }
 
     return BlePermissionStatus.granted;
+  }
+
+  /// Ensures the runtime permissions needed for *foreground* BLE discovery.
+  ///
+  /// Android 12+ (API 31+): requests BLUETOOTH_SCAN and (optionally)
+  /// BLUETOOTH_ADVERTISE.
+  ///
+  /// Note: BLUETOOTH_CONNECT is only required when initiating a GATT
+  /// connection / interacting with bonded devices. It is NOT required for
+  /// passive scanning or advertising, so we do not request it here.
+  ///
+  /// Android < 12: requests Location permission for scanning and reports if
+  /// Location services are disabled.
+  ///
+  /// Returns a structured result so callers can:
+  /// - proceed with scan-only discovery if advertise is denied
+  /// - guide users to Settings if permissions are permanently denied
+  Future<BleForegroundPermissionResult> ensureBlePermissionsForForeground(
+      {bool includeAdvertise = false}) async {
+    if (!await _isBluetoothSupported()) {
+      return const BleForegroundPermissionResult(
+        granted: false,
+        deniedPermanently: false,
+        missingPermissions: <String>['bluetoothUnsupported'],
+      );
+    }
+
+    if (kIsWeb) {
+      return const BleForegroundPermissionResult(
+        granted: false,
+        deniedPermanently: false,
+        missingPermissions: <String>['platformUnsupported'],
+      );
+    }
+
+    if (_isAndroid()) {
+      final sdkInt = await _androidSdkIntProvider();
+      final isApi31Plus = sdkInt != null && sdkInt >= 31;
+
+      final permissions = <Permission>[
+        if (isApi31Plus) Permission.bluetoothScan,
+        if (isApi31Plus && includeAdvertise) Permission.bluetoothAdvertise,
+        if (!isApi31Plus) Permission.location,
+      ];
+
+      final statuses = await _requestPermissions(permissions);
+
+      bool permanentlyDenied = false;
+      for (final entry in statuses.entries) {
+        if (entry.value.isPermanentlyDenied) {
+          permanentlyDenied = true;
+        }
+      }
+
+      final missing = <String>[];
+      if (isApi31Plus) {
+        final scanGranted =
+            (statuses[Permission.bluetoothScan]?.isGranted ?? false);
+        final advertiseGranted = includeAdvertise
+            ? (statuses[Permission.bluetoothAdvertise]?.isGranted ?? false)
+            : false;
+
+        if (!scanGranted) missing.add('bluetoothScan');
+        if (includeAdvertise && !advertiseGranted) {
+          missing.add('bluetoothAdvertise');
+        }
+
+        // Foreground scanning can proceed with scan-only.
+        final granted = scanGranted;
+        return BleForegroundPermissionResult(
+          granted: granted,
+          deniedPermanently: permanentlyDenied && !granted,
+          missingPermissions: missing,
+        );
+      }
+
+      // Pre-Android 12 fallback: location permission and location services.
+      final locationGranted =
+          (statuses[Permission.location]?.isGranted ?? false);
+      if (!locationGranted) missing.add('location');
+
+      final locationServiceEnabled = await _isLocationServiceEnabled();
+      if (!locationServiceEnabled) missing.add('locationService');
+
+      final granted = locationGranted && locationServiceEnabled;
+      return BleForegroundPermissionResult(
+        granted: granted,
+        deniedPermanently: permanentlyDenied && !granted,
+        missingPermissions: missing,
+      );
+    }
+
+    if (_isIOS()) {
+      final status = await Permission.bluetooth.request();
+      final granted = status.isGranted;
+      final deniedPermanently = status.isPermanentlyDenied;
+      return BleForegroundPermissionResult(
+        granted: granted,
+        deniedPermanently: deniedPermanently,
+        missingPermissions:
+            granted ? const <String>[] : const <String>['bluetooth'],
+      );
+    }
+
+    return const BleForegroundPermissionResult(
+      granted: false,
+      deniedPermanently: false,
+      missingPermissions: <String>['platformUnsupported'],
+    );
   }
 
   /// Checks Android-specific permissions.
@@ -293,14 +424,12 @@ class BlePermissionHandler {
   /// Requests the user to turn on Bluetooth (Android only).
   /// Returns true if successfully requested (user may still decline).
   Future<bool> requestBluetoothOn() async {
-    if (Platform.isAndroid) {
+    if (_isAndroid()) {
       try {
-        // On Android 12+, turning on Bluetooth via system intent requires
-        // BLUETOOTH_CONNECT.
-        final connectStatus = await Permission.bluetoothConnect.request();
-        if (!connectStatus.isGranted) {
-          return false;
-        }
+        // Do not gate this on BLUETOOTH_CONNECT.
+        // Turning Bluetooth ON is a system-level action; some devices/OS
+        // versions may still throw if CONNECT is required, in which case we
+        // return false and callers should guide the user to Settings.
         await FlutterBluePlus.turnOn();
         return true;
       } catch (e) {

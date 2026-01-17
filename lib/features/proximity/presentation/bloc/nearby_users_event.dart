@@ -8,50 +8,28 @@ abstract class NearbyUsersEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class NearbyUsersBleDiagnosticsTick extends NearbyUsersEvent {
-  const NearbyUsersBleDiagnosticsTick();
-
-  @override
-  List<Object?> get props => [];
-}
-
-/// User explicitly requests a single scan session.
-class NearbyUsersScanOnceRequested extends NearbyUsersEvent {
+/// Event to initialize the service (starts advertising).
+class NearbyUsersInitialize extends NearbyUsersEvent {
   final String userId;
-  final BleRangeMode rangeMode;
+  final String username;
 
-  const NearbyUsersScanOnceRequested({
+  const NearbyUsersInitialize({
     required this.userId,
-    required this.rangeMode,
+    required this.username,
   });
 
   @override
-  List<Object?> get props => [userId, rangeMode];
+  List<Object?> get props => [userId, username];
 }
 
-/// Internal event fired when an async scanOnce call completes.
-class NearbyUsersScanOnceCompleted extends NearbyUsersEvent {
-  final bool ok;
-
-  const NearbyUsersScanOnceCompleted(this.ok);
-
-  @override
-  List<Object?> get props => [ok];
+/// Event to start a 15-second scan.
+class NearbyUsersStartScan extends NearbyUsersEvent {
+  const NearbyUsersStartScan();
 }
 
-/// Event to start discovering nearby users.
-class NearbyUsersStartDiscovery extends NearbyUsersEvent {
-  final String userId;
-
-  const NearbyUsersStartDiscovery(this.userId);
-
-  @override
-  List<Object?> get props => [userId];
-}
-
-/// Event to stop discovery.
-class NearbyUsersStopDiscovery extends NearbyUsersEvent {
-  const NearbyUsersStopDiscovery();
+/// Event to stop scanning manually.
+class NearbyUsersStopScan extends NearbyUsersEvent {
+  const NearbyUsersStopScan();
 }
 
 /// Event when nearby users list is updated.
@@ -74,7 +52,46 @@ class NearbyUsersServiceStateChanged extends NearbyUsersEvent {
   List<Object?> get props => [serviceState];
 }
 
+/// Event to clear scan results.
+class NearbyUsersClearResults extends NearbyUsersEvent {
+  const NearbyUsersClearResults();
+}
+
+/// Event when app goes to background.
+class NearbyUsersAppBackgrounded extends NearbyUsersEvent {
+  const NearbyUsersAppBackgrounded();
+}
+
+/// Event when app resumes.
+class NearbyUsersAppResumed extends NearbyUsersEvent {
+  const NearbyUsersAppResumed();
+}
+
+// ============== Legacy Events (for compatibility) ==============
+
+/// Event to start discovering nearby users.
+/// @deprecated Use NearbyUsersInitialize + NearbyUsersStartScan instead.
+class NearbyUsersStartDiscovery extends NearbyUsersEvent {
+  final String userId;
+  final String username;
+
+  const NearbyUsersStartDiscovery({
+    required this.userId,
+    required this.username,
+  });
+
+  @override
+  List<Object?> get props => [userId, username];
+}
+
+/// Event to stop discovery.
+/// @deprecated Use NearbyUsersStopScan instead.
+class NearbyUsersStopDiscovery extends NearbyUsersEvent {
+  const NearbyUsersStopDiscovery();
+}
+
 /// Event to change filter.
+/// @deprecated Filters have been removed.
 class NearbyUsersFilterChanged extends NearbyUsersEvent {
   final NearbyUsersFilter filter;
 
@@ -86,15 +103,11 @@ class NearbyUsersFilterChanged extends NearbyUsersEvent {
 
 /// Event to refresh/restart discovery.
 class NearbyUsersRefresh extends NearbyUsersEvent {
-  final BleRangeMode? rangeMode;
-
-  const NearbyUsersRefresh({this.rangeMode});
-
-  @override
-  List<Object?> get props => [rangeMode];
+  const NearbyUsersRefresh();
 }
 
 /// Event when initial search timeout occurs.
+/// @deprecated Scan auto-stops after 15 seconds.
 class NearbyUsersInitialSearchTimeout extends NearbyUsersEvent {
   const NearbyUsersInitialSearchTimeout();
 }

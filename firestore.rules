@@ -17,22 +17,6 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    /// Check if a user exists
-    function userExists(userId) {
-      return exists(/databases/$(database)/documents/users/$(userId));
-    }
-    
-    /// Get user document data
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-    
-    /// Check if user's profile is visible (not private)
-    function isProfileVisible(userId) {
-      let userData = getUserData(userId);
-      return !('visibility' in userData) || userData.visibility != 'private';
-    }
-    
     /// Check if user is blocked by another user
     function isBlocked(userId, byUserId) {
       return exists(/databases/$(database)/documents/users/$(byUserId)/blocked_users/$(userId));
@@ -71,12 +55,9 @@ service cloud.firestore {
     // ============================================================
     
     match /users/{userId} {
-      // RULE: Users can always read their own profile
-      // RULE: Others can read if: authenticated + not blocked + profile visible
-      allow read: if isOwner(userId) 
-        || (isAuthenticated() 
-            && !hasBlockRelationship(request.auth.uid, userId)
-            && isProfileVisible(userId));
+      // Privacy: keep `users` private (contains sensitive fields like email).
+      // Other users should read public data from `/profiles/{userId}`.
+      allow read: if isOwner(userId);
       
       // RULE: Only owner can create their profile
       allow create: if isOwner(userId)
@@ -115,20 +96,92 @@ service cloud.firestore {
       
       // Only owner can write their profile
       allow write: if isOwner(userId);
+
+      // Proximity (private) - only the owner can read/write.
+      match /proximity/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Stats (private) - only the owner can read/write.
+      match /stats/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
     }
     
     // ============================================================
     // PROXIMITY & NEARBY USERS
     // ============================================================
     
-    // BLE ID mappings - maps Bluetooth IDs to user IDs
-    match /ble_id_mappings/{mappingId} {
-      // RULE: Any authenticated user can read (required for proximity discovery)
+    // Username counter - atomic counter for generating unique usernames
+    match /counters/usernames {
+      // RULE: Any authenticated user can read the counter
       allow read: if isAuthenticated();
       
-      // RULE: Users can only create/update their own mapping
-      allow create, update: if isAuthenticated() 
-        && request.auth.uid == request.resource.data.userId;
+      // RULE: Any authenticated user can write (increment) the counter
+      // The transaction ensures atomicity
+      allow write: if isAuthenticated();
+    }
+    
+    // Username index - maps usernames to user IDs for BLE discovery
+    match /username_index/{username} {
+      // RULE: Any authenticated user can read to look up profiles
+      allow read: if isAuthenticated();
+      
+      // RULE: Users can only create their own index entry
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+      
+      // RULE: Users cannot update or delete index entries
+      // This prevents username hijacking
+      allow update, delete: if false;
+    }
+    
+    // BLE ID mappings - maps Bluetooth IDs to user IDs (legacy, may be deprecated)
+    match /ble_id_mappings/{mappingId} {
+      // RULE: Any authenticated user can fetch a specific mapping (doc-get)
+      // only if it is still valid and the owner is currently discoverable.
+      // Privacy: deny collection enumeration to reduce linkability/harvesting risk.
+      allow get: if isAuthenticated()
+        && resource.data.bleToken is string
+        && resource.data.bleToken == mappingId
+        && resource.data.bleToken.size() == 64
+        && resource.data.userId is string
+        && resource.data.isVisible is bool
+        && resource.data.expiresAt is timestamp
+        && resource.data.expiresAt > request.time
+        && resource.data.isVisible == true;
+      allow list: if false;
+      
+      // RULE: Users can only create their own mapping.
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.userId
+        // Only allow the minimal expected schema.
+        && request.resource.data.keys().hasOnly(['bleToken', 'userId', 'expiresAt', 'updatedAt', 'isVisible'])
+        && request.resource.data.bleToken is string
+        && request.resource.data.bleToken == mappingId
+        // sha256 hex
+        && request.resource.data.bleToken.size() == 64
+        && request.resource.data.userId is string
+        && request.resource.data.isVisible is bool
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        // Bound TTL to prevent abuse / long-lived linkability.
+        && request.resource.data.expiresAt < request.time + duration.value(30, 'm');
+
+      // RULE: Users can only extend/refresh expiry on their existing mapping.
+      // Prevent rewriting bleId->userId association once created.
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.keys().hasOnly(['bleToken', 'userId', 'expiresAt', 'updatedAt', 'isVisible'])
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.bleToken == resource.data.bleToken
+        && request.resource.data.bleToken == mappingId
+        // Updates may only touch expiry + updatedAt + discoverability.
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expiresAt', 'updatedAt', 'isVisible'])
+        && request.resource.data.isVisible is bool
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt < request.time + duration.value(30, 'm');
       
       // RULE: Users can delete their own mapping
       allow delete: if isAuthenticated() 

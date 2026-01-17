@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Help and support page with FAQs and contact information.
@@ -28,6 +31,14 @@ class HelpSupportPage extends StatelessWidget {
                   subtitle: const Text('Frequently asked questions'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _navigateToFAQs(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.bluetooth),
+                  title: const Text('Bluetooth & Battery settings'),
+                  subtitle: const Text('Fix discovery on some phones'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _navigateToBluetoothBatteryHelp(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -144,6 +155,15 @@ class HelpSupportPage extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => const _UserGuidePage(),
+      ),
+    );
+  }
+
+  void _navigateToBluetoothBatteryHelp(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const _BluetoothBatteryHelpPage(),
       ),
     );
   }
@@ -297,6 +317,231 @@ class HelpSupportPage extends StatelessWidget {
       // Browser not available
     }
   }
+}
+
+class _BluetoothBatteryHelpPage extends StatelessWidget {
+  const _BluetoothBatteryHelpPage();
+
+  Future<_AndroidDeviceSummary?> _getAndroidDeviceSummary() async {
+    if (kIsWeb) return null;
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return _AndroidDeviceSummary(
+        manufacturer: info.manufacturer.trim(),
+        brand: info.brand.trim(),
+        model: info.model.trim(),
+        sdkInt: info.version.sdkInt,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<String> _oemGuidanceFor(_AndroidDeviceSummary? d) {
+    final manufacturer = (d?.manufacturer ?? '').toLowerCase();
+    final brand = (d?.brand ?? '').toLowerCase();
+
+    final key = manufacturer.isNotEmpty ? manufacturer : brand;
+
+    if (key.contains('xiaomi') ||
+        key.contains('redmi') ||
+        key.contains('poco')) {
+      return const [
+        'Settings → Apps → Radius → Battery saver: set to “No restrictions”.',
+        'Enable Autostart for Radius (if available).',
+        'Lock Radius in Recents (app icon → Lock) to reduce kills.',
+      ];
+    }
+
+    if (key.contains('huawei') || key.contains('honor')) {
+      return const [
+        'Battery optimization: set Radius to “Not allowed to optimize”.',
+        'App launch: manage manually; allow auto-launch + background activity.',
+      ];
+    }
+
+    if (key.contains('samsung')) {
+      return const [
+        'Battery: set Radius to “Unrestricted” (or disable “Put unused apps to sleep” for it).',
+        'Make sure Bluetooth is ON and you are on the Nearby screen.',
+      ];
+    }
+
+    if (key.contains('oppo') ||
+        key.contains('realme') ||
+        key.contains('vivo')) {
+      return const [
+        'Allow background activity / disable app sleep for Radius.',
+        'Battery optimization: set Radius to “Don’t optimize” / “No restrictions”.',
+      ];
+    }
+
+    if (key.contains('oneplus')) {
+      return const [
+        'Battery optimization: set Radius to “Don’t optimize”.',
+        'Disable aggressive sleep/hibernation for Radius if available.',
+      ];
+    }
+
+    return const [
+      'Battery optimization: set Radius to “Don’t optimize” / “Unrestricted” if available.',
+      'Keep Radius open on the Nearby screen for best discovery.',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Bluetooth & Battery settings'),
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Discovery basics',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Radius discovers nearby users using Bluetooth Low Energy (BLE). For privacy and battery, discovery runs only while the app is open and the Nearby screen is visible.',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await openAppSettings();
+                        },
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Open app settings'),
+                      ),
+                      if (!kIsWeb &&
+                          defaultTargetPlatform == TargetPlatform.android)
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            await Permission.bluetoothScan.request();
+                            await Permission.bluetoothConnect.request();
+                            await Permission.bluetoothAdvertise.request();
+                          },
+                          icon: const Icon(Icons.security_outlined),
+                          label: const Text('Request Bluetooth permissions'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Battery optimization (Android)',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Some Android phones aggressively pause Bluetooth scanning/advertising when battery optimizations are enabled. If discovery is unreliable, set Radius to “Unrestricted” / “No restrictions” and disable app sleep features.',
+                  ),
+                  const SizedBox(height: 12),
+                  FutureBuilder<_AndroidDeviceSummary?>(
+                    future: _getAndroidDeviceSummary(),
+                    builder: (context, snap) {
+                      if (defaultTargetPlatform != TargetPlatform.android) {
+                        return const Text(
+                          'On iOS, discovery is most reliable when both devices keep Radius open on the Nearby screen.',
+                        );
+                      }
+
+                      final summary = snap.data;
+                      final steps = _oemGuidanceFor(summary);
+                      final deviceLine = summary == null
+                          ? 'Your Android device'
+                          : 'Device: ${summary.manufacturer.isEmpty ? summary.brand : summary.manufacturer} ${summary.model} (SDK ${summary.sdkInt})'
+                              .trim();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(deviceLine, style: theme.textTheme.titleSmall),
+                          const SizedBox(height: 8),
+                          for (final s in steps)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('• '),
+                                  Expanded(child: Text(s)),
+                                ],
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'If you still see no nearby users',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Try these quick checks:\n'
+                    '• Turn Bluetooth OFF then ON.\n'
+                    '• Ensure Location is not required (Radius uses Android 12+ Bluetooth permissions).\n'
+                    '• Keep the screen on and stay on the Nearby page during scanning.\n'
+                    '• Test with another phone using nRF Connect/LightBlue to confirm advertisements are visible.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AndroidDeviceSummary {
+  final String manufacturer;
+  final String brand;
+  final String model;
+  final int sdkInt;
+
+  const _AndroidDeviceSummary({
+    required this.manufacturer,
+    required this.brand,
+    required this.model,
+    required this.sdkInt,
+  });
 }
 
 class _InfoRow extends StatelessWidget {
@@ -563,7 +808,7 @@ class _UserGuidePage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     '• Keep Bluetooth on for best results\n'
-                    '• Allow the app to run in background\n'
+                    '• Keep the app open while using Nearby\n'
                     '• Upload a clear profile photo\n'
                     '• Write an interesting bio\n'
                     '• Be respectful to other users',

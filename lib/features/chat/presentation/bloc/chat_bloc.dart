@@ -33,6 +33,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatMessagesUpdated>(_onMessagesUpdated);
     on<_ChatConversationUpdated>(_onConversationUpdated);
     on<_ChatTypingUpdated>(_onTypingUpdated);
+    on<_ChatErrorOccurred>(_onErrorOccurred);
   }
 
   Future<void> _onOpen(
@@ -52,25 +53,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _cancelSubscriptions();
 
     // Subscribe to messages stream
-    _messagesSubscription = _chatService
-        .getMessagesStream(event.conversationId)
-        .listen((messages) => add(_ChatMessagesUpdated(messages)));
+    _messagesSubscription =
+        _chatService.getMessagesStream(event.conversationId).listen(
+              (messages) => add(_ChatMessagesUpdated(messages)),
+              onError: (error) => add(_ChatErrorOccurred(error.toString())),
+            );
 
     // Subscribe to conversation updates
-    _conversationSubscription = _chatService
-        .getConversationStream(event.conversationId)
-        .listen((conversation) => add(_ChatConversationUpdated(conversation)));
+    _conversationSubscription =
+        _chatService.getConversationStream(event.conversationId).listen(
+              (conversation) => add(_ChatConversationUpdated(conversation)),
+              onError: (error) => add(_ChatErrorOccurred(error.toString())),
+            );
 
-    // Subscribe to typing indicator
-    _typingSubscription = _chatService
-        .getTypingStream(event.conversationId, event.otherUserId)
-        .listen((isTyping) => add(_ChatTypingUpdated(isTyping)));
+    // Subscribe to typing indicator when we know the other participant.
+    // Deep links may open a chat without extra payload, so otherUserId can be
+    // empty until the conversation stream yields participant data.
+    if (event.otherUserId.trim().isNotEmpty) {
+      _typingSubscription = _chatService
+          .getTypingStream(event.conversationId, event.otherUserId)
+          .listen(
+            (isTyping) => add(_ChatTypingUpdated(isTyping)),
+            onError: (error) => add(_ChatErrorOccurred(error.toString())),
+          );
+    }
 
     // Mark messages as delivered when opening chat
-    await _chatService.markMessagesAsDelivered(
-      conversationId: event.conversationId,
-      userId: event.currentUserId,
-    );
+    try {
+      await _chatService.markMessagesAsDelivered(
+        conversationId: event.conversationId,
+        userId: event.currentUserId,
+      );
+    } catch (e) {
+      add(_ChatErrorOccurred(e.toString()));
+    }
 
     emit(state.copyWith(status: ChatStatus.loaded));
   }
@@ -151,10 +167,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     emit(state.copyWith(status: ChatStatus.loadingMore));
 
-    final olderMessages = await _chatService.loadMoreMessages(
-      state.conversationId!,
-      before: oldestTime,
-    );
+    List<Message> olderMessages;
+    try {
+      olderMessages = await _chatService.loadMoreMessages(
+        state.conversationId!,
+        before: oldestTime,
+      );
+    } catch (e) {
+      emit(state.copyWith(
+        status: ChatStatus.loaded,
+        errorMessage: e.toString(),
+      ));
+      return;
+    }
 
     emit(state.copyWith(
       status: ChatStatus.loaded,
@@ -171,10 +196,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    await _chatService.markMessagesAsRead(
-      conversationId: state.conversationId!,
-      userId: state.currentUserId!,
-    );
+    try {
+      await _chatService.markMessagesAsRead(
+        conversationId: state.conversationId!,
+        userId: state.currentUserId!,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
   }
 
   Future<void> _onSetTyping(
@@ -220,11 +249,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    await _chatService.deleteMessage(
-      conversationId: state.conversationId!,
-      messageId: event.messageId,
-      userId: state.currentUserId!,
-    );
+    try {
+      await _chatService.deleteMessage(
+        conversationId: state.conversationId!,
+        messageId: event.messageId,
+        userId: state.currentUserId!,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
   }
 
   void _onMessagesUpdated(
@@ -240,7 +273,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           pendingMsg.localId == message.localId ||
           (pendingMsg.text == message.text &&
               pendingMsg.senderId == message.senderId &&
-              message.sentAt.difference(pendingMsg.sentAt).abs().inSeconds < 5));
+              message.sentAt.difference(pendingMsg.sentAt).abs().inSeconds <
+                  5));
     }
 
     emit(state.copyWith(
@@ -255,12 +289,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     if (event.conversation == null) return;
 
+    final currentUserId = state.currentUserId ?? '';
+    final derivedOtherUserId =
+        event.conversation!.getOtherParticipantId(currentUserId);
+
+    // If the chat was opened without an explicit otherUserId, derive it now
+    // and wire typing updates.
+    final needsOtherUserId =
+        (state.otherUserId == null || state.otherUserId!.trim().isEmpty) &&
+            derivedOtherUserId.trim().isNotEmpty;
+
+    if (needsOtherUserId) {
+      _typingSubscription?.cancel();
+      _typingSubscription = _chatService
+          .getTypingStream(state.conversationId!, derivedOtherUserId)
+          .listen(
+            (isTyping) => add(_ChatTypingUpdated(isTyping)),
+            onError: (error) => add(_ChatErrorOccurred(error.toString())),
+          );
+    }
+
     // Update other user info from conversation
     final otherInfo =
-        event.conversation!.getOtherParticipantInfo(state.currentUserId ?? '');
+        event.conversation!.getOtherParticipantInfo(currentUserId);
 
     emit(state.copyWith(
       conversation: event.conversation,
+      otherUserId: needsOtherUserId ? derivedOtherUserId : state.otherUserId,
       otherUserName: otherInfo?.displayName ?? state.otherUserName,
       otherUserPhotoUrl: otherInfo?.photoUrl ?? state.otherUserPhotoUrl,
     ));
@@ -271,6 +326,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) {
     emit(state.copyWith(isOtherUserTyping: event.isOtherUserTyping));
+  }
+
+  void _onErrorOccurred(
+    _ChatErrorOccurred event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(state.copyWith(
+      status: ChatStatus.error,
+      errorMessage: event.message,
+    ));
   }
 
   Future<void> _cancelSubscriptions() async {

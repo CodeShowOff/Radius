@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
+import '../logging/log_redaction.dart';
+
 /// Crash reporting service using Firebase Crashlytics.
 ///
 /// Captures crashes, non-fatal errors, and provides context
@@ -61,8 +63,13 @@ class CrashService {
   ///
   /// These appear in crash reports for debugging.
   Future<void> setCustomKey(String key, dynamic value) async {
+    // Never allow sensitive BLE identifiers/payloads in Crashlytics keys.
+    if (LogRedaction.isSensitiveKey(key)) {
+      return;
+    }
+
     if (value is String) {
-      await _crashlytics.setCustomKey(key, value);
+      await _crashlytics.setCustomKey(key, LogRedaction.redactString(value));
     } else if (value is int) {
       await _crashlytics.setCustomKey(key, value);
     } else if (value is double) {
@@ -70,7 +77,10 @@ class CrashService {
     } else if (value is bool) {
       await _crashlytics.setCustomKey(key, value);
     } else {
-      await _crashlytics.setCustomKey(key, value.toString());
+      await _crashlytics.setCustomKey(
+        key,
+        LogRedaction.redactString(value.toString()),
+      );
     }
   }
 
@@ -85,7 +95,7 @@ class CrashService {
   ///
   /// Use for breadcrumbs leading up to a crash.
   Future<void> log(String message) async {
-    await _crashlytics.log(message);
+    await _crashlytics.log(LogRedaction.redactString(message));
   }
 
   /// Record a non-fatal error.
@@ -98,12 +108,21 @@ class CrashService {
     bool fatal = false,
     Iterable<Object> information = const [],
   }) async {
+    final safeReason =
+        reason == null ? null : LogRedaction.redactString(reason);
+    final safeInformation = information
+        .map((i) => LogRedaction.redactString(i.toString()))
+        .toList(growable: false);
+
+    final safeException =
+        exception is String ? LogRedaction.redactString(exception) : exception;
+
     await _crashlytics.recordError(
-      exception,
+      safeException,
       stackTrace,
-      reason: reason,
+      reason: safeReason,
       fatal: fatal,
-      information: information,
+      information: safeInformation,
     );
   }
 

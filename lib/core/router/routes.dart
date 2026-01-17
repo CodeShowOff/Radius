@@ -9,6 +9,7 @@ abstract class Routes {
   // Authentication routes
   static const String login = '/login';
   static const String register = '/register';
+  static const String emailVerification = '/verify-email';
 
   // Main app routes
   static const String home = '/home';

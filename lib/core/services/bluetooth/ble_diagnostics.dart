@@ -1,138 +1,116 @@
-import 'package:equatable/equatable.dart';
+import 'dart:async';
 
-/// Snapshot of BLE discovery diagnostics.
-///
-/// This is best-effort debug data intended to help identify why discovery
-/// might not be finding devices in the real world.
-class BleDiagnosticsSnapshot extends Equatable {
+/// Raw BLE device info for diagnostics
+class RawBleDevice {
+  final String deviceId;
+  final String name;
+  final int rssi;
+  final List<String> serviceUuids;
+  final Map<String, List<int>> serviceData;
+  final DateTime lastSeen;
+
+  RawBleDevice({
+    required this.deviceId,
+    required this.name,
+    required this.rssi,
+    required this.serviceUuids,
+    required this.serviceData,
+    required this.lastSeen,
+  });
+}
+
+/// BLE diagnostics data for UI display
+class BleDiagnostics {
   final bool isScanning;
   final bool isAdvertising;
-
-  /// Optional platform note for discovery reliability.
-  ///
-  /// This must not include raw identifiers.
-  final String? platformDiscoveryNote;
-
-  /// Last error seen by the Bluetooth service (may include advertiser errors).
+  final DateTime? lastAdvertiseTime;
+  final DateTime? lastScanTime;
+  final int rawDeviceCount;
+  final int parsedDeviceCount;
+  final List<RawBleDevice> rawDevices;
   final String? lastError;
 
-  /// Total scan result batches received.
-  final int scanBatchCount;
-
-  /// Total ScanResult items processed across batches.
-  final int rawScanResultCount;
-
-  /// Count of ScanResult items that contained our manufacturer ID key.
-  final int msdMatchedCount;
-
-  /// Count of ScanResult items that matched the Radius service UUID.
-  final int serviceUuidMatchedCount;
-
-  /// Total failed attempts to start scanning (permissions + runtime errors).
-  final int scanStartFailures;
-
-  /// Total failed attempts to start advertising (permissions + runtime errors).
-  final int advertiseStartFailures;
-
-  /// Permission denial counts keyed by operation/status.
-  ///
-  /// Example keys: `startScanning:denied`, `startAdvertising:permissionDeniedShowSettings`.
-  final Map<String, int> permissionDeniedCounts;
-
-  /// Best-effort timestamps (no identifiers).
-  final DateTime? lastScanStartedAt;
-  final DateTime? lastScanStoppedAt;
-  final DateTime? lastAdvertiseStartedAt;
-  final DateTime? lastAdvertiseStoppedAt;
-  final DateTime? lastPermissionDeniedAt;
-
-  /// Count of Radius devices successfully parsed.
-  final int parsedRadiusCount;
-
-  /// Count filtered due to RSSI threshold.
-  final int filteredByRssiCount;
-
-  /// Count filtered due to invalid/missing manufacturer payload.
-  final int filteredInvalidPayloadCount;
-
-  const BleDiagnosticsSnapshot({
-    required this.isScanning,
-    required this.isAdvertising,
-    this.platformDiscoveryNote,
-    required this.lastError,
-    required this.scanBatchCount,
-    required this.rawScanResultCount,
-    required this.msdMatchedCount,
-    required this.serviceUuidMatchedCount,
-    required this.parsedRadiusCount,
-    required this.filteredByRssiCount,
-    required this.filteredInvalidPayloadCount,
-    required this.scanStartFailures,
-    required this.advertiseStartFailures,
-    required this.permissionDeniedCounts,
-    required this.lastScanStartedAt,
-    required this.lastScanStoppedAt,
-    required this.lastAdvertiseStartedAt,
-    required this.lastAdvertiseStoppedAt,
-    required this.lastPermissionDeniedAt,
+  BleDiagnostics({
+    this.isScanning = false,
+    this.isAdvertising = false,
+    this.lastAdvertiseTime,
+    this.lastScanTime,
+    this.rawDeviceCount = 0,
+    this.parsedDeviceCount = 0,
+    this.rawDevices = const [],
+    this.lastError,
   });
 
-  int get filteredTotal => filteredByRssiCount + filteredInvalidPayloadCount;
+  BleDiagnostics copyWith({
+    bool? isScanning,
+    bool? isAdvertising,
+    DateTime? lastAdvertiseTime,
+    DateTime? lastScanTime,
+    int? rawDeviceCount,
+    int? parsedDeviceCount,
+    List<RawBleDevice>? rawDevices,
+    String? lastError,
+  }) {
+    return BleDiagnostics(
+      isScanning: isScanning ?? this.isScanning,
+      isAdvertising: isAdvertising ?? this.isAdvertising,
+      lastAdvertiseTime: lastAdvertiseTime ?? this.lastAdvertiseTime,
+      lastScanTime: lastScanTime ?? this.lastScanTime,
+      rawDeviceCount: rawDeviceCount ?? this.rawDeviceCount,
+      parsedDeviceCount: parsedDeviceCount ?? this.parsedDeviceCount,
+      rawDevices: rawDevices ?? this.rawDevices,
+      lastError: lastError ?? this.lastError,
+    );
+  }
+}
 
-  /// Backwards-compatible aliases with the naming used by the product request.
-  int get scanMatchesByManufacturer => msdMatchedCount;
-  int get scanMatchesByServiceUuid => serviceUuidMatchedCount;
+/// Singleton service for BLE diagnostics
+class BleDiagnosticsService {
+  static final BleDiagnosticsService _instance =
+      BleDiagnosticsService._internal();
+  factory BleDiagnosticsService() => _instance;
+  BleDiagnosticsService._internal();
 
-  /// Safe diagnostics snapshot intended for UI/telemetry.
-  ///
-  /// This intentionally returns counts + timestamps only (no raw identifiers).
-  Map<String, Object?> toSafeSnapshot() {
-    String? ts(DateTime? d) => d?.toIso8601String();
+  final _diagnosticsController = StreamController<BleDiagnostics>.broadcast();
+  BleDiagnostics _currentDiagnostics = BleDiagnostics();
 
-    return <String, Object?>{
-      'isScanning': isScanning,
-      'isAdvertising': isAdvertising,
-      if (platformDiscoveryNote != null)
-        'platformDiscoveryNote': platformDiscoveryNote,
-      'lastError': lastError,
-      'scanBatchCount': scanBatchCount,
-      'rawScanResultCount': rawScanResultCount,
-      'scanMatchesByManufacturer': scanMatchesByManufacturer,
-      'scanMatchesByServiceUuid': scanMatchesByServiceUuid,
-      'parsedRadiusCount': parsedRadiusCount,
-      'filteredByRssiCount': filteredByRssiCount,
-      'filteredInvalidPayloadCount': filteredInvalidPayloadCount,
-      'scanStartFailures': scanStartFailures,
-      'advertiseStartFailures': advertiseStartFailures,
-      'permissionDeniedCounts': permissionDeniedCounts,
-      'lastScanStartedAt': ts(lastScanStartedAt),
-      'lastScanStoppedAt': ts(lastScanStoppedAt),
-      'lastAdvertiseStartedAt': ts(lastAdvertiseStartedAt),
-      'lastAdvertiseStoppedAt': ts(lastAdvertiseStoppedAt),
-      'lastPermissionDeniedAt': ts(lastPermissionDeniedAt),
-    };
+  Stream<BleDiagnostics> get diagnosticsStream => _diagnosticsController.stream;
+  BleDiagnostics get currentDiagnostics => _currentDiagnostics;
+
+  void updateScanning(bool isScanning) {
+    _currentDiagnostics = _currentDiagnostics.copyWith(
+      isScanning: isScanning,
+      lastScanTime:
+          isScanning ? DateTime.now() : _currentDiagnostics.lastScanTime,
+    );
+    _diagnosticsController.add(_currentDiagnostics);
   }
 
-  @override
-  List<Object?> get props => [
-        isScanning,
-        isAdvertising,
-        platformDiscoveryNote,
-        lastError,
-        scanBatchCount,
-        rawScanResultCount,
-        msdMatchedCount,
-        serviceUuidMatchedCount,
-        parsedRadiusCount,
-        filteredByRssiCount,
-        filteredInvalidPayloadCount,
-        scanStartFailures,
-        advertiseStartFailures,
-        permissionDeniedCounts,
-        lastScanStartedAt,
-        lastScanStoppedAt,
-        lastAdvertiseStartedAt,
-        lastAdvertiseStoppedAt,
-        lastPermissionDeniedAt,
-      ];
+  void updateAdvertising(bool isAdvertising) {
+    _currentDiagnostics = _currentDiagnostics.copyWith(
+      isAdvertising: isAdvertising,
+      lastAdvertiseTime: isAdvertising
+          ? DateTime.now()
+          : _currentDiagnostics.lastAdvertiseTime,
+    );
+    _diagnosticsController.add(_currentDiagnostics);
+  }
+
+  void updateRawDevices(List<RawBleDevice> devices, int parsedCount) {
+    _currentDiagnostics = _currentDiagnostics.copyWith(
+      rawDevices: devices,
+      rawDeviceCount: devices.length,
+      parsedDeviceCount: parsedCount,
+    );
+    _diagnosticsController.add(_currentDiagnostics);
+  }
+
+  void updateError(String? error) {
+    _currentDiagnostics = _currentDiagnostics.copyWith(lastError: error);
+    _diagnosticsController.add(_currentDiagnostics);
+  }
+
+  void dispose() {
+    _diagnosticsController.close();
+  }
 }

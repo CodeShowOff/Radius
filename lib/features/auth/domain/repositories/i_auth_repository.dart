@@ -24,6 +24,8 @@ abstract class IAuthRepository {
   Future<Either<Failure, User>> signInWithGoogle();
 
   /// Registers a new user with email and password.
+  /// Returns the user but does NOT auto-authenticate for email registration.
+  /// Email verification is required first.
   Future<Either<Failure, User>> registerWithEmail({
     required String email,
     required String password,
@@ -35,4 +37,14 @@ abstract class IAuthRepository {
 
   /// Sends a password reset email.
   Future<Either<Failure, void>> sendPasswordResetEmail(String email);
+
+  /// Sends email verification to the current user.
+  Future<Either<Failure, void>> sendEmailVerification();
+
+  /// Checks if the current user's email is verified.
+  /// Reloads the user first to get the latest status.
+  Future<Either<Failure, bool>> checkEmailVerified();
+
+  /// Whether the current user's email is verified (without reloading).
+  bool get isEmailVerified;
 }

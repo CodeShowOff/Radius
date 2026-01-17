@@ -1,10 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/connection.dart';
@@ -308,16 +309,13 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
 
   Future<void> _loadProfile() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .get();
+      final doc = await getIt<FirestoreService>().getDocument(
+        'users/${widget.userId}',
+      );
 
       if (mounted) {
         setState(() {
-          _profile = doc.exists
-              ? {...doc.data()!, 'id': doc.id}
-              : {'id': widget.userId, 'displayName': 'User'};
+          _profile = doc ?? {'id': widget.userId, 'displayName': 'User'};
           _isLoading = false;
         });
       }

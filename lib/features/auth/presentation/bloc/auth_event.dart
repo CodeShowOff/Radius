@@ -78,3 +78,13 @@ class AuthStateChanged extends AuthEvent {
   @override
   List<Object?> get props => [user];
 }
+
+/// Event to resend email verification.
+class AuthResendVerificationRequested extends AuthEvent {
+  const AuthResendVerificationRequested();
+}
+
+/// Event to check if email has been verified.
+class AuthCheckEmailVerificationRequested extends AuthEvent {
+  const AuthCheckEmailVerificationRequested();
+}

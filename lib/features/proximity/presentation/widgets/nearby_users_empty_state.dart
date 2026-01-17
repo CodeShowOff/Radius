@@ -17,60 +17,65 @@ class NearbyUsersEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Animated radar icon
-            _RadarAnimation(isAnimating: isScanning),
-            const SizedBox(height: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Animated radar icon
+                _RadarAnimation(isAnimating: isScanning),
+                const SizedBox(height: 24),
 
-            // Title
-            Text(
-              isScanning
-                  ? (hasSearchedAwhile
-                      ? 'No one nearby yet'
-                      : 'Searching for people...')
-                  : 'No one nearby',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
+                // Title
+                Text(
+                  isScanning
+                      ? (hasSearchedAwhile
+                          ? 'No one nearby yet'
+                          : 'Searching for people...')
+                      : 'No one nearby',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Description
+                Text(
+                  isScanning
+                      ? (hasSearchedAwhile
+                          ? 'Still scanning in the foreground.\nTry restarting the scan or ask the other phone to open Nearby too.'
+                          : 'Looking for other Radius users within range.\nThis may take a moment.')
+                      : 'There are no Radius users nearby right now.\nTry again later or move to a different location.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+
+                // Retry/restart scan button.
+                if (onRetry != null && (!isScanning || hasSearchedAwhile))
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(isScanning ? 'Restart Scan' : 'Scan Again'),
+                  ),
+
+                // Tips
+                if (!isScanning) ...[
+                  const SizedBox(height: 48),
+                  _Tips(),
+                ],
+              ],
             ),
-            const SizedBox(height: 12),
-
-            // Description
-            Text(
-              isScanning
-                  ? (hasSearchedAwhile
-                      ? 'Still scanning in the foreground.\nTry restarting the scan or ask the other phone to open Nearby too.'
-                      : 'Looking for other Radius users within range.\nThis may take a moment.')
-                  : 'There are no Radius users nearby right now.\nTry again later or move to a different location.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-
-            // Retry/restart scan button.
-            if (onRetry != null && (!isScanning || hasSearchedAwhile))
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: Text(isScanning ? 'Restart Scan' : 'Scan Again'),
-              ),
-
-            // Tips
-            if (!isScanning) ...[
-              const SizedBox(height: 48),
-              _Tips(),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

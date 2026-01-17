@@ -1,5 +1,7 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
 
+import '../logging/log_redaction.dart';
+
 /// Analytics service for tracking user behavior and app usage.
 ///
 /// Wraps Firebase Analytics with app-specific events and
@@ -67,7 +69,7 @@ class AnalyticsService {
     required String targetUserId,
     String? source,
   }) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.connectionRequested,
       parameters: {
         'target_user_id': targetUserId,
@@ -78,7 +80,7 @@ class AnalyticsService {
 
   /// Log when user accepts a connection request.
   Future<void> logConnectionAccepted({required String fromUserId}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.connectionAccepted,
       parameters: {'from_user_id': fromUserId},
     );
@@ -86,7 +88,7 @@ class AnalyticsService {
 
   /// Log when user rejects a connection request.
   Future<void> logConnectionRejected({required String fromUserId}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.connectionRejected,
       parameters: {'from_user_id': fromUserId},
     );
@@ -94,7 +96,7 @@ class AnalyticsService {
 
   /// Log when user removes a connection.
   Future<void> logConnectionRemoved({required String userId}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.connectionRemoved,
       parameters: {'user_id': userId},
     );
@@ -107,7 +109,7 @@ class AnalyticsService {
     required String conversationId,
     int? messageLength,
   }) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.messageSent,
       parameters: {
         'conversation_id': conversationId,
@@ -118,7 +120,7 @@ class AnalyticsService {
 
   /// Log conversation started.
   Future<void> logConversationStarted({required String withUserId}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.conversationStarted,
       parameters: {'with_user_id': withUserId},
     );
@@ -133,7 +135,7 @@ class AnalyticsService {
 
   /// Log when proximity scanning stops.
   Future<void> logProximityStopped({Duration? duration}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.proximityStopped,
       parameters: {
         if (duration != null) 'duration_seconds': duration.inSeconds,
@@ -143,7 +145,7 @@ class AnalyticsService {
 
   /// Log when a nearby user is detected.
   Future<void> logNearbyUserDetected({required int count}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.nearbyUserDetected,
       parameters: {'count': count},
     );
@@ -151,7 +153,7 @@ class AnalyticsService {
 
   /// Log when user views a nearby user's profile.
   Future<void> logNearbyUserViewed({required String userId}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.nearbyUserViewed,
       parameters: {'user_id': userId},
     );
@@ -161,7 +163,7 @@ class AnalyticsService {
 
   /// Log profile update.
   Future<void> logProfileUpdated({List<String>? fieldsUpdated}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.profileUpdated,
       parameters: {
         if (fieldsUpdated != null) 'fields': fieldsUpdated.join(','),
@@ -171,7 +173,7 @@ class AnalyticsService {
 
   /// Log profile photo changed.
   Future<void> logProfilePhotoChanged({required String source}) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.profilePhotoChanged,
       parameters: {'source': source}, // 'camera' or 'gallery'
     );
@@ -185,7 +187,7 @@ class AnalyticsService {
     String? errorMessage,
     String? screen,
   }) async {
-    await _analytics.logEvent(
+    await logEvent(
       name: AnalyticsEvents.errorOccurred,
       parameters: {
         'error_type': errorType,
@@ -202,7 +204,34 @@ class AnalyticsService {
     required String name,
     Map<String, Object>? parameters,
   }) async {
-    await _analytics.logEvent(name: name, parameters: parameters);
+    final safe = _sanitizeParameters(parameters);
+    await _analytics.logEvent(name: name, parameters: safe);
+  }
+
+  Map<String, Object>? _sanitizeParameters(Map<String, Object>? parameters) {
+    if (parameters == null || parameters.isEmpty) return parameters;
+
+    // Firebase Analytics requires primitive values (String/num/bool).
+    final out = <String, Object>{};
+
+    for (final entry in parameters.entries) {
+      final key = entry.key;
+
+      // Hard block known-sensitive keys.
+      if (LogRedaction.isSensitiveKey(key)) continue;
+
+      final value = entry.value;
+      if (value is String) {
+        out[key] = LogRedaction.redactString(value);
+      } else if (value is num || value is bool) {
+        out[key] = value;
+      } else {
+        // Best-effort stringify, then redact.
+        out[key] = LogRedaction.redactString(value.toString());
+      }
+    }
+
+    return out.isEmpty ? null : out;
   }
 }
 

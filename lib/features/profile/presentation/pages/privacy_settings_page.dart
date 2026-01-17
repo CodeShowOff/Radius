@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -104,12 +106,12 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                     secondary: const Icon(Icons.visibility),
                     title: const Text('Make me discoverable'),
                     subtitle: const Text(
-                      'Allow nearby users to see you in their discovery list',
+                      'Allow nearby users to see you while the app is open',
                     ),
                     value: _isDiscoverable,
                     onChanged: (value) {
                       setState(() => _isDiscoverable = value);
-                      _saveVisibilitySetting(value);
+                      unawaited(_saveVisibilitySetting(value));
                     },
                   ),
                   const Divider(height: 1),
@@ -257,9 +259,9 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Your BLE ID rotates every 15 minutes to protect your privacy. '
-                      'Only users you connect with can see your profile information. '
-                      'We never sell your data to third parties.',
+                      'Nearby discovery runs only while the app is open in the foreground. '
+                      'Your broadcast identifier changes frequently to reduce tracking. '
+                      'Turning off discoverability stops others from resolving your nearby presence.',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -275,8 +277,11 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     );
   }
 
-  void _saveVisibilitySetting(bool isVisible) {
+  Future<void> _saveVisibilitySetting(bool isVisible) async {
     context.read<ProfileBloc>().add(ProfileVisibilityToggled(isVisible));
+    // Visibility is now just a profile setting.
+    // The simplified BLE system broadcasts usernames directly without a
+    // Firestore-based discoverability flag.
   }
 
   void _savePrivacySettings() {

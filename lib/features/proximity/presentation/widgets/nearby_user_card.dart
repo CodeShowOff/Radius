@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../../../../core/services/bluetooth/ble_device.dart';
 import '../../domain/entities/nearby_user.dart';
 
 /// Card widget displaying a nearby user with optimized image loading.
@@ -143,6 +142,7 @@ class _UserAvatar extends StatelessWidget {
       BleProximity.immediate => theme.colorScheme.primary,
       BleProximity.near => theme.colorScheme.secondary,
       BleProximity.far => theme.colorScheme.outline,
+      BleProximity.veryFar => theme.colorScheme.outlineVariant,
       BleProximity.unknown => theme.colorScheme.outlineVariant,
     };
 
@@ -213,6 +213,7 @@ class _ProximityBadge extends StatelessWidget {
       BleProximity.immediate => (theme.colorScheme.primary, 'Very Close'),
       BleProximity.near => (theme.colorScheme.secondary, 'Nearby'),
       BleProximity.far => (theme.colorScheme.outline, 'In Range'),
+      BleProximity.veryFar => (theme.colorScheme.outlineVariant, 'Far Away'),
       BleProximity.unknown => (theme.colorScheme.outlineVariant, 'Unknown'),
     };
 

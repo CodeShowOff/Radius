@@ -1,31 +1,33 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'ble_constants.dart';
-import 'ble_id_generator.dart';
-import 'ble_range_mode.dart';
+import 'ble_diagnostics.dart';
+
+void _log(String message) {
+  if (kDebugMode) {
+    // ignore: avoid_print
+    print(message);
+  }
+}
 
 /// Handles BLE advertising to broadcast presence to nearby devices.
 ///
-/// Uses native platform channels for Android and iOS BLE advertising.
-///
-/// iOS note:
-/// Advertising behavior while backgrounded is constrained by iOS and may be
-/// throttled or stopped when the app is suspended or force-quit. The app should
-/// not rely on continuous advertising while backgrounded for discovery.
+/// Advertises Service UUID (0xBEEF) + 7-byte username in Service Data.
 class BleAdvertiser {
-  final BleIdGenerator _idGenerator;
   static const MethodChannel _channel =
       MethodChannel('com.example.radius/ble_advertiser');
 
   bool _isAdvertising = false;
   String? _lastError;
-  StreamSubscription<String>? _idRotationSubscription;
-  BleRangeMode _currentRangeMode = BleRangeMode.large;
+  String? _currentUsername;
+  DateTime? _lastAdvertiseTime;
 
-  BleAdvertiser({required BleIdGenerator idGenerator})
-      : _idGenerator = idGenerator {
+  final BleDiagnosticsService _diagnostics = BleDiagnosticsService();
+
+  BleAdvertiser() {
     // Listen for errors from native side
     _channel.setMethodCallHandler(_handleNativeCallback);
   }
@@ -36,72 +38,76 @@ class BleAdvertiser {
   /// Last error message from advertising operations.
   String? get lastError => _lastError;
 
-  /// The current anonymous ID being advertised.
-  String get currentAdvertisedId => _idGenerator.currentAnonymousId;
+  /// The current username being advertised.
+  String? get currentUsername => _currentUsername;
 
-  /// Starts BLE advertising.
-  Future<bool> startAdvertising(
-      {BleRangeMode rangeMode = BleRangeMode.large}) async {
-    if (_isAdvertising) return true;
+  /// Last time advertising was started.
+  DateTime? get lastAdvertiseTime => _lastAdvertiseTime;
+
+  /// Starts BLE advertising with the given username.
+  /// Username must be exactly 7 bytes (ASCII a-z, A-Z, 0-9).
+  Future<bool> startAdvertising(String username) async {
+    if (_isAdvertising && _currentUsername == username) {
+      return true;
+    }
+
+    // Validate username is exactly 7 characters and alphanumeric
+    if (username.length != BleConstants.usernameLength) {
+      _lastError =
+          'Username must be exactly ${BleConstants.usernameLength} characters';
+      _diagnostics.updateError(_lastError);
+      return false;
+    }
+
+    if (!RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(username)) {
+      _lastError = 'Username must be alphanumeric (a-z, A-Z, 0-9)';
+      _diagnostics.updateError(_lastError);
+      return false;
+    }
+
     _lastError = null;
-    _currentRangeMode = rangeMode;
-
-    // Ensure we don't leak an old subscription if startAdvertising is retried.
-    await _idRotationSubscription?.cancel();
-    _idRotationSubscription = null;
+    _currentUsername = username;
 
     try {
+      // Convert username to bytes (7 bytes)
+      final usernameBytes = Uint8List.fromList(username.codeUnits);
+
+      _log('[BleAdvertiser] Starting advertising...');
+      _log(
+          '[BleAdvertiser]   Service UUID (16-bit): 0x${BleConstants.radiusServiceUuid16bit}');
+      _log(
+          '[BleAdvertiser]   Username: $username (${usernameBytes.length} bytes)');
+
       // Call native platform code
       final result = await _channel.invokeMethod<bool>('startAdvertising', {
-        'anonymousId': _idGenerator.currentAnonymousId,
-        'serviceUuid': BleConstants.radiusServiceUuid,
-        'manufacturerId': BleConstants.manufacturerId,
-        'androidTxPowerLevel': rangeMode.androidTxPowerLevel,
-        'androidAdvertiseMode': rangeMode.androidAdvertiseMode,
+        'serviceUuid16': BleConstants.radiusServiceUuid16bit,
+        'serviceData': usernameBytes,
       });
 
       _isAdvertising = result ?? false;
-      if (!_isAdvertising) {
+      if (_isAdvertising) {
+        _lastAdvertiseTime = DateTime.now();
+        _diagnostics.updateAdvertising(true);
+        _log('[BleAdvertiser] ✓ Advertising started!');
+      } else {
         _lastError = 'Native advertising returned false';
-        return false;
+        _diagnostics.updateError(_lastError);
+        _log('[BleAdvertiser] ✗ Native advertising returned false');
       }
 
-      // Only listen for ID rotations once advertising is confirmed active.
-      _idRotationSubscription = _idGenerator.idRotationStream.listen(
-        (_) => _updateAdvertisement(),
-      );
       return _isAdvertising;
     } catch (e) {
       _lastError = 'Failed to start advertising: $e';
       _isAdvertising = false;
-      await _idRotationSubscription?.cancel();
-      _idRotationSubscription = null;
+      _diagnostics.updateError(_lastError);
+      _log('[BleAdvertiser] ✗ Failed: $e');
       return false;
-    }
-  }
-
-  /// Best-effort capabilities snapshot from native platform.
-  ///
-  /// On Android, this includes whether BLE advertising is supported and whether
-  /// multiple advertisement is supported.
-  Future<Map<String, dynamic>> getCapabilities() async {
-    try {
-      final raw = await _channel.invokeMethod<dynamic>('getCapabilities');
-      if (raw is Map) {
-        return Map<String, dynamic>.from(raw);
-      }
-      return const <String, dynamic>{};
-    } catch (_) {
-      return const <String, dynamic>{};
     }
   }
 
   /// Stops BLE advertising.
   Future<void> stopAdvertising() async {
     if (!_isAdvertising) return;
-
-    await _idRotationSubscription?.cancel();
-    _idRotationSubscription = null;
 
     try {
       await _channel.invokeMethod('stopAdvertising');
@@ -110,56 +116,27 @@ class BleAdvertiser {
     }
 
     _isAdvertising = false;
-  }
-
-  /// Updates the advertisement with new ID after rotation.
-  Future<void> _updateAdvertisement() async {
-    if (!_isAdvertising) return;
-
-    try {
-      await _channel.invokeMethod('updateAdvertisement', {
-        'anonymousId': _idGenerator.currentAnonymousId,
-        'serviceUuid': BleConstants.radiusServiceUuid,
-        'manufacturerId': BleConstants.manufacturerId,
-        'androidTxPowerLevel': _currentRangeMode.androidTxPowerLevel,
-        'androidAdvertiseMode': _currentRangeMode.androidAdvertiseMode,
-      });
-    } catch (e) {
-      // Log error but don't stop advertising
-    }
+    _currentUsername = null;
+    _diagnostics.updateAdvertising(false);
+    _log('[BleAdvertiser] Advertising stopped');
   }
 
   /// Handles callbacks from native platform code.
   Future<void> _handleNativeCallback(MethodCall call) async {
     switch (call.method) {
       case 'onAdvertisingError':
-        // Error from native advertising
         _isAdvertising = false;
-        await _idRotationSubscription?.cancel();
-        _idRotationSubscription = null;
         final message = call.arguments?.toString();
-        if (message != null && message.isNotEmpty) {
-          _lastError = message;
-        } else {
-          _lastError = 'Advertising failed';
-        }
+        _lastError = message ?? 'Advertising failed';
+        _diagnostics.updateAdvertising(false);
+        _diagnostics.updateError(_lastError);
+        _log('[BleAdvertiser] Error callback: $_lastError');
         break;
     }
-  }
-
-  /// Gets the advertisement data for the current ID.
-  Map<String, dynamic> getAdvertisementData() {
-    return {
-      'serviceUuid': BleConstants.radiusServiceUuid,
-      'anonymousId': _idGenerator.currentAnonymousId,
-      'manufacturerData': _idGenerator.createManufacturerData(),
-    };
   }
 
   /// Disposes resources.
   void dispose() {
     stopAdvertising();
-    _idRotationSubscription?.cancel();
-    _idRotationSubscription = null;
   }
 }

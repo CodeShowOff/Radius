@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'log_redaction.dart';
+
 enum DeviceLogLevel { debug, info, warning, error }
 
 class DeviceLog {
@@ -178,10 +180,42 @@ class DeviceLog {
     if (!_initialized) return;
     if (kIsWeb) return;
 
+    String safeMessage;
+    Map<String, Object?>? safeData;
+    String? safeError;
+    String? safeStack;
+
+    try {
+      safeMessage = LogRedaction.redactString(message);
+    } catch (_) {
+      safeMessage = '<log_redaction_failed>';
+    }
+
+    try {
+      safeData = LogRedaction.redactMap(data);
+    } catch (_) {
+      safeData = null;
+    }
+
+    try {
+      safeError =
+          error == null ? null : LogRedaction.redactString(error.toString());
+    } catch (_) {
+      safeError = error?.toString();
+    }
+
+    try {
+      safeStack = stackTrace == null
+          ? null
+          : LogRedaction.redactString(stackTrace.toString());
+    } catch (_) {
+      safeStack = null;
+    }
+
     // Mirror to console in debug mode (helps during development).
     if (kDebugMode) {
       // ignore: avoid_print
-      print('[${level.name}] $tag: $message');
+      print('[${level.name}] $tag: $safeMessage');
     }
 
     _writeChain = _writeChain.then((_) async {
@@ -194,11 +228,11 @@ class DeviceLog {
           'ts': DateTime.now().toIso8601String(),
           'lvl': level.name,
           'tag': tag,
-          'msg': message,
+          'msg': safeMessage,
           'session': _sessionId,
-          if (data != null && data.isNotEmpty) 'data': data,
-          if (error != null) 'error': error.toString(),
-          if (stackTrace != null) 'stack': stackTrace.toString(),
+          if (safeData != null && safeData.isNotEmpty) 'data': safeData,
+          if (safeError != null) 'error': safeError,
+          if (safeStack != null) 'stack': safeStack,
         };
 
         sink.writeln(jsonEncode(entry));

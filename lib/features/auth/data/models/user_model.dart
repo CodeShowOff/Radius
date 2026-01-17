@@ -10,7 +10,7 @@ class UserModel {
   final String email;
   final String? displayName;
   final String? avatarUrl;
-  final String bleIdentifier;
+  final String username;
   final DateTime? createdAt;
   final bool isDiscoverable;
 
@@ -19,7 +19,7 @@ class UserModel {
     required this.email,
     this.displayName,
     this.avatarUrl,
-    required this.bleIdentifier,
+    required this.username,
     this.createdAt,
     this.isDiscoverable = true,
   });
@@ -41,10 +41,10 @@ class UserModel {
           'Firestore document must include a valid "email" field');
     }
 
-    final bleIdentifier = doc['bleIdentifier'];
-    if (bleIdentifier == null || bleIdentifier is! String) {
+    final username = doc['username'];
+    if (username == null || username is! String) {
       throw ArgumentError(
-          'Firestore document must include a valid "bleIdentifier" field');
+          'Firestore document must include a valid "username" field');
     }
 
     return UserModel(
@@ -52,7 +52,7 @@ class UserModel {
       email: email,
       displayName: doc['displayName'] as String?,
       avatarUrl: doc['avatarUrl'] as String?,
-      bleIdentifier: bleIdentifier,
+      username: username,
       createdAt: (doc['createdAt'] as Timestamp?)?.toDate(),
       isDiscoverable: doc['isDiscoverable'] as bool? ?? true,
     );
@@ -65,7 +65,7 @@ class UserModel {
       email: user.email,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      bleIdentifier: user.bleIdentifier,
+      username: user.username,
       createdAt: user.createdAt,
       isDiscoverable: user.isDiscoverable,
     );
@@ -79,7 +79,7 @@ class UserModel {
       'email': email,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
-      'bleIdentifier': bleIdentifier,
+      'username': username,
       'createdAt': useServerTimestamp
           ? FieldValue.serverTimestamp()
           : (createdAt != null ? Timestamp.fromDate(createdAt!) : null),
@@ -98,7 +98,7 @@ class UserModel {
       email: email,
       displayName: displayName,
       avatarUrl: avatarUrl,
-      bleIdentifier: bleIdentifier,
+      username: username,
       createdAt: createdAt ?? DateTime.now(),
       isDiscoverable: isDiscoverable,
     );
@@ -113,7 +113,7 @@ class UserModel {
     String? email,
     String? displayName,
     String? avatarUrl,
-    String? bleIdentifier,
+    String? username,
     DateTime? createdAt,
     bool? isDiscoverable,
     bool clearDisplayName = false,
@@ -124,7 +124,7 @@ class UserModel {
       email: email ?? this.email,
       displayName: clearDisplayName ? null : (displayName ?? this.displayName),
       avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
-      bleIdentifier: bleIdentifier ?? this.bleIdentifier,
+      username: username ?? this.username,
       createdAt: createdAt ?? this.createdAt,
       isDiscoverable: isDiscoverable ?? this.isDiscoverable,
     );

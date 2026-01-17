@@ -22,103 +22,12 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
   bool _hasPermissions = false;
   bool _scanPermissionGranted = false;
   bool _advertisePermissionGranted = false;
-  bool _connectPermissionGranted = false;
   bool _isLoading = true;
-
-  bool _keepDiscoveringInBackground = false;
-  bool _useForegroundServiceForBackground = false;
 
   @override
   void initState() {
     super.initState();
     _checkStatus();
-    _loadBackgroundDiscoveryPrefs();
-  }
-
-  Future<void> _loadBackgroundDiscoveryPrefs() async {
-    if (!Platform.isAndroid) return;
-
-    await _bluetoothService.refreshBackgroundDiscoveryPreferences();
-    if (!mounted) return;
-    setState(() {
-      _keepDiscoveringInBackground =
-          _bluetoothService.keepDiscoveringInBackground;
-      _useForegroundServiceForBackground =
-          _bluetoothService.useForegroundServiceForBackgroundDiscovery;
-    });
-  }
-
-  Future<void> _setBackgroundDiscovery(bool enabled) async {
-    if (!Platform.isAndroid) return;
-
-    if (!enabled) {
-      setState(() {
-        _keepDiscoveringInBackground = false;
-        _useForegroundServiceForBackground = false;
-      });
-      await _bluetoothService.setBackgroundDiscoveryPreference(
-        enabled: false,
-        useForegroundService: false,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Background discovery disabled')),
-      );
-      return;
-    }
-
-    final choice = await showDialog<_BackgroundDiscoveryChoice>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Keep discovering in background?'),
-          content: const Text(
-            'This keeps scanning for nearby Radius users while the app is not on screen.\n\n'
-            'It may increase battery usage. Foreground Service mode shows a persistent notification while discovery is active.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context)
-                  .pop(_BackgroundDiscoveryChoice.pendingIntent),
-              child: const Text('Use Background Scan'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context)
-                  .pop(_BackgroundDiscoveryChoice.foregroundService),
-              child: const Text('Use Foreground Service'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (choice == null) return;
-
-    final useFgs = choice == _BackgroundDiscoveryChoice.foregroundService;
-    setState(() {
-      _keepDiscoveringInBackground = true;
-      _useForegroundServiceForBackground = useFgs;
-    });
-
-    await _bluetoothService.setBackgroundDiscoveryPreference(
-      enabled: true,
-      useForegroundService: useFgs,
-    );
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          useFgs
-              ? 'Background discovery enabled (Foreground Service)'
-              : 'Background discovery enabled',
-        ),
-      ),
-    );
   }
 
   Future<void> _checkStatus() async {
@@ -133,29 +42,24 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
       final bluetoothScanStatus = await Permission.bluetoothScan.status;
       final bluetoothAdvertiseStatus =
           await Permission.bluetoothAdvertise.status;
-      final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
 
       final scanGranted = bluetoothScanStatus.isGranted;
       final advertiseGranted = bluetoothAdvertiseStatus.isGranted;
-      final connectGranted = bluetoothConnectStatus.isGranted;
 
       _scanPermissionGranted = scanGranted;
       _advertisePermissionGranted = advertiseGranted;
-      _connectPermissionGranted = connectGranted;
 
-      // Full discovery (scan + advertise) needs all three.
-      // Scan-only and advertise-only flows are handled elsewhere in the app.
-      hasBlePermissions = scanGranted && advertiseGranted && connectGranted;
+      // Foreground discovery requires SCAN. Advertising is optional.
+      // BLUETOOTH_CONNECT is only required for GATT connections (not used for scanning).
+      hasBlePermissions = scanGranted;
     } else if (Platform.isIOS) {
       final granted = (await Permission.bluetooth.status).isGranted;
       _scanPermissionGranted = granted;
       _advertisePermissionGranted = granted;
-      _connectPermissionGranted = granted;
       hasBlePermissions = granted;
     } else {
       _scanPermissionGranted = false;
       _advertisePermissionGranted = false;
-      _connectPermissionGranted = false;
       hasBlePermissions = false;
     }
 
@@ -173,16 +77,12 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
 
       final scanStatus = await Permission.bluetoothScan.status;
       final advertiseStatus = await Permission.bluetoothAdvertise.status;
-      final connectStatus = await Permission.bluetoothConnect.status;
 
       if (!scanStatus.isGranted) {
         permissionsToRequest.add(Permission.bluetoothScan);
       }
       if (!advertiseStatus.isGranted) {
         permissionsToRequest.add(Permission.bluetoothAdvertise);
-      }
-      if (!connectStatus.isGranted) {
-        permissionsToRequest.add(Permission.bluetoothConnect);
       }
 
       if (permissionsToRequest.isEmpty) {
@@ -202,7 +102,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
 
     final allGranted =
         statuses.isEmpty || statuses.values.every((status) => status.isGranted);
-    if (allGranted && _scanPermissionGranted && _connectPermissionGranted) {
+    if (allGranted && _scanPermissionGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permissions granted')),
       );
@@ -340,8 +240,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                                   if (Platform.isAndroid)
                                     Text(
                                       'Scan: ${_scanPermissionGranted ? 'granted' : 'missing'} · '
-                                      'Advertise: ${_advertisePermissionGranted ? 'granted' : 'missing'} · '
-                                      'Connect: ${_connectPermissionGranted ? 'granted' : 'missing'}',
+                                      'Advertise: ${_advertisePermissionGranted ? 'granted' : 'missing'}',
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
@@ -351,7 +250,6 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                                     ),
                                   if (Platform.isAndroid &&
                                       _scanPermissionGranted &&
-                                      _connectPermissionGranted &&
                                       !_advertisePermissionGranted) ...[
                                     const SizedBox(height: 8),
                                     Row(
@@ -412,7 +310,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                               const SizedBox(width: 12),
                               const Expanded(
                                 child: Text(
-                                  'Background Discovery',
+                                  'Discovery Mode',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -423,28 +321,10 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Keep scanning while the app is in background (Android only).',
+                            'Foreground-only: Bluetooth scanning and advertising only run while the Nearby screen is open.',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.outline,
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Keep discovering in background'),
-                            subtitle: Text(
-                              _keepDiscoveringInBackground
-                                  ? (_useForegroundServiceForBackground
-                                      ? 'Mode: Foreground Service (persistent notification)'
-                                      : 'Mode: System background scan (PendingIntent)')
-                                  : 'Off',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.outline,
-                                fontSize: 12,
-                              ),
-                            ),
-                            value: _keepDiscoveringInBackground,
-                            onChanged: _setBackgroundDiscovery,
                           ),
                         ],
                       ),
@@ -586,9 +466,4 @@ class _InfoItem extends StatelessWidget {
       ),
     );
   }
-}
-
-enum _BackgroundDiscoveryChoice {
-  pendingIntent,
-  foregroundService,
 }

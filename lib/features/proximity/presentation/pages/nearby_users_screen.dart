@@ -5,19 +5,22 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../../../core/router/routes.dart';
-import '../../../../core/services/bluetooth/ble_device.dart';
-import '../../../../core/services/bluetooth/ble_range_mode.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/nearby_user.dart';
 import '../bloc/nearby_users_bloc.dart';
+import '../widgets/ble_diagnostics_panel.dart';
 import '../widgets/nearby_user_card.dart';
 import '../widgets/nearby_users_empty_state.dart';
-import '../widgets/nearby_users_filter_bar.dart';
 
 /// Screen displaying nearby users discovered via BLE.
+///
+/// - Advertising starts automatically when screen opens (to be discoverable)
+/// - Scanning starts when user taps "Scan" button (runs for 15 seconds)
+/// - Scanning stops when app goes to background
 class NearbyUsersScreen extends StatefulWidget {
   const NearbyUsersScreen({super.key});
 
@@ -28,27 +31,64 @@ class NearbyUsersScreen extends StatefulWidget {
 class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     with WidgetsBindingObserver {
   bool _scanPermissionGranted = false;
-  bool _advertisePermissionGranted = false;
   bool _connectPermissionGranted = false;
   bool _blePermissionsLoaded = false;
+  bool _bleRationaleShownThisSession = false;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_refreshBlePermissions());
+    unawaited(_initializeAndRefreshPermissions());
+  }
+
+  Future<void> _initializeAndRefreshPermissions() async {
+    await _refreshBlePermissions();
+    if (mounted) {
+      _initializeAdvertising();
+    }
+  }
+
+  void _initializeAdvertising() {
+    if (_isInitialized) return;
+
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final bloc = context.read<NearbyUsersBloc>();
+    bloc.add(NearbyUsersInitialize(
+      userId: authState.user.id,
+      username: authState.user.username,
+    ));
+    _isInitialized = true;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize advertising if not done yet
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _initializeAdvertising();
+    });
+  }
+
+  @override
+  void deactivate() {
+    // Stop scanning when leaving the screen
+    try {
+      context.read<NearbyUsersBloc>().add(const NearbyUsersStopScan());
+    } catch (_) {}
+    super.deactivate();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Ensure scanning stops when user leaves the Nearby screen.
-    // Advertising is managed app-wide while in foreground.
     try {
-      context.read<NearbyUsersBloc>().add(const NearbyUsersStopDiscovery());
-    } catch (_) {
-      // Ignore if the bloc is already disposed.
-    }
+      context.read<NearbyUsersBloc>().add(const NearbyUsersStopScan());
+    } catch (_) {}
     super.dispose();
   }
 
@@ -56,15 +96,78 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final bloc = context.read<NearbyUsersBloc>();
 
-    if (state == AppLifecycleState.paused) {
-      // Stop scanning when app goes to background.
-      bloc.add(const NearbyUsersStopDiscovery());
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // Stop scanning when app goes to background
+      bloc.add(const NearbyUsersAppBackgrounded());
       return;
     }
 
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshBlePermissions());
+      bloc.add(const NearbyUsersAppResumed());
     }
+  }
+
+  Future<bool> _maybeShowBleRationale() async {
+    if (_bleRationaleShownThisSession) return true;
+    if (kIsWeb) return true;
+    if (!mounted) return false;
+
+    // Only show on Android when one of the runtime permissions is missing.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final scanGranted = await Permission.bluetoothScan.isGranted;
+      final connectGranted = await Permission.bluetoothConnect.isGranted;
+      final advertiseGranted = await Permission.bluetoothAdvertise.isGranted;
+
+      if (scanGranted && connectGranted && advertiseGranted) {
+        _bleRationaleShownThisSession = true;
+        return true;
+      }
+    } else {
+      // iOS or other platforms: keep it lightweight.
+      _bleRationaleShownThisSession = true;
+      return true;
+    }
+
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Bluetooth permission'),
+          content: const Text(
+            'Radius uses Bluetooth to discover nearby users. Next, Android will ask for Bluetooth permissions.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not now'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    _bleRationaleShownThisSession = true;
+    return confirmed ?? false;
+  }
+
+  Future<void> _startScan() async {
+    final okToProceed = await _maybeShowBleRationale();
+    if (!okToProceed) return;
+    if (!mounted) return;
+
+    context.read<NearbyUsersBloc>().add(const NearbyUsersStartScan());
+  }
+
+  void _stopScan() {
+    context.read<NearbyUsersBloc>().add(const NearbyUsersStopScan());
   }
 
   Future<void> _refreshBlePermissions() async {
@@ -73,7 +176,6 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       if (!mounted) return;
       setState(() {
         _scanPermissionGranted = false;
-        _advertisePermissionGranted = false;
         _connectPermissionGranted = false;
         _blePermissionsLoaded = true;
       });
@@ -85,7 +187,6 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       setState(() {
         // iOS uses a single Bluetooth permission; this banner is Android-specific.
         _scanPermissionGranted = true;
-        _advertisePermissionGranted = true;
         _connectPermissionGranted = true;
         _blePermissionsLoaded = true;
       });
@@ -93,128 +194,323 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     }
 
     final scanStatus = await Permission.bluetoothScan.status;
-    final advertiseStatus = await Permission.bluetoothAdvertise.status;
     final connectStatus = await Permission.bluetoothConnect.status;
 
     if (!mounted) return;
     setState(() {
       _scanPermissionGranted = scanStatus.isGranted;
-      _advertisePermissionGranted = advertiseStatus.isGranted;
       _connectPermissionGranted = connectStatus.isGranted;
       _blePermissionsLoaded = true;
     });
   }
 
-  bool _shouldShowAdvertisingDisabledBanner(NearbyUsersState state) {
-    if (kIsWeb) return false;
-    if (defaultTargetPlatform != TargetPlatform.android) return false;
-    if (!state.isDiscovering) return false; // show while scanning
-    if (!_blePermissionsLoaded) return false;
-    // Scanning can still work without advertise permission.
-    return _scanPermissionGranted &&
-        _connectPermissionGranted &&
-        !_advertisePermissionGranted;
-  }
+  Future<void> _showHowItWorks() async {
+    if (!mounted) return;
 
-  Future<void> _promptRangeAndScan() async {
-    final bloc = context.read<NearbyUsersBloc>();
-    final current = bloc.state.rangeMode;
-
-    final selected = await showModalBottomSheet<BleRangeMode>(
+    await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) {
+        final theme = Theme.of(context);
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Search range',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'BLE range depends on environment. These presets adjust transmit power (Android) and RSSI filtering.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                RadioGroup<BleRangeMode>(
-                  groupValue: current,
-                  onChanged: (v) {
-                    if (v != null) {
-                      Navigator.of(context).pop(v);
-                    }
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final mode in BleRangeMode.values)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Radio<BleRangeMode>(value: mode),
-                          title: Text(mode.label),
-                          subtitle: Text(mode.description),
-                          onTap: () => Navigator.of(context).pop(mode),
-                        ),
-                    ],
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              // Prevent RenderFlex overflows on small devices.
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottomPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'How Nearby works',
+                    style: theme.textTheme.titleLarge,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Radius uses Bluetooth Low Energy (BLE) to scan for nearby users and (optionally) advertise an anonymous ID.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  const _HowItWorksBullet(
+                    title: 'Foreground-only',
+                    body:
+                        'Discovery runs only while the app is open and this screen is visible. Background discovery is disabled to save battery and protect privacy.',
+                  ),
+                  const _HowItWorksBullet(
+                    title: 'Some phones need extra steps',
+                    body:
+                        'On some Android phones, battery/"app sleep" features can still reduce BLE discovery reliability. Use Troubleshooting for device-specific tips.',
+                  ),
+                  const _HowItWorksBullet(
+                    title: 'Privacy',
+                    body:
+                        'Your Bluetooth broadcast uses a rotating anonymous ID. No personal info is shared over Bluetooth.',
+                  ),
+                  const _HowItWorksBullet(
+                    title: 'Permissions',
+                    body:
+                        'To discover nearby users, allow Bluetooth when prompted. If you denied it, you can enable it in Settings.',
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            unawaited(_showTroubleshooting());
+                          },
+                          child: const Text('Troubleshooting'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
+  }
 
-    if (!mounted || selected == null) return;
+  Future<_AndroidDeviceSummary?> _getAndroidDeviceSummary() async {
+    if (kIsWeb) return null;
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
 
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return;
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return _AndroidDeviceSummary(
+        manufacturer: info.manufacturer.trim(),
+        brand: info.brand.trim(),
+        model: info.model.trim(),
+        sdkInt: info.version.sdkInt,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
-    bloc.add(NearbyUsersScanOnceRequested(
-      userId: authState.user.id,
-      rangeMode: selected,
-    ));
+  List<String> _oemGuidanceFor(_AndroidDeviceSummary? d) {
+    final manufacturer = (d?.manufacturer ?? '').toLowerCase();
+    final brand = (d?.brand ?? '').toLowerCase();
+
+    final key = manufacturer.isNotEmpty ? manufacturer : brand;
+
+    // Keep these short and actionable; users can follow them in Settings.
+    if (key.contains('xiaomi') ||
+        key.contains('redmi') ||
+        key.contains('poco')) {
+      return const [
+        'Set Battery saver for Radius to “No restrictions”.',
+        'Enable Autostart for Radius (if available).',
+        'Lock Radius in Recents (tap the app icon → Lock).',
+      ];
+    }
+
+    if (key.contains('huawei') || key.contains('honor')) {
+      return const [
+        'Battery: set Radius to “Not allowed to optimize”.',
+        'App launch: manage manually; allow auto-launch + background activity.',
+      ];
+    }
+
+    if (key.contains('samsung')) {
+      return const [
+        'Battery: set Radius to “Unrestricted” (or disable “Put unused apps to sleep” for it).',
+        'Ensure Bluetooth is allowed while the Nearby screen is open.',
+      ];
+    }
+
+    if (key.contains('oppo') ||
+        key.contains('realme') ||
+        key.contains('vivo')) {
+      return const [
+        'Allow background activity / disable app sleep for Radius.',
+        'Battery: set Radius to “Don’t optimize” (or “No restrictions”).',
+      ];
+    }
+
+    if (key.contains('oneplus')) {
+      return const [
+        'Battery optimization: set Radius to “Don’t optimize”.',
+        'Disable aggressive sleep/hibernation for Radius if available.',
+      ];
+    }
+
+    return const [
+      'Battery optimization: set Radius to “Don’t optimize” / “Unrestricted” if available.',
+      'Keep Radius open on the Nearby screen during discovery.',
+    ];
+  }
+
+  Future<void> _showTroubleshooting() async {
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Troubleshooting',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'If you see “no nearby users” even when phones are close, this is often caused by permissions, Bluetooth being off, or OEM battery management.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FutureBuilder<_AndroidDeviceSummary?>(
+                    future: _getAndroidDeviceSummary(),
+                    builder: (context, snap) {
+                      final summary = snap.data;
+                      if (defaultTargetPlatform != TargetPlatform.android) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final title = summary == null
+                          ? 'Android device'
+                          : 'Android device: ${summary.manufacturer.isEmpty ? summary.brand : summary.manufacturer} ${summary.model}'
+                              .trim();
+                      final steps = _oemGuidanceFor(summary);
+
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title, style: theme.textTheme.titleSmall),
+                              const SizedBox(height: 8),
+                              for (final s in steps)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('• '),
+                                      Expanded(child: Text(s)),
+                                    ],
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await openAppSettings();
+                                    },
+                                    icon: const Icon(Icons.settings_outlined),
+                                    label: const Text('Open app settings'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Tips', style: theme.textTheme.titleSmall),
+                          const SizedBox(height: 8),
+                          const Text('• Make sure Bluetooth is turned on'),
+                          const Text('• Grant all Bluetooth permissions'),
+                          const Text(
+                              '• Disable battery optimization for this app'),
+                          const Text(
+                              '• Keep the app in foreground while scanning'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _shouldShowPermissionCtaBanner(NearbyUsersState state) {
+    if (kIsWeb) return false;
+
+    final message = state.errorMessage?.toLowerCase() ?? '';
+    final hasPermissionError =
+        message.contains('permission') || message.contains('permissions');
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      if (!_blePermissionsLoaded) return false;
+      final missingRuntime =
+          !_scanPermissionGranted || !_connectPermissionGranted;
+      return missingRuntime || hasPermissionError;
+    }
+
+    // iOS/other platforms: only show when we have a permission-related error.
+    return hasPermissionError;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nearby'),
         actions: [
+          IconButton(
+            tooltip: 'Help',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => unawaited(_showHowItWorks()),
+          ),
           if (kDebugMode)
             IconButton(
               tooltip: 'Diagnostics logs',
               icon: const Icon(Icons.bug_report_outlined),
               onPressed: () => context.push(Routes.diagnosticsLogs),
             ),
-          BlocBuilder<NearbyUsersBloc, NearbyUsersState>(
-            buildWhen: (prev, curr) => prev.isDiscovering != curr.isDiscovering,
-            builder: (context, state) {
-              return Row(
-                children: [
-                  if (state.isDiscovering)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8),
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.bluetooth_searching),
-                    onPressed: () => _promptRangeAndScan(),
-                    tooltip: state.isDiscovering ? 'Scanning…' : 'Scan',
-                  ),
-                ],
-              );
-            },
-          ),
         ],
       ),
       body: BlocConsumer<NearbyUsersBloc, NearbyUsersState>(
@@ -227,7 +523,6 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                 action: SnackBarAction(
                   label: 'Settings',
                   onPressed: () async {
-                    // Open app settings for permissions
                     await openAppSettings();
                     await _refreshBlePermissions();
                   },
@@ -239,34 +534,94 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         builder: (context, state) {
           return Column(
             children: [
-              if (_shouldShowAdvertisingDisabledBanner(state))
+              // Header card with scan button
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Discover nearby users',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                state.isScanning
+                                    ? 'Scanning for 15 seconds...'
+                                    : state.isAdvertising
+                                        ? 'You are visible to nearby users'
+                                        : 'Tap Scan to find nearby users',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Scan/Stop button
+                        if (state.isScanning)
+                          FilledButton.tonalIcon(
+                            onPressed: _stopScan,
+                            icon: const Icon(Icons.stop),
+                            label: const Text('Stop'),
+                          )
+                        else
+                          FilledButton.icon(
+                            onPressed: _startScan,
+                            icon: const Icon(Icons.radar),
+                            label: const Text('Scan'),
+                          ),
+                      ],
+                    ),
+                    // Progress indicator during scan
+                    if (state.isScanning) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: const LinearProgressIndicator(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Permission banner
+              if (_shouldShowPermissionCtaBanner(state))
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: theme.colorScheme.errorContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.info_outline,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.outline,
+                        Icons.bluetooth_disabled,
+                        size: 20,
+                        color: theme.colorScheme.onErrorContainer,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Advertising disabled (permission denied) — scanning still active',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
+                          'Bluetooth permission required',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
                         ),
                       ),
                       TextButton(
@@ -280,28 +635,13 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                   ),
                 ),
 
-              // Filter bar
-              if (state.users.isNotEmpty)
-                NearbyUsersFilterBar(
-                  selectedFilter: state.filter,
-                  allCount: state.users.length,
-                  closeCount: state.users
-                      .where((u) => u.proximity == BleProximity.immediate)
-                      .length,
-                  nearbyCount: state.users
-                      .where((u) =>
-                          u.proximity == BleProximity.immediate ||
-                          u.proximity == BleProximity.near)
-                      .length,
-                  onFilterChanged: (filter) => context
-                      .read<NearbyUsersBloc>()
-                      .add(NearbyUsersFilterChanged(filter)),
-                ),
-
               // Main content
               Expanded(
                 child: _buildContent(context, state),
               ),
+
+              // Diagnostics panel at bottom
+              const BleDiagnosticsPanel(),
             ],
           );
         },
@@ -322,7 +662,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       case NearbyUsersStatus.error:
         content = _ErrorState(
           message: state.errorMessage ?? 'An error occurred',
-          onRetry: () => _promptRangeAndScan(),
+          onRetry: _startScan,
         );
         break;
 
@@ -330,92 +670,119 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         content = NearbyUsersEmptyState(
           isScanning: false,
           hasSearchedAwhile: false,
-          onRetry: () => _promptRangeAndScan(),
+          onRetry: _startScan,
+        );
+        break;
+
+      case NearbyUsersStatus.scanning:
+        content = _ScanningState(
+          userCount: state.users.length,
         );
         break;
 
       case NearbyUsersStatus.empty:
         content = NearbyUsersEmptyState(
-          isScanning: state.isDiscovering,
-          hasSearchedAwhile: state.searchTimedOut,
-          onRetry: () => _promptRangeAndScan(),
+          isScanning: false,
+          hasSearchedAwhile: true,
+          onRetry: _startScan,
         );
         break;
 
-      case NearbyUsersStatus.discovering:
-        if (state.filteredUsers.isEmpty && state.users.isNotEmpty) {
-          // Users exist but filter hides them.
-          content = _NoFilterResults(
-            onClearFilter: () => context
-                .read<NearbyUsersBloc>()
-                .add(const NearbyUsersFilterChanged(NearbyUsersFilter.all)),
-          );
-        } else if (state.filteredUsers.isEmpty) {
-          content = NearbyUsersEmptyState(
-            isScanning: state.isDiscovering,
-            hasSearchedAwhile: state.searchTimedOut,
-            onRetry: () => _promptRangeAndScan(),
-          );
-        } else {
-          content = _NearbyUsersList(
-            users: state.filteredUsers,
-            isDiscovering: state.isDiscovering,
-          );
-        }
+      case NearbyUsersStatus.results:
+        content = _NearbyUsersList(
+          users: state.users,
+          isDiscovering: false,
+        );
         break;
     }
 
-    return _withBleDebugPanel(content, state);
+    return content;
   }
+}
 
-  Widget _withBleDebugPanel(Widget child, NearbyUsersState state) {
-    if (!kDebugMode) return child;
-    final d = state.bleDebugInfo;
-    if (d == null) return child;
+/// Widget shown during scanning
+class _ScanningState extends StatelessWidget {
+  final int userCount;
 
-    final error = (d.lastError ?? '').trim();
-    final errorText = error.isEmpty ? 'none' : error;
+  const _ScanningState({required this.userCount});
 
-    return Column(
-      children: [
-        Expanded(child: child),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(context).dividerColor.withAlpha(64),
-              ),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 80,
+            height: 80,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Scanning for nearby users...',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            userCount == 0
+                ? 'Looking for devices'
+                : 'Found $userCount ${userCount == 1 ? 'user' : 'users'} so far',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
             ),
           ),
-          child: DefaultTextStyle(
-            style: Theme.of(context).textTheme.bodySmall!,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'BLE Diagnostics (debug)',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Scanning: ${d.isScanning} | Advertising: ${d.isAdvertising}',
-                ),
-                Text(
-                  'Scan results: raw=${d.rawScanResults} parsed=${d.parsedRadiusDevices} filtered=${d.filteredOut}',
-                ),
-                Text(
-                  'Last error: $errorText',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AndroidDeviceSummary {
+  final String manufacturer;
+  final String brand;
+  final String model;
+  final int sdkInt;
+
+  const _AndroidDeviceSummary({
+    required this.manufacturer,
+    required this.brand,
+    required this.model,
+    required this.sdkInt,
+  });
+}
+
+class _HowItWorksBullet extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _HowItWorksBullet({
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -437,13 +804,10 @@ class _NearbyUsersList extends StatelessWidget {
         final bloc = context.read<NearbyUsersBloc>();
         final authState = context.read<AuthBloc>().state;
         if (authState is AuthAuthenticated) {
-          bloc.add(NearbyUsersScanOnceRequested(
-            userId: authState.user.id,
-            rangeMode: bloc.state.rangeMode,
-          ));
+          bloc.add(const NearbyUsersRefresh());
 
-          // Keep the indicator visible for the scan duration.
-          await Future.delayed(const Duration(seconds: 15));
+          // Keep the indicator visible briefly.
+          await Future.delayed(const Duration(seconds: 2));
         }
       },
       child: ListView.builder(
@@ -469,7 +833,7 @@ class _NearbyUsersList extends StatelessWidget {
           // Use RepaintBoundary for smoother scrolling
           return RepaintBoundary(
             child: NearbyUserCard(
-              key: ValueKey(user.userId),
+              key: ValueKey(user.username),
               user: user,
               onTap: () => _showUserDetails(context, user),
               onConnect: user.isConnected
@@ -573,89 +937,56 @@ class _ErrorState extends StatelessWidget {
             message.toLowerCase().contains('permission') ||
             message.toLowerCase().contains('location');
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: theme.colorScheme.error,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Something went wrong',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Try Again'),
+                ),
+                if (isBluetoothOrPermissionIssue) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await openAppSettings();
+                    },
+                    icon: const Icon(Icons.settings),
+                    label: const Text('Open Settings'),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Something went wrong',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try Again'),
-            ),
-            if (isBluetoothOrPermissionIssue) ...[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await openAppSettings();
-                },
-                icon: const Icon(Icons.settings),
-                label: const Text('Open Settings'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// No results for current filter.
-class _NoFilterResults extends StatelessWidget {
-  final VoidCallback onClearFilter;
-
-  const _NoFilterResults({required this.onClearFilter});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.filter_list_off,
-              size: 48,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No users match this filter',
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: onClearFilter,
-              child: const Text('Show all'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -779,6 +1110,12 @@ class _UserDetailsSheet extends StatelessWidget {
                     final authState = builderContext.read<AuthBloc>().state;
                     final currentUserId =
                         authState is AuthAuthenticated ? authState.user.id : '';
+                    final otherUserId = user.userId;
+
+                    // Don't show message button if we don't have the user's ID
+                    if (otherUserId == null) {
+                      return const SizedBox.shrink();
+                    }
 
                     return OutlinedButton.icon(
                       onPressed: () {
@@ -786,11 +1123,11 @@ class _UserDetailsSheet extends StatelessWidget {
                         final conversationId =
                             Conversation.createConversationId(
                           currentUserId,
-                          user.userId,
+                          otherUserId,
                         );
                         final routeExtra = {
                           'currentUserId': currentUserId,
-                          'otherUserId': user.userId,
+                          'otherUserId': otherUserId,
                           'otherUserName': user.displayName ?? 'Unknown',
                           'otherUserPhotoUrl': user.photoUrl,
                         };

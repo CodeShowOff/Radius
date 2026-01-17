@@ -38,15 +38,14 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
 
     await _conversationsSubscription?.cancel();
 
-    _conversationsSubscription = _chatService
-        .getConversationsStream(event.userId)
-        .listen(
-          (conversations) => add(_ConversationsUpdated(conversations)),
-          onError: (error) => emit(state.copyWith(
-            status: ConversationsStatus.error,
-            errorMessage: error.toString(),
-          )),
-        );
+    _conversationsSubscription =
+        _chatService.getConversationsStream(event.userId).listen(
+              (conversations) => add(_ConversationsUpdated(conversations)),
+              onError: (error) => emit(state.copyWith(
+                status: ConversationsStatus.error,
+                errorMessage: error.toString(),
+              )),
+            );
   }
 
   Future<void> _onRefresh(
@@ -64,12 +63,16 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   ) {
     // Filter out archived conversations unless showing archive
     final filtered = state.showArchived
-        ? event.conversations.where(
-            (c) => c.isArchivedBy(state.currentUserId ?? ''),
-          ).toList()
-        : event.conversations.where(
-            (c) => !c.isArchivedBy(state.currentUserId ?? ''),
-          ).toList();
+        ? event.conversations
+            .where(
+              (c) => c.isArchivedBy(state.currentUserId ?? ''),
+            )
+            .toList()
+        : event.conversations
+            .where(
+              (c) => !c.isArchivedBy(state.currentUserId ?? ''),
+            )
+            .toList();
 
     // Calculate total unread
     int totalUnread = 0;
@@ -96,7 +99,9 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
         state.currentUserId!,
       );
     } catch (e) {
-      // Silently fail - will retry on next update
+      emit(state.copyWith(
+        errorMessage: e.toString(),
+      ));
     }
   }
 

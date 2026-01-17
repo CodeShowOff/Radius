@@ -46,17 +46,10 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
-	<!-- Keep BLE scanning/advertising alive as much as iOS allows -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>bluetooth-central</string>
-		<string>bluetooth-peripheral</string>
-	</array>
-	
 	<!-- Bluetooth Usage Descriptions (required for BLE) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Radius uses Bluetooth to discover nearby users and to share your presence with people close to you.</string>
+	<string>Radius uses Bluetooth to discover nearby users and share an anonymous, rotating identifier. Nearby discovery works only while the app is open (foreground).</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Radius uses Bluetooth to broadcast your presence so nearby users can discover you.</string>
+	<string>Radius uses Bluetooth to broadcast an anonymous, rotating identifier so nearby users can discover you while the app is open (foreground).</string>
 </dict>
 </plist>

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../error/exceptions.dart';
+import 'firestore_write_guard.dart';
 
 /// Firestore database service implementation.
 ///
@@ -45,6 +46,7 @@ class FirestoreService {
     bool merge = true,
   }) async {
     try {
+      FirestoreWriteGuard.assertSafe(data, contextPath: path);
       await _firestore.doc(path).set(data, SetOptions(merge: merge));
     } on FirebaseException catch (e) {
       throw _mapFirestoreException(e);
@@ -59,6 +61,7 @@ class FirestoreService {
     required Map<String, dynamic> data,
   }) async {
     try {
+      FirestoreWriteGuard.assertSafe(data, contextPath: path);
       await _firestore.doc(path).update(data);
     } on FirebaseException catch (e) {
       throw _mapFirestoreException(e);
@@ -96,6 +99,7 @@ class FirestoreService {
     required Map<String, dynamic> data,
   }) async {
     try {
+      FirestoreWriteGuard.assertSafe(data, contextPath: collectionPath);
       final docRef = await _firestore.collection(collectionPath).add(data);
       return docRef.id;
     } on FirebaseException catch (e) {
@@ -223,8 +227,10 @@ class FirestoreService {
 
         switch (operation) {
           case BatchSet op:
+            FirestoreWriteGuard.assertSafe(op.data, contextPath: op.path);
             batch.set(docRef, op.data, SetOptions(merge: op.merge));
           case BatchUpdate op:
+            FirestoreWriteGuard.assertSafe(op.data, contextPath: op.path);
             batch.update(docRef, op.data);
           case BatchDelete _:
             batch.delete(docRef);
@@ -306,7 +312,8 @@ class FirestoreService {
   // ===========================================================================
 
   /// Adds document ID to the data map.
-  Map<String, dynamic> _addIdToData(DocumentSnapshot<Map<String, dynamic>> doc) {
+  Map<String, dynamic> _addIdToData(
+      DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     return {
       'id': doc.id,
@@ -335,7 +342,8 @@ class FirestoreService {
       case FilterOperator.arrayContains:
         return query.where(filter.field, arrayContains: filter.value);
       case FilterOperator.arrayContainsAny:
-        return query.where(filter.field, arrayContainsAny: filter.value as List);
+        return query.where(filter.field,
+            arrayContainsAny: filter.value as List);
       case FilterOperator.whereIn:
         return query.where(filter.field, whereIn: filter.value as List);
       case FilterOperator.whereNotIn:

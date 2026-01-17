@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/error/exceptions.dart';
 import '../domain/entities/conversation.dart';
 import '../domain/entities/message.dart';
 import 'models/conversation_model.dart';
@@ -44,6 +45,38 @@ class ChatService {
     _conversationsRef = _firestore.collection('conversations');
   }
 
+  DatabaseException _mapFirestoreException(FirebaseException e) {
+    String message;
+    switch (e.code) {
+      case 'permission-denied':
+        message = 'Permission denied. Please check your authentication.';
+        break;
+      case 'not-found':
+        message = 'Document not found';
+        break;
+      case 'already-exists':
+        message = 'Document already exists';
+        break;
+      case 'resource-exhausted':
+        message = 'Quota exceeded. Please try again later.';
+        break;
+      case 'unavailable':
+        message = 'Service temporarily unavailable';
+        break;
+      case 'cancelled':
+        message = 'Operation was cancelled';
+        break;
+      default:
+        message = e.message ?? 'Database error occurred';
+    }
+
+    return DatabaseException(
+      message: message,
+      code: e.code,
+      originalError: e,
+    );
+  }
+
   // ==================== CONVERSATIONS ====================
 
   /// Gets or creates a conversation between two users.
@@ -82,10 +115,18 @@ class ChatService {
 
       _logger.i('Created conversation: $conversationId');
       return conversation.toEntity();
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error getting/creating conversation',
+          error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error getting/creating conversation',
           error: e, stackTrace: stack);
-      rethrow;
+      throw DatabaseException(
+        message: 'Failed to open conversation',
+        code: 'chat-open-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -107,9 +148,16 @@ class ChatService {
       final doc = await _conversationsRef.doc(conversationId).get();
       if (!doc.exists) return null;
       return ConversationModel.fromFirestore(doc).toEntity();
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error getting conversation', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error getting conversation', error: e, stackTrace: stack);
-      return null;
+      throw DatabaseException(
+        message: 'Failed to load conversation',
+        code: 'chat-conversation-load-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -268,9 +316,16 @@ class ChatService {
           .toList()
           .reversed
           .toList();
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error loading more messages', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error loading more messages', error: e, stackTrace: stack);
-      return [];
+      throw DatabaseException(
+        message: 'Failed to load more messages',
+        code: 'chat-pagination-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -312,8 +367,16 @@ class ChatService {
       await batch.commit();
 
       _logger.d('Marked ${unreadMessages.docs.length} messages as read');
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error marking messages as read', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error marking messages as read', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to mark messages as read',
+        code: 'chat-mark-read-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -348,9 +411,18 @@ class ChatService {
 
       _logger
           .d('Marked ${undeliveredMessages.docs.length} messages as delivered');
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error marking messages as delivered',
+          error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error marking messages as delivered',
           error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to mark messages as delivered',
+        code: 'chat-mark-delivered-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -366,8 +438,16 @@ class ChatService {
       await _conversationsRef.doc(conversationId).update({
         'mutedBy.$userId': muted,
       });
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error setting muted status', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error setting muted status', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to update mute settings',
+        code: 'chat-mute-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -381,8 +461,16 @@ class ChatService {
       await _conversationsRef.doc(conversationId).update({
         'archivedBy.$userId': archived,
       });
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error setting archived status', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error setting archived status', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to update archive settings',
+        code: 'chat-archive-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -414,8 +502,16 @@ class ChatService {
       });
 
       _logger.d('Message deleted: $messageId');
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error deleting message', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error deleting message', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to delete message',
+        code: 'chat-delete-message-failed',
+        originalError: e,
+      );
     }
   }
 
@@ -431,8 +527,16 @@ class ChatService {
         'participantInfo.$userId.displayName': displayName,
         'participantInfo.$userId.photoUrl': photoUrl,
       });
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error updating participant info', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
     } catch (e, stack) {
       _logger.e('Error updating participant info', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to update participant info',
+        code: 'chat-participant-update-failed',
+        originalError: e,
+      );
     }
   }
 

@@ -1,42 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     
-    <!-- Bluetooth permissions (Android 12+ / API 31+). -->
-    <!-- Docs: https://developer.android.com/guide/topics/connectivity/bluetooth/permissions -->
-    <!--
-      If your app does NOT derive the user's physical location from BLE scan results,
-      you may add: android:usesPermissionFlags="neverForLocation" (API 31+).
-      This repo cannot assert that universally, so we do not set the flag by default.
-    -->
+        <!-- Bluetooth permissions (Android 12+ / API 31+). -->
+        <!-- Docs: https://developer.android.com/guide/topics/connectivity/bluetooth/permissions -->
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"
-        tools:targetApi="s" />
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
     <uses-permission
         android:name="android.permission.BLUETOOTH_ADVERTISE"
-        tools:targetApi="s" />
+        tools:targetApi="31" />
     <uses-permission
         android:name="android.permission.BLUETOOTH_CONNECT"
-        tools:targetApi="s" />
+        tools:targetApi="31" />
 
-    <!-- Legacy Bluetooth permission (Android 11 / API 30 and below). -->
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
+    <!-- Foreground-only nearby: no location permissions are requested. -->
 
-        <!-- Android 11 and lower: Location permission may be required for BLE scanning.
-            Android 12+ (API 31+): BLE scanning uses BLUETOOTH_SCAN instead of location. -->
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
-
-    <!-- Foreground service to keep BLE advertising active/reliable. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
-        tools:targetApi="34" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
-        tools:targetApi="34" />
+    <!-- Foreground-only nearby: no background scanning/FGS.
+         Do NOT add any <service> or <receiver> entries for BLE background delivery
+         unless background mode is intentionally reintroduced. -->
     
     <!-- Internet permission for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -72,25 +54,7 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".BleForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice"
-            tools:targetApi="q" />
-
-        <service
-            android:name=".BleDiscoveryForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice"
-            tools:targetApi="q" />
-
-        <receiver
-            android:name=".BlePendingIntentScanReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.example.radius.action.PENDING_INTENT_SCAN" />
-            </intent-filter>
-        </receiver>
+        <!-- Background BLE components removed for foreground-only discovery. -->
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
