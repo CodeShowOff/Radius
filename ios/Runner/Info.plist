@@ -55,8 +55,8 @@
 	
 	<!-- Bluetooth Usage Descriptions (required for BLE) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Radius uses Bluetooth to discover and connect with nearby users.</string>
+	<string>Radius uses Bluetooth to discover nearby users and to share your presence with people close to you.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Radius uses Bluetooth to let nearby users discover you.</string>
+	<string>Radius uses Bluetooth to broadcast your presence so nearby users can discover you.</string>
 </dict>
 </plist>

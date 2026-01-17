@@ -107,6 +107,7 @@ class _BlePresenceManagerState extends State<_BlePresenceManager>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _isForeground = true;
+      _bluetoothService.onAppForegroundChanged(true);
       _ensureForegroundPresence();
       return;
     }
@@ -115,6 +116,7 @@ class _BlePresenceManagerState extends State<_BlePresenceManager>
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       _isForeground = false;
+      _bluetoothService.onAppForegroundChanged(false);
       _bluetoothService.stopAdvertising();
     }
   }

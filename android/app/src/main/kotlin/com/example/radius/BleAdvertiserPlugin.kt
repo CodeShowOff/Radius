@@ -31,9 +31,9 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     companion object {
         private const val CHANNEL_NAME = "com.example.radius/ble_advertiser"
         private const val RADIUS_SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb"
-        private const val MANUFACTURER_ID = 0xFFFF
+        private const val DEBUG_MANUFACTURER_ID = 0xFFFF
 
-        // Signature to distinguish Radius packets from other apps that also use 0xFFFF.
+        // Signature to distinguish Radius packets from other apps.
         // Format: ['R','D', version=1] + packedAnonymousIdBytes
         private val RADIUS_MAGIC = byteArrayOf(0x52, 0x44, 0x01)
     }
@@ -60,13 +60,15 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val serviceUuid = call.argument<String>("serviceUuid") ?: RADIUS_SERVICE_UUID
                 val txPowerLevel = call.argument<Int>("androidTxPowerLevel") ?: 2
                 val advertiseMode = call.argument<Int>("androidAdvertiseMode") ?: 2
+                val manufacturerId = call.argument<Number>("manufacturerId")?.toInt()
+                    ?: if (BuildConfig.DEBUG) DEBUG_MANUFACTURER_ID else 0
                 
                 if (anonymousId == null) {
                     result.error("INVALID_ARGUMENT", "anonymousId is required", null)
                     return
                 }
 
-                startAdvertising(anonymousId, serviceUuid, txPowerLevel, advertiseMode, result)
+                startAdvertising(anonymousId, serviceUuid, manufacturerId, txPowerLevel, advertiseMode, result)
             }
             "stopAdvertising" -> {
                 stopAdvertising()
@@ -91,6 +93,8 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val serviceUuid = call.argument<String>("serviceUuid") ?: RADIUS_SERVICE_UUID
                 val txPowerLevel = call.argument<Int>("androidTxPowerLevel") ?: 2
                 val advertiseMode = call.argument<Int>("androidAdvertiseMode") ?: 2
+                val manufacturerId = call.argument<Number>("manufacturerId")?.toInt()
+                    ?: if (BuildConfig.DEBUG) DEBUG_MANUFACTURER_ID else 0
                 
                 if (anonymousId == null) {
                     result.error("INVALID_ARGUMENT", "anonymousId is required", null)
@@ -99,7 +103,7 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
                 // Restart advertising with new data
                 stopAdvertising()
-                startAdvertising(anonymousId, serviceUuid, txPowerLevel, advertiseMode, result)
+                startAdvertising(anonymousId, serviceUuid, manufacturerId, txPowerLevel, advertiseMode, result)
             }
             else -> {
                 result.notImplemented()
@@ -110,6 +114,7 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private fun startAdvertising(
         anonymousId: String,
         serviceUuid: String,
+        manufacturerId: Int,
         txPowerLevel: Int,
         advertiseMode: Int,
         result: MethodChannel.Result
@@ -161,10 +166,17 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             android.util.Log.d("BleAdvertiser", "Starting advertising with ID: $anonymousId (${idBytes.size} bytes)")
 
             // Configure advertising data
+            if (!BuildConfig.DEBUG && (manufacturerId == 0 || manufacturerId == DEBUG_MANUFACTURER_ID)) {
+                android.util.Log.w(
+                    "BleAdvertiser",
+                    "Production manufacturerId is not configured (id=$manufacturerId). " +
+                        "Pass --dart-define=RADIUS_MANUFACTURER_ID=<Bluetooth SIG company id>"
+                )
+            }
             val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
-                .addManufacturerData(MANUFACTURER_ID, payload)
+                .addManufacturerData(manufacturerId, payload)
                 .build()
 
             // Put the service UUID in scan response to avoid exceeding the legacy 31-byte ADV limit.
@@ -178,7 +190,10 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 null
             }
             
-            android.util.Log.d("BleAdvertiser", "Advertising data configured with service UUID: $serviceUuid, manufacturer ID: 0x${MANUFACTURER_ID.toString(16)}")
+            android.util.Log.d(
+                "BleAdvertiser",
+                "Advertising data configured with service UUID: $serviceUuid, manufacturer ID: 0x${manufacturerId.toString(16)}"
+            )
 
             // Start advertising
             if (scanResponse != null) {

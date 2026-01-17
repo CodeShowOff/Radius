@@ -9,5 +9,8 @@ class MainActivity : FlutterActivity() {
         
         // Register BLE Advertiser Plugin
         flutterEngine.plugins.add(BleAdvertiserPlugin())
+
+        // Register BLE Background Scan Plugin (PendingIntent + opt-in FGS).
+        flutterEngine.plugins.add(BleBackgroundScanPlugin())
     }
 }

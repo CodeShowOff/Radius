@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -25,10 +27,16 @@ class NearbyUsersScreen extends StatefulWidget {
 
 class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     with WidgetsBindingObserver {
+  bool _scanPermissionGranted = false;
+  bool _advertisePermissionGranted = false;
+  bool _connectPermissionGranted = false;
+  bool _blePermissionsLoaded = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshBlePermissions());
   }
 
   @override
@@ -51,7 +59,61 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     if (state == AppLifecycleState.paused) {
       // Stop scanning when app goes to background.
       bloc.add(const NearbyUsersStopDiscovery());
+      return;
     }
+
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshBlePermissions());
+    }
+  }
+
+  Future<void> _refreshBlePermissions() async {
+    // Avoid dart:io (web builds). permission_handler supports non-web platforms.
+    if (kIsWeb) {
+      if (!mounted) return;
+      setState(() {
+        _scanPermissionGranted = false;
+        _advertisePermissionGranted = false;
+        _connectPermissionGranted = false;
+        _blePermissionsLoaded = true;
+      });
+      return;
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      if (!mounted) return;
+      setState(() {
+        // iOS uses a single Bluetooth permission; this banner is Android-specific.
+        _scanPermissionGranted = true;
+        _advertisePermissionGranted = true;
+        _connectPermissionGranted = true;
+        _blePermissionsLoaded = true;
+      });
+      return;
+    }
+
+    final scanStatus = await Permission.bluetoothScan.status;
+    final advertiseStatus = await Permission.bluetoothAdvertise.status;
+    final connectStatus = await Permission.bluetoothConnect.status;
+
+    if (!mounted) return;
+    setState(() {
+      _scanPermissionGranted = scanStatus.isGranted;
+      _advertisePermissionGranted = advertiseStatus.isGranted;
+      _connectPermissionGranted = connectStatus.isGranted;
+      _blePermissionsLoaded = true;
+    });
+  }
+
+  bool _shouldShowAdvertisingDisabledBanner(NearbyUsersState state) {
+    if (kIsWeb) return false;
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    if (!state.isDiscovering) return false; // show while scanning
+    if (!_blePermissionsLoaded) return false;
+    // Scanning can still work without advertise permission.
+    return _scanPermissionGranted &&
+        _connectPermissionGranted &&
+        !_advertisePermissionGranted;
   }
 
   Future<void> _promptRangeAndScan() async {
@@ -124,6 +186,12 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       appBar: AppBar(
         title: const Text('Nearby'),
         actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Diagnostics logs',
+              icon: const Icon(Icons.bug_report_outlined),
+              onPressed: () => context.push(Routes.diagnosticsLogs),
+            ),
           BlocBuilder<NearbyUsersBloc, NearbyUsersState>(
             buildWhen: (prev, curr) => prev.isDiscovering != curr.isDiscovering,
             builder: (context, state) {
@@ -161,6 +229,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                   onPressed: () async {
                     // Open app settings for permissions
                     await openAppSettings();
+                    await _refreshBlePermissions();
                   },
                 ),
               ),
@@ -170,6 +239,47 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         builder: (context, state) {
           return Column(
             children: [
+              if (_shouldShowAdvertisingDisabledBanner(state))
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Advertising disabled (permission denied) — scanning still active',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await openAppSettings();
+                          await _refreshBlePermissions();
+                        },
+                        child: const Text('Settings'),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Filter bar
               if (state.users.isNotEmpty)
                 NearbyUsersFilterBar(

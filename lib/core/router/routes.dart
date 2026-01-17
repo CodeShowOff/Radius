@@ -31,6 +31,7 @@ abstract class Routes {
   // Settings routes
   static const String settings = '/settings';
   static const String bluetoothSettings = '/settings/bluetooth';
+  static const String diagnosticsLogs = '/settings/diagnostics-logs';
   static const String privacySettings = '/settings/privacy';
   static const String helpSupport = '/help-support';
 }

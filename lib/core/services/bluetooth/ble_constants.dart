@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// BLE configuration constants for the Radius app.
 abstract class BleConstants {
   /// Radius service UUID for BLE advertising/scanning.
@@ -36,9 +38,42 @@ abstract class BleConstants {
   /// RSSI threshold for "far" proximity.
   static const int farRssiThreshold = -85;
 
-  /// Manufacturer ID for BLE advertising (0xFFFF is for testing).
-  /// In production, use your registered Bluetooth SIG company ID.
-  static const int manufacturerId = 0xFFFF;
+  /// Manufacturer ID used in debug builds.
+  ///
+  /// `0xFFFF` is reserved for testing and must not ship in production.
+  static const int manufacturerIdDebug = 0xFFFF;
+
+  /// Build-time configurable manufacturer ID for release builds.
+  ///
+  /// Set via `--dart-define=RADIUS_MANUFACTURER_ID=0x1234` (or decimal).
+  /// If unset/invalid, this resolves to `0` and the app should warn in release.
+  ///
+  /// IMPORTANT: supply a real Bluetooth SIG Company Identifier before shipping.
+  static const String _manufacturerIdEnv = String.fromEnvironment(
+    'RADIUS_MANUFACTURER_ID',
+    defaultValue: '',
+  );
+
+  static int get manufacturerIdProduction {
+    final raw = _manufacturerIdEnv.trim();
+    if (raw.isEmpty) return 0;
+    final normalized = raw.toLowerCase();
+    try {
+      if (normalized.startsWith('0x')) {
+        return int.parse(normalized.substring(2), radix: 16);
+      }
+      return int.parse(normalized, radix: 10);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Manufacturer ID used by the app for scanning and advertising.
+  ///
+  /// - Debug/profile: `manufacturerIdDebug` (testing)
+  /// - Release: `manufacturerIdProduction` (must be configured)
+  static int get manufacturerId =>
+      kReleaseMode ? manufacturerIdProduction : manufacturerIdDebug;
 
   /// Maximum length of anonymous ID in bytes.
 

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/entities/nearby_user.dart';
+import '../../../core/services/logging/device_log.dart';
 
 /// Handles Firestore operations for proximity and encounters.
 class ProximityFirestoreService {
@@ -61,6 +62,11 @@ class ProximityFirestoreService {
       if (kDebugMode) {
         debugPrint('[ProximityFirestoreService] lookupUserByBleId failed: $e');
       }
+      DeviceLog.instance
+          .warning('firestore', 'lookupUserByBleId failed', data: {
+        'bleIdPrefix': bleId.length >= 8 ? bleId.substring(0, 8) : bleId,
+        'error': e.toString(),
+      });
       return null;
     }
   }

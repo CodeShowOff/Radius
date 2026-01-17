@@ -9,6 +9,8 @@ import 'data/proximity_cache.dart';
 import 'data/proximity_firestore_service.dart';
 import 'domain/entities/nearby_user.dart';
 
+import '../../core/services/logging/device_log.dart';
+
 /// Service state for proximity detection.
 enum ProximityServiceState {
   idle,
@@ -109,24 +111,6 @@ class ProximityService {
     _lastError = null; // Clear any previous error
 
     try {
-      // Check if Bluetooth is enabled first
-      var isBluetoothOn = await _bluetoothService.isBluetoothEnabled();
-      if (!isBluetoothOn) {
-        // Try to request Bluetooth to be turned on (shows system dialog on Android)
-        await _bluetoothService.requestBluetoothOn();
-
-        // Wait a moment for Bluetooth to fully initialize
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        // Check again after request
-        isBluetoothOn = await _bluetoothService.isBluetoothEnabled();
-        if (!isBluetoothOn) {
-          _setError('Please turn on Bluetooth to discover nearby users');
-          _setState(ProximityServiceState.error);
-          return false;
-        }
-      }
-
       // Initialize Bluetooth service
       final bleInitialized =
           await _bluetoothService.initialize(forceReinit: forceReinit);
@@ -195,6 +179,11 @@ class ProximityService {
     BleRangeMode rangeMode = BleRangeMode.large,
     Duration duration = const Duration(seconds: 15),
   }) async {
+    DeviceLog.instance.info('proximity', 'scanOnce()', data: {
+      'rangeMode': rangeMode.name,
+      'durationMs': duration.inMilliseconds,
+    });
+
     // Ensure initialized with the current user.
     final initialized = await initialize(userId);
     if (!initialized) return false;
@@ -223,15 +212,25 @@ class ProximityService {
         final error = _bluetoothService.lastError ?? 'Failed to start scan';
         _setError(error);
         _setState(ProximityServiceState.error);
+
+        DeviceLog.instance.warning('proximity', 'scanOnce startScanning failed',
+            data: {'error': error});
         return false;
       }
 
       // After the scan duration completes, scanner stops itself. Mark idle.
       _setState(ProximityServiceState.idle);
+
+      DeviceLog.instance.info('proximity', 'scanOnce completed', data: {
+        'nearbyCount': _cache.userCount,
+      });
       return true;
     } catch (e) {
       _setError('Scan failed: $e');
       _setState(ProximityServiceState.error);
+
+      DeviceLog.instance.error('proximity', 'scanOnce exception',
+          error: e, stackTrace: StackTrace.current);
       return false;
     }
   }
@@ -315,6 +314,16 @@ class ProximityService {
     final bleId = device.anonymousId;
     if (bleId.isEmpty || bleId.length < 8) return;
 
+    // Log only when first seen in this scan session (before cache hit).
+    if (!_userLookupCache.containsKey(bleId) &&
+        !_pendingLookups.contains(bleId)) {
+      DeviceLog.instance.debug('proximity', 'bleId seen', data: {
+        'bleIdPrefix': bleId.length >= 8 ? bleId.substring(0, 8) : bleId,
+        'rssi': device.rssi,
+        'proximity': device.proximity.name,
+      });
+    }
+
     // Check if we already have this BLE ID mapped
     final existingUser = _cache.getUserByBleId(bleId);
 
@@ -345,7 +354,9 @@ class ProximityService {
 
     try {
       // Look up user in Firestore
+      final startedAt = DateTime.now();
       final userData = await _firestoreService.lookupUserByBleId(bleId);
+      final ms = DateTime.now().difference(startedAt).inMilliseconds;
 
       // Cache the result (even if null, to prevent repeated queries)
       _userLookupCache[bleId] = _UserLookupResult(
@@ -354,7 +365,21 @@ class ProximityService {
       );
 
       if (userData != null) {
+        final userId = (userData['userId'] as String?) ?? '';
+        final suffix = userId.isEmpty
+            ? null
+            : userId.substring(userId.length >= 6 ? userId.length - 6 : 0);
+        DeviceLog.instance.info('proximity', 'lookup hit', data: {
+          'bleIdPrefix': bleId.length >= 8 ? bleId.substring(0, 8) : bleId,
+          'userIdSuffix': suffix,
+          'lookupMs': ms,
+        });
         _createNearbyUserFromLookup(device, userData);
+      } else {
+        DeviceLog.instance.debug('proximity', 'lookup miss', data: {
+          'bleIdPrefix': bleId.length >= 8 ? bleId.substring(0, 8) : bleId,
+          'lookupMs': ms,
+        });
       }
     } finally {
       _pendingLookups.remove(bleId);
@@ -501,7 +526,10 @@ class _UserLookupResult {
 
   /// Whether this lookup result is still valid (not expired).
   bool get isValid {
-    // Cache for 15 minutes (matches BLE ID rotation)
-    return DateTime.now().difference(timestamp).inMinutes < 15;
+    // Positive hits can be cached longer (matches BLE ID rotation).
+    // Negative hits are cached briefly so transient Firestore issues don't hide users.
+    final ageSeconds = DateTime.now().difference(timestamp).inSeconds;
+    if (userData == null) return ageSeconds < 60;
+    return ageSeconds < 15 * 60;
   }
 }

@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../../core/di/injection.dart';
 
@@ -18,12 +20,105 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
   final _bluetoothService = getIt<BluetoothService>();
   bool _isBluetoothEnabled = false;
   bool _hasPermissions = false;
+  bool _scanPermissionGranted = false;
+  bool _advertisePermissionGranted = false;
+  bool _connectPermissionGranted = false;
   bool _isLoading = true;
+
+  bool _keepDiscoveringInBackground = false;
+  bool _useForegroundServiceForBackground = false;
 
   @override
   void initState() {
     super.initState();
     _checkStatus();
+    _loadBackgroundDiscoveryPrefs();
+  }
+
+  Future<void> _loadBackgroundDiscoveryPrefs() async {
+    if (!Platform.isAndroid) return;
+
+    await _bluetoothService.refreshBackgroundDiscoveryPreferences();
+    if (!mounted) return;
+    setState(() {
+      _keepDiscoveringInBackground =
+          _bluetoothService.keepDiscoveringInBackground;
+      _useForegroundServiceForBackground =
+          _bluetoothService.useForegroundServiceForBackgroundDiscovery;
+    });
+  }
+
+  Future<void> _setBackgroundDiscovery(bool enabled) async {
+    if (!Platform.isAndroid) return;
+
+    if (!enabled) {
+      setState(() {
+        _keepDiscoveringInBackground = false;
+        _useForegroundServiceForBackground = false;
+      });
+      await _bluetoothService.setBackgroundDiscoveryPreference(
+        enabled: false,
+        useForegroundService: false,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Background discovery disabled')),
+      );
+      return;
+    }
+
+    final choice = await showDialog<_BackgroundDiscoveryChoice>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Keep discovering in background?'),
+          content: const Text(
+            'This keeps scanning for nearby Radius users while the app is not on screen.\n\n'
+            'It may increase battery usage. Foreground Service mode shows a persistent notification while discovery is active.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context)
+                  .pop(_BackgroundDiscoveryChoice.pendingIntent),
+              child: const Text('Use Background Scan'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context)
+                  .pop(_BackgroundDiscoveryChoice.foregroundService),
+              child: const Text('Use Foreground Service'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (choice == null) return;
+
+    final useFgs = choice == _BackgroundDiscoveryChoice.foregroundService;
+    setState(() {
+      _keepDiscoveringInBackground = true;
+      _useForegroundServiceForBackground = useFgs;
+    });
+
+    await _bluetoothService.setBackgroundDiscoveryPreference(
+      enabled: true,
+      useForegroundService: useFgs,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          useFgs
+              ? 'Background discovery enabled (Foreground Service)'
+              : 'Background discovery enabled',
+        ),
+      ),
+    );
   }
 
   Future<void> _checkStatus() async {
@@ -40,12 +135,27 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
           await Permission.bluetoothAdvertise.status;
       final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
 
-      hasBlePermissions = bluetoothScanStatus.isGranted &&
-          bluetoothAdvertiseStatus.isGranted &&
-          bluetoothConnectStatus.isGranted;
+      final scanGranted = bluetoothScanStatus.isGranted;
+      final advertiseGranted = bluetoothAdvertiseStatus.isGranted;
+      final connectGranted = bluetoothConnectStatus.isGranted;
+
+      _scanPermissionGranted = scanGranted;
+      _advertisePermissionGranted = advertiseGranted;
+      _connectPermissionGranted = connectGranted;
+
+      // Full discovery (scan + advertise) needs all three.
+      // Scan-only and advertise-only flows are handled elsewhere in the app.
+      hasBlePermissions = scanGranted && advertiseGranted && connectGranted;
     } else if (Platform.isIOS) {
-      hasBlePermissions = (await Permission.bluetooth.status).isGranted;
+      final granted = (await Permission.bluetooth.status).isGranted;
+      _scanPermissionGranted = granted;
+      _advertisePermissionGranted = granted;
+      _connectPermissionGranted = granted;
+      hasBlePermissions = granted;
     } else {
+      _scanPermissionGranted = false;
+      _advertisePermissionGranted = false;
+      _connectPermissionGranted = false;
       hasBlePermissions = false;
     }
 
@@ -59,11 +169,27 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
   Future<void> _requestPermissions() async {
     late final Map<Permission, PermissionStatus> statuses;
     if (Platform.isAndroid) {
-      statuses = await [
-        Permission.bluetoothScan,
-        Permission.bluetoothAdvertise,
-        Permission.bluetoothConnect,
-      ].request();
+      final permissionsToRequest = <Permission>[];
+
+      final scanStatus = await Permission.bluetoothScan.status;
+      final advertiseStatus = await Permission.bluetoothAdvertise.status;
+      final connectStatus = await Permission.bluetoothConnect.status;
+
+      if (!scanStatus.isGranted) {
+        permissionsToRequest.add(Permission.bluetoothScan);
+      }
+      if (!advertiseStatus.isGranted) {
+        permissionsToRequest.add(Permission.bluetoothAdvertise);
+      }
+      if (!connectStatus.isGranted) {
+        permissionsToRequest.add(Permission.bluetoothConnect);
+      }
+
+      if (permissionsToRequest.isEmpty) {
+        statuses = const {};
+      } else {
+        statuses = await permissionsToRequest.request();
+      }
     } else if (Platform.isIOS) {
       statuses = await [Permission.bluetooth].request();
     } else {
@@ -74,8 +200,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
 
     if (!mounted) return;
 
-    final allGranted = statuses.values.every((status) => status.isGranted);
-    if (allGranted) {
+    final allGranted =
+        statuses.isEmpty || statuses.values.every((status) => status.isGranted);
+    if (allGranted && _scanPermissionGranted && _connectPermissionGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permissions granted')),
       );
@@ -203,12 +330,56 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                                   Text(
                                     _hasPermissions
                                         ? 'All permissions granted'
-                                        : 'Some permissions needed',
+                                        : 'Some permissions are missing',
                                     style: TextStyle(
                                       color:
                                           Theme.of(context).colorScheme.outline,
                                     ),
                                   ),
+                                  const SizedBox(height: 6),
+                                  if (Platform.isAndroid)
+                                    Text(
+                                      'Scan: ${_scanPermissionGranted ? 'granted' : 'missing'} · '
+                                      'Advertise: ${_advertisePermissionGranted ? 'granted' : 'missing'} · '
+                                      'Connect: ${_connectPermissionGranted ? 'granted' : 'missing'}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  if (Platform.isAndroid &&
+                                      _scanPermissionGranted &&
+                                      _connectPermissionGranted &&
+                                      !_advertisePermissionGranted) ...[
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Advertising disabled (permission denied) — scanning still active',
+                                            style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -218,6 +389,107 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                                 child: const Text('Grant'),
                               ),
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                if (Platform.isAndroid) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.nightlight_round,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Background Discovery',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Keep scanning while the app is in background (Android only).',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Keep discovering in background'),
+                            subtitle: Text(
+                              _keepDiscoveringInBackground
+                                  ? (_useForegroundServiceForBackground
+                                      ? 'Mode: Foreground Service (persistent notification)'
+                                      : 'Mode: System background scan (PendingIntent)')
+                                  : 'Off',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.outline,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _keepDiscoveringInBackground,
+                            onChanged: _setBackgroundDiscovery,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Diagnostics
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.bug_report_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Diagnostics Logs',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                context.push(Routes.diagnosticsLogs);
+                              },
+                              child: const Text('Open'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Stores detailed Bluetooth/Nearby logs on this device so you can share them for troubleshooting.',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
                         ),
                       ],
                     ),
@@ -314,4 +586,9 @@ class _InfoItem extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _BackgroundDiscoveryChoice {
+  pendingIntent,
+  foregroundService,
 }

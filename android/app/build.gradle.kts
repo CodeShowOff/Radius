@@ -31,6 +31,9 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 31 // Android 12+ only (no legacy Bluetooth/location permissions)
         targetSdk = 35  // Android 15+ for latest features
+        // BLE manufacturer/company ID for release builds is provided via Flutter:
+        //   flutter build apk --release --dart-define=RADIUS_MANUFACTURER_ID=0x1234
+        // In CI: set an env var and pass it through as a --dart-define.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

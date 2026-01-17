@@ -13,12 +13,18 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     private var peripheralManager: CBPeripheralManager?
     private var isAdvertising = false
     private var currentServiceUUID: CBUUID?
+    private var currentManufacturerId: UInt16 = {
+        #if DEBUG
+        return 0xFFFF
+        #else
+        return 0
+        #endif
+    }()
     
     private static let channelName = "com.example.radius/ble_advertiser"
     private static let radiusServiceUUID = "00001234-0000-1000-8000-00805f9b34fb"
-    private static let manufacturerId: UInt16 = 0xFFFF
 
-    // Signature to distinguish Radius packets from other apps that also use 0xFFFF.
+    // Signature to distinguish Radius packets from other apps.
     // Format: ['R','D', version=1] + packedAnonymousIdBytes
     private static let radiusMagic: [UInt8] = [0x52, 0x44, 0x01]
     
@@ -46,6 +52,9 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
             }
             
             let serviceUuid = args["serviceUuid"] as? String ?? BleAdvertiserPlugin.radiusServiceUUID
+            if let m = args["manufacturerId"] as? NSNumber {
+                self.currentManufacturerId = UInt16(truncatingIfNeeded: m.uint16Value)
+            }
             startAdvertising(anonymousId: anonymousId, serviceUuid: serviceUuid, result: result)
             
         case "stopAdvertising":
@@ -67,6 +76,9 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
             }
             
             let serviceUuid = args["serviceUuid"] as? String ?? BleAdvertiserPlugin.radiusServiceUUID
+            if let m = args["manufacturerId"] as? NSNumber {
+                self.currentManufacturerId = UInt16(truncatingIfNeeded: m.uint16Value)
+            }
             
             // Restart advertising with new data
             stopAdvertising()
@@ -128,8 +140,8 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
         // to keep payload small and consistent with Android.
         let idBytes = hexToBytes(anonymousId)
         var manufacturer = Data()
-        manufacturer.append(UInt8(BleAdvertiserPlugin.manufacturerId & 0x00FF))
-        manufacturer.append(UInt8((BleAdvertiserPlugin.manufacturerId & 0xFF00) >> 8))
+        manufacturer.append(UInt8(currentManufacturerId & 0x00FF))
+        manufacturer.append(UInt8((currentManufacturerId & 0xFF00) >> 8))
         manufacturer.append(contentsOf: BleAdvertiserPlugin.radiusMagic)
         manufacturer.append(contentsOf: idBytes)
 

@@ -9,6 +9,11 @@ import 'ble_range_mode.dart';
 /// Handles BLE advertising to broadcast presence to nearby devices.
 ///
 /// Uses native platform channels for Android and iOS BLE advertising.
+///
+/// iOS note:
+/// Advertising behavior while backgrounded is constrained by iOS and may be
+/// throttled or stopped when the app is suspended or force-quit. The app should
+/// not rely on continuous advertising while backgrounded for discovery.
 class BleAdvertiser {
   final BleIdGenerator _idGenerator;
   static const MethodChannel _channel =
@@ -50,6 +55,7 @@ class BleAdvertiser {
       final result = await _channel.invokeMethod<bool>('startAdvertising', {
         'anonymousId': _idGenerator.currentAnonymousId,
         'serviceUuid': BleConstants.radiusServiceUuid,
+        'manufacturerId': BleConstants.manufacturerId,
         'androidTxPowerLevel': rangeMode.androidTxPowerLevel,
         'androidAdvertiseMode': rangeMode.androidAdvertiseMode,
       });
@@ -114,6 +120,7 @@ class BleAdvertiser {
       await _channel.invokeMethod('updateAdvertisement', {
         'anonymousId': _idGenerator.currentAnonymousId,
         'serviceUuid': BleConstants.radiusServiceUuid,
+        'manufacturerId': BleConstants.manufacturerId,
         'androidTxPowerLevel': _currentRangeMode.androidTxPowerLevel,
         'androidAdvertiseMode': _currentRangeMode.androidAdvertiseMode,
       });

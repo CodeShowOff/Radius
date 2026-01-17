@@ -123,8 +123,7 @@ class BleIdGenerator {
     // 2-byte company ID prefix. We only strip that prefix when it's followed by
     // the Radius magic header to avoid corrupting random payloads.
     // IMPORTANT: require the Radius magic header for packed payloads.
-    // We filter scans by manufacturer ID (0xFFFF) which is commonly used for testing,
-    // so without a signature we would accidentally treat unrelated devices as Radius.
+    // Without a signature we would accidentally treat unrelated devices as Radius.
     if (!_hasRadiusMagic(data)) return null;
 
     final Uint8List normalized =
@@ -145,12 +144,9 @@ class BleIdGenerator {
   static bool _hasRadiusMagic(Uint8List data) {
     // Either:
     // - starts with magic directly (common on Android scan manufacturerData value)
-    // - starts with companyId 0xFFFF then magic (some iOS/CoreBluetooth exposures)
+    // - starts with 2-byte companyId prefix then magic (some iOS/CoreBluetooth exposures)
     if (_startsWithRadiusMagic(data, startIndex: 0)) return true;
-    if (data.length >= 2 && data[0] == 0xFF && data[1] == 0xFF) {
-      return _startsWithRadiusMagic(data, startIndex: 2);
-    }
-    return false;
+    return _startsWithRadiusMagic(data, startIndex: 2);
   }
 
   static bool _startsWithRadiusMagic(Uint8List data,
@@ -171,11 +167,10 @@ class BleIdGenerator {
   }
 
   static Uint8List _stripCompanyIdPrefixIfPresent(Uint8List data) {
-    // Only strip 0xFFFF if immediately followed by the Radius magic header.
-    const int companyIdLo = 0xFF;
-    const int companyIdHi = 0xFF;
+    // Strip any 2-byte companyId prefix if immediately followed by the Radius magic header.
+    // This keeps parsing stable when the app switches from the testing ID (0xFFFF)
+    // to a real Bluetooth SIG company identifier.
     if (data.length < 2 + _radiusMagic.length) return data;
-    if (data[0] != companyIdLo || data[1] != companyIdHi) return data;
 
     for (int i = 0; i < _radiusMagic.length; i++) {
       if (data[2 + i] != _radiusMagic[i]) return data;

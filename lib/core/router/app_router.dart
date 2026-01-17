@@ -16,6 +16,7 @@ import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
+import '../diagnostics/presentation/pages/diagnostics_logs_page.dart';
 import '../../features/profile/presentation/pages/privacy_settings_page.dart';
 import '../../features/profile/presentation/pages/help_support_page.dart';
 import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
@@ -143,6 +144,11 @@ final GoRouter appRouter = GoRouter(
       path: Routes.bluetoothSettings,
       name: 'bluetoothSettings',
       builder: (context, state) => const BluetoothSettingsPage(),
+    ),
+    GoRoute(
+      path: Routes.diagnosticsLogs,
+      name: 'diagnosticsLogs',
+      builder: (context, state) => const DiagnosticsLogsPage(),
     ),
     GoRoute(
       path: Routes.privacySettings,
