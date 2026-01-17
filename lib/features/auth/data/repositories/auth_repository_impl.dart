@@ -6,7 +6,9 @@ import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/firebase/firebase_auth_service.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
+import '../../../../core/services/firebase/profile_service.dart';
 import '../../../../core/services/firebase/username_service.dart';
+import '../../../profile/data/models/profile_model.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 import '../models/user_model.dart';
@@ -19,13 +21,16 @@ class AuthRepositoryImpl implements IAuthRepository {
   final FirebaseAuthService _authService;
   final FirestoreService _firestoreService;
   final UsernameService _usernameService;
+  final ProfileService _profileService;
 
   AuthRepositoryImpl({
     required FirebaseAuthService authService,
     required FirestoreService firestoreService,
+    required ProfileService profileService,
     UsernameService? usernameService,
   })  : _authService = authService,
         _firestoreService = firestoreService,
+        _profileService = profileService,
         _usernameService = usernameService ?? UsernameService();
 
   @override
@@ -275,6 +280,30 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       // Store username-to-userId index for BLE discovery lookups
       await _usernameService.storeUsernameForUser(uid, username);
+
+      // Create profile entry in profiles collection
+      final now = DateTime.now();
+      final profileModel = ProfileModel(
+        id: uid,
+        userId: uid,
+        name: displayName ?? '',
+        bio: '',
+        photoUrl: avatarUrl,
+        isVisible: true,
+        showOnlineStatus: true,
+        allowConnectionRequests: true,
+        showLastSeen: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      try {
+        await _profileService.createProfile(profileModel);
+      } catch (e) {
+        // Log but don't fail - profile can be created later
+        // ignore: avoid_print
+        print('Warning: Failed to create profile entry: $e');
+      }
 
       // Read back the document to get the server-set timestamp
       final doc = await _firestoreService.getDocument(

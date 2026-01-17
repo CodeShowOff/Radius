@@ -6,14 +6,21 @@ import 'package:http/http.dart' as http;
 ///
 /// Setup Instructions:
 /// 1. Create a Cloudinary account at https://cloudinary.com
-/// 2. Get your Cloud Name, API Key, and API Secret from the dashboard
-/// 3. Create a .env file or use environment variables:
-///    - CLOUDINARY_CLOUD_NAME=your_cloud_name
-///    - CLOUDINARY_API_KEY=your_api_key
-///    - CLOUDINARY_API_SECRET=your_api_secret
-/// 4. Enable unsigned uploads in Cloudinary dashboard:
-///    Settings → Upload → Upload presets → Create unsigned preset
-/// 5. Set the upload preset name below
+/// 2. Get your Cloud Name from the dashboard
+/// 3. Enable unsigned uploads in Cloudinary dashboard:
+///    - Go to: Settings → Upload → Upload Presets
+///    - Click "Add upload preset" or edit existing one
+///    - Set Preset name: "radius" (or update the constant below)
+///    - Change "Signing Mode" to "Unsigned"
+///    - Configure allowed formats (jpg, png, etc.)
+///    - Set folder restrictions if needed
+///    - Save the preset
+/// 4. Verify the cloud name and upload preset name match below
+///
+/// Common Issues:
+/// - "Upload preset must be specified": Ensure preset is set to "Unsigned"
+/// - "Invalid upload preset": Check preset name spelling matches exactly
+/// - Upload fails: Verify cloud name is correct
 class CloudinaryService {
   // Cloudinary configuration for unsigned uploads
   // These values are safe to expose in client-side code
@@ -60,16 +67,9 @@ class CloudinaryService {
         request.fields['tags'] = tags.values.join(',');
       }
 
-      // Optional: Add transformation for optimization
-      request.fields['transformation'] = json.encode([
-        {
-          'width': 800,
-          'height': 800,
-          'crop': 'limit',
-          'quality': 'auto:good',
-          'fetch_format': 'auto',
-        }
-      ]);
+      // Note: Transformations are better configured in the upload preset
+      // on Cloudinary dashboard rather than passed in unsigned uploads
+      // to avoid validation errors and security issues
 
       // Send the request
       final response = await request.send();
@@ -79,11 +79,29 @@ class CloudinaryService {
         final data = json.decode(responseData);
         return data['secure_url'] as String;
       } else {
+        // Parse error response for better error messages
+        String errorMessage =
+            'Upload failed with status: ${response.statusCode}';
+        try {
+          final errorData = json.decode(responseData);
+          if (errorData['error'] != null) {
+            final error = errorData['error'];
+            if (error['message'] != null) {
+              errorMessage = error['message'];
+            }
+          }
+        } catch (_) {
+          // If parsing fails, use the raw response
+          errorMessage = responseData;
+        }
+
         throw CloudinaryException(
           'Upload failed with status: ${response.statusCode}',
-          responseData,
+          errorMessage,
         );
       }
+    } on CloudinaryException {
+      rethrow; // Pass through CloudinaryException as-is
     } catch (e) {
       throw CloudinaryException('Failed to upload image', e.toString());
     }

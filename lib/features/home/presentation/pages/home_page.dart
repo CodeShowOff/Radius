@@ -85,9 +85,58 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         appBar: AppBar(
           title: const Text('Radius'),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.person_outline),
-              onPressed: () => context.push(Routes.profile),
+            BlocBuilder<ProfileBloc, ProfileState>(
+              builder: (context, profileState) {
+                return BlocBuilder<AuthBloc, AuthState>(
+                  builder: (context, authState) {
+                    String? photoUrl;
+                    String displayName = 'U';
+
+                    if (authState is AuthAuthenticated) {
+                      photoUrl = authState.user.avatarUrl;
+                      displayName = authState.user.displayName ?? 'U';
+                    }
+
+                    if (profileState is ProfileLoaded) {
+                      if (profileState.profile.photoUrl != null &&
+                          profileState.profile.photoUrl!.isNotEmpty) {
+                        photoUrl = profileState.profile.photoUrl;
+                      }
+                      if (profileState.profile.name.isNotEmpty) {
+                        displayName = profileState.profile.name;
+                      }
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: IconButton(
+                        onPressed: () => context.push(Routes.profile),
+                        icon: CircleAvatar(
+                          radius: 16,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primaryContainer,
+                          backgroundImage:
+                              photoUrl != null ? NetworkImage(photoUrl) : null,
+                          child: photoUrl == null
+                              ? Text(
+                                  displayName.isNotEmpty
+                                      ? displayName[0].toUpperCase()
+                                      : 'U',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ],
         ),

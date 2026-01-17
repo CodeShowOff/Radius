@@ -111,6 +111,7 @@ extension GetItInjectableX on _i1.GetIt {
       () => _i6.AuthRepositoryImpl(
         authService: gh<_i3.FirebaseAuthService>(),
         firestoreService: gh<_i4.FirestoreService>(),
+        profileService: gh<_i8.ProfileService>(),
         usernameService: gh<_i15.UsernameService>(),
       ),
     );

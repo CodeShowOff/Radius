@@ -145,8 +145,34 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       );
     }
 
-    // Show blank screen during initialization (native splash handles this)
-    return const SizedBox.shrink();
+    // Show loading screen during initialization
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.radar,
+                size: 64,
+                color: Colors.blue,
+              ),
+              SizedBox(height: 24),
+              Text(
+                'Radius',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 32),
+              CircularProgressIndicator(),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

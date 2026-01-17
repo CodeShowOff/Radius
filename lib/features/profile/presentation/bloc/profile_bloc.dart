@@ -75,7 +75,10 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     final result = await _profileRepository.saveProfile(event.profile);
     result.fold(
       (failure) => emit(ProfileError(failure.message)),
-      (_) => emit(ProfileSaved(event.profile)),
+      (_) {
+        emit(ProfileSaved(event.profile));
+        emit(ProfileLoaded(event.profile));
+      },
     );
   }
 

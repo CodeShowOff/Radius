@@ -42,8 +42,26 @@ class _SplashPageState extends State<SplashPage> {
           context.go(Routes.login);
         }
       },
-      child: const Scaffold(
-        body: SizedBox.shrink(), // No visible content
+      child: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.radar,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Radius',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(),
+            ],
+          ),
+        ),
       ),
     );
   }
