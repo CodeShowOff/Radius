@@ -149,6 +149,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           onTap: () => context.push(Routes.bluetoothSettings),
                         ),
                         _ProfileOption(
+                          icon: Icons.palette_outlined,
+                          title: 'Appearance',
+                          onTap: () => context.push(Routes.appearanceSettings),
+                        ),
+                        _ProfileOption(
                           icon: Icons.visibility_outlined,
                           title: 'Privacy Settings',
                           onTap: () => context.push(Routes.privacySettings),

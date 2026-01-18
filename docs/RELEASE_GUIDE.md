@@ -53,7 +53,7 @@ storeFile=C:/Users/YourUsername/upload-keystore.jks
 ### Step 3: Update Build Configuration
 
 The build.gradle.kts is already configured. Just ensure:
-- Application ID is unique: Currently `com.example.radius` (change to your domain)
+- Application ID is unique: Currently `com.codeshowoff.radius` (change to your domain)
 - Version is correct in pubspec.yaml
 
 ### Step 4: Build Release APK or AAB
@@ -92,7 +92,7 @@ flutter install --release
 2. In Xcode:
    - Select "Runner" in the project navigator
    - Go to "Signing & Capabilities" tab
-   - Change Bundle Identifier from `com.example.radius` to your unique identifier (e.g., `com.yourcompany.radius`)
+   - Change Bundle Identifier from `com.codeshowoff.radius` to your unique identifier (e.g., `com.yourcompany.radius`)
    - Select your Team (Apple Developer account)
    - Xcode will automatically create/download provisioning profiles
 
@@ -231,7 +231,7 @@ flutter build apk --release --split-per-abi
 
 ### Before Release
 - [ ] Update version in `pubspec.yaml` (e.g., `1.0.0+1`)
-- [ ] Change application ID from `com.example.radius`
+- [ ] Change application ID from `com.codeshowoff.radius`
 - [ ] Add proper app icon (1024x1024px)
 - [ ] Test release build thoroughly on real devices
 - [ ] Verify all Firebase features work in release mode

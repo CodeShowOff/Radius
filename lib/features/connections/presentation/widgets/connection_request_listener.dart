@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -23,9 +25,14 @@ class ConnectionRequestListener extends StatefulWidget {
       _ConnectionRequestListenerState();
 }
 
-class _ConnectionRequestListenerState extends State<ConnectionRequestListener> {
+class _ConnectionRequestListenerState extends State<ConnectionRequestListener>
+  with TickerProviderStateMixin {
   List<ConnectionRequest> _previousRequests = [];
   bool _isInitialized = false;
+
+  final Queue<ConnectionRequest> _queue = Queue<ConnectionRequest>();
+  OverlayEntry? _activeEntry;
+  AnimationController? _controller;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +58,7 @@ class _ConnectionRequestListenerState extends State<ConnectionRequestListener> {
 
         // Show notification for each new request
         for (final request in newRequests) {
-          _showConnectionRequestBanner(context, request);
+          _enqueueBanner(request);
         }
 
         // Update previous requests
@@ -61,110 +68,217 @@ class _ConnectionRequestListenerState extends State<ConnectionRequestListener> {
     );
   }
 
-  void _showConnectionRequestBanner(
-      BuildContext context, ConnectionRequest request) {
+  @override
+  void dispose() {
+    _removeActiveEntry();
+    super.dispose();
+  }
+
+  void _enqueueBanner(ConnectionRequest request) {
+    _queue.addLast(request);
+    _showNextIfIdle();
+  }
+
+  void _showNextIfIdle() {
+    if (!mounted) return;
+    if (_activeEntry != null) return;
+    if (_queue.isEmpty) return;
+
+    final request = _queue.removeFirst();
+    _showConnectionRequestOverlay(request);
+  }
+
+  void _removeActiveEntry() {
+    _controller?.dispose();
+    _controller = null;
+    _activeEntry?.remove();
+    _activeEntry = null;
+  }
+
+  void _showConnectionRequestOverlay(ConnectionRequest request) {
+    final overlay = Overlay.of(context, rootOverlay: true);
+
     final theme = Theme.of(context);
     final senderName = request.senderDisplayName ?? 'Someone';
 
-    // Use a MaterialBanner for a more prominent notification
-    ScaffoldMessenger.of(context).showMaterialBanner(
-      MaterialBanner(
-        padding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          backgroundImage: request.senderPhotoUrl != null
-              ? NetworkImage(request.senderPhotoUrl!)
-              : null,
-          child: request.senderPhotoUrl == null
-              ? Icon(
-                  Icons.person,
-                  color: theme.colorScheme.onPrimaryContainer,
-                )
-              : null,
-        ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'New Connection Request',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$senderName wants to connect with you',
-              style: theme.textTheme.bodyMedium,
-            ),
-            if (request.message != null && request.message!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                '"${request.message}"',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ],
-        ),
-        backgroundColor: theme.colorScheme.surfaceContainerHighest,
-        actions: [
-          TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-            },
-            child: const Text('Dismiss'),
-          ),
-          TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-              // Reject the request
-              context.read<ConnectionBloc>().add(
-                    ConnectionRejectRequest(request.id),
-                  );
-            },
-            child: Text(
-              'Decline',
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
-          ),
-          FilledButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-              // Accept the request
-              context.read<ConnectionBloc>().add(
-                    ConnectionAcceptRequest(request.id),
-                  );
-              // Show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('You are now connected with $senderName!'),
-                  behavior: SnackBarBehavior.floating,
-                  action: SnackBarAction(
-                    label: 'Message',
-                    onPressed: () {
-                      // Navigate to chat with the new connection
-                      context.push(Routes.connectionRequests);
-                    },
-                  ),
-                ),
-              );
-            },
-            child: const Text('Accept'),
-          ),
-        ],
-      ),
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      reverseDuration: const Duration(milliseconds: 180),
     );
 
-    // Auto-dismiss after 5 seconds if user doesn't interact
+    final animation = CurvedAnimation(
+      parent: _controller!,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+
+    _activeEntry = OverlayEntry(
+      builder: (context) {
+        return Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            top: true,
+            bottom: false,
+            child: Material(
+              color: Colors.transparent,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, -1.1),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: FadeTransition(
+                  opacity: animation,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 18,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            _dismissActive();
+                            context.push(Routes.connectionRequests);
+                          },
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor:
+                                    theme.colorScheme.primaryContainer,
+                                backgroundImage: request.senderPhotoUrl !=
+                                            null &&
+                                        request.senderPhotoUrl!.isNotEmpty
+                                    ? NetworkImage(request.senderPhotoUrl!)
+                                    : null,
+                                child: (request.senderPhotoUrl == null ||
+                                        request.senderPhotoUrl!.isEmpty)
+                                    ? Icon(
+                                        Icons.person,
+                                        color: theme
+                                            .colorScheme.onPrimaryContainer,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Connection request',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$senderName wants to connect',
+                                      style: theme.textTheme.bodyMedium,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (request.message != null &&
+                                        request.message!.trim().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          '"${request.message!.trim()}"',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () {
+                                  _dismissActive();
+                                  context
+                                      .read<ConnectionBloc>()
+                                      .add(ConnectionRejectRequest(request.id));
+                                },
+                                child: Text(
+                                  'Decline',
+                                  style:
+                                      TextStyle(color: theme.colorScheme.error),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              FilledButton(
+                                onPressed: () {
+                                  _dismissActive();
+                                  context
+                                      .read<ConnectionBloc>()
+                                      .add(ConnectionAcceptRequest(request.id));
+                                },
+                                child: const Text('Accept'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(_activeEntry!);
+    _controller!.forward();
+
+    // Auto-dismiss after a short time (like WhatsApp), but only if still showing.
     Future.delayed(const Duration(seconds: 5), () {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-      }
+      if (!mounted) return;
+      if (_activeEntry == null) return;
+      _dismissActive();
     });
+  }
+
+  Future<void> _dismissActive() async {
+    final controller = _controller;
+    if (controller == null) {
+      _removeActiveEntry();
+      _showNextIfIdle();
+      return;
+    }
+
+    try {
+      if (controller.isAnimating || controller.value > 0) {
+        await controller.reverse();
+      }
+    } finally {
+      _removeActiveEntry();
+      _showNextIfIdle();
+    }
   }
 }

@@ -317,6 +317,15 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
   @override
   Future<void> close() {
+    // Cleanup: if user is in a game when bloc closes, clean up their status
+    if (_currentUserId != null && _currentSessionId != null) {
+      _service.clearUserGameStatus(_currentUserId!);
+      // Also cancel the session if still active
+      _service.cancelSession(_currentSessionId!, _currentUserId!).catchError((e) {
+        _logger.w('Error cancelling session on bloc close', error: e);
+      });
+    }
+    
     _sessionSubscription?.cancel();
     _messagesSubscription?.cancel();
     _statsSubscription?.cancel();

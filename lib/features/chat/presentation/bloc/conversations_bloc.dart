@@ -23,6 +23,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     on<ConversationsMarkAsRead>(_onMarkAsRead);
     on<ConversationsArchive>(_onArchive);
     on<ConversationsDelete>(_onDelete);
+    on<ConversationsClear>(_onClear);
     on<ConversationsMuteToggle>(_onMuteToggle);
     on<_ConversationsUpdated>(_onUpdated);
   }
@@ -138,6 +139,24 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     } catch (e) {
       emit(state.copyWith(
         errorMessage: 'Failed to delete conversation',
+      ));
+    }
+  }
+
+  Future<void> _onClear(
+    ConversationsClear event,
+    Emitter<ConversationsState> emit,
+  ) async {
+    if (state.currentUserId == null) return;
+
+    try {
+      await _chatService.clearMessages(
+        event.conversationId,
+        state.currentUserId!,
+      );
+    } catch (e) {
+      emit(state.copyWith(
+        errorMessage: 'Failed to clear conversation',
       ));
     }
   }

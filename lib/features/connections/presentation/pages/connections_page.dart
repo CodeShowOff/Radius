@@ -323,13 +323,43 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
 
   Future<void> _loadProfile() async {
     try {
+      // Public data lives under `/profiles/{userId}` (see firestore.rules).
+      // Normalize to the legacy keys this UI expects.
       final doc = await getIt<FirestoreService>().getDocument(
-        'users/${widget.userId}',
+        'profiles/${widget.userId}',
       );
+
+      Map<String, dynamic> normalized;
+      if (doc == null) {
+        normalized = {'id': widget.userId, 'displayName': 'User'};
+      } else {
+        final displayName =
+            (doc['name'] as String?)?.trim().isNotEmpty == true
+                ? (doc['name'] as String).trim()
+                : (doc['displayName'] as String?)?.trim().isNotEmpty == true
+                    ? (doc['displayName'] as String).trim()
+                    : 'User';
+
+        final avatarUrl = (doc['photoUrl'] as String?)?.trim().isNotEmpty ==
+                true
+            ? (doc['photoUrl'] as String).trim()
+            : (doc['avatarUrl'] as String?)?.trim().isNotEmpty == true
+                ? (doc['avatarUrl'] as String).trim()
+                : null;
+
+        final bio = (doc['bio'] as String?)?.trim();
+
+        normalized = {
+          'id': widget.userId,
+          'displayName': displayName,
+          'avatarUrl': avatarUrl,
+          'bio': bio,
+        };
+      }
 
       if (mounted) {
         setState(() {
-          _profile = doc ?? {'id': widget.userId, 'displayName': 'User'};
+          _profile = normalized;
           _isLoading = false;
         });
       }
@@ -464,7 +494,6 @@ class _UserDetailsSheet extends StatelessWidget {
     final displayName = profile['displayName'] as String? ?? 'User';
     final avatarUrl = profile['avatarUrl'] as String?;
     final bio = profile['bio'] as String?;
-    final email = profile['email'] as String?;
     final otherUserId = connection.getOtherUserId(currentUserId);
 
     return DraggableScrollableSheet(
@@ -576,11 +605,6 @@ class _UserDetailsSheet extends StatelessWidget {
                               label: 'Connected since',
                               value: _formatDate(connection.connectedAt),
                             ),
-                            if (email != null)
-                              _InfoRow(
-                                label: 'Email',
-                                value: email,
-                              ),
                           ],
                         ),
                       ),

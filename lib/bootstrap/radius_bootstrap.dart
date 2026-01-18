@@ -10,9 +10,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../app.dart';
 import '../core/config/app_config.dart';
 import '../core/di/injection.dart';
+import '../core/settings/app_settings_store.dart';
 import '../core/services/crash/crash_service.dart';
 import '../core/services/logging/device_log.dart';
 import '../core/services/notifications/notification_service.dart';
+import '../core/theme/app_theme.dart';
 import '../firebase_options.dart';
 
 class RadiusBootstrap extends StatefulWidget {
@@ -62,6 +64,21 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
       _setPhase(_InitPhase.initializing, 'Preparing local storage…');
       await Hive.initFlutter().timeout(const Duration(seconds: 5));
+
+      // Load persisted app settings (theme, etc.)
+      final settingsBox =
+          await Hive.openBox('radius_settings').timeout(const Duration(seconds: 5));
+      if (!getIt.isRegistered<Box<dynamic>>(instanceName: 'radius_settings')) {
+        getIt.registerSingleton<Box<dynamic>>(
+          settingsBox,
+          instanceName: 'radius_settings',
+        );
+      }
+      if (!getIt.isRegistered<AppSettingsStore>()) {
+        getIt.registerSingleton<AppSettingsStore>(
+          AppSettingsStore(box: settingsBox),
+        );
+      }
 
       _setPhase(_InitPhase.initializing, 'Loading services…');
       await configureDependencies().timeout(const Duration(seconds: 10));
@@ -132,6 +149,9 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
     if (_phase == _InitPhase.failed) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
         home: _BootstrapScreen(
           phase: _phase,
           message: _message,
@@ -151,9 +171,12 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
     }
 
     // Show loading screen during initialization
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
+      home: const Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

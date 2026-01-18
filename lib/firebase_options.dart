@@ -65,7 +65,7 @@ class DefaultFirebaseOptions {
     projectId: 'radiusapp-ecfcd',
     storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
     iosClientId: '486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com',
-    iosBundleId: 'com.example.radius',
+    iosBundleId: 'com.codeshowoff.radius',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -75,7 +75,7 @@ class DefaultFirebaseOptions {
     projectId: 'radiusapp-ecfcd',
     storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
     iosClientId: '486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com',
-    iosBundleId: 'com.example.radius',
+    iosBundleId: 'com.codeshowoff.radius',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

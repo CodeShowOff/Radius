@@ -12,7 +12,7 @@ copy android\key.properties.example android\key.properties
 # Edit key.properties with your keystore details
 
 # 3. Change application ID in android/app/build.gradle.kts
-# Change: com.example.radius → com.yourcompany.radius
+# Change: com.codeshowoff.radius → com.yourcompany.radius
 ```
 
 ### Build Commands
@@ -41,7 +41,7 @@ build_android_release.bat
 open ios/Runner.xcworkspace
 
 # 2. In Xcode → Runner → Signing & Capabilities:
-#    - Change Bundle Identifier: com.example.radius → com.yourcompany.radius
+#    - Change Bundle Identifier: com.codeshowoff.radius → com.yourcompany.radius
 #    - Select your Team (Apple Developer account)
 #    - Let Xcode manage signing automatically
 

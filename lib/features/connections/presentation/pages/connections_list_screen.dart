@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
@@ -137,7 +139,7 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
   }
 }
 
-class _ConnectionTile extends StatelessWidget {
+class _ConnectionTile extends StatefulWidget {
   final Connection connection;
   final String currentUserId;
 
@@ -147,80 +149,157 @@ class _ConnectionTile extends StatelessWidget {
   });
 
   @override
+  State<_ConnectionTile> createState() => _ConnectionTileState();
+}
+
+class _ConnectionTileState extends State<_ConnectionTile> {
+  late final Future<Map<String, dynamic>> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _loadOtherUserProfile();
+  }
+
+  Future<Map<String, dynamic>> _loadOtherUserProfile() async {
+    final otherUserId = widget.connection.getOtherUserId(widget.currentUserId);
+    try {
+      final doc = await getIt<FirestoreService>().getDocument(
+        'profiles/$otherUserId',
+      );
+
+      if (doc == null) {
+        return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': ''};
+      }
+
+      final name = (doc['name'] as String?)?.trim();
+      final photoUrl = (doc['photoUrl'] as String?)?.trim();
+      final bio = (doc['bio'] as String?)?.trim();
+
+      return {
+        'id': otherUserId,
+        'name': (name != null && name.isNotEmpty) ? name : 'User',
+        'photoUrl': (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null,
+        'bio': bio ?? '',
+      };
+    } catch (_) {
+      return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': ''};
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final otherUserId = connection.getOtherUserId(currentUserId);
+    final otherUserId = widget.connection.getOtherUserId(widget.currentUserId);
 
-    // TODO: Load other user's profile data
-    // For now we'll show placeholder
-    const displayName = 'Connected User';
-    const photoUrl = null;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final displayName = (profile?['name'] as String?)?.trim().isNotEmpty ==
+                true
+            ? (profile!['name'] as String).trim()
+            : 'User';
+        final photoUrl = (profile?['photoUrl'] as String?)?.trim().isNotEmpty ==
+                true
+            ? (profile!['photoUrl'] as String).trim()
+            : null;
+        final bio = (profile?['bio'] as String?)?.trim();
 
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: theme.colorScheme.primaryContainer,
-        child: photoUrl != null
-            ? ClipOval(
-                child: CachedNetworkImage(
-                  imageUrl: photoUrl,
-                  width: 48,
-                  height: 48,
-                  fit: BoxFit.cover,
+        return ListTile(
+          leading: CircleAvatar(
+            radius: 24,
+            backgroundColor: theme.colorScheme.primaryContainer,
+            child: photoUrl != null
+                ? ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: photoUrl,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : Text(
+                    displayName[0].toUpperCase(),
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+          ),
+          title: Text(displayName),
+          subtitle: (bio != null && bio.isNotEmpty)
+              ? Text(
+                  bio,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                )
+              : Text(
+                  'Connected ${_formatDate(widget.connection.connectedAt)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
-              )
-            : Text(
-                displayName[0].toUpperCase(),
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
+          trailing: PopupMenuButton<String>(
+            onSelected: (value) => _handleMenuAction(
+              context,
+              value,
+              otherUserId,
+              otherUserName: displayName,
+              otherUserPhotoUrl: photoUrl,
+            ),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'message',
+                child: ListTile(
+                  leading: Icon(Icons.message_outlined),
+                  title: Text('Message'),
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
-      ),
-      title: const Text(displayName),
-      subtitle: Text(
-        'Connected ${_formatDate(connection.connectedAt)}',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.outline,
-        ),
-      ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (value) => _handleMenuAction(context, value, otherUserId),
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'message',
-            child: ListTile(
-              leading: Icon(Icons.message_outlined),
-              title: Text('Message'),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          const PopupMenuItem(
-            value: 'remove',
-            child: ListTile(
-              leading: Icon(Icons.person_remove_outlined),
-              title: Text('Remove'),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: 'block',
-            child: ListTile(
-              leading: Icon(
-                Icons.block,
-                color: theme.colorScheme.error,
+              const PopupMenuItem(
+                value: 'remove',
+                child: ListTile(
+                  leading: Icon(Icons.person_remove_outlined),
+                  title: Text('Remove'),
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
-              title: Text(
-                'Block',
-                style: TextStyle(color: theme.colorScheme.error),
+              PopupMenuItem(
+                value: 'block',
+                child: ListTile(
+                  leading: Icon(
+                    Icons.block,
+                    color: theme.colorScheme.error,
+                  ),
+                  title: Text(
+                    'Block',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
-              contentPadding: EdgeInsets.zero,
-            ),
+            ],
           ),
-        ],
-      ),
-      onTap: () {
-        // TODO: Navigate to user profile
+          onTap: () {
+            final conversationId = Conversation.createConversationId(
+              widget.currentUserId,
+              otherUserId,
+            );
+            context.push(
+              Routes.chatWith(conversationId),
+              extra: {
+                'currentUserId': widget.currentUserId,
+                'otherUserId': otherUserId,
+                'otherUserName': displayName,
+                'otherUserPhotoUrl': photoUrl,
+              },
+            );
+          },
+        );
       },
     );
   }
@@ -243,19 +322,24 @@ class _ConnectionTile extends StatelessWidget {
   }
 
   void _handleMenuAction(
-      BuildContext context, String action, String otherUserId) {
+    BuildContext context,
+    String action,
+    String otherUserId, {
+    required String otherUserName,
+    required String? otherUserPhotoUrl,
+  }) {
     switch (action) {
       case 'message':
         // Create conversation ID and navigate to chat
         final conversationId =
-            Conversation.createConversationId(currentUserId, otherUserId);
+            Conversation.createConversationId(widget.currentUserId, otherUserId);
         context.push(
           Routes.chatWith(conversationId),
           extra: {
-            'currentUserId': currentUserId,
+            'currentUserId': widget.currentUserId,
             'otherUserId': otherUserId,
-            'otherUserName': 'User', // TODO: Get actual name from profile
-            'otherUserPhotoUrl': null,
+            'otherUserName': otherUserName,
+            'otherUserPhotoUrl': otherUserPhotoUrl,
           },
         );
         break;
@@ -288,7 +372,7 @@ class _ConnectionTile extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              bloc.add(ConnectionRemove(connection.id));
+              bloc.add(ConnectionRemove(widget.connection.id));
             },
             child: const Text('Remove'),
           ),

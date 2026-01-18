@@ -19,7 +19,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.radius"
+    namespace = "com.codeshowoff.radius"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -42,7 +42,7 @@ android {
     defaultConfig {
         // TODO: Change this to your own unique Application ID
         // Example: com.yourcompany.radius
-        applicationId = "com.example.radius"
+        applicationId = "com.codeshowoff.radius"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 31 // Android 12+ only (no legacy Bluetooth/location permissions)

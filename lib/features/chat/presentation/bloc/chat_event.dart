@@ -12,6 +12,8 @@ sealed class ChatEvent extends Equatable {
 class ChatOpen extends ChatEvent {
   final String conversationId;
   final String currentUserId;
+  final String? currentUserName;
+  final String? currentUserPhotoUrl;
   final String otherUserId;
   final String? otherUserName;
   final String? otherUserPhotoUrl;
@@ -19,6 +21,8 @@ class ChatOpen extends ChatEvent {
   const ChatOpen({
     required this.conversationId,
     required this.currentUserId,
+    this.currentUserName,
+    this.currentUserPhotoUrl,
     required this.otherUserId,
     this.otherUserName,
     this.otherUserPhotoUrl,
@@ -28,6 +32,8 @@ class ChatOpen extends ChatEvent {
   List<Object?> get props => [
         conversationId,
         currentUserId,
+      currentUserName,
+      currentUserPhotoUrl,
         otherUserId,
         otherUserName,
         otherUserPhotoUrl,
@@ -121,6 +127,11 @@ class ChatDeleteMessage extends ChatEvent {
 
   @override
   List<Object?> get props => [messageId];
+}
+
+/// Clear all messages in the chat.
+class ChatClear extends ChatEvent {
+  const ChatClear();
 }
 
 /// Internal: Messages updated from stream.

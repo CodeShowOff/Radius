@@ -19,7 +19,7 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     private var pendingServiceData: Data?
     private var pendingResult: FlutterResult?
     
-    private static let channelName = "com.example.radius/ble_advertiser"
+    private static let channelName = "com.codeshowoff.radius/ble_advertiser"
 
     override init() {
         super.init()

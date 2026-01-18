@@ -42,6 +42,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMarkAsRead>(_onMarkAsRead);
     on<ChatSetTyping>(_onSetTyping);
     on<ChatDeleteMessage>(_onDeleteMessage);
+    on<ChatClear>(_onClear);
     on<_ChatMessagesUpdated>(_onMessagesUpdated);
     on<_ChatConversationUpdated>(_onConversationUpdated);
     on<_ChatTypingUpdated>(_onTypingUpdated);
@@ -63,6 +64,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     // Cancel existing subscriptions
     await _cancelSubscriptions();
+
+    // Ensure the conversation exists before subscribing.
+    // If it doesn't exist yet (common when opening chat from Connections),
+    // Firestore will deny reading a non-existent doc under our rules.
+    if (event.currentUserId.trim().isNotEmpty &&
+        event.otherUserId.trim().isNotEmpty) {
+      try {
+        await _chatService.getOrCreateConversation(
+          currentUserId: event.currentUserId,
+          otherUserId: event.otherUserId,
+          currentUserName: (event.currentUserName?.trim().isNotEmpty == true)
+              ? event.currentUserName!.trim()
+              : 'Unknown',
+          otherUserName: (event.otherUserName?.trim().isNotEmpty == true)
+              ? event.otherUserName!.trim()
+              : 'User',
+          currentUserPhotoUrl: (event.currentUserPhotoUrl?.trim().isNotEmpty ==
+                  true)
+              ? event.currentUserPhotoUrl!.trim()
+              : null,
+          otherUserPhotoUrl: (event.otherUserPhotoUrl?.trim().isNotEmpty ==
+                  true)
+              ? event.otherUserPhotoUrl!.trim()
+              : null,
+        );
+      } catch (e) {
+        emit(state.copyWith(
+          status: ChatStatus.error,
+          errorMessage: e.toString(),
+        ));
+        return;
+      }
+    }
 
     // Subscribe to messages stream
     _messagesSubscription =
@@ -445,6 +479,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } catch (e) {
       emit(state.copyWith(errorMessage: e.toString()));
+    }
+  }
+
+  Future<void> _onClear(
+    ChatClear event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    try {
+      await _chatService.clearMessages(
+        state.conversationId!,
+        state.currentUserId!,
+      );
+      // Messages will be updated through the stream
+    } catch (e) {
+      emit(state.copyWith(
+        errorMessage: 'Failed to clear chat: ${e.toString()}',
+      ));
     }
   }
 

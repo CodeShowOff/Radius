@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import 'package:hive/hive.dart';
 import 'package:injectable/injectable.dart';
 
 import '../services/bluetooth/bluetooth_service.dart';
@@ -14,6 +15,8 @@ import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../features/proximity/proximity_service.dart';
 import '../../features/guess_me/data/guess_me_service.dart';
 import '../../features/guess_me/presentation/bloc/guess_me_bloc.dart';
+import '../settings/app_settings_store.dart';
+import '../theme/theme_cubit.dart';
 
 import 'injection.config.dart';
 
@@ -61,6 +64,25 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<IProfileRepository>()) {
     getIt.registerLazySingleton<IProfileRepository>(
       () => ProfileRepositoryImpl(profileService: getIt<ProfileService>()),
+    );
+  }
+
+  // App settings (Hive-backed when available)
+  if (!getIt.isRegistered<AppSettingsStore>()) {
+    getIt.registerLazySingleton<AppSettingsStore>(
+      () {
+        Box<dynamic>? box;
+        if (getIt.isRegistered<Box<dynamic>>(instanceName: 'radius_settings')) {
+          box = getIt<Box<dynamic>>(instanceName: 'radius_settings');
+        }
+        return AppSettingsStore(box: box);
+      },
+    );
+  }
+
+  if (!getIt.isRegistered<ThemeCubit>()) {
+    getIt.registerLazySingleton<ThemeCubit>(
+      () => ThemeCubit(settings: getIt<AppSettingsStore>()),
     );
   }
 

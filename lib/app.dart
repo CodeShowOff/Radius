@@ -6,6 +6,7 @@ import 'core/router/app_router.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/services/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
@@ -51,27 +52,36 @@ class RadiusApp extends StatelessWidget {
           BlocProvider<GuessmeBloc>(
             create: (_) => getIt<GuessmeBloc>(),
           ),
-        ],
-        child: _AuthAwareApp(
-          child: MaterialApp.router(
-            title: 'Radius',
-            debugShowCheckedModeBanner: false,
 
-            // Theme configuration
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.system,
-
-            // Router configuration
-            routerConfig: appRouter,
-
-            // Builder to add app-wide listeners (like connection request notifications)
-            builder: (context, child) {
-              return ConnectionRequestListener(
-                child: child ?? const SizedBox.shrink(),
-              );
-            },
+          // Theme settings
+          BlocProvider<ThemeCubit>(
+            create: (_) => getIt<ThemeCubit>(),
           ),
+        ],
+        child: BlocBuilder<ThemeCubit, ThemeMode>(
+          builder: (context, themeMode) {
+            return _AuthAwareApp(
+              child: MaterialApp.router(
+                title: 'Radius',
+                debugShowCheckedModeBanner: false,
+
+                // Theme configuration
+                theme: AppTheme.lightTheme,
+                darkTheme: AppTheme.darkTheme,
+                themeMode: themeMode,
+
+                // Router configuration
+                routerConfig: appRouter,
+
+                // Builder to add app-wide listeners (like connection request notifications)
+                builder: (context, child) {
+                  return ConnectionRequestListener(
+                    child: child ?? const SizedBox.shrink(),
+                  );
+                },
+              ),
+            );
+          },
         ),
       ),
     );

@@ -31,7 +31,7 @@ Use this checklist before building and releasing your app to ensure everything i
 ## ✅ Android Configuration
 
 ### Application ID
-- [ ] Change package name from `com.example.radius` to your unique ID
+- [ ] Change package name from `com.codeshowoff.radius` to your unique ID
   - File: `android/app/build.gradle.kts`
   - Format: `com.yourcompany.appname`
 
@@ -68,7 +68,7 @@ Use this checklist before building and releasing your app to ensure everything i
 
 ### Bundle Identifier
 - [ ] Open project in Xcode: `open ios/Runner.xcworkspace`
-- [ ] Change Bundle Identifier from `com.example.radius`
+- [ ] Change Bundle Identifier from `com.codeshowoff.radius`
   - Location: Runner → Signing & Capabilities
   - Must match your Apple Developer account
 

@@ -57,6 +57,16 @@ final class ConversationsDelete extends ConversationsEvent {
   List<Object?> get props => [conversationId];
 }
 
+/// Clear all messages in a conversation.
+final class ConversationsClear extends ConversationsEvent {
+  final String conversationId;
+
+  const ConversationsClear({required this.conversationId});
+
+  @override
+  List<Object?> get props => [conversationId];
+}
+
 /// Toggle mute for a conversation.
 final class ConversationsMuteToggle extends ConversationsEvent {
   final String conversationId;

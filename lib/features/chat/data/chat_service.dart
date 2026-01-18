@@ -92,11 +92,19 @@ class ChatService {
         Conversation.createConversationId(currentUserId, otherUserId);
 
     try {
-      // Check if conversation exists
-      final doc = await _conversationsRef.doc(conversationId).get();
-
-      if (doc.exists) {
-        return ConversationModel.fromFirestore(doc).toEntity();
+      // Attempt to read first (fast path for existing conversations).
+      // NOTE: With our Firestore rules, reading a non-existent conversation doc
+      // can yield permission-denied (because `resource` is null), so we treat
+      // that as "doesn't exist yet" and create.
+      try {
+        final doc = await _conversationsRef.doc(conversationId).get();
+        if (doc.exists) {
+          return ConversationModel.fromFirestore(doc).toEntity();
+        }
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied') {
+          rethrow;
+        }
       }
 
       // Create new conversation
@@ -669,6 +677,60 @@ class ChatService {
       userId: userId,
       muted: mute,
     );
+  }
+
+  /// Clears all messages in a conversation (soft delete all messages).
+  Future<void> clearMessages(String conversationId, String userId) async {
+    try {
+      // Get all messages in the conversation
+      final messagesSnapshot = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .get();
+
+      if (messagesSnapshot.docs.isEmpty) {
+        _logger.d('No messages to clear');
+        return;
+      }
+
+      // Firestore batch limit is 500 operations - process in chunks
+      const int batchSize = 500;
+      final docs = messagesSnapshot.docs;
+      
+      for (int i = 0; i < docs.length; i += batchSize) {
+        final batch = _firestore.batch();
+        final end = (i + batchSize < docs.length) ? i + batchSize : docs.length;
+        
+        for (int j = i; j < end; j++) {
+          batch.update(docs[j].reference, {
+            'isDeleted': true,
+            'text': '',
+            'mediaUrl': FieldValue.delete(),
+          });
+        }
+        
+        await batch.commit();
+        _logger.d('Cleared batch ${(i ~/ batchSize) + 1}: ${end - i} messages');
+      }
+
+      // Update conversation to clear last message
+      await _conversationsRef.doc(conversationId).update({
+        'lastMessage': '',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      });
+
+      _logger.d('Successfully cleared ${docs.length} messages for conversation: $conversationId');
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error clearing messages', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
+    } catch (e, stack) {
+      _logger.e('Error clearing messages', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to clear messages',
+        code: 'chat-clear-failed',
+        originalError: e,
+      );
+    }
   }
 
   /// Deletes a conversation for a user (soft delete via archive + clear).

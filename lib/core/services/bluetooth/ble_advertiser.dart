@@ -18,7 +18,7 @@ void _log(String message) {
 /// Advertises Service UUID (0xBEEF) + 7-byte username in Service Data.
 class BleAdvertiser {
   static const MethodChannel _channel =
-      MethodChannel('com.example.radius/ble_advertiser');
+  MethodChannel('com.codeshowoff.radius/ble_advertiser');
 
   bool _isAdvertising = false;
   String? _lastError;

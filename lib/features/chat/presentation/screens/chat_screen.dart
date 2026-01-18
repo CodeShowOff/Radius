@@ -8,6 +8,8 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/message.dart';
 import '../bloc/chat_bloc.dart';
 import '../bloc/conversations_bloc.dart';
@@ -40,11 +42,25 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoadingMore = false;
   Connection? _connection;
 
+  String? _currentUserName;
+  String? _currentUserPhotoUrl;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
+
+    // Cache current user's profile info (used when creating a new conversation).
+    try {
+      final profileState = context.read<ProfileBloc>().state;
+      if (profileState is ProfileLoaded) {
+        _currentUserName = profileState.profile.name;
+        _currentUserPhotoUrl = profileState.profile.photoUrl;
+      }
+    } catch (_) {
+      // ProfileBloc may not be available in some navigation flows.
+    }
 
     // Notify notification service that user is viewing this conversation
     try {
@@ -58,6 +74,8 @@ class _ChatScreenState extends State<ChatScreen> {
     context.read<ChatBloc>().add(ChatOpen(
           conversationId: widget.conversationId,
           currentUserId: widget.currentUserId,
+          currentUserName: _currentUserName,
+          currentUserPhotoUrl: _currentUserPhotoUrl,
           otherUserId: widget.otherUserId,
           otherUserName: widget.otherUserName,
           otherUserPhotoUrl: widget.otherUserPhotoUrl,
@@ -193,13 +211,35 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       },
       child: Scaffold(
-        appBar: _ChatAppBar(
-          name: widget.otherUserName,
-          photoUrl: widget.otherUserPhotoUrl,
-          onBackPressed: () => Navigator.of(context).pop(),
-          onMenuSelected: (value) => _handleMenuAction(context, value),
-          isDisconnected: isDisconnected,
-          isBlocked: isBlocked,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: BlocBuilder<ChatBloc, ChatState>(
+            buildWhen: (prev, curr) =>
+                prev.otherUserName != curr.otherUserName ||
+                prev.otherUserPhotoUrl != curr.otherUserPhotoUrl ||
+                prev.conversation != curr.conversation,
+            builder: (context, state) {
+              final effectiveName =
+                  (state.otherUserName?.trim().isNotEmpty == true)
+                      ? state.otherUserName!.trim()
+                      : widget.otherUserName;
+              final effectivePhotoUrl =
+                  (state.otherUserPhotoUrl?.trim().isNotEmpty == true)
+                      ? state.otherUserPhotoUrl!.trim()
+                      : widget.otherUserPhotoUrl;
+              final isMuted = state.conversation?.isMutedBy(widget.currentUserId) ?? false;
+
+              return _ChatAppBar(
+                name: effectiveName,
+                photoUrl: effectivePhotoUrl,
+                onBackPressed: () => Navigator.of(context).pop(),
+                onMenuSelected: (value) => _handleMenuAction(context, value),
+                isDisconnected: isDisconnected,
+                isBlocked: isBlocked,
+                isMuted: isMuted,
+              );
+            },
+          ),
         ),
         body: Column(
           children: [
@@ -288,6 +328,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               context.read<ChatBloc>().add(ChatOpen(
                                     conversationId: widget.conversationId,
                                     currentUserId: widget.currentUserId,
+                                    currentUserName: _currentUserName,
+                                    currentUserPhotoUrl: _currentUserPhotoUrl,
                                     otherUserId: widget.otherUserId,
                                     otherUserName: widget.otherUserName,
                                     otherUserPhotoUrl: widget.otherUserPhotoUrl,
@@ -358,13 +400,16 @@ class _ChatScreenState extends State<ChatScreen> {
         _confirmDeleteConversation(context);
         break;
       case 'mute':
-        // TODO: Implement mute
+        _toggleMute(context);
         break;
       case 'clear':
-        // TODO: Implement clear
+        _confirmClearChat(context);
         break;
       case 'block':
-        // TODO: Navigate to connection management
+        _confirmBlockUser(context);
+        break;
+      case 'unblock':
+        _confirmUnblockUser(context);
         break;
     }
   }
@@ -412,6 +457,158 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  void _toggleMute(BuildContext context) {
+    final chatState = context.read<ChatBloc>().state;
+    final currentMuteStatus = chatState.conversation?.isMutedBy(widget.currentUserId) ?? false;
+    final newMuteStatus = !currentMuteStatus;
+    
+    // Toggle mute status
+    context.read<ConversationsBloc>().add(
+          ConversationsMuteToggle(
+            conversationId: widget.conversationId,
+            mute: newMuteStatus,
+          ),
+        );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(newMuteStatus ? 'Notifications muted' : 'Notifications unmuted'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _confirmClearChat(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear Chat?'),
+        content: const Text(
+          'This will delete all messages in this chat. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
+              // Clear chat via bloc
+              context.read<ChatBloc>().add(const ChatClear());
+
+              // Show confirmation
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Chat cleared'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmBlockUser(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Block User?'),
+        content: Text(
+          'Blocking ${widget.otherUserName} will prevent them from sending you messages. '
+          'You can unblock them later from settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
+              // Block user via connections bloc
+              context.read<ConnectionBloc>().add(
+                    ConnectionBlockUser(widget.otherUserId),
+                  );
+
+              // Wait a bit for the operation to propagate
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              // Go back since chat is now blocked
+              if (context.mounted) {
+                Navigator.of(context).pop();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${widget.otherUserName} has been blocked'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmUnblockUser(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unblock User?'),
+        content: Text(
+          'Unblocking ${widget.otherUserName} will allow them to send you messages again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
+              // Unblock user via connections bloc
+              context.read<ConnectionBloc>().add(
+                    ConnectionUnblockUser(widget.otherUserId),
+                  );
+
+              // Wait for the operation to complete
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${widget.otherUserName} has been unblocked'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+
+                // Refresh connection status
+                _checkConnectionStatus();
+              }
+            },
+            child: const Text('Unblock'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -421,6 +618,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final void Function(String) onMenuSelected;
   final bool isDisconnected;
   final bool isBlocked;
+  final bool isMuted;
 
   const _ChatAppBar({
     required this.name,
@@ -429,6 +627,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onMenuSelected,
     this.isDisconnected = false,
     this.isBlocked = false,
+    this.isMuted = false,
   });
 
   @override
@@ -495,18 +694,28 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   contentPadding: EdgeInsets.zero,
                 ),
               )
-            else ...const [
+            else ...[
               PopupMenuItem(
                 value: 'mute',
-                child: Text('Mute notifications'),
+                child: Text(isMuted ? 'Unmute notifications' : 'Mute notifications'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'clear',
                 child: Text('Clear chat'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
+                value: 'block',
+                child: Text('Block user'),
+              ),
+              const PopupMenuItem(
                 value: 'delete',
                 child: Text('Delete conversation'),
+              ),
+            ],
+            if (isBlocked) ...[
+              const PopupMenuItem(
+                value: 'unblock',
+                child: Text('Unblock user'),
               ),
             ],
           ],
