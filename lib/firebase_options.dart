@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBqDQJIooySxhx96nAE_PjwRKpVZk-ddDU',
-    appId: '1:486551872927:android:e368a91d01ed3f84dcc9aa',
+    appId: '1:486551872927:android:9d8bfaf52a369100dcc9aa',
     messagingSenderId: '486551872927',
     projectId: 'radiusapp-ecfcd',
     storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
@@ -60,21 +60,23 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCQvShQy75UYraL7T8gbMd9ckS5OamX5qs',
-    appId: '1:486551872927:ios:e614a39413d0b1a7dcc9aa',
+    appId: '1:486551872927:ios:a5895d5ac8a3bf15dcc9aa',
     messagingSenderId: '486551872927',
     projectId: 'radiusapp-ecfcd',
     storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    iosClientId: '486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com',
+    androidClientId: '486551872927-4ct5jov5nfmdhpsh6a08c3vmbch3cqqt.apps.googleusercontent.com',
+    iosClientId: '486551872927-sf24d31nm53illbf2ijircm7a17s4dsj.apps.googleusercontent.com',
     iosBundleId: 'com.codeshowoff.radius',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCQvShQy75UYraL7T8gbMd9ckS5OamX5qs',
-    appId: '1:486551872927:ios:e614a39413d0b1a7dcc9aa',
+    appId: '1:486551872927:ios:a5895d5ac8a3bf15dcc9aa',
     messagingSenderId: '486551872927',
     projectId: 'radiusapp-ecfcd',
     storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    iosClientId: '486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com',
+    androidClientId: '486551872927-4ct5jov5nfmdhpsh6a08c3vmbch3cqqt.apps.googleusercontent.com',
+    iosClientId: '486551872927-sf24d31nm53illbf2ijircm7a17s4dsj.apps.googleusercontent.com',
     iosBundleId: 'com.codeshowoff.radius',
   );
 

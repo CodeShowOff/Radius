@@ -47,19 +47,19 @@ extension GetItInjectableX on _i174.GetIt {
       environment,
       environmentFilter,
     );
-    final notificationModule = _$NotificationModule();
     final firebaseModule = _$FirebaseModule();
+    final notificationModule = _$NotificationModule();
     final chatModule = _$ChatModule();
-    gh.lazySingleton<_i892.FirebaseMessaging>(
-        () => notificationModule.firebaseMessaging);
-    gh.lazySingleton<_i163.FlutterLocalNotificationsPlugin>(
-        () => notificationModule.localNotifications);
     gh.lazySingleton<_i974.FirebaseFirestore>(() => firebaseModule.firestore);
     gh.lazySingleton<_i59.FirebaseAuth>(() => firebaseModule.firebaseAuth);
     gh.lazySingleton<_i457.FirebaseStorage>(
         () => firebaseModule.firebaseStorage);
     gh.lazySingleton<_i116.GoogleSignIn>(() => firebaseModule.googleSignIn);
     gh.lazySingleton<_i974.Logger>(() => firebaseModule.logger);
+    gh.lazySingleton<_i892.FirebaseMessaging>(
+        () => notificationModule.firebaseMessaging);
+    gh.lazySingleton<_i163.FlutterLocalNotificationsPlugin>(
+        () => notificationModule.localNotifications);
     gh.lazySingleton<_i356.MediaUploadService>(
         () => chatModule.mediaUploadService(
               gh<_i457.FirebaseStorage>(),
@@ -96,8 +96,8 @@ extension GetItInjectableX on _i174.GetIt {
   }
 }
 
-class _$NotificationModule extends _i288.NotificationModule {}
-
 class _$FirebaseModule extends _i616.FirebaseModule {}
+
+class _$NotificationModule extends _i288.NotificationModule {}
 
 class _$ChatModule extends _i396.ChatModule {}
