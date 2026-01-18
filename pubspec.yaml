@@ -81,14 +81,9 @@ flutter:
   #   - assets/icons/
 
 flutter_launcher_icons:
-  android: true
+  android: "launcher_icon"  # Disables adaptive icons
   ios: true
-  image_path: "assets/icon/app_icon.png"  # You'll need to add your icon here
-  # Optionally customize for different platforms:
-  # image_path_android: "assets/icon/icon_android.png"
-  # image_path_ios: "assets/icon/icon_ios.png"
-  adaptive_icon_background: "#FFFFFF"  # Customize the background color for Android
-  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  image_path: "assets/icon/app_icon.png"
   web:
     generate: true
     image_path: "assets/icon/app_icon.png"
