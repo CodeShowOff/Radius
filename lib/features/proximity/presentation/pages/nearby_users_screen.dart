@@ -10,6 +10,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
+import '../../../connections/data/connection_service.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/nearby_user.dart';
@@ -42,6 +43,10 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshBlePermissions());
+    // Ensure advertising is running when screen is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureAdvertisingRunning();
+    });
   }
 
   @override
@@ -76,6 +81,23 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshBlePermissions());
       bloc.add(const NearbyUsersAppResumed());
+      // Also ensure advertising is running when app resumes
+      _ensureAdvertisingRunning();
+    }
+  }
+
+  /// Ensures advertising is running when screen is visible.
+  void _ensureAdvertisingRunning() {
+    try {
+      final bloc = context.read<NearbyUsersBloc>();
+      final state = bloc.state;
+
+      // If not advertising, trigger restart
+      if (!state.isAdvertising) {
+        bloc.add(const NearbyUsersAppResumed());
+      }
+    } catch (_) {
+      // Ignore if bloc is not available
     }
   }
 
@@ -801,14 +823,25 @@ class _NearbyUsersList extends StatelessWidget {
           final user = users[index];
 
           // Use RepaintBoundary for smoother scrolling
+          // Wrap with BlocBuilder to react to connection state changes
           return RepaintBoundary(
-            child: NearbyUserCard(
-              key: ValueKey(user.username),
-              user: user,
-              onTap: () => _showUserDetails(context, user),
-              onConnect: user.isConnected
-                  ? null
-                  : () => _connectWithUser(context, user),
+            child: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+              buildWhen: (previous, current) {
+                // Rebuild when connection state changes for this user
+                final prevState = previous.getStateForUser(user.userId ?? '');
+                final currState = current.getStateForUser(user.userId ?? '');
+                return prevState != currState;
+              },
+              builder: (context, connectionState) {
+                return NearbyUserCard(
+                  key: ValueKey(user.username),
+                  user: user,
+                  onTap: () => _showUserDetails(context, user),
+                  onConnect: user.isConnected
+                      ? null
+                      : () => _connectWithUser(context, user),
+                );
+              },
             ),
           );
         },
@@ -1107,124 +1140,180 @@ class _UserDetailsSheet extends StatelessWidget {
                 const SizedBox(height: 24),
               ],
 
-              // Connect button
-              if (!user.isConnected)
-                Builder(
-                  builder: (builderContext) {
+              // Connect button - wrapped with BlocBuilder for real-time updates
+              BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                buildWhen: (previous, current) {
+                  // Rebuild when connection state changes for this user
+                  final prevState = previous.getStateForUser(user.userId ?? '');
+                  final currState = current.getStateForUser(user.userId ?? '');
+                  return prevState != currState;
+                },
+                builder: (context, connectionState) {
+                  final userConnectionState =
+                      connectionState.getStateForUser(user.userId ?? '');
+                  final isConnected =
+                      userConnectionState == UserConnectionState.connected;
+                  final requestSent =
+                      userConnectionState == UserConnectionState.requestSent;
+                  final requestReceived = userConnectionState ==
+                      UserConnectionState.requestReceived;
+
+                  if (isConnected) {
+                    // Show message button for connected users
+                    return Builder(
+                      builder: (builderContext) {
+                        // Get current user ID from AuthBloc
+                        final authState = builderContext.read<AuthBloc>().state;
+                        final currentUserId = authState is AuthAuthenticated
+                            ? authState.user.id
+                            : '';
+                        final otherUserId = user.userId;
+
+                        // Don't show message button if we don't have the user's ID
+                        if (otherUserId == null) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return OutlinedButton.icon(
+                          onPressed: () {
+                            // Capture navigation data before popping
+                            final conversationId =
+                                Conversation.createConversationId(
+                              currentUserId,
+                              otherUserId,
+                            );
+                            final routeExtra = {
+                              'currentUserId': currentUserId,
+                              'otherUserId': otherUserId,
+                              'otherUserName': user.displayName ?? 'Unknown',
+                              'otherUserPhotoUrl': user.photoUrl,
+                            };
+                            final route = Routes.chatWith(conversationId);
+
+                            // Pop first, then navigate using the parent context
+                            Navigator.pop(builderContext);
+
+                            // Use a post-frame callback to ensure navigation happens
+                            // after the bottom sheet is fully dismissed
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              // Check if the parent navigator context is still valid
+                              if (context.mounted) {
+                                context.push(route, extra: routeExtra);
+                              }
+                            });
+                          },
+                          icon: const Icon(Icons.chat_outlined),
+                          label: const Text('Message'),
+                        );
+                      },
+                    );
+                  } else if (requestSent) {
+                    // Show pending state
+                    return OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.schedule),
+                      label: const Text('Request Sent'),
+                    );
+                  } else if (requestReceived) {
+                    // Show accept button
                     return FilledButton.icon(
                       onPressed: () {
-                        // Get current user info
-                        final authState = builderContext.read<AuthBloc>().state;
-                        if (authState is! AuthAuthenticated) {
+                        final request = connectionState
+                            .getReceivedRequestFrom(user.userId ?? '');
+                        if (request != null) {
+                          context.read<ConnectionBloc>().add(
+                                ConnectionAcceptRequest(request.id),
+                              );
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Please sign in to send connection requests')),
+                            SnackBar(
+                              content: Text(
+                                  'Accepted connection from ${user.displayName ?? 'user'}'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
                           );
-                          return;
                         }
+                      },
+                      icon: const Icon(Icons.check),
+                      label: const Text('Accept Request'),
+                    );
+                  } else {
+                    // Show connect button
+                    return Builder(
+                      builder: (builderContext) {
+                        return FilledButton.icon(
+                          onPressed: () {
+                            // Get current user info
+                            final authState =
+                                builderContext.read<AuthBloc>().state;
+                            if (authState is! AuthAuthenticated) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Please sign in to send connection requests')),
+                              );
+                              return;
+                            }
 
-                        // Get receiver's user ID
-                        final receiverId = user.userId;
-                        if (receiverId == null) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            // Get receiver's user ID
+                            final receiverId = user.userId;
+                            if (receiverId == null) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Cannot connect: User ID not available')),
+                              );
+                              return;
+                            }
+
+                            // Get sender's profile info
+                            final profileState =
+                                builderContext.read<ProfileBloc>().state;
+                            String? senderDisplayName;
+                            String? senderPhotoUrl;
+                            if (profileState is ProfileLoaded) {
+                              senderDisplayName = profileState.profile.name;
+                              senderPhotoUrl = profileState.profile.photoUrl;
+                            }
+
+                            // Set current user info on the ConnectionBloc
+                            builderContext
+                                .read<ConnectionBloc>()
+                                .setCurrentUser(
+                                  userId: authState.user.id,
+                                  displayName: senderDisplayName,
+                                  photoUrl: senderPhotoUrl,
+                                );
+
+                            // Send connection request
+                            builderContext
+                                .read<ConnectionBloc>()
+                                .add(ConnectionSendRequest(
+                                  receiverId: receiverId,
+                                  source: 'nearby',
+                                  receiverDisplayName: user.displayName,
+                                  receiverPhotoUrl: user.photoUrl,
+                                ));
+
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
                                 content: Text(
-                                    'Cannot connect: User ID not available')),
-                          );
-                          return;
-                        }
-
-                        // Get sender's profile info
-                        final profileState =
-                            builderContext.read<ProfileBloc>().state;
-                        String? senderDisplayName;
-                        String? senderPhotoUrl;
-                        if (profileState is ProfileLoaded) {
-                          senderDisplayName = profileState.profile.name;
-                          senderPhotoUrl = profileState.profile.photoUrl;
-                        }
-
-                        // Set current user info on the ConnectionBloc
-                        builderContext.read<ConnectionBloc>().setCurrentUser(
-                              userId: authState.user.id,
-                              displayName: senderDisplayName,
-                              photoUrl: senderPhotoUrl,
+                                    'Connection request sent to ${user.displayName ?? 'user'}'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
                             );
-
-                        // Send connection request
-                        builderContext
-                            .read<ConnectionBloc>()
-                            .add(ConnectionSendRequest(
-                              receiverId: receiverId,
-                              source: 'nearby',
-                              receiverDisplayName: user.displayName,
-                              receiverPhotoUrl: user.photoUrl,
-                            ));
-
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                'Connection request sent to ${user.displayName ?? 'user'}'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
+                          },
+                          icon: const Icon(Icons.person_add),
+                          label: const Text('Connect'),
                         );
                       },
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Connect'),
                     );
-                  },
-                )
-              else
-                Builder(
-                  builder: (builderContext) {
-                    // Get current user ID from AuthBloc
-                    final authState = builderContext.read<AuthBloc>().state;
-                    final currentUserId =
-                        authState is AuthAuthenticated ? authState.user.id : '';
-                    final otherUserId = user.userId;
-
-                    // Don't show message button if we don't have the user's ID
-                    if (otherUserId == null) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return OutlinedButton.icon(
-                      onPressed: () {
-                        // Capture navigation data before popping
-                        final conversationId =
-                            Conversation.createConversationId(
-                          currentUserId,
-                          otherUserId,
-                        );
-                        final routeExtra = {
-                          'currentUserId': currentUserId,
-                          'otherUserId': otherUserId,
-                          'otherUserName': user.displayName ?? 'Unknown',
-                          'otherUserPhotoUrl': user.photoUrl,
-                        };
-                        final route = Routes.chatWith(conversationId);
-
-                        // Pop first, then navigate using the parent context
-                        Navigator.pop(builderContext);
-
-                        // Use a post-frame callback to ensure navigation happens
-                        // after the bottom sheet is fully dismissed
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          // Check if the parent navigator context is still valid
-                          if (context.mounted) {
-                            context.push(route, extra: routeExtra);
-                          }
-                        });
-                      },
-                      icon: const Icon(Icons.chat_outlined),
-                      label: const Text('Message'),
-                    );
-                  },
-                ),
+                  }
+                },
+              ),
             ],
           ),
         );

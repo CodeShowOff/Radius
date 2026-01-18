@@ -126,6 +126,17 @@ class ProximityService {
     } else if (bleState == BluetoothServiceState.bluetoothOff) {
       _setError('Bluetooth is turned off');
       _isAdvertising = false;
+    } else if (bleState == BluetoothServiceState.ready ||
+        bleState == BluetoothServiceState.active) {
+      // Bluetooth is back on - restart advertising if we have a username
+      if (_currentUsername != null && !_isAdvertising) {
+        _log(
+            '[ProximityService] Bluetooth is on, restarting advertising for $_currentUsername');
+        _bluetoothService.startAdvertising(_currentUsername!).then((started) {
+          _isAdvertising = started;
+          _log('[ProximityService] Advertising restarted: $started');
+        });
+      }
     }
   }
 

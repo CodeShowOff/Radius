@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/di/injection.dart';
+import '../../../connections/data/connection_service.dart';
+import '../../../connections/domain/entities/connection.dart';
 import '../../domain/entities/message.dart';
 import '../bloc/chat_bloc.dart';
+import '../bloc/conversations_bloc.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/message_bubble.dart';
 
@@ -30,11 +34,13 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  Connection? _connection;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _checkConnectionStatus();
 
     // Open the chat
     context.read<ChatBloc>().add(ChatOpen(
@@ -44,6 +50,23 @@ class _ChatScreenState extends State<ChatScreen> {
           otherUserName: widget.otherUserName,
           otherUserPhotoUrl: widget.otherUserPhotoUrl,
         ));
+  }
+
+  Future<void> _checkConnectionStatus() async {
+    try {
+      final connectionService = getIt<ConnectionService>();
+      final connection = await connectionService.getConnection(
+        widget.currentUserId,
+        widget.otherUserId,
+      );
+      if (mounted) {
+        setState(() {
+          _connection = connection;
+        });
+      }
+    } catch (e) {
+      // Connection check failed, continue without connection info
+    }
   }
 
   late final ChatBloc _chatBloc;
@@ -98,14 +121,72 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDisconnected =
+        _connection?.status == ConnectionStatus.disconnected;
+    final bool isBlocked = _connection?.status == ConnectionStatus.blocked;
+
     return Scaffold(
       appBar: _ChatAppBar(
         name: widget.otherUserName,
         photoUrl: widget.otherUserPhotoUrl,
         onBackPressed: () => Navigator.of(context).pop(),
+        onMenuSelected: (value) => _handleMenuAction(context, value),
+        isDisconnected: isDisconnected,
+        isBlocked: isBlocked,
       ),
       body: Column(
         children: [
+          // Disconnection banner
+          if (isDisconnected)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.link_off,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Connection removed. You can view old messages but cannot send new ones.',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (isBlocked)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.block,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'This user has been blocked. You can view old messages.',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Messages list
           Expanded(
             child: BlocConsumer<ChatBloc, ChatState>(
@@ -162,9 +243,94 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           // Input
-          ChatInput(
-            onSend: _sendMessage,
-            onTypingChanged: _onTypingChanged,
+          if (!isDisconnected && !isBlocked)
+            ChatInput(
+              onSend: _sendMessage,
+              onTypingChanged: _onTypingChanged,
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).dividerColor,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Text(
+                isBlocked
+                    ? 'You cannot send messages to a blocked user'
+                    : 'You cannot send messages. Connection has been removed.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handleMenuAction(BuildContext context, String action) {
+    switch (action) {
+      case 'delete':
+        _confirmDeleteConversation(context);
+        break;
+      case 'mute':
+        // TODO: Implement mute
+        break;
+      case 'clear':
+        // TODO: Implement clear
+        break;
+      case 'block':
+        // TODO: Navigate to connection management
+        break;
+    }
+  }
+
+  void _confirmDeleteConversation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Conversation?'),
+        content: const Text(
+          'This will permanently delete all messages in this conversation. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
+              // Delete conversation via conversations bloc
+              context.read<ConversationsBloc>().add(
+                    ConversationsDelete(conversationId: widget.conversationId),
+                  );
+
+              // Go back to conversations list
+              Navigator.of(context).pop();
+
+              // Show confirmation
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Conversation deleted'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -176,11 +342,17 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String name;
   final String? photoUrl;
   final VoidCallback onBackPressed;
+  final void Function(String) onMenuSelected;
+  final bool isDisconnected;
+  final bool isBlocked;
 
   const _ChatAppBar({
     required this.name,
     this.photoUrl,
     required this.onBackPressed,
+    required this.onMenuSelected,
+    this.isDisconnected = false,
+    this.isBlocked = false,
   });
 
   @override
@@ -233,22 +405,34 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
-          onSelected: (value) {
-            // Handle menu actions
-          },
+          onSelected: onMenuSelected,
           itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'mute',
-              child: Text('Mute notifications'),
-            ),
-            const PopupMenuItem(
-              value: 'clear',
-              child: Text('Clear chat'),
-            ),
-            const PopupMenuItem(
-              value: 'block',
-              child: Text('Block user'),
-            ),
+            if (isDisconnected || isBlocked)
+              const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text(
+                    'Delete Conversation',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              )
+            else ...const [
+              PopupMenuItem(
+                value: 'mute',
+                child: Text('Mute notifications'),
+              ),
+              PopupMenuItem(
+                value: 'clear',
+                child: Text('Clear chat'),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('Delete conversation'),
+              ),
+            ],
           ],
         ),
       ],

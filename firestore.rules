@@ -324,12 +324,20 @@ service cloud.firestore {
           return isAuthenticated() && request.auth.uid == resource.data.senderId;
         }
         
-        // RULE: Only conversation participants can read messages
+        /// Check if the two participants are still connected (not disconnected/blocked)
+        function areParticipantsConnected() {
+          let conversation = get(/databases/$(database)/documents/conversations/$(conversationId));
+          let participants = conversation.data.participantIds;
+          return areConnected(participants[0], participants[1]);
+        }
+        
+        // RULE: Only conversation participants can read messages (even if disconnected - for history)
         allow read: if isAuthenticated() && isConversationMember();
         
-        // RULE: Only participants can send, sender must be authenticated user
+        // RULE: Only participants can send, must be connected (not disconnected/blocked)
         allow create: if isAuthenticated() 
           && isConversationMember()
+          && areParticipantsConnected()
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.keys().hasAll(['senderId', 'text', 'sentAt'])
           && request.resource.data.text.size() <= 5000; // Max message length
@@ -378,6 +386,78 @@ service cloud.firestore {
       // RULE: No user updates or deletes - admin only
       allow update, delete: if false;
     }
+    
+    // ============================================================
+    // GUESS ME - Anonymous Game-Based Chat
+    // ============================================================
+    
+    /// Check if user is a participant in a GuessMe session
+    function isGuessmeParticipant(sessionData) {
+      return request.auth.uid == sessionData.player1Id 
+        || request.auth.uid == sessionData.player2Id;
+    }
+    
+    // GuessMe matchmaking queue
+    match /guess_me_queue/{queueId} {
+      // RULE: Users can read to find matches
+      allow read: if isAuthenticated();
+      
+      // RULE: Users can only create their own queue entry
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'joinedAt', 'nearbyUserIds']);
+      
+      // RULE: Users can update their own entry (extend timeout)
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+      
+      // RULE: Users can delete their own queue entry
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // GuessMe game sessions
+    match /guess_me_sessions/{sessionId} {
+      // RULE: Only participants can read their session
+      allow read: if isAuthenticated() 
+        && isGuessmeParticipant(resource.data);
+      
+      // RULE: Authenticated users can create sessions (matchmaking service)
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['player1Id', 'player2Id', 'status', 'createdAt', 'expiresAt'])
+        && (request.resource.data.player1Id == request.auth.uid 
+            || request.resource.data.player2Id == request.auth.uid);
+      
+      // RULE: Only participants can update session (guess checks, status)
+      allow update: if isAuthenticated() 
+        && isGuessmeParticipant(resource.data)
+        // Cannot change core fields
+        && request.resource.data.player1Id == resource.data.player1Id
+        && request.resource.data.player2Id == resource.data.player2Id
+        && request.resource.data.createdAt == resource.data.createdAt;
+      
+      // RULE: No deletes - sessions expire naturally or are cleaned up by admin
+      allow delete: if false;
+      
+      // GuessMe messages within a session
+      match /messages/{messageId} {
+        // RULE: Only session participants can read messages
+        allow read: if isAuthenticated() 
+          && isGuessmeParticipant(get(/databases/$(database)/documents/guess_me_sessions/$(sessionId)).data);
+        
+        // RULE: Only session participants can send messages
+        allow create: if isAuthenticated()
+          && isGuessmeParticipant(get(/databases/$(database)/documents/guess_me_sessions/$(sessionId)).data)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp', 'type']);
+        
+        // RULE: No updates or deletes - messages are immutable
+        allow update, delete: if false;
+      }
+    }
+    
+    // GuessMe user stats (stored in profiles/userId/guess_me_stats)
+    // Note: Stats are stored under profiles/{userId}/stats/guessme for privacy
     
     // ============================================================
     // APP CONFIGURATION (read-only)

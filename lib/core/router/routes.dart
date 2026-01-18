@@ -35,4 +35,12 @@ abstract class Routes {
   static const String diagnosticsLogs = '/settings/diagnostics-logs';
   static const String privacySettings = '/settings/privacy';
   static const String helpSupport = '/help-support';
+
+  // GuessMe routes
+  static const String guessme = '/guessme';
+  static const String guessmeGame = '/guessme/game';
+
+  /// Helper to build a GuessMe game route with session ID.
+  static String guessmeGameWith(String sessionId) =>
+      '/guessme/game?sessionId=$sessionId';
 }

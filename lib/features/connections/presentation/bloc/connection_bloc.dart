@@ -255,10 +255,16 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
             Map<String, UserConnectionState>.from(state.userConnectionStates);
         updatedStates[request.receiverId] = UserConnectionState.notConnected;
 
+        // Optimistically remove from sent requests list
+        // The stream will update, but this provides immediate feedback
+        final updatedSentRequests =
+            state.sentRequests.where((r) => r.id != event.requestId).toList();
+
         emit(state.copyWith(
           isActionLoading: false,
           processingId: null,
           userConnectionStates: updatedStates,
+          sentRequests: updatedSentRequests,
         ));
 
       case ConnectionFailure<void>():

@@ -321,7 +321,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Foreground-only: Bluetooth scanning and advertising only run while the Nearby screen is open.',
+                            'Advertising runs while the app is open (foreground or in recent apps). Scanning runs for 15 seconds when you tap "Find People Nearby".',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.outline,
                             ),
@@ -396,19 +396,19 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                   icon: Icons.broadcast_on_personal,
                   title: 'BLE Advertising',
                   description:
-                      'Your device broadcasts an anonymous ID so others can discover you. Your real identity is only revealed through the app.',
+                      'Your device broadcasts your username so nearby Radius users can discover you. Only connected users can chat with you.',
                 ),
                 const _InfoItem(
                   icon: Icons.security,
                   title: 'Privacy Protection',
                   description:
-                      'Your anonymous ID rotates every 15 minutes for enhanced privacy. No personal information is shared via Bluetooth.',
+                      'Only your username is visible via Bluetooth for discovery. You control who can connect and chat with you.',
                 ),
                 const _InfoItem(
                   icon: Icons.battery_charging_full,
                   title: 'Battery Optimized',
                   description:
-                      'Discovery uses intermittent scanning (10s scan every 30s) to preserve battery life.',
+                      'BLE uses minimal power. Scanning runs for 15 seconds on demand. Advertising is lightweight and battery-efficient.',
                 ),
               ],
             ),

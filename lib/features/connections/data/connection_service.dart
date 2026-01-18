@@ -123,28 +123,71 @@ class ConnectionService {
         );
       }
 
-      // Check for existing pending request
-      final existingRequest = await _getExistingRequest(senderId, receiverId);
-      if (existingRequest != null) {
-        if (existingRequest.status == ConnectionRequestStatus.pending) {
+      // Check for existing pending request in either direction
+      final pendingRequest = await getPendingRequest(
+        userId1: senderId,
+        userId2: receiverId,
+      );
+
+      if (pendingRequest != null) {
+        // If the other user already sent us a request, auto-accept it instead
+        if (pendingRequest.senderId == receiverId &&
+            pendingRequest.receiverId == senderId) {
+          _logger.i(
+              'Auto-accepting existing request from $receiverId to $senderId');
+          return acceptRequest(
+            requestId: pendingRequest.id,
+            currentUserId: senderId,
+          ).then((result) {
+            switch (result) {
+              case ConnectionSuccess<Connection>():
+                // Convert Connection to ConnectionRequest for return type compatibility
+                // This is a bit of a hack but preserves the API
+                final acceptedRequest = ConnectionRequest(
+                  id: pendingRequest.id,
+                  senderId: pendingRequest.senderId,
+                  receiverId: pendingRequest.receiverId,
+                  status: ConnectionRequestStatus.accepted,
+                  sentAt: pendingRequest.sentAt,
+                  respondedAt: DateTime.now(),
+                  expiresAt: pendingRequest.expiresAt,
+                  message: pendingRequest.message,
+                  source: pendingRequest.source,
+                  senderDisplayName: pendingRequest.senderDisplayName,
+                  senderPhotoUrl: pendingRequest.senderPhotoUrl,
+                  receiverDisplayName: pendingRequest.receiverDisplayName,
+                  receiverPhotoUrl: pendingRequest.receiverPhotoUrl,
+                );
+                return ConnectionSuccess(acceptedRequest);
+              case ConnectionFailure<Connection>():
+                return ConnectionFailure(
+                  result.message,
+                  result.type,
+                );
+            }
+          });
+        } else {
+          // User already sent a request in this direction
           return const ConnectionFailure(
             'Request already pending',
             ConnectionErrorType.alreadyPending,
           );
         }
+      }
 
-        // Check cooldown for rejected requests
-        if (existingRequest.status == ConnectionRequestStatus.rejected &&
-            existingRequest.respondedAt != null) {
-          final cooldownEnd = existingRequest.respondedAt!.add(
-            const Duration(hours: ConnectionRateLimits.rejectionCooldownHours),
+      // Check cooldown for rejected requests
+      final existingRequest = await _getExistingRequest(senderId, receiverId);
+      if (existingRequest != null &&
+          existingRequest.status == ConnectionRequestStatus.rejected &&
+          existingRequest.respondedAt != null) {
+        final cooldownEnd = existingRequest.respondedAt!.add(
+          const Duration(hours: ConnectionRateLimits.rejectionCooldownHours),
+        );
+        if (DateTime.now().isBefore(cooldownEnd)) {
+          return const ConnectionFailure(
+            'Please wait before sending another request',
+            ConnectionErrorType.cooldownActive,
           );
-          if (DateTime.now().isBefore(cooldownEnd)) {
-            return const ConnectionFailure(
-              'Please wait before sending another request',
-              ConnectionErrorType.cooldownActive,
-            );
-          }
         }
       }
 
@@ -695,7 +738,8 @@ class ConnectionService {
     }
   }
 
-  /// Gets existing request between two users (any direction, most recent).
+  /// Gets most recent request between two users (any status, any direction).
+  /// Used to check cooldown periods after rejection.
   Future<ConnectionRequest?> _getExistingRequest(
     String userId1,
     String userId2,

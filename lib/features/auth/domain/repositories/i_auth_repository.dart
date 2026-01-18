@@ -47,4 +47,8 @@ abstract class IAuthRepository {
 
   /// Whether the current user's email is verified (without reloading).
   bool get isEmailVerified;
+
+  /// Deletes the current user's account and all associated data.
+  /// Requires recent authentication.
+  Future<Either<Failure, void>> deleteAccount();
 }

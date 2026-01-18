@@ -76,7 +76,7 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.email),
                   title: const Text('Email Support'),
-                  subtitle: const Text('support@radiusapp.com'),
+                  subtitle: const Text('connectme.shubham@gmail.com'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _launchEmail(),
                 ),
@@ -84,23 +84,25 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.language),
                   title: const Text('Website'),
-                  subtitle: const Text('www.radiusapp.com'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _launchWebsite(),
+                  subtitle: const Text('Upcoming'),
+                  trailing: const Icon(Icons.info_outline),
+                  onTap: () => _showWebsiteComingSoon(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.policy),
                   title: const Text('Privacy Policy'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _launchPrivacyPolicy(),
+                  subtitle: const Text('Upcoming'),
+                  trailing: const Icon(Icons.info_outline),
+                  onTap: () => _showWebsiteComingSoon(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.description),
                   title: const Text('Terms of Service'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _launchTerms(),
+                  subtitle: const Text('Upcoming'),
+                  trailing: const Icon(Icons.info_outline),
+                  onTap: () => _showWebsiteComingSoon(context),
                 ),
               ],
             ),
@@ -168,7 +170,7 @@ class HelpSupportPage extends StatelessWidget {
     );
   }
 
-  void _showReportBugDialog(BuildContext context) {
+  Future<void> _showReportBugDialog(BuildContext context) async {
     final descriptionController = TextEditingController();
     String selectedCategory = 'General';
     final categories = [
@@ -243,14 +245,15 @@ class HelpSupportPage extends StatelessWidget {
               FilledButton(
                 onPressed: descriptionController.text.trim().isEmpty
                     ? null
-                    : () {
+                    : () async {
+                        final description = descriptionController.text.trim();
                         Navigator.pop(dialogContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Bug report submitted. Thank you for helping us improve!'),
-                            duration: Duration(seconds: 3),
-                          ),
+
+                        // Collect device info and send bug report
+                        await _submitBugReport(
+                          context,
+                          selectedCategory,
+                          description,
                         );
                       },
                 child: const Text('Submit'),
@@ -262,10 +265,100 @@ class HelpSupportPage extends StatelessWidget {
     );
   }
 
+  Future<void> _submitBugReport(
+    BuildContext context,
+    String category,
+    String description,
+  ) async {
+    try {
+      // Collect device information
+      String deviceInfo = '';
+
+      if (Platform.isAndroid) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        deviceInfo = '''
+Platform: Android
+Device: ${androidInfo.manufacturer} ${androidInfo.model}
+Android Version: ${androidInfo.version.release} (SDK ${androidInfo.version.sdkInt})
+Brand: ${androidInfo.brand}
+''';
+      } else if (Platform.isIOS) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        deviceInfo = '''
+Platform: iOS
+Device: ${iosInfo.name} (${iosInfo.model})
+iOS Version: ${iosInfo.systemVersion}
+''';
+      } else {
+        deviceInfo = 'Platform: ${Platform.operatingSystem}';
+      }
+
+      // Create email body with bug report
+      final emailBody = Uri.encodeComponent('''
+Category: $category
+
+Description:
+$description
+
+---
+Device Information:
+$deviceInfo
+App Version: 1.0.0
+Build: 1
+''');
+
+      // Launch email client with pre-filled bug report
+      final Uri emailUri = Uri.parse(
+        'mailto:connectme.shubham@gmail.com?subject=Bug Report - $category&body=$emailBody',
+      );
+
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Opening email client with bug report. Please send it to help us improve!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        // Fallback if email client not available
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'Please email your bug report to connectme.shubham@gmail.com'),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Copy Email',
+                onPressed: () {
+                  // Email address copying would require clipboard package
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error preparing bug report: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _launchEmail() async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: 'support@radiusapp.com',
+      path: 'connectme.shubham@gmail.com',
       query: 'subject=Radius App Support',
     );
     try {
@@ -279,43 +372,30 @@ class HelpSupportPage extends StatelessWidget {
     }
   }
 
-  Future<void> _launchWebsite() async {
-    final Uri url = Uri.parse('https://www.radiusapp.com');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Could not launch website');
-      }
-    } catch (e) {
-      // Browser not available
-    }
-  }
-
-  Future<void> _launchPrivacyPolicy() async {
-    final Uri url = Uri.parse('https://www.radiusapp.com/privacy');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Could not launch privacy policy');
-      }
-    } catch (e) {
-      // Browser not available
-    }
-  }
-
-  Future<void> _launchTerms() async {
-    final Uri url = Uri.parse('https://www.radiusapp.com/terms');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Could not launch terms');
-      }
-    } catch (e) {
-      // Browser not available
-    }
+  void _showWebsiteComingSoon(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Website Coming Soon'),
+        content: const Text(
+          'Our website is currently under development and will be available soon. '
+          'In the meantime, feel free to reach out via email for any questions or support.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchEmail();
+            },
+            child: const Text('Contact Us'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -364,7 +444,7 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
     if (key.contains('samsung')) {
       return const [
         'Battery: set Radius to “Unrestricted” (or disable “Put unused apps to sleep” for it).',
-        'Make sure Bluetooth is ON and you are on the Nearby screen.',
+        'Make sure Bluetooth is ON and keep the app open for best discovery.',
       ];
     }
 
@@ -386,7 +466,7 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
 
     return const [
       'Battery optimization: set Radius to “Don’t optimize” / “Unrestricted” if available.',
-      'Keep Radius open on the Nearby screen for best discovery.',
+      'Keep the app open (foreground or in recent apps) for best discovery.',
     ];
   }
 
@@ -414,7 +494,10 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Radius discovers nearby users using Bluetooth Low Energy (BLE). For privacy and battery, discovery runs only while the app is open and the Nearby screen is visible.',
+                    'Radius discovers nearby users using Bluetooth Low Energy (BLE). '
+                    'Advertising runs continuously while the app is open (foreground or in recent apps). '
+                    'Scanning runs for 15 seconds when you tap "Find People Nearby". '
+                    'For best results, keep Bluetooth enabled and grant all requested permissions.',
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -466,7 +549,8 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                     builder: (context, snap) {
                       if (defaultTargetPlatform != TargetPlatform.android) {
                         return const Text(
-                          'On iOS, discovery is most reliable when both devices keep Radius open on the Nearby screen.',
+                          'On iOS, discovery works best when the app is open. '
+                          'Keep Radius in foreground or recent apps for continuous advertising.',
                         );
                       }
 
@@ -593,23 +677,24 @@ class _FAQsPage extends StatelessWidget {
             question: 'How does Radius find nearby users?',
             answer:
                 'Radius uses Bluetooth Low Energy (BLE) to detect other Radius users within approximately 30 meters. '
-                'Your phone broadcasts an anonymous ID that rotates every 15 minutes for privacy. '
-                'When another user is detected, the app looks up their profile from our servers.',
+                'Your phone broadcasts your username via BLE for discovery. '
+                'When another user is detected, the app looks up their full profile from our servers. '
+                'Discovery runs while the app is open (foreground or in recent apps).',
           ),
           _FAQItem(
             question: 'Does Radius drain my battery?',
             answer:
-                'Radius is optimized for battery efficiency. It uses BLE which consumes minimal power, '
-                'and implements intermittent scanning (about 3 seconds of scanning every 15 seconds) to preserve battery. '
+                'Radius is optimized for battery efficiency. It uses BLE which consumes minimal power. '
+                'Scanning runs for 15 seconds when you tap "Find People Nearby", and advertising runs continuously while the app is open. '
                 'Most users report less than 5% additional battery drain per day.',
           ),
           _FAQItem(
             question: 'Is my data private and secure?',
             answer: 'Yes! Your privacy is our top priority:\n'
-                '• Your BLE ID rotates every 15 minutes\n'
-                '• Your real identity is never broadcast via Bluetooth\n'
-                '• Only users you connect with can see your profile\n'
+                '• Your username is broadcast for discovery (visible to nearby Radius users)\n'
+                '• Only connected users can chat with you\n'
                 '• All chat messages are encrypted in transit\n'
+                '• You can disconnect from any user to disable chatting while preserving chat history\n'
                 '• We never sell your data to third parties',
           ),
           _FAQItem(
@@ -627,8 +712,9 @@ class _FAQsPage extends StatelessWidget {
           _FAQItem(
             question: 'How do I stop being discoverable?',
             answer:
-                'Go to Profile → Privacy Settings and toggle off "Make me discoverable". '
-                'You can also stop discovery by not using the "Find Nearby People" feature.',
+                'Close the app or switch it to background to stop advertising. '
+                'You can also go to Profile → Privacy Settings to manage visibility. '
+                'Scanning only runs when you tap "Find People Nearby".',
           ),
           _FAQItem(
             question: 'How far can Radius detect users?',
@@ -640,11 +726,19 @@ class _FAQsPage extends StatelessWidget {
           _FAQItem(
             question: 'What if someone is bothering me?',
             answer:
-                'You can block any user from their profile. Blocked users cannot:\n'
+                'You can disconnect or block any user from their profile or chat. Blocked users cannot:\n'
                 '• Send you connection requests\n'
                 '• See you in their discovery\n'
                 '• Message you\n'
+                'Disconnecting preserves chat history but disables messaging. '
                 'Go to Privacy Settings → Manage Blocked Users to view your blocked list.',
+          ),
+          _FAQItem(
+            question: 'What is GuessMe?',
+            answer:
+                'GuessMe is an anonymous chat game where you chat with a nearby user and try to guess their identity. '
+                'Both users remain anonymous until someone makes a correct guess. '
+                'It\'s a fun way to break the ice with people around you!',
           ),
         ],
       ),
@@ -777,9 +871,9 @@ class _UserGuidePage extends StatelessWidget {
             title: '5. Privacy & Safety',
             icon: Icons.security,
             steps: [
-              'Your BLE ID changes every 15 minutes',
+              'Your username is broadcast via Bluetooth for discovery',
               'Only connected users can message you',
-              'Block users who are bothering you',
+              'Disconnect or block users who are bothering you',
               'Toggle discoverability in Privacy Settings',
               'Request your data or delete your account anytime',
             ],

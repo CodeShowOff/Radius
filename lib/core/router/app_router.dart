@@ -12,6 +12,7 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
 import '../../features/connections/presentation/pages/connections_page.dart';
+import '../../features/guess_me/guess_me.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
@@ -244,6 +245,28 @@ GoRouter get appRouter {
               otherUserPhotoUrl: extra?['otherUserPhotoUrl'] as String?,
             ),
           );
+        },
+      ),
+
+      // GuessMe routes
+      GoRoute(
+        path: Routes.guessme,
+        name: 'guessme',
+        builder: (context, state) {
+          return BlocProvider(
+            create: (_) => getIt<GuessmeBloc>(),
+            child: const GuessMeLobbyPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.guessmeGame,
+        name: 'guessmeGame',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final sessionId = extra?['sessionId'] as String? ?? '';
+
+          return GuessmeGamePage(sessionId: sessionId);
         },
       ),
     ],

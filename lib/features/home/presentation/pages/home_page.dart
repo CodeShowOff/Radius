@@ -146,58 +146,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Welcome card - now uses ProfileBloc for name
-                BlocBuilder<ProfileBloc, ProfileState>(
-                  builder: (context, profileState) {
-                    return BlocBuilder<AuthBloc, AuthState>(
-                      builder: (context, authState) {
-                        String userName = 'there';
-                        if (authState is AuthAuthenticated) {
-                          // Prefer profile name over auth displayName
-                          if (profileState is ProfileLoaded &&
-                              profileState.profile.name.isNotEmpty) {
-                            userName = profileState.profile.name;
-                          } else {
-                            userName = authState.user.displayName ?? 'there';
-                          }
-                        }
-                        return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Hello, $userName! 👋',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Ready to discover people nearby?',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-
                 // Status card
                 _BluetoothStatusCard(
                   isEnabled: _bluetoothEnabled,
@@ -232,6 +180,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+
+                // GuessMe game button
+                FilledButton.tonalIcon(
+                  onPressed: () => context.push(Routes.guessme),
+                  icon: const Icon(Icons.psychology),
+                  label: const Text('Guess Me - Anonymous Chat Game'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor:
+                        Theme.of(context).colorScheme.tertiaryContainer,
+                    foregroundColor:
+                        Theme.of(context).colorScheme.onTertiaryContainer,
+                  ),
                 ),
                 const SizedBox(height: 24),
 

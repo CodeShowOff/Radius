@@ -250,6 +250,67 @@ class AuthRepositoryImpl implements IAuthRepository {
   @override
   bool get isEmailVerified => _authService.isEmailVerified;
 
+  @override
+  Future<Either<Failure, void>> deleteAccount() async {
+    try {
+      final uid = _authService.currentUser?.uid;
+      if (uid == null) {
+        return const Left(AuthFailure(
+          message: 'No user signed in',
+          code: 'no-user',
+        ));
+      }
+
+      // Delete user data from Firestore first
+      try {
+        // Get username before deleting user document
+        String? username;
+        try {
+          final userDoc = await _firestoreService.getDocument(
+            '${FirestoreCollections.users}/$uid',
+          );
+          if (userDoc != null && userDoc['username'] != null) {
+            username = userDoc['username'] as String;
+          }
+        } catch (e) {
+          // Continue even if we can't get username
+        }
+
+        // Delete profile
+        await _profileService.deleteProfile(uid);
+
+        // Delete user document
+        await _firestoreService.deleteDocument(
+          '${FirestoreCollections.users}/$uid',
+        );
+
+        // Delete username index if we found the username
+        if (username != null) {
+          try {
+            await _firestoreService.deleteDocument(
+              'username_index/$username',
+            );
+          } catch (e) {
+            // Username index might already be deleted, continue
+          }
+        }
+      } catch (e) {
+        // Log but continue with account deletion
+        // ignore: avoid_print
+        print('Warning: Failed to delete user data: $e');
+      }
+
+      // Delete Firebase Auth account
+      await _authService.deleteAccount();
+
+      return const Right(null);
+    } on AuthException catch (e) {
+      return Left(AuthFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return Left(UnexpectedFailure(message: e.toString()));
+    }
+  }
+
   /// Creates a new user profile in Firestore.
   Future<Either<Failure, User>> _createUserProfile(
     String uid,

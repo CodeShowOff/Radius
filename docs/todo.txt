@@ -1,0 +1,5 @@
+requirement android 12+
+
+add repuation for users.
+
+also add phone number to users to very first then only allow to verify and only one id from one phone number.

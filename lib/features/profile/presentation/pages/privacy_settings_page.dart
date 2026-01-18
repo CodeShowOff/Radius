@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../auth/domain/repositories/i_auth_repository.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/data/connection_service.dart';
 import '../bloc/profile_bloc.dart';
@@ -259,9 +261,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Nearby discovery runs only while the app is open in the foreground. '
-                      'Your broadcast identifier changes frequently to reduce tracking. '
-                      'Turning off discoverability stops others from resolving your nearby presence.',
+                      'Nearby discovery runs while the app is open (foreground or in recent apps). '
+                      'Your broadcast username is visible to nearby Radius users for discovery. '
+                      'You can disconnect from any user to disable chatting while preserving chat history. '
+                      'All chat messages are encrypted in transit and stored securely.',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -435,21 +438,65 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      'Data download request submitted. Check your email in 48 hours.'),
-                  duration: Duration(seconds: 4),
-                ),
-              );
+
+              // Send data download request email
+              await _sendDataDownloadRequest(email);
             },
             child: const Text('Request Download'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _sendDataDownloadRequest(String email) async {
+    try {
+      final Uri emailUri = Uri(
+        scheme: 'mailto',
+        path: 'connectme.shubham@gmail.com',
+        queryParameters: {
+          'subject': 'Data Download Request - Radius App',
+          'body': 'I would like to request a copy of my data.\n\n'
+              'Email: $email\n'
+              'Request Date: ${DateTime.now()}\n\n'
+              'Please send my data export to this email address within 48 hours.',
+        },
+      );
+
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Opening email client. Please send the request to receive your data.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Please email connectme.shubham@gmail.com to request your data download.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening email client: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   void _showDeleteAccountDialog() {
@@ -532,16 +579,9 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                       : Colors.grey,
                 ),
                 onPressed: isConfirmEnabled
-                    ? () {
+                    ? () async {
                         Navigator.pop(dialogContext);
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Account deletion requested. You will receive a confirmation email shortly.',
-                            ),
-                            duration: Duration(seconds: 4),
-                          ),
-                        );
+                        await _performAccountDeletion();
                       }
                     : null,
                 child: const Text('Delete My Account'),
@@ -551,5 +591,76 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
         },
       ),
     );
+  }
+
+  Future<void> _performAccountDeletion() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Deleting your account...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is! AuthAuthenticated) {
+        throw Exception('Not authenticated');
+      }
+
+      // Delete account through auth repository
+      final result = await getIt<IAuthRepository>().deleteAccount();
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      result.fold(
+        (failure) {
+          // Show error
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete account: ${failure.message}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        },
+        (_) {
+          // Account deleted successfully - sign out will be handled by auth bloc
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Your account has been permanently deleted.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Sign out to trigger navigation to login
+          context.read<AuthBloc>().add(const AuthSignOutRequested());
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting account: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 }

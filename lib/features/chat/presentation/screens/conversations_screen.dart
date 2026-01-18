@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/di/injection.dart';
+import '../../../connections/data/connection_service.dart';
+import '../../../connections/domain/entities/connection.dart';
 import '../../domain/entities/conversation.dart';
 import '../bloc/conversations_bloc.dart';
 
@@ -24,8 +27,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   void initState() {
     super.initState();
     context.read<ConversationsBloc>().add(
-      ConversationsLoad(userId: widget.currentUserId),
-    );
+          ConversationsLoad(userId: widget.currentUserId),
+        );
   }
 
   @override
@@ -64,8 +67,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ElevatedButton(
                     onPressed: () {
                       context.read<ConversationsBloc>().add(
-                        ConversationsLoad(userId: widget.currentUserId),
-                      );
+                            ConversationsLoad(userId: widget.currentUserId),
+                          );
                     },
                     child: const Text('Retry'),
                   ),
@@ -81,8 +84,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           return RefreshIndicator(
             onRefresh: () async {
               context.read<ConversationsBloc>().add(
-                const ConversationsRefresh(),
-              );
+                    const ConversationsRefresh(),
+                  );
               await Future.delayed(const Duration(milliseconds: 500));
             },
             child: ListView.builder(
@@ -97,13 +100,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     if (direction == DismissDirection.endToStart) {
                       // Delete
                       context.read<ConversationsBloc>().add(
-                        ConversationsDelete(conversationId: conversation.id),
-                      );
+                            ConversationsDelete(
+                                conversationId: conversation.id),
+                          );
                     } else {
                       // Archive
                       context.read<ConversationsBloc>().add(
-                        ConversationsArchive(conversationId: conversation.id),
-                      );
+                            ConversationsArchive(
+                                conversationId: conversation.id),
+                          );
                     }
                   },
                 );
@@ -156,7 +161,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _ConversationTile extends StatelessWidget {
+class _ConversationTile extends StatefulWidget {
   final Conversation conversation;
   final String currentUserId;
   final VoidCallback onTap;
@@ -170,14 +175,50 @@ class _ConversationTile extends StatelessWidget {
   });
 
   @override
+  State<_ConversationTile> createState() => _ConversationTileState();
+}
+
+class _ConversationTileState extends State<_ConversationTile> {
+  Connection? _connection;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectionStatus();
+  }
+
+  Future<void> _checkConnectionStatus() async {
+    try {
+      final otherUserId =
+          widget.conversation.getOtherParticipantId(widget.currentUserId);
+      final connectionService = getIt<ConnectionService>();
+      final connection = await connectionService.getConnection(
+        widget.currentUserId,
+        otherUserId,
+      );
+      if (mounted) {
+        setState(() {
+          _connection = connection;
+        });
+      }
+    } catch (e) {
+      // Connection check failed, continue without connection info
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final otherParticipant = conversation.getOtherParticipantInfo(currentUserId);
-    final unreadCount = conversation.getUnreadCount(currentUserId);
-    final isMuted = conversation.isMutedBy(currentUserId);
+    final otherParticipant =
+        widget.conversation.getOtherParticipantInfo(widget.currentUserId);
+    final unreadCount =
+        widget.conversation.getUnreadCount(widget.currentUserId);
+    final isMuted = widget.conversation.isMutedBy(widget.currentUserId);
+    final isDisconnected = _connection?.status == ConnectionStatus.disconnected;
+    final isBlocked = _connection?.status == ConnectionStatus.blocked;
 
     return Dismissible(
-      key: Key(conversation.id),
+      key: Key(widget.conversation.id),
       background: Container(
         color: theme.colorScheme.secondary,
         alignment: Alignment.centerLeft,
@@ -196,113 +237,167 @@ class _ConversationTile extends StatelessWidget {
           color: theme.colorScheme.onError,
         ),
       ),
-      onDismissed: onDismissed,
-      child: ListTile(
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundImage: otherParticipant?.photoUrl != null
-                  ? NetworkImage(otherParticipant!.photoUrl!)
-                  : null,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: otherParticipant?.photoUrl == null
-                  ? Text(
-                      (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    )
-                  : null,
-            ),
-            // Unread indicator
-            if (unreadCount > 0)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                  child: Center(
-                    child: Text(
-                      unreadCount > 99 ? '99+' : unreadCount.toString(),
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+      onDismissed: widget.onDismissed,
+      child: Container(
+        color: isDisconnected || isBlocked
+            ? theme.colorScheme.errorContainer.withValues(alpha: 0.1)
+            : null,
+        child: ListTile(
+          leading: Stack(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundImage: otherParticipant?.photoUrl != null
+                    ? NetworkImage(otherParticipant!.photoUrl!)
+                    : null,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: otherParticipant?.photoUrl == null
+                    ? Text(
+                        (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
+                        style: TextStyle(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      )
+                    : null,
+              ),
+              // Unread indicator
+              if (unreadCount > 0)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 20, minHeight: 20),
+                    child: Center(
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: TextStyle(
+                          color: theme.colorScheme.onPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                otherParticipant?.displayName ?? 'Unknown',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight:
-                      unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (isMuted)
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Icon(
-                  Icons.notifications_off,
-                  size: 16,
-                  color: theme.colorScheme.outline,
-                ),
-              ),
-          ],
-        ),
-        subtitle: Row(
-          children: [
-            if (conversation.lastMessageSenderId == currentUserId)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  Icons.done_all,
-                  size: 14,
-                  color: theme.colorScheme.outline,
-                ),
-              ),
-            Expanded(
-              child: Text(
-                conversation.lastMessageText ?? 'No messages yet',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: unreadCount > 0
-                      ? theme.colorScheme.onSurface
-                      : theme.colorScheme.outline,
-                  fontWeight:
-                      unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        trailing: Text(
-          _formatTime(conversation.lastMessageAt),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: unreadCount > 0
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
-            fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+            ],
           ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  otherParticipant?.displayName ?? 'Unknown',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight:
+                        unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isDisconnected)
+                Container(
+                  margin: const EdgeInsets.only(left: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Disconnected',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              if (isBlocked)
+                Container(
+                  margin: const EdgeInsets.only(left: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.block,
+                        size: 10,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        'Blocked',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (isMuted && !isDisconnected && !isBlocked)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.notifications_off,
+                    size: 16,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+            ],
+          ),
+          subtitle: Row(
+            children: [
+              if (widget.conversation.lastMessageSenderId ==
+                  widget.currentUserId)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    Icons.done_all,
+                    size: 14,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              Expanded(
+                child: Text(
+                  widget.conversation.lastMessageText ?? 'No messages yet',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: unreadCount > 0
+                        ? theme.colorScheme.onSurface
+                        : theme.colorScheme.outline,
+                    fontWeight:
+                        unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          trailing: Text(
+            _formatTime(widget.conversation.lastMessageAt),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: unreadCount > 0
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+              fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          onTap: widget.onTap,
         ),
-        onTap: onTap,
       ),
     );
   }

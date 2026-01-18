@@ -19,6 +19,8 @@ import '../../features/chat/presentation/bloc/conversations_bloc.dart' as _i21;
 import '../../features/connections/data/connection_service.dart' as _i17;
 import '../../features/connections/presentation/bloc/connection_bloc.dart'
     as _i18;
+import '../../features/guess_me/data/guess_me_service.dart' as _i26;
+import '../../features/guess_me/presentation/bloc/guess_me_bloc.dart' as _i27;
 import '../../features/profile/data/repositories/profile_repository_impl.dart'
     as _i10;
 import '../../features/profile/domain/repositories/i_profile_repository.dart'
@@ -166,6 +168,18 @@ extension GetItInjectableX on _i1.GetIt {
     // Conversations BLoC
     gh.factory<_i21.ConversationsBloc>(
       () => _i21.ConversationsBloc(chatService: gh<_i19.ChatService>()),
+    );
+
+    // ==================== GUESS ME ====================
+
+    // GuessMe Service
+    gh.lazySingleton<_i26.GuessmeService>(
+      () => _i26.GuessmeService(),
+    );
+
+    // GuessMe BLoC (factory - one per session)
+    gh.factory<_i27.GuessmeBloc>(
+      () => _i27.GuessmeBloc(service: gh<_i26.GuessmeService>()),
     );
 
     return this;
