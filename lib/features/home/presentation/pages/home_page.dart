@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 
 /// Home page - main screen after authentication.
@@ -170,13 +171,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => context.push(Routes.connections),
-                        icon: const Icon(Icons.people),
-                        label: const Text('Connections'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
+                      child: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                        builder: (context, connectionState) {
+                          final pendingCount =
+                              connectionState.receivedRequests.length;
+                          return Badge(
+                            isLabelVisible: pendingCount > 0,
+                            label: Text(pendingCount.toString()),
+                            child: FilledButton.tonalIcon(
+                              onPressed: () => context.push(Routes.connections),
+                              icon: const Icon(Icons.people),
+                              label: const Text('Connections'),
+                              style: FilledButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

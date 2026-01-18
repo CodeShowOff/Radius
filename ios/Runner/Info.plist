@@ -46,10 +46,26 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
+	<!-- Firebase Configuration -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	
 	<!-- Bluetooth Usage Descriptions (required for BLE) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Radius uses Bluetooth to discover nearby users and share an anonymous, rotating identifier. Nearby discovery works only while the app is open (foreground).</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Radius uses Bluetooth to broadcast an anonymous, rotating identifier so nearby users can discover you while the app is open (foreground).</string>
+	
+	<!-- Camera permission for taking photos -->
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed to take photos for messages</string>
+	
+	<!-- Photo library permission for selecting images -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is needed to send images</string>
+	
+	<!-- Microphone permission for voice messages -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed to record voice messages</string>
 </dict>
 </plist>

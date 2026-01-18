@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import '../core/config/app_config.dart';
 import '../core/di/injection.dart';
 import '../core/services/crash/crash_service.dart';
 import '../core/services/logging/device_log.dart';
+import '../core/services/notifications/notification_service.dart';
 import '../firebase_options.dart';
 
 class RadiusBootstrap extends StatefulWidget {
@@ -49,6 +51,9 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 12));
+
+      // Register background message handler
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       if (AppConfig.enableCrashReporting) {
         _setPhase(_InitPhase.initializing, 'Starting crash reporting…');

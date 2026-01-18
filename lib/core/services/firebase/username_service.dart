@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:logger/logger.dart';
 
 /// Service for generating unique usernames using Firestore transactions.
 ///
@@ -6,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Firestore guarantees uniqueness via atomic counter increment.
 class UsernameService {
   final FirebaseFirestore _firestore;
+  final Logger _logger = Logger();
 
   static const String _counterCollection = 'counters';
   static const String _counterDocument = 'usernames';
@@ -145,26 +147,46 @@ class UsernameService {
   /// Looks up user profile by username.
   /// Returns null if user not found.
   Future<Map<String, dynamic>?> lookupUserByUsername(String username) async {
-    // First get the userId from the index
-    final userId = await getUserIdByUsername(username);
-    if (userId == null) return null;
+    try {
+      // First get the userId from the index
+      final userId = await getUserIdByUsername(username);
+      if (userId == null) {
+        _logger.d('No userId found for username: $username');
+        return null;
+      }
 
-    // Then fetch the profile
-    final profileDoc =
-        await _firestore.collection('profiles').doc(userId).get();
-    if (!profileDoc.exists) return null;
+      // Then fetch the profile
+      final profileDoc =
+          await _firestore.collection('profiles').doc(userId).get();
+      if (!profileDoc.exists) {
+        _logger.d('Profile document does not exist for userId: $userId');
+        return null;
+      }
 
-    final profile = profileDoc.data();
-    if (profile == null) return null;
+      final profile = profileDoc.data();
+      if (profile == null) {
+        _logger.d('Profile data is null for userId: $userId');
+        return null;
+      }
 
-    return {
-      'userId': userId,
-      'username': username,
-      'displayName': (profile['name'] as String?)?.trim().isNotEmpty == true
-          ? (profile['name'] as String)
-          : 'User $username',
-      'photoUrl': profile['photoUrl'],
-      'bio': profile['bio'],
-    };
+      final result = {
+        'userId': userId,
+        'username': username,
+        'displayName': (profile['name'] as String?)?.trim().isNotEmpty == true
+            ? (profile['name'] as String)
+            : 'User $username',
+        'photoUrl': profile['photoUrl'],
+        'bio': profile['bio'],
+      };
+
+      _logger.d(
+          'Successfully looked up profile for $username: displayName=${result['displayName']}, photoUrl=${result['photoUrl']}');
+
+      return result;
+    } catch (e, stack) {
+      _logger.e('Error looking up profile for $username',
+          error: e, stackTrace: stack);
+      return null;
+    }
   }
 }

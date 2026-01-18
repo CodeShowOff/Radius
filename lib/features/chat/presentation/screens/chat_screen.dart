@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/services/notifications/notification_service.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
 import '../../domain/entities/message.dart';
@@ -41,6 +45,14 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
+
+    // Notify notification service that user is viewing this conversation
+    try {
+      getIt<NotificationService>()
+          .setCurrentConversation(widget.conversationId);
+    } catch (_) {
+      // Ignore if service not available
+    }
 
     // Open the chat
     context.read<ChatBloc>().add(ChatOpen(
@@ -82,6 +94,14 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+
+    // Notify notification service that user left this conversation
+    try {
+      getIt<NotificationService>().clearCurrentConversation();
+    } catch (_) {
+      // Ignore if service not available
+    }
+
     // Use cached reference to avoid context access after disposal
     _chatBloc.add(const ChatClose());
     super.dispose();
@@ -115,6 +135,33 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _onImageSelected(File file, ImageSource source) {
+    context.read<ChatBloc>().add(ChatSendImage(file, source: source));
+    _scrollToBottom();
+  }
+
+  void _onDocumentSelected(File file) {
+    context.read<ChatBloc>().add(ChatSendDocument(file));
+    _scrollToBottom();
+  }
+
+  void _onVoiceRecorded(File file, int duration) {
+    context.read<ChatBloc>().add(ChatSendAudio(file, duration: duration));
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   void _onTypingChanged(bool isTyping) {
     context.read<ChatBloc>().add(ChatSetTyping(isTyping));
   }
@@ -125,153 +172,182 @@ class _ChatScreenState extends State<ChatScreen> {
         _connection?.status == ConnectionStatus.disconnected;
     final bool isBlocked = _connection?.status == ConnectionStatus.blocked;
 
-    return Scaffold(
-      appBar: _ChatAppBar(
-        name: widget.otherUserName,
-        photoUrl: widget.otherUserPhotoUrl,
-        onBackPressed: () => Navigator.of(context).pop(),
-        onMenuSelected: (value) => _handleMenuAction(context, value),
-        isDisconnected: isDisconnected,
-        isBlocked: isBlocked,
-      ),
-      body: Column(
-        children: [
-          // Disconnection banner
-          if (isDisconnected)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.link_off,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Connection removed. You can view old messages but cannot send new ones.',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
+    return BlocListener<ChatBloc, ChatState>(
+      listener: (context, state) {
+        // Show SnackBar for transient errors (like upload failures)
+        if (state.errorMessage != null && state.status != ChatStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage!),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Theme.of(context).colorScheme.onError,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                },
               ),
             ),
-          if (isBlocked)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.block,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'This user has been blocked. You can view old messages.',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                        fontSize: 13,
-                      ),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: _ChatAppBar(
+          name: widget.otherUserName,
+          photoUrl: widget.otherUserPhotoUrl,
+          onBackPressed: () => Navigator.of(context).pop(),
+          onMenuSelected: (value) => _handleMenuAction(context, value),
+          isDisconnected: isDisconnected,
+          isBlocked: isBlocked,
+        ),
+        body: Column(
+          children: [
+            // Disconnection banner
+            if (isDisconnected)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.link_off,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
-                  ),
-                ],
-              ),
-            ),
-          // Messages list
-          Expanded(
-            child: BlocConsumer<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.status != current.status,
-              listener: (context, state) {
-                if (state.status != ChatStatus.loading) {
-                  _isLoadingMore = false;
-                }
-              },
-              builder: (context, state) {
-                if (state.status == ChatStatus.loading &&
-                    state.messages.isEmpty) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-
-                if (state.status == ChatStatus.error) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline, size: 48),
-                        const SizedBox(height: 16),
-                        Text(state.errorMessage ?? 'Failed to load messages'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            context.read<ChatBloc>().add(ChatOpen(
-                                  conversationId: widget.conversationId,
-                                  currentUserId: widget.currentUserId,
-                                  otherUserId: widget.otherUserId,
-                                  otherUserName: widget.otherUserName,
-                                  otherUserPhotoUrl: widget.otherUserPhotoUrl,
-                                ));
-                          },
-                          child: const Text('Retry'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Connection removed. You can view old messages but cannot send new ones.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                          fontSize: 13,
                         ),
-                      ],
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            if (isBlocked)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.block,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This user has been blocked. You can view old messages.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            // Messages list
+            Expanded(
+              child: BlocConsumer<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.status != current.status,
+                listener: (context, state) {
+                  if (state.status != ChatStatus.loading) {
+                    _isLoadingMore = false;
+                  }
+                },
+                builder: (context, state) {
+                  if (state.status == ChatStatus.loading &&
+                      state.messages.isEmpty) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  if (state.status == ChatStatus.error) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48),
+                          const SizedBox(height: 16),
+                          Text(state.errorMessage ?? 'Failed to load messages'),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              context.read<ChatBloc>().add(ChatOpen(
+                                    conversationId: widget.conversationId,
+                                    currentUserId: widget.currentUserId,
+                                    otherUserId: widget.otherUserId,
+                                    otherUserName: widget.otherUserName,
+                                    otherUserPhotoUrl: widget.otherUserPhotoUrl,
+                                  ));
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return _MessagesList(
+                    messages: state.allMessages,
+                    currentUserId: state.currentUserId ?? widget.currentUserId,
+                    isTyping: state.isOtherUserTyping,
+                    hasMore: state.hasMore,
+                    scrollController: _scrollController,
                   );
-                }
-
-                return _MessagesList(
-                  messages: state.allMessages,
-                  currentUserId: state.currentUserId ?? widget.currentUserId,
-                  isTyping: state.isOtherUserTyping,
-                  hasMore: state.hasMore,
-                  scrollController: _scrollController,
-                );
-              },
+                },
+              ),
             ),
-          ),
 
-          // Input
-          if (!isDisconnected && !isBlocked)
-            ChatInput(
-              onSend: _sendMessage,
-              onTypingChanged: _onTypingChanged,
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: Border(
-                  top: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 1,
+            // Input
+            if (!isDisconnected && !isBlocked)
+              ChatInput(
+                onSend: _sendMessage,
+                onTypingChanged: _onTypingChanged,
+                onImageSelected: (file) =>
+                    _onImageSelected(file, ImageSource.gallery),
+                onCameraImageSelected: (file) =>
+                    _onImageSelected(file, ImageSource.camera),
+                onDocumentSelected: _onDocumentSelected,
+                onVoiceRecorded: _onVoiceRecorded,
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context).dividerColor,
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  isBlocked
+                      ? 'You cannot send messages to a blocked user'
+                      : 'You cannot send messages. Connection has been removed.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 14,
                   ),
                 ),
               ),
-              child: Text(
-                isBlocked
-                    ? 'You cannot send messages to a blocked user'
-                    : 'You cannot send messages. Connection has been removed.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

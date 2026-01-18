@@ -506,12 +506,17 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         ],
       ),
       body: BlocConsumer<NearbyUsersBloc, NearbyUsersState>(
-        listenWhen: (prev, curr) => curr.status == NearbyUsersStatus.error,
+        listenWhen: (prev, curr) =>
+            curr.status == NearbyUsersStatus.error &&
+            prev.errorMessage != curr.errorMessage,
         listener: (context, state) {
           if (state.errorMessage != null) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
                 action: SnackBarAction(
                   label: 'Settings',
                   onPressed: () async {
@@ -824,24 +829,42 @@ class _NearbyUsersList extends StatelessWidget {
 
           // Use RepaintBoundary for smoother scrolling
           // Wrap with BlocBuilder to react to connection state changes
-          return RepaintBoundary(
-            child: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-              buildWhen: (previous, current) {
-                // Rebuild when connection state changes for this user
-                final prevState = previous.getStateForUser(user.userId ?? '');
-                final currState = current.getStateForUser(user.userId ?? '');
-                return prevState != currState;
-              },
-              builder: (context, connectionState) {
-                return NearbyUserCard(
-                  key: ValueKey(user.username),
-                  user: user,
-                  onTap: () => _showUserDetails(context, user),
-                  onConnect: user.isConnected
-                      ? null
-                      : () => _connectWithUser(context, user),
-                );
-              },
+          return TweenAnimationBuilder<double>(
+            key: ValueKey(user.userId),
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 400 + (index * 40)),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Transform.translate(
+                offset: Offset(30 * (1 - value), 0),
+                child: Opacity(
+                  opacity: value,
+                  child: Transform.scale(
+                    scale: 0.95 + (0.05 * value),
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: RepaintBoundary(
+              child: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                buildWhen: (previous, current) {
+                  // Rebuild when connection state changes for this user
+                  final prevState = previous.getStateForUser(user.userId ?? '');
+                  final currState = current.getStateForUser(user.userId ?? '');
+                  return prevState != currState;
+                },
+                builder: (context, connectionState) {
+                  return NearbyUserCard(
+                    key: ValueKey(user.username),
+                    user: user,
+                    onTap: () => _showUserDetails(context, user),
+                    onConnect: user.isConnected
+                        ? null
+                        : () => _connectWithUser(context, user),
+                  );
+                },
+              ),
             ),
           );
         },
@@ -861,9 +884,13 @@ class _NearbyUsersList extends StatelessWidget {
     // Get current user info
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Please sign in to send connection requests')),
+          content: Text('Please sign in to send connection requests'),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -871,8 +898,13 @@ class _NearbyUsersList extends StatelessWidget {
     // Get receiver's user ID
     final receiverId = user.userId;
     if (receiverId == null) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot connect: User ID not available')),
+        const SnackBar(
+          content: Text('Cannot connect: User ID not available'),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -901,10 +933,12 @@ class _NearbyUsersList extends StatelessWidget {
           receiverPhotoUrl: user.photoUrl,
         ));
 
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content:
             Text('Connection request sent to ${user.displayName ?? 'user'}'),
+        duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1225,10 +1259,12 @@ class _UserDetailsSheet extends StatelessWidget {
                                 ConnectionAcceptRequest(request.id),
                               );
                           Navigator.pop(context);
+                          ScaffoldMessenger.of(context).clearSnackBars();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
                                   'Accepted connection from ${user.displayName ?? 'user'}'),
+                              duration: const Duration(seconds: 3),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -1248,10 +1284,14 @@ class _UserDetailsSheet extends StatelessWidget {
                                 builderContext.read<AuthBloc>().state;
                             if (authState is! AuthAuthenticated) {
                               Navigator.pop(context);
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                    content: Text(
-                                        'Please sign in to send connection requests')),
+                                  content: Text(
+                                      'Please sign in to send connection requests'),
+                                  duration: Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
                               );
                               return;
                             }
@@ -1260,10 +1300,14 @@ class _UserDetailsSheet extends StatelessWidget {
                             final receiverId = user.userId;
                             if (receiverId == null) {
                               Navigator.pop(context);
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                    content: Text(
-                                        'Cannot connect: User ID not available')),
+                                  content: Text(
+                                      'Cannot connect: User ID not available'),
+                                  duration: Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
                               );
                               return;
                             }
@@ -1298,10 +1342,12 @@ class _UserDetailsSheet extends StatelessWidget {
                                 ));
 
                             Navigator.pop(context);
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
                                     'Connection request sent to ${user.displayName ?? 'user'}'),
+                                duration: const Duration(seconds: 3),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );

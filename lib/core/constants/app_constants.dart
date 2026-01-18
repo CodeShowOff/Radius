@@ -19,6 +19,11 @@ abstract class AppConstants {
   static const int animationDurationMs = 300;
   static const double defaultPadding = 16.0;
   static const double defaultRadius = 12.0;
+
+  // Feature flags
+  /// Enable/disable media uploads (images, audio, documents, stickers)
+  /// Set to false to show "coming soon" message without Firebase Storage
+  static const bool enableMediaUploads = false;
 }
 
 /// Hive box names for local storage

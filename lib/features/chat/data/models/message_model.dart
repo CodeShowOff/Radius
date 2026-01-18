@@ -3,12 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/message.dart';
 
 /// Firestore model for Message entity.
-/// 
+///
 /// Firestore Schema:
 /// ```
 /// conversations/{conversationId}/messages/{messageId}
 ///   - senderId: string
 ///   - text: string
+///   - type: string ('text', 'image', 'audio', 'document', 'sticker', 'video')
+///   - mediaUrl: string?
+///   - mediaFileName: string?
+///   - mediaFileSize: number?
+///   - duration: number? (seconds)
+///   - thumbnailUrl: string?
 ///   - sentAt: timestamp
 ///   - deliveredAt: timestamp?
 ///   - readAt: timestamp?
@@ -21,12 +27,19 @@ class MessageModel extends Message {
     required super.conversationId,
     required super.senderId,
     required super.text,
+    super.type,
+    super.mediaUrl,
+    super.mediaFileName,
+    super.mediaFileSize,
+    super.duration,
+    super.thumbnailUrl,
     required super.sentAt,
     super.deliveredAt,
     super.readAt,
     super.status,
     super.isDeleted,
     super.localId,
+    super.uploadProgress,
   });
 
   /// Creates model from Firestore document.
@@ -40,7 +53,13 @@ class MessageModel extends Message {
       id: doc.id,
       conversationId: conversationId,
       senderId: data['senderId'] as String,
-      text: data['text'] as String,
+      text: data['text'] as String? ?? '',
+      type: _parseType(data['type'] as String? ?? 'text'),
+      mediaUrl: data['mediaUrl'] as String?,
+      mediaFileName: data['mediaFileName'] as String?,
+      mediaFileSize: data['mediaFileSize'] as int?,
+      duration: data['duration'] as int?,
+      thumbnailUrl: data['thumbnailUrl'] as String?,
       sentAt: (data['sentAt'] as Timestamp).toDate(),
       deliveredAt: data['deliveredAt'] != null
           ? (data['deliveredAt'] as Timestamp).toDate()
@@ -60,12 +79,19 @@ class MessageModel extends Message {
       conversationId: message.conversationId,
       senderId: message.senderId,
       text: message.text,
+      type: message.type,
+      mediaUrl: message.mediaUrl,
+      mediaFileName: message.mediaFileName,
+      mediaFileSize: message.mediaFileSize,
+      duration: message.duration,
+      thumbnailUrl: message.thumbnailUrl,
       sentAt: message.sentAt,
       deliveredAt: message.deliveredAt,
       readAt: message.readAt,
       status: message.status,
       isDeleted: message.isDeleted,
       localId: message.localId,
+      uploadProgress: message.uploadProgress,
     );
   }
 
@@ -75,15 +101,29 @@ class MessageModel extends Message {
     required String conversationId,
     required String senderId,
     required String text,
+    MessageType type = MessageType.text,
+    String? mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    int? duration,
+    String? thumbnailUrl,
+    double? uploadProgress,
   }) {
     return MessageModel(
       id: localId, // Temporary ID
       conversationId: conversationId,
       senderId: senderId,
       text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
       sentAt: DateTime.now(),
       status: MessageStatus.sending,
       localId: localId,
+      uploadProgress: uploadProgress,
     );
   }
 
@@ -92,10 +132,15 @@ class MessageModel extends Message {
     return {
       'senderId': senderId,
       'text': text,
+      'type': type.name,
+      if (mediaUrl != null) 'mediaUrl': mediaUrl,
+      if (mediaFileName != null) 'mediaFileName': mediaFileName,
+      if (mediaFileSize != null) 'mediaFileSize': mediaFileSize,
+      if (duration != null) 'duration': duration,
+      if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
       'sentAt': FieldValue.serverTimestamp(),
-      'deliveredAt': deliveredAt != null
-          ? Timestamp.fromDate(deliveredAt!)
-          : null,
+      'deliveredAt':
+          deliveredAt != null ? Timestamp.fromDate(deliveredAt!) : null,
       'readAt': readAt != null ? Timestamp.fromDate(readAt!) : null,
       'status': status.name,
       'isDeleted': isDeleted,
@@ -109,13 +154,39 @@ class MessageModel extends Message {
       conversationId: conversationId,
       senderId: senderId,
       text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
       sentAt: sentAt,
       deliveredAt: deliveredAt,
       readAt: readAt,
       status: status,
       isDeleted: isDeleted,
       localId: localId,
+      uploadProgress: uploadProgress,
     );
+  }
+
+  static MessageType _parseType(String value) {
+    switch (value) {
+      case 'text':
+        return MessageType.text;
+      case 'image':
+        return MessageType.image;
+      case 'audio':
+        return MessageType.audio;
+      case 'document':
+        return MessageType.document;
+      case 'sticker':
+        return MessageType.sticker;
+      case 'video':
+        return MessageType.video;
+      default:
+        return MessageType.text;
+    }
   }
 
   static MessageStatus _parseStatus(String status) {

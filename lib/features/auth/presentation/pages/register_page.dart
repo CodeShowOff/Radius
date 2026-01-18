@@ -16,7 +16,8 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterPageState extends State<RegisterPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -25,9 +26,48 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptedTerms = false;
+  late AnimationController _animationController;
+  late List<Animation<double>> _fadeAnimations;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _fadeAnimations = List.generate(
+      8,
+      (index) => Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Interval(
+            index * 0.08,
+            0.5 + (index * 0.08),
+            curve: Curves.easeOut,
+          ),
+        ),
+      ),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
+    _animationController.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -48,71 +88,102 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         body: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Header
-                    _buildHeader(context),
-                    const SizedBox(height: 32),
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header
+                      FadeTransition(
+                        opacity: _fadeAnimations[0],
+                        child: _buildHeader(context),
+                      ),
+                      const SizedBox(height: 32),
 
-                    // Display name field
-                    _buildNameField(),
-                    const SizedBox(height: 16),
+                      // Display name field
+                      FadeTransition(
+                        opacity: _fadeAnimations[1],
+                        child: _buildNameField(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Email field
-                    _buildEmailField(),
-                    const SizedBox(height: 16),
+                      // Email field
+                      FadeTransition(
+                        opacity: _fadeAnimations[2],
+                        child: _buildEmailField(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Password field
-                    _buildPasswordField(),
-                    const SizedBox(height: 16),
+                      // Password field
+                      FadeTransition(
+                        opacity: _fadeAnimations[3],
+                        child: _buildPasswordField(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Confirm password field
-                    _buildConfirmPasswordField(),
-                    const SizedBox(height: 16),
+                      // Confirm password field
+                      FadeTransition(
+                        opacity: _fadeAnimations[4],
+                        child: _buildConfirmPasswordField(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Terms checkbox
-                    _buildTermsCheckbox(context),
-                    const SizedBox(height: 24),
+                      // Terms checkbox
+                      FadeTransition(
+                        opacity: _fadeAnimations[5],
+                        child: _buildTermsCheckbox(context),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Register button
-                    _buildRegisterButton(),
-                    const SizedBox(height: 24),
+                      // Register button
+                      FadeTransition(
+                        opacity: _fadeAnimations[6],
+                        child: _buildRegisterButton(),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Divider
-                    _buildDivider(context),
-                    const SizedBox(height: 24),
+                      // Divider
+                      FadeTransition(
+                        opacity: _fadeAnimations[7],
+                        child: _buildDivider(context),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Google sign up
-                    SocialSignInButton(
-                      onPressed: _onGoogleSignUp,
-                      icon: 'G',
-                      label: 'Sign up with Google',
-                    ),
-                    const SizedBox(height: 24),
+                      // Google sign up
+                      FadeTransition(
+                        opacity: _fadeAnimations[7],
+                        child: SocialSignInButton(
+                          onPressed: _onGoogleSignUp,
+                          icon: 'G',
+                          label: 'Sign up with Google',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Login link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Already have an account?',
-                          style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                      // Login link
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Already have an account?',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.go(Routes.login),
-                          child: const Text('Sign In'),
-                        ),
-                      ],
-                    ),
-                  ],
+                          TextButton(
+                            onPressed: () => context.go(Routes.login),
+                            child: const Text('Sign In'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

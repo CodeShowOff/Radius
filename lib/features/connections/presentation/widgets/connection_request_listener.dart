@@ -160,8 +160,8 @@ class _ConnectionRequestListenerState extends State<ConnectionRequestListener> {
       ),
     );
 
-    // Auto-dismiss after 10 seconds if user doesn't interact
-    Future.delayed(const Duration(seconds: 10), () {
+    // Auto-dismiss after 5 seconds if user doesn't interact
+    Future.delayed(const Duration(seconds: 5), () {
       if (context.mounted) {
         ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
       }

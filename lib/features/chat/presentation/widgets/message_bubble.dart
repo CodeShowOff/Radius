@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/message.dart';
+import 'media_message_content.dart';
 
 /// Message bubble widget for chat.
 class MessageBubble extends StatelessWidget {
@@ -41,10 +42,12 @@ class MessageBubble extends StatelessWidget {
             children: [
               // Message content
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
+                padding: message.isMediaMessage
+                    ? const EdgeInsets.all(4)
+                    : const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                 decoration: BoxDecoration(
                   color: isMe
                       ? theme.colorScheme.primary
@@ -58,7 +61,43 @@ class MessageBubble extends StatelessWidget {
                 ),
                 child: message.isDeleted
                     ? _DeletedMessage(isMe: isMe, theme: theme)
-                    : _MessageText(message: message, isMe: isMe, theme: theme),
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Media content
+                          if (message.isMediaMessage)
+                            MediaMessageContent(
+                              message: message,
+                              isSent: isMe,
+                            ),
+
+                          // Caption or text
+                          if (message.text.isNotEmpty &&
+                              message.type != MessageType.text)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 10,
+                                right: 10,
+                                top: 4,
+                                bottom: 6,
+                              ),
+                              child: _MessageText(
+                                message: message,
+                                isMe: isMe,
+                                theme: theme,
+                              ),
+                            ),
+
+                          // Text-only message
+                          if (!message.isMediaMessage &&
+                              message.text.isNotEmpty)
+                            _MessageText(
+                              message: message,
+                              isMe: isMe,
+                              theme: theme,
+                            ),
+                        ],
+                      ),
               ),
 
               // Timestamp and status

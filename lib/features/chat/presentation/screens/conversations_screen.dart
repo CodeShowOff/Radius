@@ -92,25 +92,39 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               itemCount: state.conversations.length,
               itemBuilder: (context, index) {
                 final conversation = state.conversations[index];
-                return _ConversationTile(
-                  conversation: conversation,
-                  currentUserId: widget.currentUserId,
-                  onTap: () => widget.onConversationTap(conversation),
-                  onDismissed: (direction) {
-                    if (direction == DismissDirection.endToStart) {
-                      // Delete
-                      context.read<ConversationsBloc>().add(
-                            ConversationsDelete(
-                                conversationId: conversation.id),
-                          );
-                    } else {
-                      // Archive
-                      context.read<ConversationsBloc>().add(
-                            ConversationsArchive(
-                                conversationId: conversation.id),
-                          );
-                    }
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 300 + (index * 50)),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Transform.translate(
+                      offset: Offset(0, 20 * (1 - value)),
+                      child: Opacity(
+                        opacity: value,
+                        child: child,
+                      ),
+                    );
                   },
+                  child: _ConversationTile(
+                    conversation: conversation,
+                    currentUserId: widget.currentUserId,
+                    onTap: () => widget.onConversationTap(conversation),
+                    onDismissed: (direction) {
+                      if (direction == DismissDirection.endToStart) {
+                        // Delete
+                        context.read<ConversationsBloc>().add(
+                              ConversationsDelete(
+                                  conversationId: conversation.id),
+                            );
+                      } else {
+                        // Archive
+                        context.read<ConversationsBloc>().add(
+                              ConversationsArchive(
+                                  conversationId: conversation.id),
+                            );
+                      }
+                    },
+                  ),
                 );
               },
             ),

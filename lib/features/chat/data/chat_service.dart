@@ -274,6 +274,100 @@ class ChatService {
     }
   }
 
+  /// Sends a media message (image, audio, document, sticker).
+  ///
+  /// Returns the optimistic message immediately for UI update.
+  Future<Message> sendMediaMessage({
+    required String conversationId,
+    required String senderId,
+    required MessageType type,
+    required String mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    int? duration,
+    String? thumbnailUrl,
+    String text = '',
+    String? recipientId,
+  }) async {
+    final localId = _uuid.v4();
+    final now = DateTime.now();
+
+    // Create optimistic message for immediate UI
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
+      sentAt: now,
+      status: MessageStatus.sending,
+      localId: localId,
+    );
+
+    try {
+      // Write to Firestore
+      final messagesRef =
+          _conversationsRef.doc(conversationId).collection('messages');
+
+      final messageData =
+          MessageModel.fromEntity(optimisticMessage).toFirestore();
+      final docRef = await messagesRef.add(messageData);
+
+      // Update conversation metadata
+      final batch = _firestore.batch();
+
+      // Determine last message preview text based on type
+      String lastMessagePreview;
+      switch (type) {
+        case MessageType.image:
+          lastMessagePreview = '📷 Photo';
+          break;
+        case MessageType.audio:
+          lastMessagePreview = '🎤 Voice message';
+          break;
+        case MessageType.document:
+          lastMessagePreview = '📄 ${mediaFileName ?? 'Document'}';
+          break;
+        case MessageType.sticker:
+          lastMessagePreview = '😀 Sticker';
+          break;
+        case MessageType.video:
+          lastMessagePreview = '🎥 Video';
+          break;
+        default:
+          lastMessagePreview = text;
+      }
+
+      batch.update(_conversationsRef.doc(conversationId), {
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastMessageText': lastMessagePreview,
+        'lastMessageSenderId': senderId,
+        // Increment unread count for recipient
+        if (recipientId != null)
+          'unreadCounts.$recipientId': FieldValue.increment(1),
+      });
+
+      await batch.commit();
+
+      _logger.d('Media message sent: ${docRef.id}');
+
+      // Return with real ID
+      return optimisticMessage.copyWith(
+        id: docRef.id,
+        status: MessageStatus.sent,
+      );
+    } catch (e, stack) {
+      _logger.e('Error sending media message', error: e, stackTrace: stack);
+      // Return failed message
+      return optimisticMessage.copyWith(status: MessageStatus.failed);
+    }
+  }
+
   /// Stream of messages for a conversation with real-time updates.
   ///
   /// Messages are ordered by sentAt descending for efficient pagination.

@@ -9,8 +9,32 @@ import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 
 /// Screen displaying user's connections list.
-class ConnectionsListScreen extends StatelessWidget {
+class ConnectionsListScreen extends StatefulWidget {
   const ConnectionsListScreen({super.key});
+
+  @override
+  State<ConnectionsListScreen> createState() => _ConnectionsListScreenState();
+}
+
+class _ConnectionsListScreenState extends State<ConnectionsListScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,9 +110,23 @@ class ConnectionsListScreen extends StatelessWidget {
               itemCount: connections.length,
               itemBuilder: (context, index) {
                 final connection = connections[index];
-                return _ConnectionTile(
-                  connection: connection,
-                  currentUserId: state.userId!,
+                return TweenAnimationBuilder<double>(
+                  duration: Duration(milliseconds: 300 + (index * 50)),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) {
+                    return Transform.translate(
+                      offset: Offset(0, 20 * (1 - value)),
+                      child: Opacity(
+                        opacity: value,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _ConnectionTile(
+                    connection: connection,
+                    currentUserId: state.userId!,
+                  ),
                 );
               },
             ),

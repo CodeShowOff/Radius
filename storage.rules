@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
+    
+    /// Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    /// Check if file size is within limit (20MB for images, 100MB for docs)
+    function isValidSize(maxSizeMB) {
+      return request.resource.size <= maxSizeMB * 1024 * 1024;
+    }
+    
+    /// Check if file is an image
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    /// Check if file is audio
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+    
+    /// Check if file is a document
+    function isDocument() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain'
+      ];
+    }
+    
+    // ============================================================
+    // CHAT MEDIA FILES
+    // ============================================================
+    
+    // Images in chat_media/images/{conversationId}/{userId_timestamp}.ext
+    match /chat_media/images/{conversationId}/{fileName} {
+      // Allow authenticated users to upload images
+      allow write: if isAuthenticated()
+        && isImage()
+        && isValidSize(20) // 20MB max
+        && resource == null; // Only allow creating new files, not overwriting
+      
+      // Allow reading images from conversations user is part of
+      allow read: if isAuthenticated();
+    }
+    
+    // Audio files in chat_media/audio/{conversationId}/{userId_timestamp}.ext
+    match /chat_media/audio/{conversationId}/{fileName} {
+      // Allow authenticated users to upload audio (voice messages)
+      allow write: if isAuthenticated()
+        && isAudio()
+        && isValidSize(50) // 50MB max for audio
+        && resource == null;
+      
+      // Allow reading audio from conversations user is part of
+      allow read: if isAuthenticated();
+    }
+    
+    // Documents in chat_media/documents/{conversationId}/{userId_timestamp}.ext
+    match /chat_media/documents/{conversationId}/{fileName} {
+      // Allow authenticated users to upload documents
+      allow write: if isAuthenticated()
+        && isDocument()
+        && isValidSize(100) // 100MB max for documents
+        && resource == null;
+      
+      // Allow reading documents from conversations user is part of
+      allow read: if isAuthenticated();
+    }
+    
+    // Stickers in chat_media/stickers/{conversationId}/{userId_timestamp}.ext
+    match /chat_media/stickers/{conversationId}/{fileName} {
+      // Allow authenticated users to upload stickers (same as images)
+      allow write: if isAuthenticated()
+        && isImage()
+        && isValidSize(5) // 5MB max for stickers
+        && resource == null;
+      
+      // Allow reading stickers from conversations user is part of
+      allow read: if isAuthenticated();
+    }
+    
+    // Default: deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/constants/app_constants.dart';
 import '../../data/chat_service.dart';
+import '../../data/media_upload_service.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/entities/message.dart';
 
@@ -13,6 +17,7 @@ part 'chat_state.dart';
 /// BLoC for managing a single chat conversation.
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
+  final MediaUploadService _mediaUploadService;
 
   StreamSubscription<List<Message>>? _messagesSubscription;
   StreamSubscription<Conversation?>? _conversationSubscription;
@@ -20,12 +25,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Timer? _typingDebounce;
 
-  ChatBloc({required ChatService chatService})
-      : _chatService = chatService,
+  ChatBloc({
+    required ChatService chatService,
+    required MediaUploadService mediaUploadService,
+  })  : _chatService = chatService,
+        _mediaUploadService = mediaUploadService,
         super(const ChatState()) {
     on<ChatOpen>(_onOpen);
     on<ChatClose>(_onClose);
     on<ChatSendMessage>(_onSendMessage);
+    on<ChatSendImage>(_onSendImage);
+    on<ChatSendAudio>(_onSendAudio);
+    on<ChatSendDocument>(_onSendDocument);
+    on<ChatSendSticker>(_onSendSticker);
     on<ChatLoadMore>(_onLoadMore);
     on<ChatMarkAsRead>(_onMarkAsRead);
     on<ChatSetTyping>(_onSetTyping);
@@ -149,6 +161,182 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final pending = Map<String, Message>.from(state.pendingMessages);
       pending.remove(sentMessage.localId);
       emit(state.copyWith(pendingMessages: pending));
+    }
+  }
+
+  Future<void> _onSendImage(
+    ChatSendImage event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    // Check if media uploads are enabled
+    if (!AppConstants.enableMediaUploads) {
+      emit(state.copyWith(
+        errorMessage:
+            '📷 Photo sharing will be available very soon! We\'re setting up our servers.',
+      ));
+      return;
+    }
+
+    try {
+      // Upload image
+      final uploadResult = await _mediaUploadService.uploadImage(
+        file: event.file,
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        onProgress: (progress) {
+          // Could emit progress updates here if needed
+        },
+      );
+
+      // Send media message
+      await _chatService.sendMediaMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        type: MessageType.image,
+        mediaUrl: uploadResult.downloadUrl,
+        mediaFileName: uploadResult.fileName,
+        mediaFileSize: uploadResult.fileSize,
+        text: event.caption ?? '',
+        recipientId: state.otherUserId,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Failed to send image: $e'));
+    }
+  }
+
+  Future<void> _onSendAudio(
+    ChatSendAudio event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    // Check if media uploads are enabled
+    if (!AppConstants.enableMediaUploads) {
+      emit(state.copyWith(
+        errorMessage:
+            '🎤 Voice messages will be available very soon! We\'re setting up our servers.',
+      ));
+      return;
+    }
+
+    try {
+      // Upload audio
+      final uploadResult = await _mediaUploadService.uploadAudio(
+        file: event.file,
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        duration: event.duration,
+        onProgress: (progress) {
+          // Could emit progress updates here if needed
+        },
+      );
+
+      // Send media message
+      await _chatService.sendMediaMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        type: MessageType.audio,
+        mediaUrl: uploadResult.downloadUrl,
+        mediaFileName: uploadResult.fileName,
+        mediaFileSize: uploadResult.fileSize,
+        duration: event.duration,
+        recipientId: state.otherUserId,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Failed to send voice message: $e'));
+    }
+  }
+
+  Future<void> _onSendDocument(
+    ChatSendDocument event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    // Check if media uploads are enabled
+    if (!AppConstants.enableMediaUploads) {
+      emit(state.copyWith(
+        errorMessage:
+            '📄 Document sharing will be available very soon! We\'re setting up our servers.',
+      ));
+      return;
+    }
+
+    try {
+      // Upload document
+      final uploadResult = await _mediaUploadService.uploadDocument(
+        file: event.file,
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        onProgress: (progress) {
+          // Could emit progress updates here if needed
+        },
+      );
+
+      // Send media message
+      await _chatService.sendMediaMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        type: MessageType.document,
+        mediaUrl: uploadResult.downloadUrl,
+        mediaFileName: uploadResult.fileName,
+        mediaFileSize: uploadResult.fileSize,
+        text: event.caption ?? '',
+        recipientId: state.otherUserId,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Failed to send document: $e'));
+    }
+  }
+
+  Future<void> _onSendSticker(
+    ChatSendSticker event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    // Check if media uploads are enabled
+    if (!AppConstants.enableMediaUploads) {
+      emit(state.copyWith(
+        errorMessage:
+            '😊 Stickers will be available very soon! We\'re setting up our servers.',
+      ));
+      return;
+    }
+
+    try {
+      // Upload sticker
+      final uploadResult = await _mediaUploadService.uploadSticker(
+        file: event.file,
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        onProgress: (progress) {
+          // Could emit progress updates here if needed
+        },
+      );
+
+      // Send media message
+      await _chatService.sendMediaMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        type: MessageType.sticker,
+        mediaUrl: uploadResult.downloadUrl,
+        mediaFileName: uploadResult.fileName,
+        mediaFileSize: uploadResult.fileSize,
+        recipientId: state.otherUserId,
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Failed to send sticker: $e'));
     }
   }
 

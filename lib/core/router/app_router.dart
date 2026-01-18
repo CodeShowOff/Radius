@@ -253,10 +253,7 @@ GoRouter get appRouter {
         path: Routes.guessme,
         name: 'guessme',
         builder: (context, state) {
-          return BlocProvider(
-            create: (_) => getIt<GuessmeBloc>(),
-            child: const GuessMeLobbyPage(),
-          );
+          return const GuessMeLobbyPage();
         },
       ),
       GoRoute(

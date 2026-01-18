@@ -136,90 +136,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     
-    // BLE ID mappings - maps Bluetooth IDs to user IDs (legacy, may be deprecated)
-    match /ble_id_mappings/{mappingId} {
-      // RULE: Any authenticated user can fetch a specific mapping (doc-get)
-      // only if it is still valid and the owner is currently discoverable.
-      // Privacy: deny collection enumeration to reduce linkability/harvesting risk.
-      allow get: if isAuthenticated()
-        && resource.data.bleToken is string
-        && resource.data.bleToken == mappingId
-        && resource.data.bleToken.size() == 64
-        && resource.data.userId is string
-        && resource.data.isVisible is bool
-        && resource.data.expiresAt is timestamp
-        && resource.data.expiresAt > request.time
-        && resource.data.isVisible == true;
-      allow list: if false;
-      
-      // RULE: Users can only create their own mapping.
-      allow create: if isAuthenticated()
-        && request.auth.uid == request.resource.data.userId
-        // Only allow the minimal expected schema.
-        && request.resource.data.keys().hasOnly(['bleToken', 'userId', 'expiresAt', 'updatedAt', 'isVisible'])
-        && request.resource.data.bleToken is string
-        && request.resource.data.bleToken == mappingId
-        // sha256 hex
-        && request.resource.data.bleToken.size() == 64
-        && request.resource.data.userId is string
-        && request.resource.data.isVisible is bool
-        && request.resource.data.expiresAt is timestamp
-        && request.resource.data.expiresAt > request.time
-        // Bound TTL to prevent abuse / long-lived linkability.
-        && request.resource.data.expiresAt < request.time + duration.value(30, 'm');
-
-      // RULE: Users can only extend/refresh expiry on their existing mapping.
-      // Prevent rewriting bleId->userId association once created.
-      allow update: if isAuthenticated()
-        && request.auth.uid == resource.data.userId
-        && request.resource.data.keys().hasOnly(['bleToken', 'userId', 'expiresAt', 'updatedAt', 'isVisible'])
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.bleToken == resource.data.bleToken
-        && request.resource.data.bleToken == mappingId
-        // Updates may only touch expiry + updatedAt + discoverability.
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expiresAt', 'updatedAt', 'isVisible'])
-        && request.resource.data.isVisible is bool
-        && request.resource.data.expiresAt is timestamp
-        && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt < request.time + duration.value(30, 'm');
-      
-      // RULE: Users can delete their own mapping
-      allow delete: if isAuthenticated() 
-        && request.auth.uid == resource.data.userId;
-    }
-    
-    // Proximity beacons - users broadcast their presence
-    match /proximityBeacons/{beaconId} {
-      // RULE: Any authenticated user can read beacons (filtered by distance client-side)
-      allow read: if isAuthenticated();
-      
-      // RULE: Only owner can write their beacon
-      allow create: if isAuthenticated()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasAll(['userId', 'location', 'timestamp']);
-      
-      allow update: if isAuthenticated()
-        && resource.data.userId == request.auth.uid;
-      
-      allow delete: if isAuthenticated()
-        && resource.data.userId == request.auth.uid;
-    }
-    
-    // Encounters - records of nearby user detections
-    match /encounters/{encounterId} {
-      // RULE: Users can read encounters they participated in
-      allow read: if isAuthenticated() 
-        && request.auth.uid in resource.data.userIds;
-      
-      // RULE: Users can create encounters they're part of
-      allow create: if isAuthenticated() 
-        && request.auth.uid in request.resource.data.userIds
-        && request.resource.data.userIds.size() == 2;
-      
-      // No updates or deletes - encounters are immutable records
-      allow update, delete: if false;
-    }
-    
     // ============================================================
     // CONNECTIONS
     // ============================================================
@@ -324,23 +240,17 @@ service cloud.firestore {
           return isAuthenticated() && request.auth.uid == resource.data.senderId;
         }
         
-        /// Check if the two participants are still connected (not disconnected/blocked)
-        function areParticipantsConnected() {
-          let conversation = get(/databases/$(database)/documents/conversations/$(conversationId));
-          let participants = conversation.data.participantIds;
-          return areConnected(participants[0], participants[1]);
-        }
-        
         // RULE: Only conversation participants can read messages (even if disconnected - for history)
         allow read: if isAuthenticated() && isConversationMember();
         
-        // RULE: Only participants can send, must be connected (not disconnected/blocked)
+        // RULE: Only participants can send messages (app logic handles connection status checks)
+        // Supports both text and media messages
         allow create: if isAuthenticated() 
           && isConversationMember()
-          && areParticipantsConnected()
           && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.keys().hasAll(['senderId', 'text', 'sentAt'])
-          && request.resource.data.text.size() <= 5000; // Max message length
+          && request.resource.data.keys().hasAll(['senderId', 'text', 'sentAt', 'type'])
+          && request.resource.data.text.size() <= 5000 // Max message length
+          && request.resource.data.type in ['text', 'image', 'audio', 'document', 'sticker', 'video'];
         
         // RULE: Sender can edit/delete, recipient can only mark as read/delivered
         allow update: if isAuthenticated() && isConversationMember()
@@ -456,8 +366,40 @@ service cloud.firestore {
       }
     }
     
-    // GuessMe user stats (stored in profiles/userId/guess_me_stats)
-    // Note: Stats are stored under profiles/{userId}/stats/guessme for privacy
+    // GuessMe messages - top-level collection for game chat
+    // Messages are stored separately from sessions for better query performance
+    match /guess_me_messages/{messageId} {
+      /// Check if user is participant in the message's session
+      function isSessionParticipant() {
+        let session = get(/databases/$(database)/documents/guess_me_sessions/$(resource.data.sessionId));
+        return request.auth.uid == session.data.player1Id 
+          || request.auth.uid == session.data.player2Id;
+      }
+      
+      /// Check if user will be participant (for creates)
+      function willBeSessionParticipant() {
+        let session = get(/databases/$(database)/documents/guess_me_sessions/$(request.resource.data.sessionId));
+        return request.auth.uid == session.data.player1Id 
+          || request.auth.uid == session.data.player2Id;
+      }
+      
+      // RULE: Only session participants can read messages
+      allow read: if isAuthenticated() && isSessionParticipant();
+      
+      // RULE: Only session participants can send messages
+      allow create: if isAuthenticated()
+        && willBeSessionParticipant()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.keys().hasAll(['sessionId', 'senderId', 'text', 'sentAt', 'type'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 5000;
+      
+      // RULE: Messages are immutable - no updates or deletes
+      allow update, delete: if false;
+    }
+    
+    // GuessMe user stats - stored under profiles/{userId}/stats/guessme for privacy
+    // Access is controlled by the profiles/{userId}/stats/** rule
     
     // ============================================================
     // APP CONFIGURATION (read-only)

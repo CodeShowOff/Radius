@@ -75,11 +75,15 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen>
         ),
       ),
       body: BlocListener<ConnectionBloc, ConnectionBlocState>(
+        listenWhen: (prev, curr) =>
+            curr.errorMessage != null && prev.errorMessage != curr.errorMessage,
         listener: (context, state) {
           if (state.errorMessage != null) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
+                duration: const Duration(seconds: 3),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -147,7 +151,8 @@ class _ReceivedRequestsTab extends StatelessWidget {
           return const _EmptyState(
             icon: Icons.inbox_outlined,
             title: 'No pending requests',
-            message: 'When someone sends you a connection request,\nit will appear here.',
+            message:
+                'When someone sends you a connection request,\nit will appear here.',
           );
         }
 
@@ -161,8 +166,8 @@ class _ReceivedRequestsTab extends StatelessWidget {
             itemCount: requests.length,
             itemBuilder: (context, index) {
               final request = requests[index];
-              final isLoading = state.isActionLoading &&
-                  state.processingId == request.id;
+              final isLoading =
+                  state.isActionLoading && state.processingId == request.id;
 
               return ConnectionRequestCard(
                 request: request,
@@ -230,7 +235,8 @@ class _SentRequestsTab extends StatelessWidget {
           return const _EmptyState(
             icon: Icons.send_outlined,
             title: 'No pending requests',
-            message: 'Requests you\'ve sent that are\nwaiting for a response will appear here.',
+            message:
+                'Requests you\'ve sent that are\nwaiting for a response will appear here.',
           );
         }
 
@@ -243,8 +249,8 @@ class _SentRequestsTab extends StatelessWidget {
             itemCount: requests.length,
             itemBuilder: (context, index) {
               final request = requests[index];
-              final isLoading = state.isActionLoading &&
-                  state.processingId == request.id;
+              final isLoading =
+                  state.isActionLoading && state.processingId == request.id;
 
               return ConnectionRequestCard(
                 request: request,

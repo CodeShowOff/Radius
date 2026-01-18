@@ -224,21 +224,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
       },
       child: BlocConsumer<ProfileBloc, ProfileState>(
         listenWhen: (previous, current) =>
-            current is ProfileSaved || current is ProfileError,
+            (current is ProfileSaved || current is ProfileError) &&
+            previous != current,
         listener: (context, state) {
           if (state is ProfileSaved) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Profile saved successfully'),
+                duration: Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
                 backgroundColor: Colors.green,
               ),
             );
             setState(() => _hasChanges = false);
             context.pop();
           } else if (state is ProfileError) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );

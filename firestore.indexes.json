@@ -169,11 +169,15 @@
       ]
     },
     {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "guess_me_messages",
+      "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "timestamp",
+          "fieldPath": "sessionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sentAt",
           "order": "ASCENDING"
         }
       ]

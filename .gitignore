@@ -4,6 +4,8 @@
 *.pyc
 *.swp
 .DS_Store
+desktop.ini
+Desktop.ini
 .atom/
 .build/
 .buildlog/
@@ -56,3 +58,6 @@ app.*.map.json
 
 # Firebase configuration (regenerate for each environment)
 **/google-services.json
+
+
+node_modules

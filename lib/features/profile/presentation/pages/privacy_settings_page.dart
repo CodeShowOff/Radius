@@ -73,13 +73,18 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return BlocListener<ProfileBloc, ProfileState>(
+      listenWhen: (previous, current) =>
+          current is ProfileError && previous != current,
       listener: (context, state) {
         if (state is ProfileLoaded) {
           // Settings saved successfully
         } else if (state is ProfileError) {
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error: ${state.message}'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );

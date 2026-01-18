@@ -49,6 +49,50 @@ class ChatSendMessage extends ChatEvent {
   List<Object?> get props => [text];
 }
 
+/// Send an image message.
+class ChatSendImage extends ChatEvent {
+  final File file;
+  final String? caption;
+  final ImageSource source; // camera or gallery
+
+  const ChatSendImage(this.file, {this.caption, required this.source});
+
+  @override
+  List<Object?> get props => [file, caption, source];
+}
+
+/// Send an audio/voice message.
+class ChatSendAudio extends ChatEvent {
+  final File file;
+  final int duration; // in seconds
+
+  const ChatSendAudio(this.file, {required this.duration});
+
+  @override
+  List<Object?> get props => [file, duration];
+}
+
+/// Send a document.
+class ChatSendDocument extends ChatEvent {
+  final File file;
+  final String? caption;
+
+  const ChatSendDocument(this.file, {this.caption});
+
+  @override
+  List<Object?> get props => [file, caption];
+}
+
+/// Send a sticker.
+class ChatSendSticker extends ChatEvent {
+  final File file;
+
+  const ChatSendSticker(this.file);
+
+  @override
+  List<Object?> get props => [file];
+}
+
 /// Load more (older) messages.
 class ChatLoadMore extends ChatEvent {
   const ChatLoadMore();

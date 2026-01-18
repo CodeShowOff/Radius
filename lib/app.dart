@@ -4,10 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
+import 'core/services/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
+import 'features/guess_me/presentation/bloc/guess_me_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
 
@@ -43,6 +45,11 @@ class RadiusApp extends StatelessWidget {
           // Nearby Users BLoC for BLE advertising (app-wide)
           BlocProvider<NearbyUsersBloc>(
             create: (_) => getIt<NearbyUsersBloc>(),
+          ),
+
+          // Guess Me BLoC (used by both lobby and game pages)
+          BlocProvider<GuessmeBloc>(
+            create: (_) => getIt<GuessmeBloc>(),
           ),
         ],
         child: _AuthAwareApp(
@@ -86,6 +93,8 @@ class _AuthAwareApp extends StatefulWidget {
 
 class _AuthAwareAppState extends State<_AuthAwareApp> {
   String? _currentUserId;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   @override
   void initState() {
@@ -95,7 +104,66 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _onAuthChanged(context, context.read<AuthBloc>().state);
+      _setupInAppNotifications();
     });
+  }
+
+  /// Setup in-app notification handler for foreground messages
+  void _setupInAppNotifications() {
+    try {
+      final notificationService = getIt<NotificationService>();
+      notificationService.onInAppNotification = (title, body, data) {
+        // Show SnackBar for new messages when user is not viewing that chat
+        if (mounted) {
+          _scaffoldMessengerKey.currentState?.clearSnackBars();
+          _scaffoldMessengerKey.currentState?.showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.message, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (body.isNotEmpty)
+                          Text(
+                            body,
+                            style: const TextStyle(color: Colors.white),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              action: SnackBarAction(
+                label: 'VIEW',
+                textColor: Colors.white,
+                onPressed: () {
+                  // TODO: Navigate to the conversation
+                  // Will need context.go or Navigator to go to chat
+                },
+              ),
+            ),
+          );
+        }
+      };
+    } catch (_) {
+      // Service not available
+    }
   }
 
   void _onAuthChanged(BuildContext context, AuthState state) {
@@ -131,11 +199,26 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
         } catch (_) {
           // Ignore if NearbyUsersBloc isn't available in the tree yet.
         }
+
+        // Initialize push notifications
+        try {
+          getIt<NotificationService>().initialize(newUserId);
+        } catch (_) {
+          // Ignore if NotificationService isn't available yet.
+        }
       }
       return;
     }
 
     // Signed out or unauthenticated.
+    if (_currentUserId != null) {
+      // Clean up notifications on sign out
+      try {
+        getIt<NotificationService>().removeToken();
+      } catch (_) {
+        // Ignore if NotificationService isn't available.
+      }
+    }
     _currentUserId = null;
   }
 
@@ -165,7 +248,10 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
           listener: _onProfileChanged,
         ),
       ],
-      child: widget.child,
+      child: ScaffoldMessenger(
+        key: _scaffoldMessengerKey,
+        child: widget.child,
+      ),
     );
   }
 }

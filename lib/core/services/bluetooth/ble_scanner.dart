@@ -152,15 +152,26 @@ class BleScanner {
       final serviceData = result.advertisementData.serviceData;
       final now = DateTime.now();
 
-      // Track ALL devices in raw list for diagnostics
-      _rawDevices[deviceId] = RawBleDevice(
-        deviceId: deviceId,
-        name: localName.isNotEmpty ? localName : deviceName,
-        rssi: result.rssi,
-        serviceUuids: serviceUuids.map((g) => g.toString()).toList(),
-        serviceData: serviceData.map((k, v) => MapEntry(k.toString(), v)),
-        lastSeen: now,
-      );
+      // Track only app UUID for diagnostics (not all raw data)
+      final appServiceUuids = serviceUuids
+          .where((uuid) => uuid
+              .toString()
+              .toLowerCase()
+              .contains(BleConstants.radiusServiceUuid16bit.toLowerCase()))
+          .map((g) => g.toString())
+          .toList();
+
+      // Only store device if it has our app UUID
+      if (appServiceUuids.isNotEmpty) {
+        _rawDevices[deviceId] = RawBleDevice(
+          deviceId: deviceId,
+          name: localName.isNotEmpty ? localName : deviceName,
+          rssi: result.rssi,
+          serviceUuids: appServiceUuids,
+          serviceData: {}, // Don't collect raw service data
+          lastSeen: now,
+        );
+      }
 
       // Now check if this is a Radius device
       String? username;

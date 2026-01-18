@@ -77,9 +77,12 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
           // Show error messages
           if (state.status == GuessmeStatus.error &&
               state.errorMessage != null) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
                 backgroundColor: Colors.red,
               ),
             );
@@ -102,6 +105,16 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
                   // Header card explaining the game
                   _buildInfoCard(context),
                   const SizedBox(height: 24),
+
+                  // Active games section (if any)
+                  if (state.session != null &&
+                      (state.status == GuessmeStatus.inGame ||
+                          state.status == GuessmeStatus.awaitingGuessResponse ||
+                          state.status ==
+                              GuessmeStatus.receivedGuessCheck)) ...[
+                    _buildActiveGamesSection(context, state),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Stats card
                   if (state.stats != null) ...[
@@ -195,6 +208,118 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActiveGamesSection(BuildContext context, GuessmeState state) {
+    final theme = Theme.of(context);
+    final session = state.session!;
+    final timeRemaining = session.timeRemaining;
+
+    return Card(
+      elevation: 2,
+      child: InkWell(
+        onTap: () {
+          context.push(
+            Routes.guessmeGame,
+            extra: {'sessionId': session.id},
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.games,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Active Game',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.circle, size: 8, color: Colors.green),
+                        SizedBox(width: 4),
+                        Text(
+                          'LIVE',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: theme.colorScheme.secondary,
+                    child: const Text(
+                      '?',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Mystery Player',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '${timeRemaining.inMinutes}m ${timeRemaining.inSeconds.remainder(60)}s remaining',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

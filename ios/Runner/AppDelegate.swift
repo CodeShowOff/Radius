@@ -1,5 +1,7 @@
 import Flutter
 import UIKit
+import Firebase
+import FirebaseMessaging
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -7,6 +9,17 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Configure Firebase
+    FirebaseApp.configure()
+    
+    // Configure notifications
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self
+    }
+    
+    // Register for remote notifications
+    application.registerForRemoteNotifications()
+    
     GeneratedPluginRegistrant.register(with: self)
     
     // Register BLE Advertiser Plugin
@@ -14,5 +27,9 @@ import UIKit
     BleAdvertiserPlugin.register(with: registrar(forPlugin: "BleAdvertiserPlugin")!)
     
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+  
+  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    Messaging.messaging().apnsToken = deviceToken
   }
 }

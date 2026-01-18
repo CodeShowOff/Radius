@@ -262,14 +262,6 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     final theme = Theme.of(context);
     final isLowTime = _timeRemaining.inMinutes < 5;
 
-    // Get the other player's name from session
-    String otherPlayerName = 'Mystery User';
-    if (state.session != null && state.currentUserId != null) {
-      otherPlayerName =
-          state.session!.getOtherPlayerName(state.currentUserId!) ??
-              'Mystery User';
-    }
-
     return AppBar(
       leading: IconButton(
         icon: const Icon(Icons.close),
@@ -277,9 +269,9 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
       ),
       title: Column(
         children: [
-          Text(
-            otherPlayerName,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          const Text(
+            'Mystery Player',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           Text(
             _formatDuration(_timeRemaining),
@@ -601,84 +593,135 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     final wasSuccessfulGuess =
         session?.status == GuessmeSessionStatus.completed;
     final otherPlayerId = state.otherPlayerId;
-    final otherPlayerName =
-        state.session?.getOtherPlayerName(state.currentUserId ?? '') ??
-            'this user';
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              wasSuccessfulGuess ? Icons.celebration : Icons.timer_off,
-              color: wasSuccessfulGuess ? Colors.green : Colors.orange,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                wasSuccessfulGuess ? 'Correct Guess!' : 'Time\'s Up!',
-                overflow: TextOverflow.ellipsis,
+    // Fetch the other player's profile to show real name and photo
+    _fetchOtherPlayerProfile(otherPlayerId).then((profile) {
+      if (!mounted) return;
+
+      final otherPlayerName = profile?['name'] as String? ?? 'this user';
+      final otherPlayerPhoto = profile?['photoUrl'] as String?;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                wasSuccessfulGuess ? Icons.celebration : Icons.timer_off,
+                color: wasSuccessfulGuess ? Colors.green : Colors.orange,
               ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (wasSuccessfulGuess) ...[
-              Text('You were chatting with: $otherPlayerName'),
-              const SizedBox(height: 16),
-              const Text(
-                'Would you like to connect with them?',
-                style: TextStyle(fontWeight: FontWeight.w500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  wasSuccessfulGuess ? 'Correct Guess!' : 'Time\'s Up!',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ] else ...[
-              const Text('The game has ended.'),
-              const SizedBox(height: 8),
-              Text('You were chatting with: $otherPlayerName'),
-              const SizedBox(height: 8),
-              const Text('Maybe next time you\'ll figure it out faster!'),
             ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              context.pop();
-            },
-            child: Text(wasSuccessfulGuess ? 'No Thanks' : 'Back to Lobby'),
           ),
-          if (wasSuccessfulGuess && otherPlayerId != null)
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                await _sendConnectionRequest(
-                  otherPlayerId,
-                  otherPlayerName,
-                  state.currentUserId!,
-                );
-                if (mounted) {
-                  context.pop();
-                }
-              },
-              icon: const Icon(Icons.person_add),
-              label: const Text('Connect'),
-            ),
-          if (!wasSuccessfulGuess)
-            FilledButton(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Show the other player's profile
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundImage: otherPlayerPhoto != null
+                        ? NetworkImage(otherPlayerPhoto)
+                        : null,
+                    child: otherPlayerPhoto == null
+                        ? Text(
+                            otherPlayerName.isNotEmpty
+                                ? otherPlayerName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'You were chatting with:',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          otherPlayerName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (wasSuccessfulGuess) ...[
+                const Text(
+                  'Would you like to connect and continue chatting?',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ] else ...[
+                const Text('Maybe next time you\'ll figure it out faster!'),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
                 context.pop();
               },
-              child: const Text('Find New Match'),
+              child: Text(wasSuccessfulGuess ? 'No Thanks' : 'Back to Lobby'),
             ),
-        ],
-      ),
-    );
+            if (wasSuccessfulGuess && otherPlayerId != null)
+              FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
+                  await _sendConnectionRequest(
+                    otherPlayerId,
+                    otherPlayerName,
+                    state.currentUserId!,
+                  );
+                  if (mounted) {
+                    context.pop();
+                  }
+                },
+                icon: const Icon(Icons.person_add),
+                label: const Text('Connect'),
+              ),
+            if (!wasSuccessfulGuess)
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  context.pop();
+                },
+                child: const Text('Find New Match'),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<Map<String, dynamic>?> _fetchOtherPlayerProfile(String? userId) async {
+    if (userId == null) return null;
+    try {
+      final connectionService = getIt<ConnectionService>();
+      return await connectionService.getUserProfile(userId);
+    } catch (e) {
+      return null;
+    }
   }
 
   Future<void> _sendConnectionRequest(

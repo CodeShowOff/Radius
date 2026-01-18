@@ -15,14 +15,55 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  late AnimationController _animationController;
+  late List<Animation<double>> _fadeAnimations;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    // Create staggered fade animations
+    _fadeAnimations = List.generate(
+      6,
+      (index) => Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Interval(
+            index * 0.1,
+            0.6 + (index * 0.1),
+            curve: Curves.easeOut,
+          ),
+        ),
+      ),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
+    _animationController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -35,70 +76,98 @@ class _LoginPageState extends State<LoginPage> {
       child: Scaffold(
         body: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Logo/Title
-                    _buildHeader(context),
-                    const SizedBox(height: 48),
-
-                    // Email field
-                    _buildEmailField(),
-                    const SizedBox(height: 16),
-
-                    // Password field
-                    _buildPasswordField(),
-                    const SizedBox(height: 8),
-
-                    // Forgot password
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _showForgotPasswordDialog,
-                        child: const Text('Forgot Password?'),
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Logo/Title
+                      FadeTransition(
+                        opacity: _fadeAnimations[0],
+                        child: _buildHeader(context),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 48),
 
-                    // Sign in button
-                    _buildSignInButton(),
-                    const SizedBox(height: 24),
+                      // Email field
+                      FadeTransition(
+                        opacity: _fadeAnimations[1],
+                        child: _buildEmailField(),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Divider
-                    _buildDivider(context),
-                    const SizedBox(height: 24),
+                      // Password field
+                      FadeTransition(
+                        opacity: _fadeAnimations[2],
+                        child: _buildPasswordField(),
+                      ),
+                      const SizedBox(height: 8),
 
-                    // Google sign in
-                    SocialSignInButton(
-                      onPressed: _onGoogleSignIn,
-                      icon: 'G',
-                      label: 'Continue with Google',
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Register link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "Don't have an account?",
-                          style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                      // Forgot password
+                      FadeTransition(
+                        opacity: _fadeAnimations[3],
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _showForgotPasswordDialog,
+                            child: const Text('Forgot Password?'),
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => context.go(Routes.register),
-                          child: const Text('Sign Up'),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Sign in button
+                      FadeTransition(
+                        opacity: _fadeAnimations[4],
+                        child: _buildSignInButton(),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Divider
+                      FadeTransition(
+                        opacity: _fadeAnimations[4],
+                        child: _buildDivider(context),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Google sign in
+                      FadeTransition(
+                        opacity: _fadeAnimations[5],
+                        child: SocialSignInButton(
+                          onPressed: _onGoogleSignIn,
+                          icon: 'G',
+                          label: 'Continue with Google',
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Register link
+                      FadeTransition(
+                        opacity: _fadeAnimations[5],
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "Don't have an account?",
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => context.go(Routes.register),
+                              child: const Text('Sign Up'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
