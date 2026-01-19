@@ -75,11 +75,17 @@ class _LoginPageState extends State<LoginPage>
       listener: _authStateListener,
       child: Scaffold(
         body: SafeArea(
+          bottom: true,
           child: Center(
             child: SlideTransition(
               position: _slideAnimation,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  24 + MediaQuery.of(context).padding.bottom,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(

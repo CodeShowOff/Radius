@@ -86,16 +86,17 @@ class ChatState extends Equatable {
       }
     }
 
-    // Sort by sentAt
+    // Sort by sentAt descending (newest first) to match the stream ordering
     final sorted = messageMap.values.toList()
-      ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+      ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
 
     return sorted;
   }
 
   /// Gets the oldest message timestamp for pagination.
+  /// Since messages are ordered descending (newest first), the oldest is at the end.
   DateTime? get oldestMessageTime =>
-      messages.isNotEmpty ? messages.first.sentAt : null;
+      messages.isNotEmpty ? messages.last.sentAt : null;
 
   ChatState copyWith({
     ChatStatus? status,

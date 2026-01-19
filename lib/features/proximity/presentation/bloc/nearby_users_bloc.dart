@@ -11,8 +11,13 @@ part 'nearby_users_state.dart';
 
 /// BLoC for managing nearby users discovery.
 ///
+/// Real-time discovery flow:
+/// 1. User clicks "Start Scan" → status becomes "scanning"
+/// 2. As soon as first user is discovered → switches to "results" and shows them immediately
+/// 3. More users keep appearing in the list as they're discovered (live updates)
+/// 4. After 10 seconds, scan stops automatically but results remain visible
+/// 
 /// Advertising runs continuously while app is open.
-/// Scanning runs for 15 seconds when user taps Scan button.
 class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   final ProximityService _proximityService;
 
@@ -89,7 +94,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     ));
   }
 
-  /// Start a 15-second scan.
+  /// Start a 10-second scan.
   Future<void> _onStartScan(
     NearbyUsersStartScan event,
     Emitter<NearbyUsersState> emit,
@@ -130,13 +135,24 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     // State will be updated via service state subscription
   }
 
-  /// Handle nearby users updates.
+  /// Handle nearby users updates - shows results immediately as they're discovered.
   void _onUsersUpdated(
     NearbyUsersUpdated event,
     Emitter<NearbyUsersState> emit,
   ) {
+    // If we're scanning and found users, switch to results status to show them immediately
+    // This provides real-time discovery UX instead of waiting for scan to complete
+    NearbyUsersStatus newStatus = state.status;
+    if (state.isScanning && event.users.isNotEmpty) {
+      newStatus = NearbyUsersStatus.results;
+    } else if (state.isScanning && event.users.isEmpty) {
+      // Still scanning but no users yet - keep scanning status
+      newStatus = NearbyUsersStatus.scanning;
+    }
+    
     emit(state.copyWith(
       users: event.users,
+      status: newStatus,
     ));
   }
 

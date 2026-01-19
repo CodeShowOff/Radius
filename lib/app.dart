@@ -193,11 +193,26 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
         }
 
         // Initialize ConnectionBloc to listen for connection requests
-        // Profile info will be updated when ProfileBloc loads
+        // This preloads connections so the connections page loads instantly
         try {
-          context.read<ConnectionBloc>().add(ConnectionLoadAll(newUserId));
+          final profileBloc = context.read<ProfileBloc>();
+          final connectionBloc = context.read<ConnectionBloc>();
+          
+          // Load connections immediately (profile info will be updated later)
+          connectionBloc.add(ConnectionLoadAll(newUserId));
+          
+          // Listen for profile updates and update ConnectionBloc with display info
+          profileBloc.stream.listen((profileState) {
+            if (profileState is ProfileLoaded) {
+              connectionBloc.setCurrentUser(
+                userId: newUserId,
+                displayName: profileState.profile.name,
+                photoUrl: profileState.profile.photoUrl,
+              );
+            }
+          });
         } catch (_) {
-          // Ignore if ConnectionBloc isn't available in the tree yet.
+          // Ignore if blocs aren't available in the tree yet.
         }
 
         // Initialize BLE advertising to be discoverable

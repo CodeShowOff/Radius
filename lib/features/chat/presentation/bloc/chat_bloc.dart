@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/error/exceptions.dart';
 import '../../data/chat_service.dart';
 import '../../data/media_upload_service.dart';
 import '../../domain/entities/conversation.dart';
@@ -18,6 +20,7 @@ part 'chat_state.dart';
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
   final MediaUploadService _mediaUploadService;
+  final Logger _logger = Logger();
 
   StreamSubscription<List<Message>>? _messagesSubscription;
   StreamSubscription<Conversation?>? _conversationSubscription;
@@ -89,6 +92,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? event.otherUserPhotoUrl!.trim()
               : null,
         );
+        
+        // Delay to ensure Firestore propagates the conversation write
+        // This prevents race conditions with security rules checking conversation existence
+        // Increased to 200ms for better reliability on slow networks
+        await Future.delayed(const Duration(milliseconds: 200));
+        
+        // Verify conversation is readable before subscribing
+        final conversation = await _chatService.getConversation(event.conversationId);
+        if (conversation == null) {
+          throw const DatabaseException(
+            message: 'Conversation not found after creation',
+            code: 'conversation-not-found',
+          );
+        }
       } catch (e) {
         emit(state.copyWith(
           status: ChatStatus.error,
@@ -125,14 +142,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Mark messages as delivered when opening chat
-    try {
-      await _chatService.markMessagesAsDelivered(
-        conversationId: event.conversationId,
-        userId: event.currentUserId,
-      );
-    } catch (e) {
-      add(_ChatErrorOccurred(e.toString()));
-    }
+    // Don't let this block the chat from opening
+    _chatService.markMessagesAsDelivered(
+      conversationId: event.conversationId,
+      userId: event.currentUserId,
+    ).catchError((e) {
+      _logger.d('Failed to mark messages as delivered: $e');
+      // Non-critical error, continue anyway
+    });
 
     emit(state.copyWith(status: ChatStatus.loaded));
   }

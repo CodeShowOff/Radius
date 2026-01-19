@@ -39,7 +39,7 @@ class ProximityService {
   final _errorController = StreamController<String>.broadcast();
 
   /// Duration for a single scan cycle
-  static const Duration scanDuration = Duration(seconds: 15);
+  static const Duration scanDuration = Duration(seconds: 10);
 
   ProximityServiceState _state = ProximityServiceState.idle;
   String? _lastError;
@@ -97,6 +97,8 @@ class ProximityService {
   ///
   /// [userId] is not used in the simplified system but kept for API consistency.
   /// [username] is the 7-character BLE username to advertise and filter self.
+  /// 
+  /// If Bluetooth is off, it will wait and automatically start advertising when Bluetooth turns on.
   Future<bool> initialize(String userId, String username) async {
     _log('[ProximityService] Initializing with username: $username');
     _currentUsername = username;
@@ -111,7 +113,15 @@ class ProximityService {
       _handleBleDevices,
     );
 
-    // Start advertising immediately (runs while app is open)
+    // Check if Bluetooth is enabled before trying to advertise
+    final bluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
+    if (!bluetoothEnabled) {
+      _log('[ProximityService] Bluetooth is off - advertising will start automatically when Bluetooth turns on');
+      _isAdvertising = false;
+      return true; // Return true as initialization succeeded, just waiting for Bluetooth
+    }
+
+    // Start advertising (runs while app is open)
     final advStarted = await _bluetoothService.startAdvertising(username);
     _isAdvertising = advStarted;
     _log('[ProximityService] Advertising started: $advStarted');
@@ -229,9 +239,10 @@ class ProximityService {
 
   // ============== Scanning ==============
 
-  /// Starts a 15-second scan for nearby users.
+  /// Starts a 10-second scan for nearby users.
   ///
-  /// After 15 seconds, scanning stops automatically and results are available.
+  /// Users appear in real-time as they're discovered (don't wait for scan to complete).
+  /// After 10 seconds, scanning stops automatically and results remain available.
   Future<bool> startScan() async {
     _log('[ProximityService] startScan() called, current state: $_state');
 
@@ -260,12 +271,12 @@ class ProximityService {
     }
 
     _setState(ProximityServiceState.scanning);
-    _log('[ProximityService] ✓ Scan started! Will run for 15 seconds.');
+    _log('[ProximityService] ✓ Scan started! Will run for 10 seconds.');
 
-    // Auto-stop after 15 seconds
+    // Auto-stop after 10 seconds
     _scanTimer?.cancel();
     _scanTimer = Timer(scanDuration, () {
-      _log('[ProximityService] 15-second timer expired, stopping scan');
+      _log('[ProximityService] 10-second timer expired, stopping scan');
       stopScan();
     });
 

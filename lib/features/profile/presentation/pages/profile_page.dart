@@ -47,6 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
               // Use profile name if loaded, fallback to auth displayName
               String displayName = user?.displayName ?? 'User';
               String? photoUrl = user?.avatarUrl;
+              String bio = '';
 
               if (profileState is ProfileLoaded) {
                 final profile = profileState.profile;
@@ -56,6 +57,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 if (profile.photoUrl != null && profile.photoUrl!.isNotEmpty) {
                   photoUrl = profile.photoUrl;
                 }
+                bio = profile.bio;
               }
 
               return Scaffold(
@@ -119,6 +121,33 @@ class _ProfilePageState extends State<ProfilePage> {
                                 color: Theme.of(context).colorScheme.outline,
                               ),
                         ),
+                        if (bio.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              bio,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         // Stats

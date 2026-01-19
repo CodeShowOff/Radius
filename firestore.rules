@@ -236,9 +236,11 @@ service cloud.firestore {
       // Messages subcollection
       match /messages/{messageId} {
         /// Check if user is in the parent conversation
+        /// Uses exists() first to avoid failed-precondition errors
         function isConversationMember() {
-          let conversation = get(/databases/$(database)/documents/conversations/$(conversationId));
-          return request.auth.uid in conversation.data.participantIds;
+          let conversationPath = /databases/$(database)/documents/conversations/$(conversationId);
+          return exists(conversationPath) 
+            && request.auth.uid in get(conversationPath).data.participantIds;
         }
         
         /// Check if user sent this message
@@ -271,9 +273,11 @@ service cloud.firestore {
       // Typing indicators subcollection
       match /typing/{typingUserId} {
         /// Check if user is in the parent conversation
+        /// Uses exists() first to avoid failed-precondition errors
         function isConversationMember() {
-          let conversation = get(/databases/$(database)/documents/conversations/$(conversationId));
-          return request.auth.uid in conversation.data.participantIds;
+          let conversationPath = /databases/$(database)/documents/conversations/$(conversationId);
+          return exists(conversationPath) 
+            && request.auth.uid in get(conversationPath).data.participantIds;
         }
         
         // RULE: Participants can read typing status

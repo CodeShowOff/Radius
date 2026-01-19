@@ -19,6 +19,7 @@ class NearbyPage extends StatelessWidget {
         ],
       ),
       body: SafeArea(
+        bottom: true,
         child: Column(
           children: [
             // Scan status indicator

@@ -605,7 +605,10 @@ class ConnectionService {
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => ConnectionModel.fromFirestore(doc).toEntity())
-            .toList());
+            .toList())
+        .handleError((error) {
+          _logger.e('Error in connections stream', error: error);
+        });
 
     // Also get conversations to sort by recent messages
     final conversationsStream = _firestore
@@ -627,29 +630,53 @@ class ConnectionService {
             }
           }
           return lastMessageTimes;
+        })
+        .handleError((error) {
+          _logger.e('Error in conversations stream', error: error);
         });
 
-    // Combine streams and sort connections by last message time
-    await for (final connections in connectionsStream) {
-      final conversationData = await conversationsStream.first;
-      
-      // Sort connections by last message time
-      connections.sort((a, b) {
-        final aTime = conversationData[a.getOtherUserId(userId)];
-        final bTime = conversationData[b.getOtherUserId(userId)];
+    // Cache for conversation data to avoid blocking
+    Map<String, DateTime> cachedConversationData = {};
+
+    // Start listening to conversations stream in background
+    final conversationSubscription = conversationsStream.listen((data) {
+      cachedConversationData = data;
+    });
+
+    try {
+      // Wait for initial conversation data with timeout to prevent infinite loading
+      try {
+        cachedConversationData = await conversationsStream.first
+            .timeout(const Duration(seconds: 3), onTimeout: () => {});
+      } catch (e) {
+        _logger.w('Failed to load initial conversation data, proceeding without it', error: e);
+      }
+
+      // Combine streams and sort connections by last message time
+      await for (final connections in connectionsStream) {
+        // Use cached conversation data instead of blocking
+        final conversationData = cachedConversationData;
         
-        // If both have messages, sort by time (most recent first)
-        if (aTime != null && bTime != null) {
-          return bTime.compareTo(aTime);
-        }
-        // If only one has messages, it comes first
-        if (aTime != null) return -1;
-        if (bTime != null) return 1;
-        // If neither has messages, sort by connectedAt
-        return b.connectedAt.compareTo(a.connectedAt);
-      });
-      
-      yield connections;
+        // Sort connections by last message time
+        connections.sort((a, b) {
+          final aTime = conversationData[a.getOtherUserId(userId)];
+          final bTime = conversationData[b.getOtherUserId(userId)];
+          
+          // If both have messages, sort by time (most recent first)
+          if (aTime != null && bTime != null) {
+            return bTime.compareTo(aTime);
+          }
+          // If only one has messages, it comes first
+          if (aTime != null) return -1;
+          if (bTime != null) return 1;
+          // If neither has messages, sort by connectedAt
+          return b.connectedAt.compareTo(a.connectedAt);
+        });
+        
+        yield connections;
+      }
+    } finally {
+      await conversationSubscription.cancel();
     }
   }
 

@@ -87,7 +87,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Radius'),
+          title: const Text(
+            'Radius',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           actions: [
             BlocBuilder<ProfileBloc, ProfileState>(
               builder: (context, profileState) {
@@ -145,8 +148,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ],
         ),
         body: SafeArea(
+          bottom: true,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -546,22 +555,29 @@ class _BluetoothStatusCard extends StatelessWidget {
                   style: theme.textTheme.titleMedium,
                 ),
                 const Spacer(),
-                if (isChecking)
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.primary,
-                    ),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    onPressed: onRefresh,
-                    tooltip: 'Refresh',
-                    visualDensity: VisualDensity.compact,
-                  ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: isChecking
+                      ? Padding(
+                          key: const ValueKey('checking'),
+                          padding: const EdgeInsets.all(8.0),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        )
+                      : IconButton(
+                          key: const ValueKey('refresh'),
+                          icon: const Icon(Icons.refresh, size: 20),
+                          onPressed: onRefresh,
+                          tooltip: 'Refresh Bluetooth status',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                ),
                 const SizedBox(width: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(

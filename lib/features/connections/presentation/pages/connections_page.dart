@@ -35,7 +35,12 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   @override
   void initState() {
     super.initState();
-    _loadConnections();
+    // Only load if not already loaded (status is initial)
+    // This prevents reloading when navigating back to the page
+    final connectionState = context.read<ConnectionBloc>().state;
+    if (connectionState.status == ConnectionBlocStatus.initial) {
+      _loadConnections();
+    }
   }
 
   void _loadConnections() {
@@ -58,6 +63,13 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     }
   }
 
+  // Refresh method for pull-to-refresh
+  Future<void> _refreshConnections() async {
+    _loadConnections();
+    // Wait for the streams to emit at least once
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -70,7 +82,10 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       appBar: _isSearching ? _buildSearchAppBar() : _buildNormalAppBar(),
       body: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
         builder: (context, state) {
-          if (state.status == ConnectionBlocStatus.loading) {
+          // Only show loading indicator on initial load
+          if (state.status == ConnectionBlocStatus.initial ||
+              (state.status == ConnectionBlocStatus.loading && 
+               state.connections.isEmpty)) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -84,26 +99,38 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           final connections = state.connections;
 
           if (connections.isEmpty) {
-            return _EmptyState(
-              onFindPeople: () => context.push(Routes.nearby),
+            return RefreshIndicator(
+              onRefresh: _refreshConnections,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: _EmptyState(
+                    onFindPeople: () => context.push(Routes.nearby),
+                  ),
+                ),
+              ),
             );
           }
 
-          return _ConnectionsList(
-            connections: connections,
-            currentUserId: state.userId!,
-            searchQuery: _searchQuery,
-            onUserTap: (connection, profile) => _navigateToChat(
-              context,
-              connection,
-              state.userId!,
-              profile,
-            ),
-            onProfilePhotoTap: (connection, profile) => _showUserDetails(
-              context,
-              connection,
-              state.userId!,
-              profile,
+          return RefreshIndicator(
+            onRefresh: _refreshConnections,
+            child: _ConnectionsList(
+              connections: connections,
+              currentUserId: state.userId!,
+              searchQuery: _searchQuery,
+              onUserTap: (connection, profile) => _navigateToChat(
+                context,
+                connection,
+                state.userId!,
+                profile,
+              ),
+              onProfilePhotoTap: (connection, profile) => _showUserDetails(
+                context,
+                connection,
+                state.userId!,
+                profile,
+              ),
             ),
           );
         },
@@ -146,15 +173,28 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         child: TextField(
           controller: _searchController,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Search users...',
+          style: Theme.of(context).textTheme.bodyLarge,
+          decoration: InputDecoration(
+            hintText: 'Search connections...',
+            hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
+            ),
             border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            prefixIcon: Icon(
+              Icons.search,
+              color: Theme.of(context).colorScheme.outline,
+              size: 20,
+            ),
           ),
           onChanged: (value) => setState(() => _searchQuery = value),
         ),
@@ -333,9 +373,13 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
     try {
       // Public data lives under `/profiles/{userId}` (see firestore.rules).
       // Normalize to the legacy keys this UI expects.
-      final doc = await getIt<FirestoreService>().getDocument(
-        'profiles/${widget.userId}',
-      );
+      // Add timeout to prevent infinite loading
+      final doc = await getIt<FirestoreService>()
+          .getDocument('profiles/${widget.userId}')
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
 
       Map<String, dynamic> normalized;
       if (doc == null) {

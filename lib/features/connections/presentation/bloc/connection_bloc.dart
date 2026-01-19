@@ -56,6 +56,20 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     ConnectionLoadAll event,
     Emitter<ConnectionBlocState> emit,
   ) async {
+    // If already loading or loaded for the same user, don't reload
+    // This prevents redundant loads when navigating between pages
+    // NOTE: Streams remain active and continue to emit real-time updates!
+    if (state.userId == event.userId && 
+        (state.status == ConnectionBlocStatus.loading || 
+         state.status == ConnectionBlocStatus.loaded)) {
+      _logger.i('Already loaded/loading for user ${event.userId}, skipping reload');
+      _logger.i('Real-time streams remain active - new requests/connections will appear automatically');
+      // Update display name/photo if changed
+      _currentUserDisplayName = event.displayName;
+      _currentUserPhotoUrl = event.photoUrl;
+      return;
+    }
+
     emit(state.copyWith(
       status: ConnectionBlocStatus.loading,
       userId: event.userId,
@@ -70,22 +84,60 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     await _receivedRequestsSubscription?.cancel();
     await _sentRequestsSubscription?.cancel();
 
-    // Subscribe to connections stream
-    _connectionsSubscription = _connectionService
-        .getConnectionsStream(event.userId)
-        .listen((connections) => add(_ConnectionsUpdated(connections)));
+    try {
+      // Subscribe to connections stream - updates automatically when connections change
+      _connectionsSubscription = _connectionService
+          .getConnectionsStream(event.userId)
+          .listen(
+            (connections) => add(_ConnectionsUpdated(connections)),
+            onError: (error) {
+              _logger.e('Error in connections stream', error: error);
+              // Still emit empty list so UI can show empty state
+              add(const _ConnectionsUpdated([]));
+            },
+          );
 
-    // Subscribe to received requests stream
-    _receivedRequestsSubscription = _connectionService
-        .getReceivedRequestsStream(event.userId)
-        .listen((requests) => add(_ReceivedRequestsUpdated(requests)));
+      // Subscribe to received requests stream - new requests appear in real-time
+      _receivedRequestsSubscription = _connectionService
+          .getReceivedRequestsStream(event.userId)
+          .listen(
+            (requests) => add(_ReceivedRequestsUpdated(requests)),
+            onError: (error) {
+              _logger.e('Error in received requests stream', error: error);
+              // Still emit empty list so UI doesn't get stuck
+              add(const _ReceivedRequestsUpdated([]));
+            },
+          );
 
-    // Subscribe to sent requests stream
-    _sentRequestsSubscription = _connectionService
-        .getSentRequestsStream(event.userId)
-        .listen((requests) => add(_SentRequestsUpdated(requests)));
+      // Subscribe to sent requests stream - track outgoing requests in real-time
+      _sentRequestsSubscription = _connectionService
+          .getSentRequestsStream(event.userId)
+          .listen(
+            (requests) => add(_SentRequestsUpdated(requests)),
+            onError: (error) {
+              _logger.e('Error in sent requests stream', error: error);
+              // Still emit empty list so UI doesn't get stuck
+              add(const _SentRequestsUpdated([]));
+            },
+          );
 
-    emit(state.copyWith(status: ConnectionBlocStatus.loaded));
+      // Safety timeout: if still loading after 5 seconds, force transition
+      Future.delayed(const Duration(seconds: 5), () {
+        if (!isClosed && state.status == ConnectionBlocStatus.loading) {
+          _logger.w('Stream initialization timeout - forcing loaded state');
+          add(const _ConnectionsUpdated([]));
+        }
+      });
+
+      // Stay in loading state until we receive initial data from streams
+      // The stream update handlers will transition to loaded
+    } catch (e) {
+      _logger.e('Error setting up connection streams', error: e);
+      emit(state.copyWith(
+        status: ConnectionBlocStatus.error,
+        errorMessage: 'Failed to initialize connections. Please try again.',
+      ));
+    }
   }
 
   Future<void> _onSendRequest(
@@ -426,21 +478,48 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     _ConnectionsUpdated event,
     Emitter<ConnectionBlocState> emit,
   ) {
-    emit(state.copyWith(connections: event.connections));
+    // Transition from loading to loaded when we receive first data
+    // After that, this handler processes real-time updates from Firestore
+    final newStatus = state.status == ConnectionBlocStatus.loading
+        ? ConnectionBlocStatus.loaded
+        : state.status;
+    
+    emit(state.copyWith(
+      connections: event.connections,
+      status: newStatus,
+    ));
   }
 
   void _onReceivedRequestsUpdated(
     _ReceivedRequestsUpdated event,
     Emitter<ConnectionBlocState> emit,
   ) {
-    emit(state.copyWith(receivedRequests: event.requests));
+    // Transition from loading to loaded when we receive first data
+    // New connection requests appear here automatically via Firestore listener
+    final newStatus = state.status == ConnectionBlocStatus.loading
+        ? ConnectionBlocStatus.loaded
+        : state.status;
+    
+    emit(state.copyWith(
+      receivedRequests: event.requests,
+      status: newStatus,
+    ));
   }
 
   void _onSentRequestsUpdated(
     _SentRequestsUpdated event,
     Emitter<ConnectionBlocState> emit,
   ) {
-    emit(state.copyWith(sentRequests: event.requests));
+    // Transition from loading to loaded when we receive first data
+    // Outgoing request status updates appear here in real-time
+    final newStatus = state.status == ConnectionBlocStatus.loading
+        ? ConnectionBlocStatus.loaded
+        : state.status;
+    
+    emit(state.copyWith(
+      sentRequests: event.requests,
+      status: newStatus,
+    ));
   }
 
   @override

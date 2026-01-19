@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../../connections/data/connection_service.dart';
@@ -22,8 +23,10 @@ import '../widgets/nearby_users_empty_state.dart';
 /// Screen displaying nearby users discovered via BLE.
 ///
 /// - Advertising is started app-wide when user authenticates (to be discoverable)
-/// - Scanning starts when user taps "Scan" button (runs for 15 seconds)
+/// - If Bluetooth is off, waits until Bluetooth is turned on before advertising
+/// - Scanning starts when user taps "Scan" button (runs for 10 seconds, shows results in real-time)
 /// - Scanning stops when app goes to background
+/// - Page shows faded content with prominent "Turn On Bluetooth" button when Bluetooth is off
 class NearbyUsersScreen extends StatefulWidget {
   const NearbyUsersScreen({super.key});
 
@@ -37,12 +40,15 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
   bool _connectPermissionGranted = false;
   bool _blePermissionsLoaded = false;
   bool _bleRationaleShownThisSession = false;
+  bool _bluetoothEnabled = false;
+  bool _checkingBluetooth = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshBlePermissions());
+    unawaited(_checkBluetoothStatus());
     // Ensure advertising is running when screen is opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureAdvertisingRunning();
@@ -80,6 +86,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
 
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshBlePermissions());
+      unawaited(_checkBluetoothStatus());
       bloc.add(const NearbyUsersAppResumed());
       // Also ensure advertising is running when app resumes
       _ensureAdvertisingRunning();
@@ -150,7 +157,69 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
     return confirmed ?? false;
   }
 
+  Future<void> _checkBluetoothStatus() async {
+    setState(() => _checkingBluetooth = true);
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      final isEnabled = await bluetoothService.isBluetoothEnabled();
+      if (mounted) {
+        final wasDisabled = !_bluetoothEnabled;
+        setState(() {
+          _bluetoothEnabled = isEnabled;
+          _checkingBluetooth = false;
+        });
+        
+        // If Bluetooth just turned on, clear any Bluetooth-related errors
+        if (wasDisabled && isEnabled) {
+          final bloc = context.read<NearbyUsersBloc>();
+          final state = bloc.state;
+          final errorMessage = state.errorMessage?.toLowerCase() ?? '';
+          final isBluetoothError = errorMessage.contains('bluetooth');
+          
+          if (isBluetoothError && state.status == NearbyUsersStatus.error) {
+            // Clear the error by resetting to idle state
+            bloc.add(const NearbyUsersClearResults());
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _bluetoothEnabled = false;
+          _checkingBluetooth = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _requestBluetoothOn() async {
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      await bluetoothService.requestBluetoothOn();
+      // Wait a bit for Bluetooth to turn on
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _checkBluetoothStatus();
+      // Ensure advertising starts after Bluetooth is on
+      _ensureAdvertisingRunning();
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
   Future<void> _startScan() async {
+    // Check if Bluetooth is on first
+    if (!_bluetoothEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please turn on Bluetooth first'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    
     final okToProceed = await _maybeShowBleRationale();
     if (!okToProceed) return;
     if (!mounted) return;
@@ -531,8 +600,80 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         builder: (context, state) {
           return Column(
             children: [
-              // Header card with scan button
-              Container(
+              // Bluetooth status banner
+              if (!_bluetoothEnabled && !_checkingBluetooth)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.bluetooth_disabled,
+                            color: theme.colorScheme.error,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bluetooth is Off',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: theme.colorScheme.onErrorContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Turn on Bluetooth to discover nearby users',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _requestBluetoothOn,
+                              icon: const Icon(Icons.bluetooth),
+                              label: const Text('Turn On Bluetooth'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: theme.colorScheme.error,
+                                foregroundColor: theme.colorScheme.onError,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: _checkBluetoothStatus,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Refresh',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Header card with scan button (faded when Bluetooth is off)
+              Opacity(
+                opacity: _bluetoothEnabled ? 1.0 : 0.4,
+                child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                 padding: const EdgeInsets.all(16),
@@ -556,7 +697,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                               const SizedBox(height: 4),
                               Text(
                                 state.isScanning
-                                    ? 'Scanning for 15 seconds...'
+                                    ? 'Scanning for 10 seconds...'
                                     : state.isAdvertising
                                         ? 'You are visible to nearby users'
                                         : 'Tap Scan to find nearby users',
@@ -594,9 +735,13 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                   ],
                 ),
               ),
+              ),
 
-              // Permission banner
+              // Permission banner (faded when Bluetooth is off)
               if (_shouldShowPermissionCtaBanner(state))
+                Opacity(
+                  opacity: _bluetoothEnabled ? 1.0 : 0.4,
+                  child:
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -631,14 +776,23 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                     ],
                   ),
                 ),
+                ),
 
-              // Main content
+              // Main content (faded when Bluetooth is off)
               Expanded(
-                child: _buildContent(context, state),
+                child: Opacity(
+                  opacity: _bluetoothEnabled ? 1.0 : 0.4,
+                  child: _buildContent(context, state),
+                ),
               ),
 
-              // Diagnostics panel at bottom
-              const BleDiagnosticsPanel(),
+              // Diagnostics panel at bottom with safe padding
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).padding.bottom,
+                ),
+                child: const BleDiagnosticsPanel(),
+              ),
             ],
           );
         },
@@ -657,10 +811,25 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         break;
 
       case NearbyUsersStatus.error:
-        content = _ErrorState(
-          message: state.errorMessage ?? 'An error occurred',
-          onRetry: _startScan,
-        );
+        // Don't show error state if it's just Bluetooth being off
+        // (we already show the banner for that)
+        final errorMessage = state.errorMessage?.toLowerCase() ?? '';
+        final isBluetoothOffError = errorMessage.contains('bluetooth') && 
+                                     errorMessage.contains('off');
+        
+        if (isBluetoothOffError || !_bluetoothEnabled) {
+          // Show empty state instead of error when Bluetooth is off
+          content = NearbyUsersEmptyState(
+            isScanning: false,
+            hasSearchedAwhile: false,
+            onRetry: _startScan,
+          );
+        } else {
+          content = _ErrorState(
+            message: state.errorMessage ?? 'An error occurred',
+            onRetry: _startScan,
+          );
+        }
         break;
 
       case NearbyUsersStatus.idle:

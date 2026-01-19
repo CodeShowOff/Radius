@@ -8,6 +8,8 @@ class AppearanceSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return BlocBuilder<ThemeCubit, ThemeMode>(
       builder: (context, themeMode) {
         return Scaffold(
@@ -21,8 +23,8 @@ class AppearanceSettingsPage extends StatelessWidget {
               context.read<ThemeCubit>().setThemeMode(mode);
             },
             child: ListView(
+              padding: EdgeInsets.fromLTRB(0, 8, 0, 16 + bottomPadding),
               children: [
-                const SizedBox(height: 8),
                 const _ThemeModeTile(
                   title: 'System default',
                   subtitle: 'Follow your device setting',

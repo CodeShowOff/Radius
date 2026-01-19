@@ -67,7 +67,7 @@ class ChatService {
         message = 'Operation was cancelled';
         break;
       case 'failed-precondition':
-        message = 'Database is being updated. Please try again in a moment.';
+        message = e.message ?? 'Database operation failed. This may indicate a missing index or invalid query.';
         break;
       default:
         message = e.message ?? 'Database error occurred';
@@ -120,11 +120,26 @@ class ChatService {
         otherUserPhotoUrl: otherUserPhotoUrl,
       );
 
-      await _conversationsRef
-          .doc(conversationId)
-          .set(conversation.toFirestore(useServerTimestamp: true));
+      try {
+        await _conversationsRef
+            .doc(conversationId)
+            .set(conversation.toFirestore(useServerTimestamp: true));
 
-      _logger.i('Created conversation: $conversationId');
+        _logger.i('Created conversation: $conversationId');
+      } on FirebaseException catch (e) {
+        // If already exists (race condition where both users created simultaneously),
+        // read and return it
+        if (e.code == 'already-exists' || e.code == 'failed-precondition') {
+          _logger.d('Conversation already exists or race condition, retrying read');
+          await Future.delayed(const Duration(milliseconds: 200));
+          final doc = await _conversationsRef.doc(conversationId).get();
+          if (doc.exists) {
+            return ConversationModel.fromFirestore(doc).toEntity();
+          }
+        }
+        rethrow;
+      }
+
       return conversation.toEntity();
     } on FirebaseException catch (e, stack) {
       _logger.e('Error getting/creating conversation',
@@ -395,8 +410,6 @@ class ChatService {
         .map((snapshot) => snapshot.docs
             .map((doc) =>
                 MessageModel.fromFirestore(doc, conversationId).toEntity())
-            .toList()
-            .reversed // Return in chronological order
             .toList());
   }
 
@@ -418,8 +431,6 @@ class ChatService {
       return snapshot.docs
           .map((doc) =>
               MessageModel.fromFirestore(doc, conversationId).toEntity())
-          .toList()
-          .reversed
           .toList();
     } on FirebaseException catch (e, stack) {
       _logger.e('Error loading more messages', error: e, stackTrace: stack);

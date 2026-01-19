@@ -87,11 +87,17 @@ class _RegisterPageState extends State<RegisterPage>
           ),
         ),
         body: SafeArea(
+          bottom: true,
           child: Center(
             child: SlideTransition(
               position: _slideAnimation,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  24 + MediaQuery.of(context).padding.bottom,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(

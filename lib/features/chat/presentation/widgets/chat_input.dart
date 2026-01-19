@@ -224,16 +224,7 @@ class _ChatInputState extends State<ChatInput> {
         top: 8,
         bottom: 8 + MediaQuery.of(context).padding.bottom,
       ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      color: theme.colorScheme.surface,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -251,6 +242,17 @@ class _ChatInputState extends State<ChatInput> {
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
               child: TextField(
                 controller: _controller,
@@ -258,15 +260,15 @@ class _ChatInputState extends State<ChatInput> {
                 maxLines: null,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.newline,
-                style: theme.textTheme.bodyMedium,
+                style: theme.textTheme.bodyLarge,
                 decoration: InputDecoration(
-                  hintText: widget.hintText ?? 'Message',
+                  hintText: widget.hintText ?? 'Type a message...',
                   hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.outline.withValues(alpha: 0.6),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                    horizontal: 18,
+                    vertical: 14,
                   ),
                   border: InputBorder.none,
                 ),

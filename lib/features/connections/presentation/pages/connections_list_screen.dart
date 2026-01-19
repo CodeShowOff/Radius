@@ -164,9 +164,12 @@ class _ConnectionTileState extends State<_ConnectionTile> {
   Future<Map<String, dynamic>> _loadOtherUserProfile() async {
     final otherUserId = widget.connection.getOtherUserId(widget.currentUserId);
     try {
-      final doc = await getIt<FirestoreService>().getDocument(
-        'profiles/$otherUserId',
-      );
+      final doc = await getIt<FirestoreService>()
+          .getDocument('profiles/$otherUserId')
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
 
       if (doc == null) {
         return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': ''};

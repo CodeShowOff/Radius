@@ -56,6 +56,22 @@ class HelpSupportPage extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showReportBugDialog(context),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.feedback),
+                  title: const Text('Send Feedback'),
+                  subtitle: const Text('Share your thoughts'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showFeedbackDialog(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.lightbulb_outline),
+                  title: const Text('Suggest a Feature'),
+                  subtitle: const Text('Share your ideas'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showFeatureSuggestionDialog(context),
+                ),
               ],
             ),
           ),
@@ -92,17 +108,17 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.policy),
                   title: const Text('Privacy Policy'),
-                  subtitle: const Text('Upcoming'),
-                  trailing: const Icon(Icons.info_outline),
-                  onTap: () => _showWebsiteComingSoon(context),
+                  subtitle: const Text('How we protect your data'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _navigateToPrivacyPolicy(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.description),
                   title: const Text('Terms of Service'),
-                  subtitle: const Text('Upcoming'),
-                  trailing: const Icon(Icons.info_outline),
-                  onTap: () => _showWebsiteComingSoon(context),
+                  subtitle: const Text('App usage terms'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _navigateToTermsOfService(context),
                 ),
               ],
             ),
@@ -138,6 +154,39 @@ class HelpSupportPage extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 32),
+
+          // Developer Attribution
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  'Developed by',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'CodeShowOff',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '\u00a9 2026 All rights reserved',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -166,6 +215,24 @@ class HelpSupportPage extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => const _BluetoothBatteryHelpPage(),
+      ),
+    );
+  }
+
+  void _navigateToPrivacyPolicy(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const _PrivacyPolicyPage(),
+      ),
+    );
+  }
+
+  void _navigateToTermsOfService(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const _TermsOfServicePage(),
       ),
     );
   }
@@ -348,6 +415,333 @@ Build: 1
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error preparing bug report: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showFeedbackDialog(BuildContext context) async {
+    final feedbackController = TextEditingController();
+    String selectedCategory = 'General';
+    final categories = [
+      'General',
+      'User Experience',
+      'Features',
+      'Design',
+      'Performance',
+      'Other'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Send Feedback'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Category:'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    items: categories
+                        .map((cat) => DropdownMenuItem(
+                              value: cat,
+                              child: Text(cat),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(
+                          () => selectedCategory = value ?? 'General');
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Your Feedback:'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: feedbackController,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Tell us what you think about Radius. What do you like? What could be better?',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Your feedback helps us make Radius better!',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: feedbackController.text.trim().isEmpty
+                    ? null
+                    : () async {
+                        final feedback = feedbackController.text.trim();
+                        Navigator.pop(dialogContext);
+
+                        // Submit feedback via email
+                        await _submitFeedback(
+                          context,
+                          selectedCategory,
+                          feedback,
+                        );
+                      },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _submitFeedback(
+    BuildContext context,
+    String category,
+    String feedback,
+  ) async {
+    try {
+      // Collect device information
+      String deviceInfo = '';
+
+      if (Platform.isAndroid) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        deviceInfo = '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
+      } else if (Platform.isIOS) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        deviceInfo = '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
+      }
+
+      // Create email body with feedback
+      final emailBody = Uri.encodeComponent('''
+Category: $category
+
+Feedback:
+$feedback
+
+---
+App Version: 1.0.0$deviceInfo
+''');
+
+      // Launch email client with pre-filled feedback
+      final Uri emailUri = Uri.parse(
+        'mailto:connectme.shubham@gmail.com?subject=Radius Feedback - $category&body=$emailBody',
+      );
+
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Opening email client with your feedback. Thank you for helping us improve!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Please email your feedback to connectme.shubham@gmail.com'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error preparing feedback: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showFeatureSuggestionDialog(BuildContext context) async {
+    final suggestionController = TextEditingController();
+    String selectedCategory = 'New Feature';
+    final categories = [
+      'New Feature',
+      'Enhancement',
+      'Discovery',
+      'Chat',
+      'Profile',
+      'Privacy',
+      'Other'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Suggest a Feature'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Category:'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    items: categories
+                        .map((cat) => DropdownMenuItem(
+                              value: cat,
+                              child: Text(cat),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(
+                          () => selectedCategory = value ?? 'New Feature');
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Your Suggestion:'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: suggestionController,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Describe the feature you\'d like to see in Radius. How would it work? What problem would it solve?',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'We love hearing your ideas!',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: suggestionController.text.trim().isEmpty
+                    ? null
+                    : () async {
+                        final suggestion = suggestionController.text.trim();
+                        Navigator.pop(dialogContext);
+
+                        // Submit feature suggestion via email
+                        await _submitFeatureSuggestion(
+                          context,
+                          selectedCategory,
+                          suggestion,
+                        );
+                      },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _submitFeatureSuggestion(
+    BuildContext context,
+    String category,
+    String suggestion,
+  ) async {
+    try {
+      // Collect device information
+      String deviceInfo = '';
+
+      if (Platform.isAndroid) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        deviceInfo = '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
+      } else if (Platform.isIOS) {
+        final deviceInfoPlugin = DeviceInfoPlugin();
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        deviceInfo = '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
+      }
+
+      // Create email body with feature suggestion
+      final emailBody = Uri.encodeComponent('''
+Category: $category
+
+Feature Suggestion:
+$suggestion
+
+---
+App Version: 1.0.0$deviceInfo
+''');
+
+      // Launch email client with pre-filled suggestion
+      final Uri emailUri = Uri.parse(
+        'mailto:connectme.shubham@gmail.com?subject=Radius Feature Suggestion - $category&body=$emailBody',
+      );
+
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Opening email client with your suggestion. We appreciate your input!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Please email your suggestion to connectme.shubham@gmail.com'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error preparing suggestion: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -998,6 +1392,445 @@ class _GuideSection extends StatelessWidget {
                 ),
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Privacy Policy Page
+class _PrivacyPolicyPage extends StatelessWidget {
+  const _PrivacyPolicyPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Privacy Policy'),
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
+        children: [
+          Text(
+            'Last Updated: January 19, 2026',
+            style: TextStyle(
+              color: theme.colorScheme.outline,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const _PolicySection(
+            title: '1. Introduction',
+            content:
+                'Welcome to Radius, a proximity-based social networking application developed by CodeShowOff. '
+                'We are committed to protecting your privacy and ensuring the security of your personal information. '
+                'This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.',
+          ),
+          const _PolicySection(
+            title: '2. Information We Collect',
+            content:
+                'We collect information that you provide directly to us:\n\n'
+                '• Account Information: Email address, display name, username, profile photo, and bio\n'
+                '• User-Generated Content: Messages, chat history, connection requests, and profile updates\n'
+                '• Device Information: Device model, operating system version, and app version (for bug reporting and support)\n\n'
+                'Information collected automatically:\n\n'
+                '• Bluetooth Discovery: Your 7-character username is broadcast via Bluetooth Low Energy (BLE) for nearby user discovery\n'
+                '• Usage Data: App interactions, feature usage, and crash reports\n'
+                '• Authentication Data: Firebase Authentication tokens for secure login\n\n'
+                'We do NOT collect:\n\n'
+                '• GPS location or precise geographic coordinates\n'
+                '• Contact lists or phonebook data\n'
+                '• Microphone or camera access without your explicit permission\n'
+                '• Third-party social media data beyond Google Sign-In',
+          ),
+          const _PolicySection(
+            title: '3. How We Use Your Information',
+            content:
+                'We use the collected information for:\n\n'
+                '• Providing Core Services: User discovery, connection management, and real-time messaging\n'
+                '• Account Management: Authentication, profile customization, and account recovery\n'
+                '• Communication: Sending notifications for connection requests and new messages\n'
+                '• Improvement: Analyzing usage patterns to enhance app features and performance\n'
+                '• Security: Detecting and preventing fraud, abuse, and technical issues\n'
+                '• Support: Responding to your inquiries and providing customer assistance',
+          ),
+          const _PolicySection(
+            title: '4. Bluetooth Discovery & Privacy',
+            content:
+                'Radius uses Bluetooth Low Energy (BLE) for proximity-based user discovery:\n\n'
+                '• Your username is broadcast via BLE advertising when the app is open\n'
+                '• Other Radius users within approximately 30 meters can discover your username\n'
+                '• We do not collect or store your GPS location\n'
+                '• Discovery requires Bluetooth permissions but NOT location permissions (Android 12+)\n'
+                '• You can stop being discoverable by closing the app or adjusting privacy settings\n'
+                '• Only users you accept as connections can message you',
+          ),
+          const _PolicySection(
+            title: '5. Data Storage & Security',
+            content:
+                'We implement industry-standard security measures:\n\n'
+                '• All data is stored in Firebase Cloud Firestore with encryption at rest\n'
+                '• Messages are encrypted in transit using TLS/SSL protocols\n'
+                '• User passwords are hashed and never stored in plain text\n'
+                '• Access to user data is restricted to authorized personnel only\n'
+                '• Regular security audits and vulnerability assessments\n\n'
+                'While we strive to protect your information, no method of transmission over the internet or electronic storage is 100% secure. '
+                'We cannot guarantee absolute security.',
+          ),
+          const _PolicySection(
+            title: '6. Data Sharing & Disclosure',
+            content:
+                'We do NOT sell your personal information to third parties. We may share your information only in the following circumstances:\n\n'
+                '• With Other Users: Your profile information (name, photo, bio) is visible to users you connect with\n'
+                '• Service Providers: Firebase (Google Cloud) for authentication, database, and cloud storage\n'
+                '• Legal Requirements: When required by law, court order, or government request\n'
+                '• Safety & Security: To prevent fraud, abuse, or threats to user safety\n'
+                '• Business Transfers: In the event of a merger, acquisition, or sale of assets (with notice)',
+          ),
+          const _PolicySection(
+            title: '7. Your Privacy Rights',
+            content:
+                'You have the following rights regarding your data:\n\n'
+                '• Access: Request a copy of your personal data\n'
+                '• Correction: Update or correct inaccurate information\n'
+                '• Deletion: Request deletion of your account and associated data\n'
+                '• Portability: Export your data in a machine-readable format\n'
+                '• Objection: Opt-out of certain data processing activities\n'
+                '• Revocation: Withdraw consent at any time\n\n'
+                'To exercise these rights, contact us at connectme.shubham@gmail.com. We will respond within 30 days.',
+          ),
+          const _PolicySection(
+            title: '8. Data Retention',
+            content:
+                'We retain your information for as long as your account is active or as needed to provide services:\n\n'
+                '• Account Data: Retained until you delete your account\n'
+                '• Chat Messages: Stored until manually deleted by you or your connection\n'
+                '• Deleted Accounts: Data is permanently deleted within 90 days of account deletion\n'
+                '• Legal Requirements: Some data may be retained longer if required by law',
+          ),
+          const _PolicySection(
+            title: '9. Children\'s Privacy',
+            content:
+                'Radius is not intended for users under the age of 13 (or 16 in the European Union). '
+                'We do not knowingly collect personal information from children. If we become aware that a child has provided us with personal information, '
+                'we will take steps to delete such information immediately. If you believe a child has provided information to us, please contact us at connectme.shubham@gmail.com.',
+          ),
+          const _PolicySection(
+            title: '10. International Data Transfers',
+            content:
+                'Your information may be transferred to and processed in countries other than your own. '
+                'We use Firebase (Google Cloud) services, which may process data in multiple regions. '
+                'We ensure appropriate safeguards are in place to protect your information in compliance with applicable data protection laws.',
+          ),
+          const _PolicySection(
+            title: '11. Third-Party Services',
+            content:
+                'Radius integrates with the following third-party services:\n\n'
+                '• Firebase Authentication: For secure login (Google Sign-In)\n'
+                '• Firebase Firestore: For data storage\n'
+                '• Firebase Cloud Storage: For profile photos and media\n'
+                '• Firebase Cloud Messaging: For push notifications\n\n'
+                'These services have their own privacy policies. We recommend reviewing Google\'s Privacy Policy at https://policies.google.com/privacy',
+          ),
+          const _PolicySection(
+            title: '12. Changes to This Privacy Policy',
+            content:
+                'We may update this Privacy Policy from time to time to reflect changes in our practices or for legal, operational, or regulatory reasons. '
+                'We will notify you of any material changes by posting the updated policy in the app and updating the "Last Updated" date. '
+                'Your continued use of Radius after changes constitutes acceptance of the updated policy.',
+          ),
+          const _PolicySection(
+            title: '13. Contact Us',
+            content:
+                'If you have any questions, concerns, or requests regarding this Privacy Policy or your personal information, please contact us:\n\n'
+                'Email: connectme.shubham@gmail.com\n'
+                'Developer: CodeShowOff\n\n'
+                'We will respond to your inquiry within 30 business days.',
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              '\u00a9 2026 CodeShowOff. All rights reserved.',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Terms of Service Page
+class _TermsOfServicePage extends StatelessWidget {
+  const _TermsOfServicePage();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Terms of Service'),
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
+        children: [
+          Text(
+            'Last Updated: January 19, 2026',
+            style: TextStyle(
+              color: theme.colorScheme.outline,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const _PolicySection(
+            title: '1. Acceptance of Terms',
+            content:
+                'By downloading, installing, accessing, or using Radius ("the App"), you agree to be bound by these Terms of Service ("Terms"). '
+                'If you do not agree to these Terms, do not use the App. These Terms constitute a legally binding agreement between you and CodeShowOff ("we," "us," or "our").',
+          ),
+          const _PolicySection(
+            title: '2. Eligibility',
+            content:
+                'You must be at least 13 years old (or 16 years old in the European Union) to use Radius. '
+                'By using the App, you represent and warrant that you meet this age requirement. '
+                'If you are under 18, you confirm that you have obtained parental or guardian consent to use the App.',
+          ),
+          const _PolicySection(
+            title: '3. Account Registration',
+            content:
+                'To use Radius, you must create an account by providing:\n\n'
+                '• A valid email address or Google account\n'
+                '• A unique display name and username\n'
+                '• A profile photo (optional)\n\n'
+                'You are responsible for:\n\n'
+                '• Maintaining the confidentiality of your account credentials\n'
+                '• All activities that occur under your account\n'
+                '• Notifying us immediately of any unauthorized access\n\n'
+                'You agree to provide accurate, current, and complete information during registration and to update such information as necessary.',
+          ),
+          const _PolicySection(
+            title: '4. Acceptable Use Policy',
+            content:
+                'You agree to use Radius only for lawful purposes and in accordance with these Terms. You agree NOT to:\n\n'
+                '• Violate any applicable laws or regulations\n'
+                '• Harass, abuse, threaten, or intimidate other users\n'
+                '• Impersonate any person or entity or misrepresent your affiliation\n'
+                '• Post or transmit any content that is illegal, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, or otherwise objectionable\n'
+                '• Upload or share any content that infringes on intellectual property rights, privacy rights, or other rights of any party\n'
+                '• Transmit spam, unsolicited messages, or advertisements\n'
+                '• Attempt to gain unauthorized access to the App, other accounts, or computer systems\n'
+                '• Use the App for commercial purposes without our prior written consent\n'
+                '• Reverse engineer, decompile, or disassemble the App\n'
+                '• Use automated tools, bots, or scripts to access or interact with the App',
+          ),
+          const _PolicySection(
+            title: '5. User-Generated Content',
+            content:
+                'You retain ownership of any content you create, post, or share through Radius ("User Content"). '
+                'By posting User Content, you grant us a worldwide, non-exclusive, royalty-free, transferable license to use, reproduce, modify, display, and distribute your User Content solely for the purpose of operating and improving the App.\n\n'
+                'You represent and warrant that:\n\n'
+                '• You own or have the necessary rights to your User Content\n'
+                '• Your User Content does not violate these Terms or any applicable laws\n'
+                '• Your User Content does not infringe on the rights of any third party\n\n'
+                'We reserve the right to remove any User Content that violates these Terms or is otherwise objectionable, without prior notice.',
+          ),
+          const _PolicySection(
+            title: '6. Bluetooth Discovery & Proximity Features',
+            content:
+                'Radius uses Bluetooth Low Energy (BLE) for proximity-based user discovery:\n\n'
+                '• Your username is broadcast via BLE when the app is open, making you discoverable to nearby users\n'
+                '• Bluetooth advertising runs continuously while the app is in the foreground or recent apps\n'
+                '• Scanning for nearby users runs for 10 seconds when you tap the "Scan" button\n'
+                '• We do not collect or track your GPS location\n'
+                '• You can control your discoverability by closing the app or adjusting privacy settings\n\n'
+                'You acknowledge and agree that:\n\n'
+                '• Bluetooth discovery is inherently proximity-based and may reveal your general location to nearby users\n'
+                '• We are not responsible for how other users use the proximity information\n'
+                '• Discovery functionality may vary based on device capabilities and environmental factors',
+          ),
+          const _PolicySection(
+            title: '7. Privacy & Data Protection',
+            content:
+                'Your privacy is important to us. Our Privacy Policy explains how we collect, use, and protect your information. '
+                'By using Radius, you consent to the collection and use of your information as described in the Privacy Policy. '
+                'Please review our Privacy Policy at Help & Support > Privacy Policy.',
+          ),
+          const _PolicySection(
+            title: '8. Connections & Messaging',
+            content:
+                'Radius allows you to connect with nearby users and exchange messages:\n\n'
+                '• You can send connection requests to other users\n'
+                '• Other users can accept or decline your requests\n'
+                '• Only accepted connections can exchange messages\n'
+                '• You can disconnect from or block any user at any time\n'
+                '• Blocked users cannot send you connection requests or messages\n\n'
+                'We do not monitor the content of private messages between users. However, we may review reported content to enforce these Terms and take appropriate action against users who violate our policies.',
+          ),
+          const _PolicySection(
+            title: '9. Intellectual Property Rights',
+            content:
+                'The App, including its design, features, functionality, graphics, logos, and underlying code, is owned by CodeShowOff and is protected by copyright, trademark, and other intellectual property laws. '
+                'You are granted a limited, non-exclusive, non-transferable, revocable license to use the App for personal, non-commercial purposes.\n\n'
+                'You may not:\n\n'
+                '• Copy, modify, distribute, sell, or lease any part of the App\n'
+                '• Reverse engineer or attempt to extract the source code of the App\n'
+                '• Remove or alter any copyright, trademark, or proprietary notices',
+          ),
+          const _PolicySection(
+            title: '10. Prohibited Activities',
+            content:
+                'You agree not to engage in any of the following prohibited activities:\n\n'
+                '• Using the App for any illegal or unauthorized purpose\n'
+                '• Attempting to interfere with, compromise, or disrupt the App or its servers\n'
+                '• Collecting or harvesting information about other users without their consent\n'
+                '• Creating multiple accounts to evade bans or restrictions\n'
+                '• Using the App to send spam, phishing attempts, or malicious software\n'
+                '• Engaging in any form of harassment, stalking, or threatening behavior\n'
+                '• Posting or distributing sexually explicit, violent, or otherwise inappropriate content\n'
+                '• Impersonating or falsely representing affiliation with any person or entity',
+          ),
+          const _PolicySection(
+            title: '11. Account Suspension & Termination',
+            content:
+                'We reserve the right to suspend or terminate your account at any time, without prior notice, for:\n\n'
+                '• Violation of these Terms\n'
+                '• Fraudulent, abusive, or illegal activity\n'
+                '• Extended periods of inactivity\n'
+                '• At our sole discretion if we believe it is in the best interest of the App or other users\n\n'
+                'Upon termination:\n\n'
+                '• Your access to the App will be immediately revoked\n'
+                '• Your User Content may be deleted\n'
+                '• You may request deletion of your personal data as outlined in our Privacy Policy\n\n'
+                'You may also delete your account at any time through the App settings. Account deletion is permanent and cannot be undone.',
+          ),
+          const _PolicySection(
+            title: '12. Disclaimer of Warranties',
+            content:
+                'THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.\n\n'
+                'We do not warrant that:\n\n'
+                '• The App will be uninterrupted, secure, or error-free\n'
+                '• The results obtained from using the App will be accurate or reliable\n'
+                '• Any errors or defects in the App will be corrected\n\n'
+                'You use the App at your own risk. We are not responsible for any damage to your device, loss of data, or any other harm resulting from your use of the App.',
+          ),
+          const _PolicySection(
+            title: '13. Limitation of Liability',
+            content:
+                'TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, CODESHOWOFF SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO:\n\n'
+                '• Loss of profits, data, or goodwill\n'
+                '• Service interruptions or security breaches\n'
+                '• Unauthorized access to your account or User Content\n'
+                '• Interactions with other users (online or offline)\n'
+                '• Any damages arising from your use or inability to use the App\n\n'
+                'OUR TOTAL LIABILITY TO YOU FOR ANY CLAIMS ARISING FROM YOUR USE OF THE APP SHALL NOT EXCEED THE AMOUNT YOU PAID TO US IN THE PAST 12 MONTHS (WHICH IS CURRENTLY \$0).',
+          ),
+          const _PolicySection(
+            title: '14. Indemnification',
+            content:
+                'You agree to indemnify, defend, and hold harmless CodeShowOff, its affiliates, officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, costs, or expenses (including reasonable attorneys\' fees) arising out of or in connection with:\n\n'
+                '• Your use of the App\n'
+                '• Your violation of these Terms\n'
+                '• Your violation of any rights of another person or entity\n'
+                '• Your User Content',
+          ),
+          const _PolicySection(
+            title: '15. Dispute Resolution',
+            content:
+                'Any disputes arising out of or relating to these Terms or your use of the App shall be resolved through:\n\n'
+                '1. Informal Negotiation: Contact us at connectme.shubham@gmail.com to attempt to resolve the issue informally\n'
+                '2. Arbitration: If informal resolution fails, disputes shall be resolved through binding arbitration in accordance with the rules of a mutually agreed arbitration body\n'
+                '3. Governing Law: These Terms are governed by the laws of [Your Jurisdiction], without regard to conflict of law principles\n\n'
+                'You agree to waive your right to participate in class action lawsuits or class-wide arbitration.',
+          ),
+          const _PolicySection(
+            title: '16. Changes to Terms',
+            content:
+                'We reserve the right to modify these Terms at any time. We will notify you of material changes by:\n\n'
+                '• Posting an updated version in the App\n'
+                '• Updating the "Last Updated" date\n'
+                '• Sending you a notification (email or in-app)\n\n'
+                'Your continued use of the App after changes constitutes your acceptance of the revised Terms. If you do not agree to the updated Terms, you must stop using the App and delete your account.',
+          ),
+          const _PolicySection(
+            title: '17. Severability',
+            content:
+                'If any provision of these Terms is found to be invalid, illegal, or unenforceable, the remaining provisions shall continue in full force and effect. '
+                'The invalid provision shall be modified to the minimum extent necessary to make it valid and enforceable.',
+          ),
+          const _PolicySection(
+            title: '18. Entire Agreement',
+            content:
+                'These Terms, together with our Privacy Policy, constitute the entire agreement between you and CodeShowOff regarding your use of Radius and supersede all prior agreements and understandings.',
+          ),
+          const _PolicySection(
+            title: '19. Contact Information',
+            content:
+                'If you have any questions, concerns, or feedback regarding these Terms of Service, please contact us:\n\n'
+                'Email: connectme.shubham@gmail.com\n'
+                'Developer: CodeShowOff\n\n'
+                'We will respond to your inquiry within 30 business days.',
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              '\u00a9 2026 CodeShowOff. All rights reserved.',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Helper widget for policy sections
+class _PolicySection extends StatelessWidget {
+  final String title;
+  final String content;
+
+  const _PolicySection({
+    required this.title,
+    required this.content,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              content,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.outline,
+                height: 1.6,
+              ),
+            ),
           ],
         ),
       ),
