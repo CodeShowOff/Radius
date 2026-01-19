@@ -10,9 +10,9 @@ import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
+import '../../data/chat_service.dart';
 import '../../domain/entities/message.dart';
 import '../bloc/chat_bloc.dart';
-import '../bloc/conversations_bloc.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/message_bubble.dart';
 
@@ -432,21 +432,36 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () async {
               Navigator.pop(dialogContext);
 
-              // Delete conversation via conversations bloc
-              context.read<ConversationsBloc>().add(
-                    ConversationsDelete(conversationId: widget.conversationId),
+              try {
+                // Delete conversation directly via chat service
+                await getIt<ChatService>().deleteConversation(
+                  widget.conversationId,
+                  widget.currentUserId,
+                );
+
+                // Go back to conversations list
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+
+                  // Show confirmation
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Conversation deleted'),
+                      duration: Duration(seconds: 2),
+                    ),
                   );
-
-              // Go back to conversations list
-              Navigator.of(context).pop();
-
-              // Show confirmation
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Conversation deleted'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
             },
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
@@ -458,25 +473,38 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _toggleMute(BuildContext context) {
+  void _toggleMute(BuildContext context) async {
     final chatState = context.read<ChatBloc>().state;
     final currentMuteStatus = chatState.conversation?.isMutedBy(widget.currentUserId) ?? false;
     final newMuteStatus = !currentMuteStatus;
     
-    // Toggle mute status
-    context.read<ConversationsBloc>().add(
-          ConversationsMuteToggle(
-            conversationId: widget.conversationId,
-            mute: newMuteStatus,
+    try {
+      // Toggle mute status via chat service
+      await getIt<ChatService>().setMuted(
+        conversationId: widget.conversationId,
+        userId: widget.currentUserId,
+        muted: newMuteStatus,
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newMuteStatus ? 'Notifications muted' : 'Notifications unmuted'),
+            duration: const Duration(seconds: 2),
           ),
         );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(newMuteStatus ? 'Notifications muted' : 'Notifications unmuted'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update mute status: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _confirmClearChat(BuildContext context) {

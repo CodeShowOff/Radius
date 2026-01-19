@@ -66,6 +66,9 @@ class ChatService {
       case 'cancelled':
         message = 'Operation was cancelled';
         break;
+      case 'failed-precondition':
+        message = 'Database is being updated. Please try again in a moment.';
+        break;
       default:
         message = e.message ?? 'Database error occurred';
     }

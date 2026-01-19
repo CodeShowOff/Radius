@@ -52,12 +52,7 @@ class MessageBubble extends StatelessWidget {
                   color: isMe
                       ? theme.colorScheme.primary
                       : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe || !showTail ? 18 : 4),
-                    bottomRight: Radius.circular(!isMe || !showTail ? 18 : 4),
-                  ),
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: message.isDeleted
                     ? _DeletedMessage(isMe: isMe, theme: theme)

@@ -19,6 +19,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
   StreamSubscription<GuessmeSession?>? _sessionSubscription;
   StreamSubscription<List<GuessmeMessage>>? _messagesSubscription;
   StreamSubscription<GuessmeStats>? _statsSubscription;
+  StreamSubscription<GuessmeSession?>? _queueMonitorSubscription;
   Timer? _expiryTimer;
 
   String? _currentUserId;
@@ -92,9 +93,11 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
           status: GuessmeStatus.inGame,
           session: session,
         ));
+      } else {
+        // We're in queue waiting for match
+        // Monitor for when a session is created for us
+        _startQueueMonitoring();
       }
-      // If null, we're in queue waiting for match
-      // Session subscription will handle when matched
     } catch (e, stack) {
       _logger.e('Error joining queue', error: e, stackTrace: stack);
       emit(state.copyWith(
@@ -111,6 +114,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     if (_currentUserId == null) return;
 
     await _service.leaveQueue(_currentUserId!);
+    _stopQueueMonitoring();
     emit(state.copyWith(status: GuessmeStatus.ready));
   }
 
@@ -119,6 +123,11 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     Emitter<GuessmeState> emit,
   ) async {
     if (_currentUserId == null || _currentSessionId == null) return;
+
+    // Don't send messages if game has ended
+    if (state.status == GuessmeStatus.gameEnded) {
+      return;
+    }
 
     try {
       await _service.sendMessage(
@@ -139,6 +148,21 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     Emitter<GuessmeState> emit,
   ) async {
     if (_currentUserId == null || _currentSessionId == null) return;
+
+    // Validate we can initiate guess check
+    if (state.hasUsedGuess) {
+      emit(state.copyWith(
+        errorMessage: 'You have already used your guess check',
+      ));
+      return;
+    }
+
+    if (state.status == GuessmeStatus.awaitingGuessResponse) {
+      emit(state.copyWith(
+        errorMessage: 'Already waiting for guess check response',
+      ));
+      return;
+    }
 
     try {
       await _service.initiateGuessCheck(_currentSessionId!, _currentUserId!);
@@ -178,6 +202,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     try {
       await _service.cancelSession(_currentSessionId!, _currentUserId!);
+      await _service.clearUserGameStatus(_currentUserId!);
       _unsubscribeFromSession();
       emit(state.copyWith(
         status: GuessmeStatus.ready,
@@ -201,6 +226,10 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     if (session == null) {
       // Session deleted
       _unsubscribeFromSession();
+      // Clear game status when returning to ready
+      if (_currentUserId != null) {
+        _service.clearUserGameStatus(_currentUserId!);
+      }
       emit(state.copyWith(
         status: GuessmeStatus.ready,
         clearSession: true,
@@ -213,6 +242,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     if (session.status == GuessmeSessionStatus.cancelled ||
         session.status == GuessmeSessionStatus.expired ||
         session.status == GuessmeSessionStatus.completed) {
+      _unsubscribeFromSession(); // Clean up when game ends
       emit(state.copyWith(
         status: GuessmeStatus.gameEnded,
         session: session,
@@ -281,6 +311,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
   void _subscribeToSession(String sessionId) {
     _currentSessionId = sessionId;
+    _stopQueueMonitoring(); // Stop monitoring queue when we have a session
 
     _sessionSubscription?.cancel();
     _sessionSubscription = _service.getSessionStream(sessionId).listen(
@@ -291,6 +322,30 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _messagesSubscription = _service.getMessagesStream(sessionId).listen(
           (messages) => add(_GuessmeMessagesUpdated(messages)),
         );
+  }
+
+  void _startQueueMonitoring() {
+    if (_currentUserId == null) return;
+    
+    _queueMonitorSubscription?.cancel();
+    _queueMonitorSubscription = _service.getActiveSessionStream(_currentUserId!).listen(
+      (session) {
+        if (session != null) {
+          // A session was created for us while we were in queue!
+          _logger.i('Detected new session ${session.id} while in queue');
+          _subscribeToSession(session.id);
+          add(_GuessmeSessionUpdated(session));
+        }
+      },
+      onError: (e) {
+        _logger.e('Error monitoring queue', error: e);
+      },
+    );
+  }
+
+  void _stopQueueMonitoring() {
+    _queueMonitorSubscription?.cancel();
+    _queueMonitorSubscription = null;
   }
 
   void _unsubscribeFromSession() {
@@ -308,27 +363,36 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     final duration = expiresAt.difference(DateTime.now());
     if (duration.isNegative) {
       add(const _GuessmeSessionExpired());
-    } else {
-      _expiryTimer = Timer(duration, () {
-        add(const _GuessmeSessionExpired());
-      });
+      return;
     }
+    _expiryTimer = Timer(duration, () {
+      add(const _GuessmeSessionExpired());
+    });
   }
 
   @override
-  Future<void> close() {
+  Future<void> close() async {
     // Cleanup: if user is in a game when bloc closes, clean up their status
-    if (_currentUserId != null && _currentSessionId != null) {
-      _service.clearUserGameStatus(_currentUserId!);
-      // Also cancel the session if still active
-      _service.cancelSession(_currentSessionId!, _currentUserId!).catchError((e) {
-        _logger.w('Error cancelling session on bloc close', error: e);
-      });
+    if (_currentUserId != null) {
+      try {
+        await _service.clearUserGameStatus(_currentUserId!);
+        if (_currentSessionId != null) {
+          // Also cancel the session if still active
+          await _service.cancelSession(_currentSessionId!, _currentUserId!).catchError((e) {
+            _logger.w('Error cancelling session on bloc close', error: e);
+          });
+        }
+        // Remove from queue if in queue
+        await _service.leaveQueue(_currentUserId!);
+      } catch (e) {
+        _logger.w('Error during bloc cleanup', error: e);
+      }
     }
     
     _sessionSubscription?.cancel();
     _messagesSubscription?.cancel();
     _statsSubscription?.cancel();
+    _queueMonitorSubscription?.cancel();
     _expiryTimer?.cancel();
     return super.close();
   }

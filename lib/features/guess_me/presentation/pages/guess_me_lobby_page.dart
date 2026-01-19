@@ -19,10 +19,14 @@ class GuessMeLobbyPage extends StatefulWidget {
 }
 
 class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
+  bool _isScanning = false;
+  bool _hasScanned = false;
+
   @override
   void initState() {
     super.initState();
     _initializeGuessMe();
+    _startInitialScan();
   }
 
   void _initializeGuessMe() {
@@ -32,7 +36,107 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
     }
   }
 
+  /// Starts a BLE scan when the page loads
+  void _startInitialScan() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      // Ensure advertising is initialized before scanning
+      final authState = context.read<AuthBloc>().state;
+      if (authState is AuthAuthenticated) {
+        final nearbyBloc = context.read<NearbyUsersBloc>();
+        
+        // Initialize if not already initialized
+        nearbyBloc.add(NearbyUsersInitialize(
+          userId: authState.user.id,
+          username: authState.user.username,
+        ));
+        
+        // Wait a moment for initialization, then start scan
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _startScan();
+          }
+        });
+      }
+    });
+  }
+
+  /// Triggers a BLE scan for nearby users
+  void _startScan() {
+    if (_isScanning) return;
+    
+    setState(() {
+      _isScanning = true;
+      _hasScanned = true;
+    });
+
+    final nearbyBloc = context.read<NearbyUsersBloc>();
+    nearbyBloc.add(const NearbyUsersStartScan());
+
+    // Scanning takes 15 seconds, update UI after that
+    Future.delayed(const Duration(seconds: 15), () {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+        
+        // Check if scan found users
+        final nearbyState = nearbyBloc.state;
+        if (nearbyState.status == NearbyUsersStatus.error) {
+          _showScanError(nearbyState.errorMessage);
+        } else if (nearbyState.users.isEmpty) {
+          _showNoUsersFound();
+        }
+      }
+    });
+  }
+  
+  /// Show error message when scan fails
+  void _showScanError(String? errorMessage) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMessage ?? 'Failed to scan for nearby users'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _startScan,
+        ),
+      ),
+    );
+  }
+  
+  /// Show message when no users found after scan
+  void _showNoUsersFound() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('No players found nearby. Make sure Bluetooth is enabled.'),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Scan Again',
+          textColor: Colors.white,
+          onPressed: _startScan,
+        ),
+      ),
+    );
+  }
+
   void _joinQueue() {
+    // If still scanning, wait for it to complete
+    if (_isScanning) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scanning for nearby users... Please wait.'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final nearbyState = context.read<NearbyUsersBloc>().state;
     final nearbyUserIds = nearbyState.users
         .where((u) => u.userId != null)
@@ -40,10 +144,17 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
         .toList();
 
     if (nearbyUserIds.isEmpty) {
+      // Offer to scan again
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No nearby users found. Move closer to others!'),
+        SnackBar(
+          content: const Text('No nearby users found. Try scanning again?'),
           backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Scan',
+            textColor: Colors.white,
+            onPressed: _startScan,
+          ),
         ),
       );
       return;
@@ -105,7 +216,11 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
                   // Header card explaining the game
                   _buildInfoCard(context),
                   const SizedBox(height: 24),
-
+                  // Scanning status indicator
+                  if (_isScanning) ...[
+                    _buildScanningIndicator(context),
+                    const SizedBox(height: 24),
+                  ],
                   // Active games section (if any)
                   if (state.session != null &&
                       (state.status == GuessmeStatus.inGame ||
@@ -557,11 +672,76 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: _joinQueue,
-                icon: const Icon(Icons.search),
-                label: const Text('Find Match'),
+                onPressed: _isScanning ? null : _joinQueue,
+                icon: _isScanning
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.search),
+                label: Text(_isScanning ? 'Scanning...' : 'Find Match'),
               ),
+              if (_hasScanned && !_isScanning) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: _startScan,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Scan Again'),
+                ),
+              ],
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build scanning indicator widget
+  Widget _buildScanningIndicator(BuildContext context) {
+    final theme = Theme.of(context);
+    final nearbyState = context.watch<NearbyUsersBloc>().state;
+    final userCount = nearbyState.users.length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Scanning for nearby users...',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    userCount > 0
+                        ? 'Found $userCount ${userCount == 1 ? 'user' : 'users'} so far'
+                        : 'Looking for players nearby',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

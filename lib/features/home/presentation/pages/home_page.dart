@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../chat/data/chat_service.dart';
+import '../../../chat/domain/entities/conversation.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 
@@ -175,17 +178,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         builder: (context, connectionState) {
                           final pendingCount =
                               connectionState.receivedRequests.length;
-                          return Badge(
-                            isLabelVisible: pendingCount > 0,
-                            label: Text(pendingCount.toString()),
-                            child: FilledButton.tonalIcon(
-                              onPressed: () => context.push(Routes.connections),
-                              icon: const Icon(Icons.people),
-                              label: const Text('Connections'),
-                              style: FilledButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                              ),
+                          return FilledButton.tonalIcon(
+                            onPressed: () => context.push(Routes.connections),
+                            icon: Badge(
+                              isLabelVisible: pendingCount > 0,
+                              label: Text(pendingCount.toString()),
+                              child: const Icon(Icons.people),
+                            ),
+                            label: const Text('Connections'),
+                            style: FilledButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 16),
                             ),
                           );
                         },
@@ -225,39 +228,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outline,
+                // Recent conversations list
+                BlocBuilder<AuthBloc, AuthState>(
+                  builder: (context, authState) {
+                    if (authState is! AuthAuthenticated) {
+                      return const Expanded(
+                        child: Center(
+                          child: Text('Please sign in'),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No connections yet',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start scanning to find people nearby',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      );
+                    }
+
+                    return Expanded(
+                      child: _RecentConversationsList(
+                        userId: authState.user.id,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -265,6 +252,237 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+}
+
+/// Widget that displays recent conversations (connections with recent messages)
+class _RecentConversationsList extends StatelessWidget {
+  final String userId;
+
+  const _RecentConversationsList({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    final chatService = getIt<ChatService>();
+
+    return StreamBuilder<List<Conversation>>(
+      stream: chatService.getConversationsStream(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load conversations',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final conversations = snapshot.data ?? [];
+        
+        // Take only the first 10 conversations
+        final recentConversations = conversations.take(10).toList();
+
+        if (recentConversations.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.people_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No conversations yet',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Connect with people and start chatting',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: recentConversations.length,
+          itemBuilder: (context, index) {
+            final conversation = recentConversations[index];
+            final otherParticipant = conversation.getOtherParticipantInfo(userId);
+            final otherUserId = conversation.getOtherParticipantId(userId);
+            final unreadCount = conversation.getUnreadCount(userId);
+
+            return _ConversationTile(
+              conversation: conversation,
+              otherParticipant: otherParticipant,
+              otherUserId: otherUserId,
+              currentUserId: userId,
+              unreadCount: unreadCount,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Individual conversation tile
+class _ConversationTile extends StatelessWidget {
+  final Conversation conversation;
+  final ParticipantInfo? otherParticipant;
+  final String otherUserId;
+  final String currentUserId;
+  final int unreadCount;
+
+  const _ConversationTile({
+    required this.conversation,
+    required this.otherParticipant,
+    required this.otherUserId,
+    required this.currentUserId,
+    required this.unreadCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final displayName = otherParticipant?.displayName ?? 'Unknown';
+    final photoUrl = otherParticipant?.photoUrl;
+    final lastMessage = conversation.lastMessageText ?? 'No messages yet';
+    final lastMessageTime = conversation.lastMessageAt;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: Stack(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+            backgroundColor: theme.colorScheme.primaryContainer,
+            child: photoUrl == null
+                ? Text(
+                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  )
+                : null,
+          ),
+          if (unreadCount > 0)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  unreadCount > 9 ? '9+' : unreadCount.toString(),
+                  style: TextStyle(
+                    color: theme.colorScheme.onPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+      title: Text(
+        displayName,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        lastMessage,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: unreadCount > 0
+              ? theme.colorScheme.onSurface
+              : theme.colorScheme.outline,
+          fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: lastMessageTime != null
+          ? Text(
+              _formatTime(lastMessageTime),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: unreadCount > 0
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline,
+                fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+              ),
+            )
+          : null,
+      onTap: () {
+        context.push(
+          Routes.chatWith(conversation.id),
+          extra: {
+            'currentUserId': currentUserId,
+            'otherUserId': otherUserId,
+            'otherUserName': displayName,
+            'otherUserPhotoUrl': photoUrl,
+          },
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(time.year, time.month, time.day);
+
+    if (messageDate == today) {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+
+    final yesterday = today.subtract(const Duration(days: 1));
+    if (messageDate == yesterday) {
+      return 'Yesterday';
+    }
+
+    final daysAgo = today.difference(messageDate).inDays;
+    if (daysAgo < 7) {
+      const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return weekdays[time.weekday - 1];
+    }
+
+    return '${time.day}/${time.month}/${time.year}';
   }
 }
 

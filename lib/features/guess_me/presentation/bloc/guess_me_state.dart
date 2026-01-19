@@ -122,11 +122,11 @@ class GuessmeState extends Equatable {
   /// True if this user correctly guessed the other player.
   bool get hasUsedGuess {
     if (session == null || currentUserId == null) return false;
+    // Check if we've initiated a guess check that was resolved
     // If I'm player1 and I guessed player2 correctly, player2Guessed is true
     // If I'm player2 and I guessed player1 correctly, player1Guessed is true
-    return session!.player1Id == currentUserId
-        ? session!.player2Guessed
-        : session!.player1Guessed;
+    final weArePlayer1 = session!.player1Id == currentUserId;
+    return weArePlayer1 ? session!.player2Guessed : session!.player1Guessed;
   }
 
   /// Whether the other player has used their guess.
@@ -135,9 +135,8 @@ class GuessmeState extends Equatable {
     if (session == null || currentUserId == null) return false;
     // If I'm player1 and player2 guessed me correctly, player1Guessed is true
     // If I'm player2 and player1 guessed me correctly, player2Guessed is true
-    return session!.player1Id == currentUserId
-        ? session!.player1Guessed
-        : session!.player2Guessed;
+    final weArePlayer1 = session!.player1Id == currentUserId;
+    return weArePlayer1 ? session!.player1Guessed : session!.player2Guessed;
   }
 
   @override

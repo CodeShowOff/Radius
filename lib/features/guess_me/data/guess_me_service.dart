@@ -92,12 +92,8 @@ class GuessmeService {
         }
       }
 
-      // Check if in queue
-      final queueDoc = await _queueRef.doc(userId).get();
-      if (queueDoc.exists) {
-        return false;
-      }
-
+      // User in queue IS available for matching!
+      // Only unavailable if they're already in an active game
       return true;
     } catch (e) {
       _logger.w('Error checking user availability for $userId', error: e);
@@ -148,10 +144,11 @@ class GuessmeService {
         _logger.i('Found available user $nearbyUserId, creating session');
         final sessionId = await _createSession(userId, nearbyUserId);
 
-        // Remove from queue if was in queue
-        if (existingQueueEntry.exists) {
-          await _queueRef.doc(userId).delete();
-        }
+        // Remove both users from queue if they were in queue
+        await Future.wait([
+          if (existingQueueEntry.exists) _queueRef.doc(userId).delete(),
+          _queueRef.doc(nearbyUserId).delete(), // Remove matched user from queue too
+        ]);
 
         // Set both users' game status
         await Future.wait([
@@ -194,6 +191,20 @@ class GuessmeService {
   /// Stream of queue status for a user.
   Stream<bool> getQueueStatusStream(String userId) {
     return _queueRef.doc(userId).snapshots().map((doc) => doc.exists);
+  }
+
+  /// Stream that detects when a user gets an active session.
+  /// Used to monitor when a queued user gets matched.
+  Stream<GuessmeSession?> getActiveSessionStream(String userId) {
+    return _sessionsRef
+        .where('players', arrayContains: userId)
+        .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) return null;
+          return GuessmeSessionModel.fromFirestore(snapshot.docs.first).toEntity();
+        });
   }
 
   // ==================== SESSION MANAGEMENT ====================
@@ -311,6 +322,12 @@ class GuessmeService {
         text: '👋 The other player has left the game.',
       );
 
+      // Update stats for both players (game played without completing)
+      await Future.wait([
+        incrementGamesPlayedNoGuess(session.player1Id),
+        if (session.player2Id != null) incrementGamesPlayedNoGuess(session.player2Id!),
+      ]);
+
       // Clear game status for both players
       await Future.wait([
         _clearUserGameStatus(session.player1Id),
@@ -334,6 +351,12 @@ class GuessmeService {
         'status': GuessmeSessionStatus.expired.name,
         'endedAt': FieldValue.serverTimestamp(),
       });
+
+      // Update stats for both players (game played without correct guess)
+      await Future.wait([
+        incrementGamesPlayedNoGuess(session.player1Id),
+        if (session.player2Id != null) incrementGamesPlayedNoGuess(session.player2Id!),
+      ]);
 
       // Clear game status for both players
       await Future.wait([

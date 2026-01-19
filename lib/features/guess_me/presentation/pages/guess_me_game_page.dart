@@ -215,8 +215,21 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<GuessmeBloc, GuessmeState>(
-      listenWhen: (previous, current) => previous.status != current.status,
+      listenWhen: (previous, current) =>
+          previous.status != current.status ||
+          previous.session?.expiresAt != current.session?.expiresAt,
       listener: (context, state) {
+        // Update countdown timer if expiry time changed
+        if (state.session?.expiresAt != null) {
+          final endTime = state.session!.expiresAt!;
+          final now = DateTime.now();
+          if (endTime.isAfter(now)) {
+            setState(() {
+              _timeRemaining = endTime.difference(now);
+            });
+          }
+        }
+
         // Show guess check dialog when received
         if (state.status == GuessmeStatus.receivedGuessCheck) {
           _showGuessCheckReceived();
@@ -539,6 +552,7 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
 
   Widget _buildMessageInput(BuildContext context, GuessmeState state) {
     final theme = Theme.of(context);
+    final canSend = state.isInGame; // Can only send when game is active
 
     return Container(
       padding: EdgeInsets.only(
@@ -561,8 +575,9 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
             child: TextField(
               controller: _messageController,
               focusNode: _focusNode,
+              enabled: canSend,
               decoration: InputDecoration(
-                hintText: 'Type a message...',
+                hintText: canSend ? 'Type a message...' : 'Game ended',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -575,12 +590,12 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
                 ),
               ),
               textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _sendMessage(),
+              onSubmitted: canSend ? (_) => _sendMessage() : null,
             ),
           ),
           const SizedBox(width: 8),
           IconButton.filled(
-            onPressed: _sendMessage,
+            onPressed: canSend ? _sendMessage : null,
             icon: const Icon(Icons.send),
           ),
         ],

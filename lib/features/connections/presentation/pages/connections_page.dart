@@ -142,14 +142,22 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           });
         },
       ),
-      title: TextField(
-        controller: _searchController,
-        autofocus: true,
-        decoration: const InputDecoration(
-          hintText: 'Search connections...',
-          border: InputBorder.none,
+      title: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(24),
         ),
-        onChanged: (value) => setState(() => _searchQuery = value),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: TextField(
+          controller: _searchController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Search users...',
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: 8),
+          ),
+          onChanged: (value) => setState(() => _searchQuery = value),
+        ),
       ),
       actions: [
         if (_searchQuery.isNotEmpty)

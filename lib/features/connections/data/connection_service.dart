@@ -597,15 +597,60 @@ class ConnectionService {
   }
 
   /// Stream of user's connections.
-  Stream<List<Connection>> getConnectionsStream(String userId) {
-    return _connectionsRef
+  Stream<List<Connection>> getConnectionsStream(String userId) async* {
+    // Get connections ordered by connectedAt first
+    final connectionsStream = _connectionsRef
         .where('users', arrayContains: userId)
         .where('status', isEqualTo: ConnectionStatus.connected.name)
-        .orderBy('connectedAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => ConnectionModel.fromFirestore(doc).toEntity())
             .toList());
+
+    // Also get conversations to sort by recent messages
+    final conversationsStream = _firestore
+        .collection('conversations')
+        .where('participantIds', arrayContains: userId)
+        .orderBy('lastMessageAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          final Map<String, DateTime> lastMessageTimes = {};
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final participants = List<String>.from(data['participantIds'] ?? []);
+            final otherUserId = participants.firstWhere(
+              (id) => id != userId,
+              orElse: () => '',
+            );
+            if (otherUserId.isNotEmpty && data['lastMessageAt'] != null) {
+              lastMessageTimes[otherUserId] = (data['lastMessageAt'] as Timestamp).toDate();
+            }
+          }
+          return lastMessageTimes;
+        });
+
+    // Combine streams and sort connections by last message time
+    await for (final connections in connectionsStream) {
+      final conversationData = await conversationsStream.first;
+      
+      // Sort connections by last message time
+      connections.sort((a, b) {
+        final aTime = conversationData[a.getOtherUserId(userId)];
+        final bTime = conversationData[b.getOtherUserId(userId)];
+        
+        // If both have messages, sort by time (most recent first)
+        if (aTime != null && bTime != null) {
+          return bTime.compareTo(aTime);
+        }
+        // If only one has messages, it comes first
+        if (aTime != null) return -1;
+        if (bTime != null) return 1;
+        // If neither has messages, sort by connectedAt
+        return b.connectedAt.compareTo(a.connectedAt);
+      });
+      
+      yield connections;
+    }
   }
 
   /// Gets the count of pending received requests.
