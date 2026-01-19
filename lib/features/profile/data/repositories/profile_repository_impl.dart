@@ -55,6 +55,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
     String? bio,
     String? photoUrl,
     bool? isVisible,
+    String? vibe,
+    String? mood,
+    String? gender,
   }) async {
     try {
       final updateMap = ProfileModel.toUpdateMap(
@@ -62,6 +65,9 @@ class ProfileRepositoryImpl implements IProfileRepository {
         bio: bio,
         photoUrl: photoUrl,
         isVisible: isVisible,
+        vibe: vibe,
+        mood: mood,
+        gender: gender,
       );
 
       await _profileService.updateProfile(userId, updateMap);

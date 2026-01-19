@@ -1416,7 +1416,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
         children: [
           Text(
-            'Last Updated: January 19, 2026',
+            'Last Updated: January 20, 2026',
             style: TextStyle(
               color: theme.colorScheme.outline,
               fontSize: 13,
@@ -1429,7 +1429,9 @@ class _PrivacyPolicyPage extends StatelessWidget {
             content:
                 'Welcome to Radius, a proximity-based social networking application developed by CodeShowOff. '
                 'We are committed to protecting your privacy and ensuring the security of your personal information. '
-                'This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.',
+                'This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.\n\n'
+                'By using Radius, you agree to the collection and use of information in accordance with this Privacy Policy. '
+                'If you do not agree with our policies and practices, please do not use our app.',
           ),
           const _PolicySection(
             title: '2. Information We Collect',
@@ -1442,6 +1444,18 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Bluetooth Discovery: Your 7-character username is broadcast via Bluetooth Low Energy (BLE) for nearby user discovery\n'
                 '• Usage Data: App interactions, feature usage, and crash reports\n'
                 '• Authentication Data: Firebase Authentication tokens for secure login\n\n'
+                'Device & Session Information (collected during login/registration for security purposes):\n\n'
+                '• Device Details: Brand, model, type (phone/tablet/emulator), screen resolution, screen density\n'
+                '• Operating System: Platform (Android/iOS), OS version, build number\n'
+                '• App Details: App version, build number, install source (Play Store/App Store/sideload)\n'
+                '• Network Information: IP address (IPv4/IPv6), network type (WiFi/cellular), carrier name\n'
+                '• Approximate Location: Country and city (derived from IP address, NOT GPS)\n'
+                '• ISP Information: Internet Service Provider name and ASN\n\n'
+                'This device and session information is collected ONLY when you log in or register, and is used exclusively for:\n'
+                '• Detecting and preventing unauthorized account access\n'
+                '• Identifying suspicious login patterns and security threats\n'
+                '• Debugging technical issues and improving app stability\n'
+                '• Ensuring account security and fraud prevention\n\n'
                 'We do NOT collect:\n\n'
                 '• GPS location or precise geographic coordinates\n'
                 '• Contact lists or phonebook data\n'
@@ -1510,6 +1524,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 'We retain your information for as long as your account is active or as needed to provide services:\n\n'
                 '• Account Data: Retained until you delete your account\n'
                 '• Chat Messages: Stored until manually deleted by you or your connection\n'
+                '• Device Session Logs: Retained for up to 90 days for security monitoring and debugging purposes\n'
                 '• Deleted Accounts: Data is permanently deleted within 90 days of account deletion\n'
                 '• Legal Requirements: Some data may be retained longer if required by law',
           ),

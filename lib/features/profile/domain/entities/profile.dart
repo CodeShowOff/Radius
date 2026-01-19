@@ -11,6 +11,9 @@ class Profile extends Equatable {
   final bool showOnlineStatus;
   final bool allowConnectionRequests;
   final bool showLastSeen;
+  final String? vibe;
+  final String? mood;
+  final String? gender;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -24,6 +27,9 @@ class Profile extends Equatable {
     this.showOnlineStatus = true,
     this.allowConnectionRequests = true,
     this.showLastSeen = true,
+    this.vibe,
+    this.mood,
+    this.gender,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -41,6 +47,9 @@ class Profile extends Equatable {
       showOnlineStatus: true,
       allowConnectionRequests: true,
       showLastSeen: true,
+      vibe: null,
+      mood: null,
+      gender: null,
       createdAt: now,
       updatedAt: now,
     );
@@ -57,6 +66,9 @@ class Profile extends Equatable {
     bool? showOnlineStatus,
     bool? allowConnectionRequests,
     bool? showLastSeen,
+    String? vibe,
+    String? mood,
+    String? gender,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -71,6 +83,9 @@ class Profile extends Equatable {
       allowConnectionRequests:
           allowConnectionRequests ?? this.allowConnectionRequests,
       showLastSeen: showLastSeen ?? this.showLastSeen,
+      vibe: vibe ?? this.vibe,
+      mood: mood ?? this.mood,
+      gender: gender ?? this.gender,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -87,6 +102,9 @@ class Profile extends Equatable {
         showOnlineStatus,
         allowConnectionRequests,
         showLastSeen,
+        vibe,
+        mood,
+        gender,
         createdAt,
         updatedAt,
       ];

@@ -10,6 +10,7 @@ import '../../../chat/data/chat_service.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
+import '../../../profile/presentation/widgets/mood_selector.dart';
 
 /// Home page - main screen after authentication.
 class HomePage extends StatefulWidget {
@@ -166,6 +167,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   onRefresh: _checkBluetoothStatus,
                   onEnableTap: _requestBluetoothOn,
                 ),
+                const SizedBox(height: 16),
+
+                // Mood selector
+                const MoodSelector(showLabel: true, compact: false),
                 const SizedBox(height: 16),
 
                 // Quick action buttons row

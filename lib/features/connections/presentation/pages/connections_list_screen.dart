@@ -172,21 +172,27 @@ class _ConnectionTileState extends State<_ConnectionTile> {
           );
 
       if (doc == null) {
-        return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': ''};
+        return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': '', 'vibe': '', 'mood': '', 'gender': null};
       }
 
       final name = (doc['name'] as String?)?.trim();
       final photoUrl = (doc['photoUrl'] as String?)?.trim();
       final bio = (doc['bio'] as String?)?.trim();
+      final vibe = (doc['vibe'] as String?)?.trim();
+      final mood = (doc['mood'] as String?)?.trim();
+      final gender = (doc['gender'] as String?)?.trim();
 
       return {
         'id': otherUserId,
         'name': (name != null && name.isNotEmpty) ? name : 'User',
         'photoUrl': (photoUrl != null && photoUrl.isNotEmpty) ? photoUrl : null,
         'bio': bio ?? '',
+        'vibe': vibe ?? '',
+        'mood': mood ?? '',
+        'gender': gender,
       };
     } catch (_) {
-      return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': ''};
+      return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': '', 'vibe': '', 'mood': '', 'gender': null};
     }
   }
 
@@ -208,6 +214,8 @@ class _ConnectionTileState extends State<_ConnectionTile> {
             ? (profile!['photoUrl'] as String).trim()
             : null;
         final bio = (profile?['bio'] as String?)?.trim();
+        final vibe = (profile?['vibe'] as String?)?.trim();
+        final mood = (profile?['mood'] as String?)?.trim();
 
         return ListTile(
           leading: CircleAvatar(
@@ -230,7 +238,75 @@ class _ConnectionTileState extends State<_ConnectionTile> {
                     ),
                   ),
           ),
-          title: Text(displayName),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(displayName),
+              ),
+              if (vibe != null && vibe.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.mood,
+                        size: 12,
+                        color: theme.colorScheme.tertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        vibe,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (mood != null && mood.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.sentiment_satisfied_alt,
+                        size: 12,
+                        color: theme.colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        mood,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
           subtitle: (bio != null && bio.isNotEmpty)
               ? Text(
                   bio,

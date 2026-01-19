@@ -59,7 +59,111 @@ class NearbyUserCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-
+                    // Vibe
+                    if (user.vibe != null && user.vibe!.isNotEmpty) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.mood,
+                              size: 14,
+                              color: theme.colorScheme.tertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              user.vibe!,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Mood
+                    if (user.mood != null && user.mood!.isNotEmpty) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.sentiment_satisfied_alt,
+                              size: 14,
+                              color: theme.colorScheme.secondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              user.mood!,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSecondaryContainer,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Gender (show "Gender unknown" if not set)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: user.gender == null
+                            ? theme.colorScheme.surfaceContainerHighest
+                            : theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            user.gender == null
+                                ? Icons.help_outline
+                                : Icons.person_outline,
+                            size: 14,
+                            color: user.gender == null
+                                ? theme.colorScheme.outline
+                                : theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.gender ?? 'Gender unknown',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: user.gender == null
+                                  ? theme.colorScheme.outline
+                                  : theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w500,
+                              fontStyle: user.gender == null
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     // Bio
                     if (user.bio != null && user.bio!.isNotEmpty)
                       Text(

@@ -27,6 +27,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   String? _profileImageUrl;
   File? _selectedImage;
   bool _isUploadingImage = false;
+  String? _selectedVibe;
+  String? _selectedGender;
   final _cloudinaryService = CloudinaryService();
   final _imagePicker = ImagePicker();
 
@@ -60,6 +62,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       _bioController.text = profile.bio;
       _isVisible = profile.isVisible;
       _profileImageUrl = profile.photoUrl;
+      _selectedVibe = profile.vibe;
+      _selectedGender = profile.gender;
     }
   }
 
@@ -180,6 +184,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       bio: _bioController.text.trim(),
       isVisible: _isVisible,
       photoUrl: _profileImageUrl,
+      vibe: _selectedVibe,
+      gender: _selectedGender,
       updatedAt: DateTime.now(),
     );
 
@@ -334,6 +340,31 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 maxLength: 200,
                                 maxLines: 4,
                                 onChanged: (_) => _onFieldChanged(),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Vibe selector
+                              _VibeSelector(
+                                selectedVibe: _selectedVibe,
+                                onChanged: (vibe) {
+                                  setState(() {
+                                    _selectedVibe = vibe;
+                                    _hasChanges = true;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Gender selector
+                              _GenderSelector(
+                                selectedGender: _selectedGender,
+                                isLocked: profile?.gender != null,
+                                onChanged: (gender) {
+                                  setState(() {
+                                    _selectedGender = gender;
+                                    _hasChanges = true;
+                                  });
+                                },
                               ),
                               const SizedBox(height: 24),
 
@@ -641,6 +672,300 @@ class _InfoCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Vibe selector widget with predefined vibe options.
+class _VibeSelector extends StatelessWidget {
+  final String? selectedVibe;
+  final ValueChanged<String?> onChanged;
+
+  const _VibeSelector({
+    required this.selectedVibe,
+    required this.onChanged,
+  });
+
+  static const vibes = {
+    '👋 Open to talk': '👋 Open to talk',
+    '🎧 Busy': '🎧 Busy',
+    '🤝 Networking': '🤝 Networking',
+    '💬 Looking for conversation': '💬 Looking for conversation',
+    '☕ Coffee break': '☕ Coffee break',
+    '🎮 Gaming': '🎮 Gaming',
+    '📚 Studying': '📚 Studying',
+    '🎨 Being creative': '🎨 Being creative',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.mood,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your Vibe',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Let others know your current status',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                // Clear selection chip
+                FilterChip(
+                  label: const Text('None'),
+                  selected: selectedVibe == null,
+                  onSelected: (selected) {
+                    if (selected) onChanged(null);
+                  },
+                  selectedColor: Theme.of(context)
+                      .colorScheme
+                      .secondaryContainer,
+                ),
+                // Vibe chips
+                ...vibes.entries.map((entry) {
+                  return FilterChip(
+                    label: Text(entry.key),
+                    selected: selectedVibe == entry.value,
+                    onSelected: (selected) {
+                      onChanged(selected ? entry.value : null);
+                    },
+                    selectedColor: Theme.of(context)
+                        .colorScheme
+                        .tertiaryContainer,
+                  );
+                }),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Gender selector widget - one-time selection only.
+class _GenderSelector extends StatelessWidget {
+  final String? selectedGender;
+  final bool isLocked;
+  final ValueChanged<String?> onChanged;
+
+  const _GenderSelector({
+    required this.selectedGender,
+    required this.isLocked,
+    required this.onChanged,
+  });
+
+  static const genders = {
+    '👨 Male': 'Male',
+    '👩 Female': 'Female',
+    '⚧️ Non-binary': 'Non-binary',
+    '🤷 Prefer not to say': 'Prefer not to say',
+  };
+
+  Future<void> _showWarningAndSelect(
+      BuildContext context, String gender) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          icon: Icon(
+            Icons.warning_amber_rounded,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          title: const Text('Important: Cannot Change Later'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Once you set your gender, you CANNOT change it later.',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'This is a permanent decision to ensure authenticity in our community.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Are you sure you want to set your gender to: $gender?',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      onChanged(gender);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isLocked
+                        ? theme.colorScheme.surfaceContainerHighest
+                        : theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    isLocked ? Icons.lock : Icons.person_outline,
+                    color: isLocked
+                        ? theme.colorScheme.outline
+                        : theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Gender',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (isLocked) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'LOCKED',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onErrorContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isLocked
+                            ? 'Gender cannot be changed once set'
+                            : '⚠️ Warning: Cannot be changed later',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isLocked
+                              ? theme.colorScheme.outline
+                              : theme.colorScheme.error,
+                          fontWeight:
+                              isLocked ? FontWeight.normal : FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: genders.entries.map((entry) {
+                final isSelected = selectedGender == entry.value;
+                return FilterChip(
+                  label: Text(entry.key),
+                  selected: isSelected,
+                  onSelected: isLocked
+                      ? null
+                      : (selected) {
+                          if (selected) {
+                            _showWarningAndSelect(context, entry.value);
+                          }
+                        },
+                  selectedColor: theme.colorScheme.primaryContainer,
+                  disabledColor: isSelected
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                );
+              }).toList(),
             ),
           ],
         ),

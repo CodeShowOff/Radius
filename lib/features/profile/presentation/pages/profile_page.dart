@@ -48,6 +48,8 @@ class _ProfilePageState extends State<ProfilePage> {
               String displayName = user?.displayName ?? 'User';
               String? photoUrl = user?.avatarUrl;
               String bio = '';
+              String? vibe;
+              String? mood;
 
               if (profileState is ProfileLoaded) {
                 final profile = profileState.profile;
@@ -58,6 +60,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   photoUrl = profile.photoUrl;
                 }
                 bio = profile.bio;
+                vibe = profile.vibe;
+                mood = profile.mood;
               }
 
               return Scaffold(
@@ -145,6 +149,82 @@ class _ProfilePageState extends State<ProfilePage> {
                                         .onSurfaceVariant,
                                   ),
                               textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                        if (vibe != null && vibe.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .tertiaryContainer,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.mood,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.tertiary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  vibe,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onTertiaryContainer,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (mood != null && mood.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .secondaryContainer,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.sentiment_satisfied_alt,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  mood,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSecondaryContainer,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

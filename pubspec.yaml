@@ -52,6 +52,9 @@ dependencies:
 
   # Device Info
   device_info_plus: ^10.1.0
+  package_info_plus: ^8.0.0
+  connectivity_plus: ^6.0.0
+  geolocator: ^13.0.0
 
   # Image Loading
   cached_network_image: ^3.3.1

@@ -936,6 +936,9 @@ class ConnectionService {
         'displayName': data['name'] ?? 'User',
         'avatarUrl': data['photoUrl'],
         'bio': data['bio'],
+        'vibe': data['vibe'],
+        'mood': data['mood'],
+        'gender': data['gender'],
         'isOnline': data['isOnline'] ?? false,
         'lastSeen': data['lastSeen'],
       };
@@ -975,6 +978,9 @@ class ConnectionService {
             'displayName': data['name'] ?? 'User',
             'avatarUrl': data['photoUrl'],
             'bio': data['bio'],
+            'vibe': data['vibe'],
+            'mood': data['mood'],
+            'gender': data['gender'],
             'isOnline': data['isOnline'] ?? false,
             'lastSeen': data['lastSeen'],
           };

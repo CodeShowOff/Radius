@@ -2,6 +2,8 @@ import 'package:dartz/dartz.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/device_session/data/services/device_info_service.dart';
+import '../../../../core/device_session/domain/repositories/i_device_session_repository.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/firebase/firebase_auth_service.dart';
@@ -22,15 +24,21 @@ class AuthRepositoryImpl implements IAuthRepository {
   final FirestoreService _firestoreService;
   final UsernameService _usernameService;
   final ProfileService _profileService;
+  final DeviceInfoService _deviceInfoService;
+  final IDeviceSessionRepository _deviceSessionRepository;
 
   AuthRepositoryImpl({
     required FirebaseAuthService authService,
     required FirestoreService firestoreService,
     required ProfileService profileService,
+    required DeviceInfoService deviceInfoService,
+    required IDeviceSessionRepository deviceSessionRepository,
     UsernameService? usernameService,
   })  : _authService = authService,
         _firestoreService = firestoreService,
         _profileService = profileService,
+        _deviceInfoService = deviceInfoService,
+        _deviceSessionRepository = deviceSessionRepository,
         _usernameService = usernameService ?? UsernameService();
 
   @override
@@ -118,6 +126,9 @@ class AuthRepositoryImpl implements IAuthRepository {
             firebaseUser.uid, email, firebaseUser.displayName);
       }
 
+      // Record device session for security and debugging
+      _recordDeviceSession(firebaseUser.uid, 'login');
+
       return Right(UserModel.fromFirestore(doc).toEntity());
     } on AuthException catch (e) {
       return Left(AuthFailure(message: e.message, code: e.code));
@@ -152,6 +163,9 @@ class AuthRepositoryImpl implements IAuthRepository {
           avatarUrl: firebaseUser.photoURL,
         );
       }
+
+      // Record device session for security and debugging
+      _recordDeviceSession(firebaseUser.uid, 'login');
 
       return Right(UserModel.fromFirestore(doc).toEntity());
     } on AuthException catch (e) {
@@ -376,6 +390,9 @@ class AuthRepositoryImpl implements IAuthRepository {
             DatabaseFailure(message: 'Failed to create user profile'));
       }
 
+      // Record device session for registration
+      _recordDeviceSession(uid, 'register');
+
       return Right(UserModel.fromFirestore(doc).toEntity());
     } on ArgumentError catch (e) {
       return Left(DatabaseFailure(
@@ -387,5 +404,24 @@ class AuthRepositoryImpl implements IAuthRepository {
     } catch (e) {
       return Left(UnexpectedFailure(message: e.toString()));
     }
+  }
+
+  /// Record device session for security and debugging purposes.
+  /// This runs in the background and does not block authentication flow.
+  void _recordDeviceSession(String userId, String sessionType) {
+    // Run asynchronously without blocking
+    Future(() async {
+      try {
+        final session = await _deviceInfoService.collectDeviceSession(
+          userId,
+          sessionType,
+        );
+        await _deviceSessionRepository.saveDeviceSession(session);
+      } catch (e) {
+        // Log error but don't fail the authentication
+        // ignore: avoid_print
+        print('Warning: Failed to record device session: $e');
+      }
+    });
   }
 }

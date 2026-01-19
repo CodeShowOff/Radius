@@ -18,6 +18,9 @@ abstract class IProfileRepository {
     String? bio,
     String? photoUrl,
     bool? isVisible,
+    String? vibe,
+    String? mood,
+    String? gender,
   });
 
   /// Updates profile visibility.

@@ -14,6 +14,7 @@ import '../../../chat/domain/entities/conversation.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
+import '../../../profile/presentation/widgets/mood_selector.dart';
 import '../../domain/entities/nearby_user.dart';
 import '../bloc/nearby_users_bloc.dart';
 import '../widgets/ble_diagnostics_panel.dart';
@@ -953,8 +954,8 @@ class _HowItWorksBullet extends StatelessWidget {
   }
 }
 
-/// Nearby users list with smooth scrolling.
-class _NearbyUsersList extends StatelessWidget {
+/// Nearby users list with smooth scrolling and mood filtering.
+class _NearbyUsersList extends StatefulWidget {
   final List<NearbyUser> users;
   final bool isDiscovering;
 
@@ -964,80 +965,299 @@ class _NearbyUsersList extends StatelessWidget {
   });
 
   @override
+  State<_NearbyUsersList> createState() => _NearbyUsersListState();
+}
+
+class _NearbyUsersListState extends State<_NearbyUsersList> {
+  String? _selectedMoodFilter;
+  String? _selectedGenderFilter;
+
+  static const moods = {
+    '😊 Chill': '😊 Chill',
+    '🤓 Focused': '🤓 Focused',
+    '🧠 Deep talk': '🧠 Deep talk',
+    '😂 Fun': '😂 Fun',
+  };
+
+  static const genders = {
+    '👨 Male': 'Male',
+    '👩 Female': 'Female',
+    '⚧️ Non-binary': 'Non-binary',
+    '🤷 Prefer not to say': 'Prefer not to say',
+  };
+
+  List<NearbyUser> get _filteredUsers {
+    var filtered = widget.users;
+
+    // Apply mood filter - include users with matching mood OR users with no mood set
+    if (_selectedMoodFilter != null) {
+      filtered = filtered.where((user) {
+        return user.mood == _selectedMoodFilter || user.mood == null;
+      }).toList();
+    }
+
+    // Apply gender filter - include users with matching gender OR users with no gender set
+    if (_selectedGenderFilter != null) {
+      filtered = filtered.where((user) {
+        // Include users with matching gender or users with no gender set
+        return user.gender == _selectedGenderFilter || user.gender == null;
+      }).toList();
+    }
+
+    return filtered;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: () async {
-        final bloc = context.read<NearbyUsersBloc>();
-        final authState = context.read<AuthBloc>().state;
-        if (authState is AuthAuthenticated) {
-          bloc.add(const NearbyUsersRefresh());
+    final theme = Theme.of(context);
+    final filteredUsers = _filteredUsers;
 
-          // Keep the indicator visible briefly.
-          await Future.delayed(const Duration(seconds: 2));
-        }
-      },
-      child: ListView.builder(
-        // Performance optimizations
-        itemCount: users.length + 1, // +1 for footer
-        itemExtent: null, // Let items size themselves
-        cacheExtent: 200, // Cache items off-screen
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
+    return Column(
+      children: [
+        // Mood selector and filter chips
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Quick mood setter
+              const MoodSelector(showLabel: false, compact: true),
+              const SizedBox(height: 16),
+              
+              // Divider
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: 8),
+              
+              // Filters header
+              Text(
+                'FILTERS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Mood filter section
+              Row(
+                children: [
+                  Text(
+                    'Mood:',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('All'),
+                            selected: _selectedMoodFilter == null,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedMoodFilter = null;
+                              });
+                            },
+                            selectedColor: theme.colorScheme.primaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          ...moods.entries.map((entry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(entry.key),
+                                selected: _selectedMoodFilter == entry.value,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    _selectedMoodFilter =
+                                        selected ? entry.value : null;
+                                  });
+                                },
+                                selectedColor:
+                                    theme.colorScheme.secondaryContainer,
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Gender filter section
+              Row(
+                children: [
+                  Text(
+                    'Gender:',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('All'),
+                            selected: _selectedGenderFilter == null,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedGenderFilter = null;
+                              });
+                            },
+                            selectedColor: theme.colorScheme.primaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          ...genders.entries.map((entry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(entry.key),
+                                selected: _selectedGenderFilter == entry.value,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    _selectedGenderFilter =
+                                        selected ? entry.value : null;
+                                  });
+                                },
+                                selectedColor:
+                                    theme.colorScheme.tertiaryContainer,
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        padding: const EdgeInsets.only(top: 8, bottom: 100),
-        itemBuilder: (context, index) {
-          if (index == users.length) {
-            // Footer with count
-            return _ListFooter(
-              count: users.length,
-              isScanning: isDiscovering,
-            );
-          }
+        const SizedBox(height: 8),
 
-          final user = users[index];
+        // User list
+        Expanded(
+          child: filteredUsers.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: theme.colorScheme.outline.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No users match the selected filters',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedMoodFilter = null;
+                            _selectedGenderFilter = null;
+                          });
+                        },
+                        child: const Text('Clear all filters'),
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    final bloc = context.read<NearbyUsersBloc>();
+                    final authState = context.read<AuthBloc>().state;
+                    if (authState is AuthAuthenticated) {
+                      bloc.add(const NearbyUsersRefresh());
 
-          // Use RepaintBoundary for smoother scrolling
-          // Wrap with BlocBuilder to react to connection state changes
-          return TweenAnimationBuilder<double>(
-            key: ValueKey(user.userId),
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 400 + (index * 40)),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Transform.translate(
-                offset: Offset(30 * (1 - value), 0),
-                child: Opacity(
-                  opacity: value,
-                  child: Transform.scale(
-                    scale: 0.95 + (0.05 * value),
-                    child: child,
+                      // Keep the indicator visible briefly.
+                      await Future.delayed(const Duration(seconds: 2));
+                    }
+                  },
+                  child: ListView.builder(
+                    // Performance optimizations
+                    itemCount: filteredUsers.length + 1, // +1 for footer
+                    itemExtent: null, // Let items size themselves
+                    cacheExtent: 200, // Cache items off-screen
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(top: 8, bottom: 100),
+                    itemBuilder: (context, index) {
+                      if (index == filteredUsers.length) {
+                        // Footer with count
+                        return _ListFooter(
+                          count: filteredUsers.length,
+                          isScanning: widget.isDiscovering,
+                        );
+                      }
+
+                      final user = filteredUsers[index];
+
+                      // Use RepaintBoundary for smoother scrolling
+                      // Wrap with BlocBuilder to react to connection state changes
+                      return TweenAnimationBuilder<double>(
+                        key: ValueKey(user.userId),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 400 + (index * 40)),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return Transform.translate(
+                            offset: Offset(30 * (1 - value), 0),
+                            child: Opacity(
+                              opacity: value,
+                              child: Transform.scale(
+                                scale: 0.95 + (0.05 * value),
+                                child: child,
+                              ),
+                            ),
+                          );
+                        },
+                        child: RepaintBoundary(
+                          child: BlocBuilder<ConnectionBloc,
+                              ConnectionBlocState>(
+                            buildWhen: (previous, current) {
+                              // Rebuild when connection state changes for this user
+                              final prevState =
+                                  previous.getStateForUser(user.userId ?? '');
+                              final currState =
+                                  current.getStateForUser(user.userId ?? '');
+                              return prevState != currState;
+                            },
+                            builder: (context, connectionState) {
+                              return NearbyUserCard(
+                                key: ValueKey(user.username),
+                                user: user,
+                                onTap: () => _showUserDetails(context, user),
+                                onConnect: user.isConnected
+                                    ? null
+                                    : () => _connectWithUser(context, user),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-              );
-            },
-            child: RepaintBoundary(
-              child: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-                buildWhen: (previous, current) {
-                  // Rebuild when connection state changes for this user
-                  final prevState = previous.getStateForUser(user.userId ?? '');
-                  final currState = current.getStateForUser(user.userId ?? '');
-                  return prevState != currState;
-                },
-                builder: (context, connectionState) {
-                  return NearbyUserCard(
-                    key: ValueKey(user.username),
-                    user: user,
-                    onTap: () => _showUserDetails(context, user),
-                    onConnect: user.isConnected
-                        ? null
-                        : () => _connectWithUser(context, user),
-                  );
-                },
-              ),
-            ),
-          );
-        },
-      ),
+        ),
+      ],
     );
   }
 
@@ -1309,6 +1529,40 @@ class _UserDetailsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
+
+              // Vibe
+              if (user.vibe != null && user.vibe!.isNotEmpty)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.mood,
+                          size: 18,
+                          color: theme.colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          user.vibe!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onTertiaryContainer,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
               // Proximity
               Center(

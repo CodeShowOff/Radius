@@ -400,12 +400,18 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
                 : null;
 
         final bio = (doc['bio'] as String?)?.trim();
+        final vibe = (doc['vibe'] as String?)?.trim();
+        final mood = (doc['mood'] as String?)?.trim();
+        final gender = (doc['gender'] as String?)?.trim();
 
         normalized = {
           'id': widget.userId,
           'displayName': displayName,
           'avatarUrl': avatarUrl,
           'bio': bio,
+          'vibe': vibe,
+          'mood': mood,
+          'gender': gender,
         };
       }
 
@@ -440,6 +446,8 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
     final displayName = profile['displayName'] as String? ?? 'User';
     final avatarUrl = profile['avatarUrl'] as String?;
     final bio = profile['bio'] as String?;
+    final vibe = profile['vibe'] as String?;
+    final mood = profile['mood'] as String?;
 
     // Filter by search query
     if (widget.searchQuery.isNotEmpty) {
@@ -475,11 +483,79 @@ class _ConnectionUserTileState extends State<_ConnectionUserTile> {
           ),
         ),
       ),
-      title: Text(
-        displayName,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              displayName,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          if (vibe != null && vibe.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.tertiaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.mood,
+                    size: 12,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    vibe,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onTertiaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (mood != null && mood.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sentiment_satisfied_alt,
+                    size: 12,
+                    color: theme.colorScheme.secondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    mood,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
       subtitle: bio != null && bio.isNotEmpty
           ? Text(

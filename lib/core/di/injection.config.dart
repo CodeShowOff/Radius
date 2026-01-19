@@ -27,6 +27,11 @@ import '../../features/chat/data/chat_service.dart' as _i621;
 import '../../features/chat/data/media_upload_service.dart' as _i356;
 import '../../features/chat/presentation/bloc/chat_bloc.dart' as _i65;
 import '../../features/chat/presentation/bloc/conversations_bloc.dart' as _i346;
+import '../device_session/data/repositories/device_session_repository.dart'
+    as _i51;
+import '../device_session/data/services/device_info_service.dart' as _i819;
+import '../device_session/domain/repositories/i_device_session_repository.dart'
+    as _i199;
 import '../services/firebase/firebase_auth_service.dart' as _i491;
 import '../services/firebase/firestore_service.dart' as _i939;
 import '../services/firebase/profile_service.dart' as _i759;
@@ -50,6 +55,7 @@ extension GetItInjectableX on _i174.GetIt {
     final firebaseModule = _$FirebaseModule();
     final notificationModule = _$NotificationModule();
     final chatModule = _$ChatModule();
+    gh.lazySingleton<_i819.DeviceInfoService>(() => _i819.DeviceInfoService());
     gh.lazySingleton<_i974.FirebaseFirestore>(() => firebaseModule.firestore);
     gh.lazySingleton<_i59.FirebaseAuth>(() => firebaseModule.firebaseAuth);
     gh.lazySingleton<_i457.FirebaseStorage>(
@@ -67,6 +73,8 @@ extension GetItInjectableX on _i174.GetIt {
             ));
     gh.lazySingleton<_i939.FirestoreService>(
         () => _i939.FirestoreService(firestore: gh<_i974.FirebaseFirestore>()));
+    gh.lazySingleton<_i199.IDeviceSessionRepository>(() =>
+        _i51.DeviceSessionRepository(firestore: gh<_i974.FirebaseFirestore>()));
     gh.lazySingleton<_i621.ChatService>(() => chatModule.chatService(
           gh<_i974.FirebaseFirestore>(),
           gh<_i974.Logger>(),
@@ -90,6 +98,8 @@ extension GetItInjectableX on _i174.GetIt {
           authService: gh<_i491.FirebaseAuthService>(),
           firestoreService: gh<_i939.FirestoreService>(),
           profileService: gh<_i759.ProfileService>(),
+          deviceInfoService: gh<_i819.DeviceInfoService>(),
+          deviceSessionRepository: gh<_i199.IDeviceSessionRepository>(),
           usernameService: gh<_i615.UsernameService>(),
         ));
     return this;

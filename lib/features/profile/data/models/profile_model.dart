@@ -14,6 +14,9 @@ class ProfileModel {
   final bool showOnlineStatus;
   final bool allowConnectionRequests;
   final bool showLastSeen;
+  final String? vibe;
+  final String? mood;
+  final String? gender;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -27,6 +30,9 @@ class ProfileModel {
     this.showOnlineStatus = true,
     this.allowConnectionRequests = true,
     this.showLastSeen = true,
+    this.vibe,
+    this.mood,
+    this.gender,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -44,6 +50,9 @@ class ProfileModel {
       showOnlineStatus: data['showOnlineStatus'] as bool? ?? true,
       allowConnectionRequests: data['allowConnectionRequests'] as bool? ?? true,
       showLastSeen: data['showLastSeen'] as bool? ?? true,
+      vibe: data['vibe'] as String?,
+      mood: data['mood'] as String?,
+      gender: data['gender'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -61,6 +70,9 @@ class ProfileModel {
       showOnlineStatus: profile.showOnlineStatus,
       allowConnectionRequests: profile.allowConnectionRequests,
       showLastSeen: profile.showLastSeen,
+      vibe: profile.vibe,
+      mood: profile.mood,
+      gender: profile.gender,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     );
@@ -77,6 +89,9 @@ class ProfileModel {
       'showOnlineStatus': showOnlineStatus,
       'allowConnectionRequests': allowConnectionRequests,
       'showLastSeen': showLastSeen,
+      'vibe': vibe,
+      'mood': mood,
+      'gender': gender,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -94,6 +109,9 @@ class ProfileModel {
       showOnlineStatus: showOnlineStatus,
       allowConnectionRequests: allowConnectionRequests,
       showLastSeen: showLastSeen,
+      vibe: vibe,
+      mood: mood,
+      gender: gender,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -108,6 +126,9 @@ class ProfileModel {
     bool? showOnlineStatus,
     bool? allowConnectionRequests,
     bool? showLastSeen,
+    String? vibe,
+    String? mood,
+    String? gender,
   }) {
     final map = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -122,6 +143,9 @@ class ProfileModel {
       map['allowConnectionRequests'] = allowConnectionRequests;
     }
     if (showLastSeen != null) map['showLastSeen'] = showLastSeen;
+    if (vibe != null) map['vibe'] = vibe;
+    if (mood != null) map['mood'] = mood;
+    if (gender != null) map['gender'] = gender;
 
     return map;
   }

@@ -177,6 +177,9 @@ class UsernameService {
             : 'User $username',
         'photoUrl': profile['photoUrl'],
         'bio': profile['bio'],
+        'vibe': profile['vibe'],
+        'mood': profile['mood'],
+        'gender': profile['gender'],
       };
 
       _logger.d(

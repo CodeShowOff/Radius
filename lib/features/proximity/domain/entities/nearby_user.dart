@@ -60,6 +60,15 @@ class NearbyUser extends Equatable {
   /// User's bio from profile.
   final String? bio;
 
+  /// User's current vibe from profile.
+  final String? vibe;
+
+  /// User's current mood from profile.
+  final String? mood;
+
+  /// User's gender from profile.
+  final String? gender;
+
   /// Signal strength (RSSI) in dBm.
   final int rssi;
 
@@ -78,6 +87,9 @@ class NearbyUser extends Equatable {
     this.displayName,
     this.photoUrl,
     this.bio,
+    this.vibe,
+    this.mood,
+    this.gender,
     required this.rssi,
     this.isConnected = false,
     required this.firstSeen,
@@ -113,6 +125,9 @@ class NearbyUser extends Equatable {
     String? displayName,
     String? photoUrl,
     String? bio,
+    String? vibe,
+    String? mood,
+    String? gender,
     int? rssi,
     bool? isConnected,
     DateTime? firstSeen,
@@ -124,6 +139,9 @@ class NearbyUser extends Equatable {
       displayName: displayName ?? this.displayName,
       photoUrl: photoUrl ?? this.photoUrl,
       bio: bio ?? this.bio,
+      vibe: vibe ?? this.vibe,
+      mood: mood ?? this.mood,
+      gender: gender ?? this.gender,
       rssi: rssi ?? this.rssi,
       isConnected: isConnected ?? this.isConnected,
       firstSeen: firstSeen ?? this.firstSeen,
@@ -138,6 +156,9 @@ class NearbyUser extends Equatable {
         displayName,
         photoUrl,
         bio,
+        vibe,
+        mood,
+        gender,
         rssi,
         isConnected,
         firstSeen,
