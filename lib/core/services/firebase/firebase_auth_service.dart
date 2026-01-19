@@ -281,6 +281,14 @@ class FirebaseAuthService {
       );
     }
 
+    // Check if email is already verified
+    if (user.emailVerified) {
+      throw const AuthException(
+        message: 'Email is already verified',
+        code: 'already-verified',
+      );
+    }
+
     try {
       await user.sendEmailVerification();
     } on firebase.FirebaseAuthException catch (e) {
@@ -308,6 +316,8 @@ class FirebaseAuthService {
 
     try {
       await user.reload();
+      // Force refresh the current user reference
+      await _firebaseAuth.currentUser?.reload();
     } on firebase.FirebaseAuthException catch (e) {
       throw _mapFirebaseAuthException(e);
     } catch (e) {

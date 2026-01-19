@@ -80,9 +80,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       result.fold(
         (failure) => emit(AuthError(failure.message)),
-        (user) {
+        (user) async {
           // Check if email is verified before allowing sign in
           if (!_authRepository.isEmailVerified) {
+            // Send verification email if not already sent recently
+            try {
+              await _authRepository.sendEmailVerification();
+            } catch (e) {
+              // Ignore errors (email might have been sent recently)
+              // User can still use the resend button
+            }
             emit(AuthAwaitingEmailVerification(email: user.email, user: user));
           } else {
             emit(AuthAuthenticated(user));
@@ -180,18 +187,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await _authRepository.sendEmailVerification();
 
     result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (_) => emit(AuthVerificationEmailSent(currentState.email)),
+      (failure) {
+        // Show error briefly then return to awaiting state
+        emit(AuthError(failure.message));
+        Future.delayed(const Duration(seconds: 2)).then((_) {
+          if (state is AuthError) {
+            add(const AuthCheckRequested());
+          }
+        });
+      },
+      (_) {
+        emit(AuthVerificationEmailSent(currentState.email));
+        // Return to awaiting verification state after showing success
+        Future.delayed(const Duration(seconds: 2)).then((_) {
+          if (state is AuthVerificationEmailSent) {
+            emit(AuthAwaitingEmailVerification(
+              email: currentState.email,
+              user: currentState.user,
+            ));
+          }
+        });
+      },
     );
-
-    // Return to awaiting verification state after showing success
-    await Future.delayed(const Duration(seconds: 2));
-    if (state is AuthVerificationEmailSent) {
-      emit(AuthAwaitingEmailVerification(
-        email: currentState.email,
-        user: currentState.user,
-      ));
-    }
   }
 
   Future<void> _onCheckEmailVerificationRequested(
@@ -204,10 +221,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await _authRepository.checkEmailVerified();
 
     result.fold(
-      (failure) => emit(AuthError(failure.message)),
-      (isVerified) {
+      (failure) {
+        // Silently ignore errors during background checks
+        // Only log in debug mode
+        assert(() {
+          // ignore: avoid_print
+          print('Email verification check error: ${failure.message}');
+          return true;
+        }());
+        // Don't emit error state, just stay in current state
+      },
+      (isVerified) async {
         if (isVerified) {
-          emit(AuthAuthenticated(currentState.user));
+          // Email is verified! Fetch the updated user from Firestore
+          final userResult = await _authRepository.getCurrentUser();
+          userResult.fold(
+            (failure) {
+              // Failed to get user, but email is verified
+              // Use the user from current state
+              emit(AuthAuthenticated(currentState.user));
+            },
+            (user) {
+              if (user != null) {
+                emit(AuthAuthenticated(user));
+              } else {
+                // User doesn't exist in Firestore (shouldn't happen)
+                emit(AuthAuthenticated(currentState.user));
+              }
+            },
+          );
         }
         // If not verified, stay in current state (no change needed)
       },
