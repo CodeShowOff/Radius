@@ -14,6 +14,12 @@ import '../../features/connections/presentation/pages/connection_requests_screen
 import '../../features/connections/presentation/pages/connections_page.dart';
 import '../../features/guess_me/guess_me.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
+import '../../features/location_groups/presentation/bloc/location_group_bloc.dart';
+import '../../features/location_groups/presentation/pages/create_group_page.dart';
+import '../../features/location_groups/presentation/pages/find_groups_page.dart';
+import '../../features/location_groups/presentation/pages/group_chat_page.dart';
+import '../../features/location_groups/presentation/pages/group_detail_page.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
@@ -270,6 +276,64 @@ GoRouter get appRouter {
           final sessionId = extra?['sessionId'] as String? ?? '';
 
           return GuessmeGamePage(sessionId: sessionId);
+        },
+      ),
+
+      // Location Groups routes
+      GoRoute(
+        path: Routes.locationGroups,
+        name: 'locationGroups',
+        builder: (context, state) {
+          return BlocProvider(
+            create: (_) => getIt<LocationGroupBloc>(),
+            child: const FindGroupsPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.createLocationGroup,
+        name: 'createLocationGroup',
+        builder: (context, state) {
+          return BlocProvider(
+            create: (_) => getIt<LocationGroupBloc>(),
+            child: const CreateGroupPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.locationGroupDetail,
+        name: 'locationGroupDetail',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (_) => getIt<LocationGroupBloc>(),
+              ),
+              BlocProvider(
+                create: (_) => getIt<GroupChatBloc>(),
+              ),
+            ],
+            child: GroupDetailPage(groupId: groupId),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.locationGroupChat,
+        name: 'locationGroupChat',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (_) => getIt<LocationGroupBloc>(),
+              ),
+              BlocProvider(
+                create: (_) => getIt<GroupChatBloc>(),
+              ),
+            ],
+            child: GroupChatPage(groupId: groupId),
+          );
         },
       ),
     ],

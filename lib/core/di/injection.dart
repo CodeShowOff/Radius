@@ -8,6 +8,11 @@ import '../services/firebase/username_service.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
+import '../../features/location_groups/data/group_chat_service.dart';
+import '../../features/location_groups/data/location_data_service.dart';
+import '../../features/location_groups/data/location_group_service.dart';
+import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
+import '../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/domain/repositories/i_profile_repository.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
@@ -119,6 +124,33 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<NearbyUsersBloc>()) {
     getIt.registerFactory<NearbyUsersBloc>(
       () => NearbyUsersBloc(proximityService: getIt()),
+    );
+  }
+
+  // Location Groups feature
+  if (!getIt.isRegistered<LocationDataService>()) {
+    getIt.registerLazySingleton<LocationDataService>(() => LocationDataService());
+  }
+
+  if (!getIt.isRegistered<LocationGroupService>()) {
+    getIt.registerLazySingleton<LocationGroupService>(() => LocationGroupService());
+  }
+
+  if (!getIt.isRegistered<GroupChatService>()) {
+    getIt.registerLazySingleton<GroupChatService>(() => GroupChatService());
+  }
+
+  if (!getIt.isRegistered<LocationGroupBloc>()) {
+    getIt.registerFactory<LocationGroupBloc>(
+      () => LocationGroupBloc(
+        groupService: getIt<LocationGroupService>(),
+      ),
+    );
+  }
+
+  if (!getIt.isRegistered<GroupChatBloc>()) {
+    getIt.registerFactory<GroupChatBloc>(
+      () => GroupChatBloc(chatService: getIt<GroupChatService>()),
     );
   }
 

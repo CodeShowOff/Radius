@@ -44,4 +44,18 @@ abstract class Routes {
   /// Helper to build a GuessMe game route with session ID.
   static String guessmeGameWith(String sessionId) =>
       '/guessme/game?sessionId=$sessionId';
+
+  // Location Groups routes
+  static const String locationGroups = '/location-groups';
+  static const String createLocationGroup = '/location-groups/create';
+  static const String locationGroupDetail = '/location-groups/:groupId';
+  static const String locationGroupChat = '/location-groups/:groupId/chat';
+
+  /// Helper to build a group detail route with group ID.
+  static String locationGroupDetailWith(String groupId) =>
+      '/location-groups/$groupId';
+
+  /// Helper to build a group chat route with group ID.
+  static String locationGroupChatWith(String groupId) =>
+      '/location-groups/$groupId/chat';
 }

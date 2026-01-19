@@ -412,6 +412,108 @@ service cloud.firestore {
     // Access is controlled by the profiles/{userId}/stats/** rule
     
     // ============================================================
+    // LOCATION GROUPS
+    // ============================================================
+    
+    match /location_groups/{groupId} {
+      /// Check if user is a member of this group
+      function isGroupMember() {
+        return exists(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid)).data.status == 'active';
+      }
+      
+      /// Check if user is an admin of this group
+      function isGroupAdmin() {
+        return exists(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid)).data.status == 'active'
+          && get(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // RULE: Any authenticated user can read groups (for discovery)
+      allow read: if isAuthenticated();
+      
+      // RULE: Any authenticated user can create a group
+      allow create: if isAuthenticated()
+        && request.resource.data.createdByUserId == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.memberCount == 1
+        && request.resource.data.keys().hasAll(['name', 'countryCode', 'stateCode', 'visibility', 'status', 'createdByUserId', 'createdAt']);
+      
+      // RULE: Only admins can update group settings
+      allow update: if isAuthenticated()
+        && isGroupAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['createdByUserId', 'createdAt', 'countryCode', 'stateCode']);
+      
+      // RULE: Only admins can delete (archive) groups
+      allow delete: if isAuthenticated() && isGroupAdmin();
+      
+      // Members subcollection
+      match /members/{memberId} {
+        // RULE: Members can read member list
+        allow read: if isAuthenticated() && isGroupMember();
+        
+        // RULE: User can join public groups directly
+        allow create: if isAuthenticated()
+          && memberId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && (get(/databases/$(database)/documents/location_groups/$(groupId)).data.visibility == 'public'
+              || request.resource.data.status == 'pending');
+        
+        // RULE: Admins can update any member (for promotion, ban)
+        // Users can update their own membership (for leaving)
+        allow update: if isAuthenticated()
+          && (isGroupAdmin() || memberId == request.auth.uid);
+        
+        // RULE: Admins can remove members, users can remove themselves
+        allow delete: if isAuthenticated()
+          && (isGroupAdmin() || memberId == request.auth.uid);
+      }
+      
+      // Join requests subcollection (for private groups)
+      match /join_requests/{requestId} {
+        // RULE: Admins can read join requests
+        allow read: if isAuthenticated() 
+          && (isGroupAdmin() || requestId == request.auth.uid);
+        
+        // RULE: Users can create join requests for themselves
+        allow create: if isAuthenticated()
+          && requestId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'pending';
+        
+        // RULE: Admins can update requests (approve/reject)
+        allow update: if isAuthenticated() && isGroupAdmin();
+        
+        // RULE: Admins can delete requests, users can cancel their own
+        allow delete: if isAuthenticated()
+          && (isGroupAdmin() || requestId == request.auth.uid);
+      }
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // RULE: Only members can read messages
+        allow read: if isAuthenticated() && isGroupMember();
+        
+        // RULE: Only members can send messages
+        allow create: if isAuthenticated()
+          && isGroupMember()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasAll(['groupId', 'senderId', 'text', 'sentAt', 'type'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000;
+        
+        // RULE: Senders can delete (soft delete) their own messages, admins can delete any
+        allow update: if isAuthenticated()
+          && (resource.data.senderId == request.auth.uid || isGroupAdmin())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted']);
+        
+        // RULE: No hard deletes
+        allow delete: if false;
+      }
+    }
+    
+    // ============================================================
     // APP CONFIGURATION (read-only)
     // ============================================================
     

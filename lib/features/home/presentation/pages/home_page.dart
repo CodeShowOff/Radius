@@ -220,6 +220,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Theme.of(context).colorScheme.onTertiaryContainer,
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Location Groups button
+                FilledButton.tonalIcon(
+                  onPressed: () => context.push(Routes.locationGroups),
+                  icon: const Icon(Icons.location_on),
+                  label: const Text('Location Groups'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor:
+                        Theme.of(context).colorScheme.secondaryContainer,
+                    foregroundColor:
+                        Theme.of(context).colorScheme.onSecondaryContainer,
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 // Connections section header with "View All" button
