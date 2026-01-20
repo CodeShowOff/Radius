@@ -5,7 +5,10 @@ import 'package:injectable/injectable.dart';
 import '../services/bluetooth/bluetooth_service.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/firebase/username_service.dart';
+import '../services/realtime/realtime_connection_service.dart';
+import '../services/realtime/realtime_data_manager.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../features/location_groups/data/group_chat_service.dart';
@@ -66,6 +69,13 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<ConnectionService>(() => ConnectionService());
   }
 
+  // Real-time connection monitoring service
+  if (!getIt.isRegistered<RealtimeConnectionService>()) {
+    getIt.registerLazySingleton<RealtimeConnectionService>(
+      () => RealtimeConnectionService(),
+    );
+  }
+
   if (!getIt.isRegistered<IProfileRepository>()) {
     getIt.registerLazySingleton<IProfileRepository>(
       () => ProfileRepositoryImpl(profileService: getIt<ProfileService>()),
@@ -102,7 +112,7 @@ Future<void> configureDependencies() {
     );
   }
 
-  // App-wide BLoCs
+  // App-wide BLoCs - these must be singletons to maintain persistent real-time streams
   if (!getIt.isRegistered<AuthBloc>()) {
     getIt.registerFactory<AuthBloc>(
       () => AuthBloc(authRepository: getIt()),
@@ -110,13 +120,13 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<ConnectionBloc>()) {
-    getIt.registerFactory<ConnectionBloc>(
+    getIt.registerLazySingleton<ConnectionBloc>(
       () => ConnectionBloc(connectionService: getIt()),
     );
   }
 
   if (!getIt.isRegistered<ProfileBloc>()) {
-    getIt.registerFactory<ProfileBloc>(
+    getIt.registerLazySingleton<ProfileBloc>(
       () => ProfileBloc(profileRepository: getIt()),
     );
   }
@@ -156,6 +166,20 @@ Future<void> configureDependencies() {
 
   // Run generated registrations last so modules can override defaults if needed.
   getIt.init();
+
+  // Register RealTimeDataManager after all BLoCs are registered
+  // This needs to be registered after getIt.init() so that ConversationsBloc is available
+  if (!getIt.isRegistered<RealTimeDataManager>()) {
+    getIt.registerLazySingleton<RealTimeDataManager>(
+      () => RealTimeDataManager(
+        connectionService: getIt<RealtimeConnectionService>(),
+        connectionBloc: getIt<ConnectionBloc>(),
+        conversationsBloc: getIt<ConversationsBloc>(),
+        locationGroupBloc: getIt<LocationGroupBloc>(),
+        profileBloc: getIt<ProfileBloc>(),
+      ),
+    );
+  }
 
   return Future.value();
 }

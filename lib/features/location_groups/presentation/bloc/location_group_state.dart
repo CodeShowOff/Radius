@@ -24,6 +24,9 @@ class LocationGroupState extends Equatable {
 
   /// User's joined groups.
   final List<LocationGroup> userGroups;
+  
+  /// The user ID whose groups are currently loaded (for avoiding redundant reloads).
+  final String? userGroupsUserId;
 
   /// Unread counts per group for the current user.
   final Map<String, int> userGroupUnreadCounts;
@@ -58,6 +61,7 @@ class LocationGroupState extends Equatable {
     this.selectedStateCode,
     this.locationGroups = const [],
     this.userGroups = const [],
+    this.userGroupsUserId,
     this.userGroupUnreadCounts = const {},
     this.currentGroup,
     this.currentMembership,
@@ -87,6 +91,7 @@ class LocationGroupState extends Equatable {
     String? selectedStateCode,
     List<LocationGroup>? locationGroups,
     List<LocationGroup>? userGroups,
+    String? userGroupsUserId,
     Map<String, int>? userGroupUnreadCounts,
     LocationGroup? currentGroup,
     GroupMembership? currentMembership,
@@ -103,6 +108,7 @@ class LocationGroupState extends Equatable {
       selectedStateCode: selectedStateCode ?? this.selectedStateCode,
       locationGroups: locationGroups ?? this.locationGroups,
       userGroups: userGroups ?? this.userGroups,
+      userGroupsUserId: userGroupsUserId ?? this.userGroupsUserId,
       userGroupUnreadCounts:
           userGroupUnreadCounts ?? this.userGroupUnreadCounts,
       currentGroup: currentGroup ?? this.currentGroup,
@@ -123,6 +129,7 @@ class LocationGroupState extends Equatable {
         selectedStateCode,
         locationGroups,
         userGroups,
+        userGroupsUserId,
       userGroupUnreadCounts,
         currentGroup,
         currentMembership,

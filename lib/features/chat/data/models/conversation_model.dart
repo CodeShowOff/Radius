@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/conversation.dart';
+import '../../domain/entities/message.dart';
 
 /// Firestore model for Conversation entity.
 ///
@@ -12,6 +13,7 @@ import '../../domain/entities/conversation.dart';
 ///   - lastMessageAt: timestamp?
 ///   - lastMessageText: string?
 ///   - lastMessageSenderId: string?
+///   - lastMessageStatus: string?
 ///   - unreadCounts: { [userId]: number }
 ///   - mutedBy: { [userId]: boolean }
 ///   - archivedBy: { [userId]: boolean }
@@ -27,6 +29,7 @@ class ConversationModel extends Conversation {
     super.lastMessageAt,
     super.lastMessageText,
     super.lastMessageSenderId,
+    super.lastMessageStatus,
     super.unreadCounts,
     super.mutedBy,
     super.participantInfo,
@@ -83,6 +86,9 @@ class ConversationModel extends Conversation {
           : null,
       lastMessageText: data['lastMessageText'] as String?,
       lastMessageSenderId: data['lastMessageSenderId'] as String?,
+      lastMessageStatus: data['lastMessageStatus'] != null
+          ? _parseStatus(data['lastMessageStatus'] as String)
+          : null,
       unreadCounts: unreadCounts,
       mutedBy: mutedBy,
       participantInfo: participantInfo,
@@ -99,6 +105,7 @@ class ConversationModel extends Conversation {
       lastMessageAt: conversation.lastMessageAt,
       lastMessageText: conversation.lastMessageText,
       lastMessageSenderId: conversation.lastMessageSenderId,
+      lastMessageStatus: conversation.lastMessageStatus,
       unreadCounts: conversation.unreadCounts,
       mutedBy: conversation.mutedBy,
       participantInfo: conversation.participantInfo,
@@ -152,6 +159,7 @@ class ConversationModel extends Conversation {
           lastMessageAt != null ? Timestamp.fromDate(lastMessageAt!) : null,
       'lastMessageText': lastMessageText,
       'lastMessageSenderId': lastMessageSenderId,
+      'lastMessageStatus': lastMessageStatus?.name,
       'unreadCounts': unreadCounts,
       'mutedBy': mutedBy,
       'archivedBy': archivedBy,
@@ -177,10 +185,18 @@ class ConversationModel extends Conversation {
       lastMessageAt: lastMessageAt,
       lastMessageText: lastMessageText,
       lastMessageSenderId: lastMessageSenderId,
+      lastMessageStatus: lastMessageStatus,
       unreadCounts: unreadCounts,
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
+    );
+  }
+
+  static MessageStatus _parseStatus(String status) {
+    return MessageStatus.values.firstWhere(
+      (e) => e.name == status,
+      orElse: () => MessageStatus.sent,
     );
   }
 }

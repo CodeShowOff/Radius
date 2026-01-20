@@ -56,10 +56,14 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     ConnectionLoadAll event,
     Emitter<ConnectionBlocState> emit,
   ) async {
+    // Handle user switching - if different user, force reload
+    final isDifferentUser = state.userId != null && state.userId != event.userId;
+    
     // If already loading or loaded for the same user, don't reload
     // This prevents redundant loads when navigating between pages
     // NOTE: Streams remain active and continue to emit real-time updates!
-    if (state.userId == event.userId && 
+    if (!isDifferentUser &&
+        state.userId == event.userId && 
         (state.status == ConnectionBlocStatus.loading || 
          state.status == ConnectionBlocStatus.loaded)) {
       _logger.i('Already loaded/loading for user ${event.userId}, skipping reload');
@@ -70,9 +74,25 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       return;
     }
 
+    // If switching users, cancel existing subscriptions first and clear old data
+    if (isDifferentUser) {
+      _logger.i('User changed from ${state.userId} to ${event.userId}, reloading');
+      await _connectionsSubscription?.cancel();
+      await _receivedRequestsSubscription?.cancel();
+      await _sentRequestsSubscription?.cancel();
+      _connectionsSubscription = null;
+      _receivedRequestsSubscription = null;
+      _sentRequestsSubscription = null;
+    }
+
     emit(state.copyWith(
       status: ConnectionBlocStatus.loading,
       userId: event.userId,
+      // Clear old user's data when switching users
+      connections: isDifferentUser ? const [] : state.connections,
+      receivedRequests: isDifferentUser ? const [] : state.receivedRequests,
+      sentRequests: isDifferentUser ? const [] : state.sentRequests,
+      userConnectionStates: isDifferentUser ? const {} : state.userConnectionStates,
     ));
 
     _currentUserId = event.userId;
@@ -89,11 +109,13 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       _connectionsSubscription = _connectionService
           .getConnectionsStream(event.userId)
           .listen(
-            (connections) => add(_ConnectionsUpdated(connections)),
+            (connections) {
+              if (!isClosed) add(_ConnectionsUpdated(connections));
+            },
             onError: (error) {
               _logger.e('Error in connections stream', error: error);
               // Still emit empty list so UI can show empty state
-              add(const _ConnectionsUpdated([]));
+              if (!isClosed) add(const _ConnectionsUpdated([]));
             },
           );
 
@@ -101,11 +123,13 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       _receivedRequestsSubscription = _connectionService
           .getReceivedRequestsStream(event.userId)
           .listen(
-            (requests) => add(_ReceivedRequestsUpdated(requests)),
+            (requests) {
+              if (!isClosed) add(_ReceivedRequestsUpdated(requests));
+            },
             onError: (error) {
               _logger.e('Error in received requests stream', error: error);
               // Still emit empty list so UI doesn't get stuck
-              add(const _ReceivedRequestsUpdated([]));
+              if (!isClosed) add(const _ReceivedRequestsUpdated([]));
             },
           );
 
@@ -113,11 +137,13 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       _sentRequestsSubscription = _connectionService
           .getSentRequestsStream(event.userId)
           .listen(
-            (requests) => add(_SentRequestsUpdated(requests)),
+            (requests) {
+              if (!isClosed) add(_SentRequestsUpdated(requests));
+            },
             onError: (error) {
               _logger.e('Error in sent requests stream', error: error);
               // Still emit empty list so UI doesn't get stuck
-              add(const _SentRequestsUpdated([]));
+              if (!isClosed) add(const _SentRequestsUpdated([]));
             },
           );
 

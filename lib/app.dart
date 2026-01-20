@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -5,6 +6,7 @@ import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/services/notifications/notification_service.dart';
+import 'core/services/realtime/realtime_data_manager.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -193,55 +195,21 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
       final userChanged = _currentUserId != newUserId;
       _currentUserId = newUserId;
 
-      // Make sure profile data (including display name) starts loading as soon
-      // as the user is authenticated, so HomePage can render the correct name
-      // without requiring navigation to Profile first.
+      // Initialize all real-time data streams via the centralized manager
+      // This ensures persistent connections and instant navigation
       if (userChanged) {
         try {
-          context.read<ProfileBloc>().add(ProfileLoadRequested(newUserId));
+          // Use RealTimeDataManager for centralized stream management
+          // This initializes: Profile, Connections, Conversations, and Groups
+          // All streams are persistent and won't reload on navigation
+          getIt<RealTimeDataManager>().initializeForUser(
+            userId: newUserId,
+            displayName: state.user.displayName,
+            photoUrl: state.user.avatarUrl,
+          );
         } catch (_) {
-          // Ignore if ProfileBloc isn't available in the tree yet.
-        }
-
-        // Initialize ConnectionBloc to listen for connection requests
-        // This preloads connections so the connections page loads instantly
-        try {
-          final profileBloc = context.read<ProfileBloc>();
-          final connectionBloc = context.read<ConnectionBloc>();
-          
-          // Load connections immediately (profile info will be updated later)
-          connectionBloc.add(ConnectionLoadAll(newUserId));
-          
-          // Listen for profile updates and update ConnectionBloc with display info
-          profileBloc.stream.listen((profileState) {
-            if (profileState is ProfileLoaded) {
-              connectionBloc.setCurrentUser(
-                userId: newUserId,
-                displayName: profileState.profile.name,
-                photoUrl: profileState.profile.photoUrl,
-              );
-            }
-          });
-        } catch (_) {
-          // Ignore if blocs aren't available in the tree yet.
-        }
-
-        // Initialize ConversationsBloc to preload chats and unread counts
-        try {
-          context
-              .read<ConversationsBloc>()
-              .add(ConversationsLoad(userId: newUserId));
-        } catch (_) {
-          // Ignore if ConversationsBloc isn't available in the tree yet.
-        }
-
-        // Initialize LocationGroupBloc to preload user's groups
-        // This preloads groups so the my groups page loads instantly
-        try {
-          final groupBloc = context.read<LocationGroupBloc>();
-          groupBloc.add(LoadUserGroups(userId: newUserId));
-        } catch (_) {
-          // Ignore if bloc isn't available in the tree yet.
+          // Fallback to individual BLoC initialization if manager not available
+          _initializeBlocsManually(context, newUserId, state);
         }
 
         // Initialize BLE advertising to be discoverable
@@ -266,6 +234,13 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
 
     // Signed out or unauthenticated.
     if (_currentUserId != null) {
+      // Clean up real-time data manager
+      try {
+        getIt<RealTimeDataManager>().signOut();
+      } catch (_) {
+        // Ignore if manager isn't available.
+      }
+
       // Clean up notifications on sign out
       try {
         getIt<NotificationService>().removeToken();
@@ -276,17 +251,105 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
     _currentUserId = null;
   }
 
+  /// Fallback method for manual BLoC initialization if RealTimeDataManager fails.
+  /// 
+  /// This method waits for auth token validation before starting Firestore streams
+  /// to prevent PERMISSION_DENIED race conditions.
+  Future<void> _initializeBlocsManually(BuildContext context, String userId, AuthAuthenticated state) async {
+    // Capture bloc references BEFORE any async operation to avoid context issues
+    ProfileBloc? profileBloc;
+    ConnectionBloc? connectionBloc;
+    ConversationsBloc? conversationsBloc;
+    LocationGroupBloc? locationGroupBloc;
+    
+    try {
+      profileBloc = context.read<ProfileBloc>();
+    } catch (_) {}
+    
+    try {
+      connectionBloc = context.read<ConnectionBloc>();
+    } catch (_) {}
+    
+    try {
+      conversationsBloc = context.read<ConversationsBloc>();
+    } catch (_) {}
+    
+    try {
+      locationGroupBloc = context.read<LocationGroupBloc>();
+    } catch (_) {}
+    
+    // CRITICAL: Wait for auth token to be ready before starting Firestore streams
+    // This prevents race conditions where streams start before token propagation
+    final isAuthReady = await _waitForAuthToken(userId);
+    if (!isAuthReady) {
+      // Auth token not ready - don't start streams yet
+      return;
+    }
+    
+    // Now use the captured bloc references (no context needed)
+    profileBloc?.add(ProfileLoadRequested(userId));
+    
+    if (connectionBloc != null) {
+      final capturedConnectionBloc = connectionBloc; // Capture for closure
+      capturedConnectionBloc.add(ConnectionLoadAll(userId));
+      profileBloc?.stream.listen((profileState) {
+        if (profileState is ProfileLoaded) {
+          capturedConnectionBloc.setCurrentUser(
+            userId: userId,
+            displayName: profileState.profile.name,
+            photoUrl: profileState.profile.photoUrl,
+          );
+        }
+      });
+    }
+    
+    conversationsBloc?.add(ConversationsLoad(userId: userId));
+    locationGroupBloc?.add(LoadUserGroups(userId: userId));
+  }
+  
+  /// Waits for the Firebase auth token to be available and valid.
+  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 5}) async {
+    final auth = FirebaseAuth.instance;
+    
+    for (int i = 0; i < maxRetries; i++) {
+      final currentUser = auth.currentUser;
+      if (currentUser != null && currentUser.uid == userId) {
+        try {
+          final token = await currentUser.getIdToken(false);
+          if (token != null && token.isNotEmpty) {
+            return true;
+          }
+        } catch (_) {}
+      }
+      
+      if (i < maxRetries - 1) {
+        await Future.delayed(Duration(milliseconds: 100 * (i + 1)));
+      }
+    }
+    
+    return false;
+  }
+
   void _onProfileChanged(BuildContext context, ProfileState state) {
     if (state is ProfileLoaded && _currentUserId != null) {
-      // Update the ConnectionBloc with user info when profile loads
+      // Update user info via the centralized RealTimeDataManager
       try {
-        context.read<ConnectionBloc>().setCurrentUser(
-              userId: _currentUserId!,
-              displayName: state.profile.name,
-              photoUrl: state.profile.photoUrl,
-            );
+        getIt<RealTimeDataManager>().updateUserInfo(
+          userId: _currentUserId!,
+          displayName: state.profile.name,
+          photoUrl: state.profile.photoUrl,
+        );
       } catch (_) {
-        // Ignore if ConnectionBloc isn't available in the tree yet.
+        // Fallback: Update ConnectionBloc directly
+        try {
+          context.read<ConnectionBloc>().setCurrentUser(
+                userId: _currentUserId!,
+                displayName: state.profile.name,
+                photoUrl: state.profile.photoUrl,
+              );
+        } catch (_) {
+          // Ignore if ConnectionBloc isn't available in the tree yet.
+        }
       }
     }
   }

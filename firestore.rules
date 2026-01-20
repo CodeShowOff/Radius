@@ -459,6 +459,24 @@ service cloud.firestore {
     }
     
     // ============================================================
+    // COLLECTION GROUP RULES (for cross-collection queries)
+    // ============================================================
+    
+    // CRITICAL: Collection group queries require rules at the wildcard path level.
+    // The path {path=**}/members/{memberId} matches 'members' subcollections
+    // under ANY parent document, enabling collectionGroup('members') queries.
+    //
+    // This rule allows users to:
+    // 1. Query their own memberships across all groups (for "My Groups" feature)
+    // 2. Read their own membership document in any group
+    match /{path=**}/members/{memberId} {
+      // Users can read/list their own membership documents across all groups
+      // This is required for collectionGroup('members').where('userId', '==', uid)
+      allow read: if request.auth != null 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================================
     // LOCATION GROUPS
     // ============================================================
     

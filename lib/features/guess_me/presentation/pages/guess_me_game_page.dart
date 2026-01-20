@@ -745,8 +745,11 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
             ),
             const SizedBox(width: 8),
           ],
-          Flexible(
+          IntrinsicWidth(
             child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: isMe
@@ -761,7 +764,7 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
               ),
               child: Text(
                 message.text,
-                style: TextStyle(
+                style: theme.textTheme.bodyLarge?.copyWith(
                   color: isMe
                       ? theme.colorScheme.onPrimary
                       : theme.colorScheme.onSurface,

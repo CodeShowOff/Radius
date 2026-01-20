@@ -35,11 +35,34 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   @override
   void initState() {
     super.initState();
-    // Only load if not already loaded (status is initial)
-    // This prevents reloading when navigating back to the page
+    // The RealTimeDataManager initializes streams when the user authenticates.
+    // We only need to trigger a load if:
+    // 1. The bloc is in initial state (very first load), OR
+    // 2. The bloc has no userId set (not yet initialized)
+    // 
+    // This prevents redundant loads when:
+    // - Navigating between tabs (state already loaded)
+    // - Navigating back to this page (state persisted in singleton bloc)
+    // - RealTimeDataManager already triggered the load (status may be loading/loaded)
     final connectionState = context.read<ConnectionBloc>().state;
-    if (connectionState.status == ConnectionBlocStatus.initial) {
-      _loadConnections();
+    final authState = context.read<AuthBloc>().state;
+    
+    // Only load if we have an authenticated user and the bloc isn't already
+    // initialized for this user
+    if (authState is AuthAuthenticated) {
+      final currentUserId = authState.user.id;
+      final blocUserId = connectionState.userId;
+      
+      // If bloc hasn't been initialized at all, OR if it's for a different user
+      if (blocUserId == null || blocUserId != currentUserId) {
+        // Bloc not initialized for this user - RealTimeDataManager should handle this,
+        // but as a safety net we trigger the load
+        if (connectionState.status == ConnectionBlocStatus.initial) {
+          _loadConnections();
+        }
+      }
+      // If blocUserId == currentUserId, the data is already loading/loaded
+      // No need to do anything - streams are already active
     }
   }
 

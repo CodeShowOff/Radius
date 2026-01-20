@@ -100,17 +100,27 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     LoadGroupsForLocation event,
     Emitter<LocationGroupState> emit,
   ) async {
-    emit(state.copyWith(
-      status: GroupBlocStatus.loading,
-      selectedCountryCode: event.countryCode,
-      selectedStateCode: event.stateCode,
-      sortBy: event.sortBy,
-    ));
+    // Only show loading if we have no cached data for this location
+    if (state.locationGroups.isEmpty ||
+        state.selectedCountryCode != event.countryCode ||
+        state.selectedStateCode != event.stateCode) {
+      emit(state.copyWith(
+        status: GroupBlocStatus.loading,
+        selectedCountryCode: event.countryCode,
+        selectedStateCode: event.stateCode,
+        sortBy: event.sortBy,
+      ));
+    } else {
+      // Keep showing existing data while refreshing
+      emit(state.copyWith(
+        selectedCountryCode: event.countryCode,
+        selectedStateCode: event.stateCode,
+        sortBy: event.sortBy,
+      ));
+    }
 
     await _groupsSubscription?.cancel();
 
-    // Stream now handles errors internally and never emits error events
-    // Empty results are a valid state (no groups in this location yet)
     _groupsSubscription = _groupService
         .streamGroupsForLocation(
           countryCode: event.countryCode,
@@ -119,7 +129,19 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         )
         .listen(
           (groups) {
-            add(_GroupsUpdated(groups));
+            if (!isClosed) add(_GroupsUpdated(groups));
+          },
+          onError: (error) {
+            _logger.e('Error loading groups for location', error: error);
+            // On error, keep existing data and show error only if we have no data
+            if (!isClosed) {
+              if (state.locationGroups.isEmpty) {
+                add(_GroupsError(error.toString()));
+              } else {
+                // Log but don't update state - preserve existing data
+                _logger.w('Preserving cached data after stream error');
+              }
+            }
           },
         );
   }
@@ -128,7 +150,49 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     LoadUserGroups event,
     Emitter<LocationGroupState> emit,
   ) async {
-    emit(state.copyWith(status: GroupBlocStatus.loading));
+    // Handle user switching - if different user, force reload
+    final isDifferentUser = state.userGroupsUserId != null && 
+        state.userGroupsUserId != event.userId;
+    
+    // If already loading or loaded for the same user, don't reload.
+    // This prevents redundant loads when navigating between pages.
+    // NOTE: The Firestore streams remain active and continue to emit
+    // real-time updates - new groups/messages will appear automatically!
+    if (!isDifferentUser &&
+        state.userGroupsUserId == event.userId &&
+        (state.status == GroupBlocStatus.loading ||
+         state.status == GroupBlocStatus.loaded)) {
+      _logger.i('User groups already loaded/loading for user ${event.userId}, skipping reload');
+      _logger.i('Real-time streams remain active - new group updates will appear automatically');
+      return;
+    }
+
+    // If switching users, cancel existing subscriptions first and clear old data
+    if (isDifferentUser) {
+      _logger.i('User changed from ${state.userGroupsUserId} to ${event.userId}, reloading');
+      await _userGroupsSubscription?.cancel();
+      await _userGroupMembershipsSubscription?.cancel();
+      _userGroupsSubscription = null;
+      _userGroupMembershipsSubscription = null;
+      emit(state.copyWith(
+        status: GroupBlocStatus.loading,
+        userGroupsUserId: event.userId,
+        userGroups: const [], // Clear old user's data
+        userGroupUnreadCounts: const {},
+      ));
+    } else if (state.userGroups.isEmpty) {
+      // Only show loading state if we have no cached data
+      // This provides instant UI for returning users
+      emit(state.copyWith(
+        status: GroupBlocStatus.loading,
+        userGroupsUserId: event.userId,
+      ));
+    } else {
+      // Keep showing existing data while refreshing in background
+      emit(state.copyWith(
+        userGroupsUserId: event.userId,
+      ));
+    }
 
     await _userGroupsSubscription?.cancel();
     await _userGroupMembershipsSubscription?.cancel();
@@ -137,14 +201,22 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     // Empty results are a valid state (user has no groups)
     _userGroupsSubscription = _groupService.streamUserGroups(event.userId).listen(
           (groups) {
-            add(_UserGroupsUpdated(groups));
+            if (!isClosed) add(_UserGroupsUpdated(groups));
+          },
+          onError: (error) {
+            _logger.e('Error in user groups stream', error: error);
+            // Don't emit error state - show empty list instead for better UX
           },
         );
 
     _userGroupMembershipsSubscription =
         _groupService.streamUserMemberships(event.userId).listen(
       (memberships) {
-        add(_UserGroupMembershipsUpdated(memberships));
+        if (!isClosed) add(_UserGroupMembershipsUpdated(memberships));
+      },
+      onError: (error) {
+        _logger.e('Error in user memberships stream', error: error);
+        // Don't emit error state - show empty counts instead for better UX
       },
     );
   }
@@ -289,6 +361,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     _currentGroupSubscription = _groupService.streamGroup(event.groupId).listen(
           (group) async {
+            if (isClosed) return;
             if (group != null) {
               GroupMembership? membership;
               bool hasPendingRequest = false;
@@ -308,7 +381,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
                 }
               }
 
-              add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
+              if (!isClosed) add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
             }
           },
           onError: (error) {
@@ -318,7 +391,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     _membersSubscription = _groupService.streamGroupMembers(event.groupId).listen(
           (members) {
-            add(_MembersUpdated(members));
+            if (!isClosed) add(_MembersUpdated(members));
           },
           onError: (error) {
             _logger.e('Error streaming members', error: error);
@@ -334,7 +407,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     _requestsSubscription = _groupService.streamJoinRequests(event.groupId).listen(
           (requests) {
-            add(_JoinRequestsUpdated(requests));
+            if (!isClosed) add(_JoinRequestsUpdated(requests));
           },
           onError: (error) {
             _logger.e('Error streaming join requests', error: error);

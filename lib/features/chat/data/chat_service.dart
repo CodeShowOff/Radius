@@ -282,6 +282,7 @@ class ChatService {
             ? '${text.trim().substring(0, 100)}...'
             : text.trim(),
         'lastMessageSenderId': senderId,
+        'lastMessageStatus': MessageStatus.sent.name,
         // Increment unread count for recipient
         if (recipientId != null)
           'unreadCounts.$recipientId': FieldValue.increment(1),
@@ -379,6 +380,7 @@ class ChatService {
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastMessageText': lastMessagePreview,
         'lastMessageSenderId': senderId,
+        'lastMessageStatus': MessageStatus.sent.name,
         // Increment unread count for recipient
         if (recipientId != null)
           'unreadCounts.$recipientId': FieldValue.increment(1),
@@ -486,6 +488,20 @@ class ChatService {
         });
       }
 
+      // Check if the last message in the conversation was sent by the other user
+      // If yes, update conversation's lastMessageStatus to 'read'
+      final conversationDoc =
+          await _conversationsRef.doc(conversationId).get();
+      if (conversationDoc.exists) {
+        final data = conversationDoc.data();
+        final lastMessageSenderId = data?['lastMessageSenderId'] as String?;
+        if (lastMessageSenderId != null && lastMessageSenderId != userId) {
+          batch.update(_conversationsRef.doc(conversationId), {
+            'lastMessageStatus': MessageStatus.read.name,
+          });
+        }
+      }
+
       await batch.commit();
 
       _logger.d('Marked ${unreadMessages.docs.length} messages as read');
@@ -527,6 +543,20 @@ class ChatService {
           'deliveredAt': now,
           'status': MessageStatus.delivered.name,
         });
+      }
+
+      // Check if the last message in the conversation was sent by the other user
+      // If yes, update conversation's lastMessageStatus to 'delivered'
+      final conversationDoc =
+          await _conversationsRef.doc(conversationId).get();
+      if (conversationDoc.exists) {
+        final data = conversationDoc.data();
+        final lastMessageSenderId = data?['lastMessageSenderId'] as String?;
+        if (lastMessageSenderId != null && lastMessageSenderId != userId) {
+          batch.update(_conversationsRef.doc(conversationId), {
+            'lastMessageStatus': MessageStatus.delivered.name,
+          });
+        }
       }
 
       await batch.commit();

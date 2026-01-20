@@ -28,12 +28,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _checkBluetoothStatus();
     
-    // Load conversations for the recent conversations list
+    // Ensure conversations are loaded for the recent conversations list
+    // The BLoC handles redundant loads gracefully - if already loaded,
+    // this will be a no-op while keeping real-time streams active
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<ConversationsBloc>().add(
-            ConversationsLoad(userId: authState.user.id),
-          );
+      final convState = context.read<ConversationsBloc>().state;
+      // Only explicitly trigger load if in initial state
+      // Otherwise, streams are already active from app initialization
+      if (convState.status == ConversationsStatus.initial) {
+        context.read<ConversationsBloc>().add(
+              ConversationsLoad(userId: authState.user.id),
+            );
+      }
     }
   }
 

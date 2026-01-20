@@ -26,9 +26,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<ConversationsBloc>().add(
-          ConversationsLoad(userId: widget.currentUserId),
-        );
+    // Only load if not already loaded for this user
+    // The BLoC will handle checking if data is already available
+    // and will skip redundant loads while keeping real-time streams active
+    final state = context.read<ConversationsBloc>().state;
+    if (state.status == ConversationsStatus.initial ||
+        state.currentUserId != widget.currentUserId) {
+      context.read<ConversationsBloc>().add(
+            ConversationsLoad(userId: widget.currentUserId),
+          );
+    }
   }
 
   @override
@@ -49,11 +56,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       ),
       body: BlocBuilder<ConversationsBloc, ConversationsState>(
         builder: (context, state) {
+          // Only show loading on initial load with no cached data
           if (state.status == ConversationsStatus.loading &&
               state.conversations.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // Show error only if we have no cached data to display
           if (state.status == ConversationsStatus.error &&
               state.conversations.isEmpty) {
             return Center(

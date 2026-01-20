@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'message.dart';
+
 /// Entity representing a conversation between two users.
 class Conversation extends Equatable {
   /// Unique conversation ID (canonical format: smaller_larger user IDs).
@@ -19,6 +21,9 @@ class Conversation extends Equatable {
 
   /// Sender ID of the last message.
   final String? lastMessageSenderId;
+
+  /// Status of the last message (sent, delivered, read).
+  final MessageStatus? lastMessageStatus;
 
   /// Count of unread messages for each participant.
   /// Map<userId, unreadCount>
@@ -42,6 +47,7 @@ class Conversation extends Equatable {
     this.lastMessageAt,
     this.lastMessageText,
     this.lastMessageSenderId,
+    this.lastMessageStatus,
     this.unreadCounts = const {},
     this.mutedBy = const {},
     this.participantInfo = const {},
@@ -87,6 +93,7 @@ class Conversation extends Equatable {
     Object? lastMessageAt = _sentinel,
     Object? lastMessageText = _sentinel,
     Object? lastMessageSenderId = _sentinel,
+    Object? lastMessageStatus = _sentinel,
     Map<String, int>? unreadCounts,
     Map<String, bool>? mutedBy,
     Map<String, ParticipantInfo>? participantInfo,
@@ -105,6 +112,9 @@ class Conversation extends Equatable {
       lastMessageSenderId: lastMessageSenderId == _sentinel
           ? this.lastMessageSenderId
           : lastMessageSenderId as String?,
+      lastMessageStatus: lastMessageStatus == _sentinel
+          ? this.lastMessageStatus
+          : lastMessageStatus as MessageStatus?,
       unreadCounts: unreadCounts ?? this.unreadCounts,
       mutedBy: mutedBy ?? this.mutedBy,
       participantInfo: participantInfo ?? this.participantInfo,
@@ -120,6 +130,7 @@ class Conversation extends Equatable {
         lastMessageAt,
         lastMessageText,
         lastMessageSenderId,
+        lastMessageStatus,
         unreadCounts,
         mutedBy,
         participantInfo,

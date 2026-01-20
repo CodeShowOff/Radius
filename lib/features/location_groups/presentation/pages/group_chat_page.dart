@@ -460,9 +460,9 @@ class _MessageBubble extends StatelessWidget {
           ],
 
           // Message content
-          Flexible(
-            child: GestureDetector(
-              onLongPress: onDelete,
+          GestureDetector(
+            onLongPress: onDelete,
+            child: IntrinsicWidth(
               child: Container(
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -499,7 +499,7 @@ class _MessageBubble extends StatelessWidget {
                     // Message text
                     Text(
                       message.text,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodyLarge?.copyWith(
                         color: isMe
                             ? theme.colorScheme.onPrimaryContainer
                             : theme.colorScheme.onSurface,

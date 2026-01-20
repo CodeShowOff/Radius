@@ -245,6 +245,13 @@ class LocationGroupService {
   }
 
   /// Streams groups for a location with real-time updates.
+  /// 
+  /// Note: This query requires a composite Firestore index on:
+  /// (countryCode, stateCode, status, lastActivityAt/createdAt/memberCount)
+  /// 
+  /// If the index doesn't exist, the stream will emit an error.
+  /// The error is logged but NOT converted to an empty list, so that
+  /// the BLoC can preserve any previously loaded data.
   Stream<List<LocationGroup>> streamGroupsForLocation({
     required String countryCode,
     required String stateCode,
@@ -270,22 +277,22 @@ class LocationGroupService {
     }
 
     return query.limit(limit).snapshots().map((snapshot) {
-      try {
-        return snapshot.docs
-            .map((doc) => LocationGroupModel.fromFirestore(doc))
-            .toList();
-      } catch (e) {
-        _logger.e('Error in streamGroupsForLocation map', error: e);
-        // Return empty list instead of propagating error
-        return <LocationGroup>[];
+      return snapshot.docs
+          .map((doc) => LocationGroupModel.fromFirestore(doc))
+          .toList();
+    }).handleError((error, stackTrace) {
+      // Log the error but don't transform it - let it propagate to the BLoC
+      // The BLoC will handle the error and preserve existing data
+      _logger.e('Error in streamGroupsForLocation stream', error: error);
+      // Check if this is a missing index error and log more details
+      if (error.toString().contains('FAILED_PRECONDITION') ||
+          error.toString().contains('requires an index')) {
+        _logger.w(
+          'Firestore index missing! Deploy the index using: firebase deploy --only firestore:indexes',
+        );
       }
-    }).transform(StreamTransformer.fromHandlers(
-      handleError: (error, stackTrace, sink) {
-        // On error, emit empty list to ensure UI receives data
-        _logger.e('Error in streamGroupsForLocation, emitting empty list', error: error);
-        sink.add(<LocationGroup>[]);
-      },
-    ));
+      throw error; // Re-throw to let BLoC handle it
+    });
   }
 
   /// Gets a single group by ID.
@@ -301,22 +308,16 @@ class LocationGroupService {
   }
 
   /// Streams a single group with real-time updates.
+  /// 
+  /// Errors are logged but re-thrown to let the BLoC preserve existing data.
   Stream<LocationGroup?> streamGroup(String groupId) {
     return _groupsRef.doc(groupId).snapshots().map((doc) {
-      try {
-        if (!doc.exists) return null;
-        return LocationGroupModel.fromFirestore(doc);
-      } catch (e) {
-        _logger.e('Error in streamGroup map', error: e);
-        return null;
-      }
-    }).transform(StreamTransformer.fromHandlers(
-      handleError: (error, stackTrace, sink) {
-        // On error, emit null to ensure UI receives data
-        _logger.e('Error in streamGroup, emitting null', error: error);
-        sink.add(null);
-      },
-    ));
+      if (!doc.exists) return null;
+      return LocationGroupModel.fromFirestore(doc);
+    }).handleError((error, stackTrace) {
+      _logger.e('Error in streamGroup', error: error);
+      throw error; // Re-throw to let BLoC handle it
+    });
   }
 
   /// Gets groups the user is a member of.
@@ -367,32 +368,89 @@ class LocationGroupService {
     }
   }
 
+  /// Waits for the auth token to be available and valid.
+  /// 
+  /// This prevents race conditions where Firestore queries are executed
+  /// before the auth token has propagated to the Firebase SDK.
+  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 3}) async {
+    for (int i = 0; i < maxRetries; i++) {
+      final currentUser = _auth.currentUser;
+      if (currentUser != null && currentUser.uid == userId) {
+        try {
+          // Force token refresh to ensure it's valid
+          final token = await currentUser.getIdToken(false);
+          if (token != null && token.isNotEmpty) {
+            return true;
+          }
+        } catch (e) {
+          _logger.w('Token validation failed on attempt ${i + 1}', error: e);
+        }
+      }
+      // Wait briefly before retry
+      if (i < maxRetries - 1) {
+        await Future.delayed(Duration(milliseconds: 100 * (i + 1)));
+      }
+    }
+    _logger.e('Failed to validate auth token after $maxRetries attempts');
+    return false;
+  }
+
   /// Streams groups the user is a member of.
   ///
-  /// Uses idTokenChanges() instead of authStateChanges() to ensure the
-  /// Firebase ID token is ready before making Firestore queries. This prevents
-  /// PERMISSION_DENIED errors that occur when authStateChanges fires but the
-  /// token hasn't been propagated to Firestore yet.
+  /// IMPORTANT: This uses a collection group query which requires:
+  /// 1. A Firestore security rule at /{path=**}/members/{memberId}
+  /// 2. The user to be authenticated with a valid token
+  ///
+  /// Returns empty stream if user is not authenticated or userId doesn't match.
+  /// Errors are caught and logged, returning empty list to prevent UI disruption.
   Stream<List<LocationGroup>> streamUserGroups(String userId) {
-    return Stream<List<LocationGroup>>.multi((controller) {
-      StreamSubscription<User?>? authSub;
-      StreamSubscription<List<LocationGroup>>? dataSub;
-      bool hasEmittedInitial = false;
+    // Validate auth synchronously first
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      _logger.w('streamUserGroups: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
+      return Stream.value(<LocationGroup>[]);
+    }
 
-      void cancelData() {
-        dataSub?.cancel();
-        dataSub = null;
+    // Create a controller to handle the async token validation
+    final controller = StreamController<List<LocationGroup>>();
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
+    bool isDisposed = false;
+
+    // Start the stream after validating the auth token
+    () async {
+      // Wait for auth token to be ready
+      final isAuthReady = await _waitForAuthToken(userId);
+      if (!isAuthReady || isDisposed) {
+        if (!isDisposed) {
+          _logger.w('streamUserGroups: Auth token not ready, emitting empty list');
+          controller.add(<LocationGroup>[]);
+          await controller.close();
+        }
+        return;
       }
 
-      Stream<List<LocationGroup>> buildDataStream() {
-        return _firestore
-            .collectionGroup('members')
-            .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: 'active')
-            .snapshots()
-            .asyncMap((snapshot) async {
+      subscription = _firestore
+          .collectionGroup('members')
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'active')
+          .snapshots()
+          .listen(
+        (snapshot) async {
+          if (isDisposed) return;
+          
           try {
-            if (snapshot.docs.isEmpty) return <LocationGroup>[];
+            // Re-validate auth on each emission
+            final user = _auth.currentUser;
+            if (user == null || user.uid != userId) {
+              _logger.w('streamUserGroups: Auth invalidated during stream');
+              controller.add(<LocationGroup>[]);
+              return;
+            }
+
+            if (snapshot.docs.isEmpty) {
+              controller.add(<LocationGroup>[]);
+              return;
+            }
 
             final groupIds = snapshot.docs
                 .where((doc) => doc.reference.parent.parent != null)
@@ -413,148 +471,134 @@ class LocationGroupService {
               return bTime.compareTo(aTime);
             });
 
-            return groups;
+            if (!isDisposed) {
+              controller.add(groups);
+            }
           } catch (e) {
-            _logger.e('Error in streamUserGroups asyncMap', error: e);
-            return <LocationGroup>[];
-          }
-        });
-      }
-
-      // Use idTokenChanges() which fires when:
-      // 1. User signs in (token becomes available)
-      // 2. Token is refreshed
-      // 3. User signs out (token becomes null)
-      // This ensures the ID token is ready for Firestore before we query.
-      authSub = _auth.idTokenChanges().listen(
-        (user) async {
-          if (user == null || user.uid != userId) {
-            cancelData();
-            if (!hasEmittedInitial) {
-              hasEmittedInitial = true;
+            _logger.e('Error processing streamUserGroups snapshot', error: e);
+            if (!isDisposed) {
               controller.add(<LocationGroup>[]);
             }
-            return;
           }
-
-          // Ensure token is fresh before making Firestore query
-          try {
-            await user.getIdToken();
-          } catch (e) {
-            _logger.w('Failed to get ID token, skipping Firestore query', error: e);
-            if (!hasEmittedInitial) {
-              hasEmittedInitial = true;
-              controller.add(<LocationGroup>[]);
-            }
-            return;
-          }
-
-          cancelData();
-          dataSub = buildDataStream().listen(
-                (groups) {
-                  hasEmittedInitial = true;
-                  controller.add(groups);
-                },
-                onError: (error, stackTrace) {
-                  _logger.e('Error in streamUserGroups, emitting empty list', error: error);
-                  hasEmittedInitial = true;
-                  controller.add(<LocationGroup>[]);
-                },
-              );
         },
-        onError: controller.addError,
-        onDone: controller.close,
+        onError: (error) {
+          _logger.e('Error in streamUserGroups stream', error: error);
+          // Check if this is a permission error
+          if (error.toString().contains('permission-denied') ||
+              error.toString().contains('PERMISSION_DENIED')) {
+            _logger.w(
+              'PERMISSION_DENIED in streamUserGroups - check Firestore rules for collectionGroup members',
+            );
+          }
+          // Emit empty list on error instead of propagating
+          if (!isDisposed) {
+            controller.add(<LocationGroup>[]);
+          }
+        },
       );
+    }();
 
-      controller.onCancel = () {
-        cancelData();
-        authSub?.cancel();
-      };
-    });
+    // Handle cleanup when the stream is cancelled
+    controller.onCancel = () {
+      isDisposed = true;
+      subscription?.cancel();
+    };
+
+    return controller.stream;
   }
 
   /// Streams the user's memberships (for unread counts).
   ///
-  /// Uses idTokenChanges() instead of authStateChanges() to ensure the
-  /// Firebase ID token is ready before making Firestore queries.
+  /// IMPORTANT: This uses a collection group query which requires:
+  /// 1. A Firestore security rule at /{path=**}/members/{memberId}
+  /// 2. The user to be authenticated with a valid token
+  ///
+  /// Returns empty stream if user is not authenticated or userId doesn't match.
   Stream<List<GroupMembership>> streamUserMemberships(String userId) {
-    return Stream<List<GroupMembership>>.multi((controller) {
-      StreamSubscription<User?>? authSub;
-      StreamSubscription<List<GroupMembership>>? dataSub;
-      bool hasEmittedInitial = false;
+    // Validate auth synchronously first
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      _logger.w('streamUserMemberships: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
+      return Stream.value(<GroupMembership>[]);
+    }
 
-      void cancelData() {
-        dataSub?.cancel();
-        dataSub = null;
+    // Create a controller to handle the async token validation
+    final controller = StreamController<List<GroupMembership>>();
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
+    bool isDisposed = false;
+
+    // Start the stream after validating the auth token
+    () async {
+      // Wait for auth token to be ready
+      final isAuthReady = await _waitForAuthToken(userId);
+      if (!isAuthReady || isDisposed) {
+        if (!isDisposed) {
+          _logger.w('streamUserMemberships: Auth token not ready, emitting empty list');
+          controller.add(<GroupMembership>[]);
+          await controller.close();
+        }
+        return;
       }
 
-      Stream<List<GroupMembership>> buildDataStream() {
-        return _firestore
-            .collectionGroup('members')
-            .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: 'active')
-            .snapshots()
-            .map((snapshot) {
+      subscription = _firestore
+          .collectionGroup('members')
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'active')
+          .snapshots()
+          .listen(
+        (snapshot) {
+          if (isDisposed) return;
+          
           try {
-            return snapshot.docs
+            // Re-validate auth on each emission
+            final user = _auth.currentUser;
+            if (user == null || user.uid != userId) {
+              _logger.w('streamUserMemberships: Auth invalidated during stream');
+              controller.add(<GroupMembership>[]);
+              return;
+            }
+
+            final memberships = snapshot.docs
                 .where((doc) => doc.reference.parent.parent != null)
                 .map((doc) {
               final groupId = doc.reference.parent.parent!.id;
               return GroupMembershipModel.fromFirestore(doc, groupId);
             }).toList();
-          } catch (e) {
-            _logger.e('Error in streamUserMemberships map', error: e);
-            return <GroupMembership>[];
-          }
-        });
-      }
 
-      // Use idTokenChanges() to ensure the ID token is ready for Firestore
-      authSub = _auth.idTokenChanges().listen(
-        (user) async {
-          if (user == null || user.uid != userId) {
-            cancelData();
-            if (!hasEmittedInitial) {
-              hasEmittedInitial = true;
+            if (!isDisposed) {
+              controller.add(memberships);
+            }
+          } catch (e) {
+            _logger.e('Error processing streamUserMemberships snapshot', error: e);
+            if (!isDisposed) {
               controller.add(<GroupMembership>[]);
             }
-            return;
           }
-
-          // Ensure token is fresh before making Firestore query
-          try {
-            await user.getIdToken();
-          } catch (e) {
-            _logger.w('Failed to get ID token, skipping Firestore query', error: e);
-            if (!hasEmittedInitial) {
-              hasEmittedInitial = true;
-              controller.add(<GroupMembership>[]);
-            }
-            return;
-          }
-
-          cancelData();
-          dataSub = buildDataStream().listen(
-                (memberships) {
-                  hasEmittedInitial = true;
-                  controller.add(memberships);
-                },
-                onError: (error, stackTrace) {
-                  _logger.e('Error in streamUserMemberships, emitting empty list', error: error);
-                  hasEmittedInitial = true;
-                  controller.add(<GroupMembership>[]);
-                },
-              );
         },
-        onError: controller.addError,
-        onDone: controller.close,
+        onError: (error) {
+          _logger.e('Error in streamUserMemberships stream', error: error);
+          // Check if this is a permission error
+          if (error.toString().contains('permission-denied') ||
+              error.toString().contains('PERMISSION_DENIED')) {
+            _logger.w(
+              'PERMISSION_DENIED in streamUserMemberships - check Firestore rules for collectionGroup members',
+            );
+          }
+          // Emit empty list on error instead of propagating
+          if (!isDisposed) {
+            controller.add(<GroupMembership>[]);
+          }
+        },
       );
+    }();
 
-      controller.onCancel = () {
-        cancelData();
-        authSub?.cancel();
-      };
-    });
+    // Handle cleanup when the stream is cancelled
+    controller.onCancel = () {
+      isDisposed = true;
+      subscription?.cancel();
+    };
+
+    return controller.stream;
   }
 
   // ==================== MEMBERSHIP MANAGEMENT ====================

@@ -29,9 +29,6 @@ class MessageBubble extends StatelessWidget {
       child: GestureDetector(
         onLongPress: onLongPress,
         child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
-          ),
           margin: EdgeInsets.only(
             left: isMe ? 48 : 12,
             right: isMe ? 12 : 48,
@@ -44,7 +41,11 @@ class MessageBubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Message content
-              Container(
+              IntrinsicWidth(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  ),
                 padding: message.isMediaMessage
                     ? const EdgeInsets.all(4)
                     : const EdgeInsets.only(
@@ -93,32 +94,31 @@ class MessageBubble extends StatelessWidget {
                               ),
                             ),
 
-                          // Text-only message
+                          // Text-only message with inline time (WhatsApp style)
                           if (!message.isMediaMessage &&
                               message.text.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _MessageText(
-                                message: message,
-                                isMe: isMe,
-                                theme: theme,
-                              ),
+                            _MessageTextWithTime(
+                              message: message,
+                              isMe: isMe,
+                              theme: theme,
                             ),
 
-                          // Timestamp and status (inside bubble, bottom-right)
-                          Align(
-                            alignment: Alignment.bottomRight,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: _MessageMeta(
-                                message: message,
-                                isMe: isMe,
-                                theme: theme,
+                          // For media messages, show time separately below
+                          if (message.isMediaMessage)
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: _MessageMeta(
+                                  message: message,
+                                  isMe: isMe,
+                                  theme: theme,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
+                ),
               ),
               // Retry button for failed messages
               if (isMe && message.status == MessageStatus.failed)
@@ -182,10 +182,49 @@ class _MessageText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       message.text,
-      style: theme.textTheme.bodyMedium?.copyWith(
+      style: theme.textTheme.bodyLarge?.copyWith(
         color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
         height: 1.3,
       ),
+    );
+  }
+}
+
+/// Text message with inline time at bottom-right (WhatsApp style)
+class _MessageTextWithTime extends StatelessWidget {
+  final Message message;
+  final bool isMe;
+  final ThemeData theme;
+
+  const _MessageTextWithTime({
+    required this.message,
+    required this.isMe,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: [
+        Text(
+          message.text,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+            height: 1.3,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 1),
+          child: _MessageMeta(
+            message: message,
+            isMe: isMe,
+            theme: theme,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -214,7 +253,7 @@ class _DeletedMessage extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           'Message deleted',
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: theme.textTheme.bodyLarge?.copyWith(
             color: isMe
                 ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
                 : theme.colorScheme.onSurfaceVariant,
@@ -246,8 +285,8 @@ class _MessageMeta extends StatelessWidget {
           _formatTime(message.sentAt),
           style: theme.textTheme.labelSmall?.copyWith(
             color: isMe
-                ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
+                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             fontSize: 11,
           ),
         ),
@@ -284,26 +323,31 @@ class _StatusIcon extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
 
     return switch (status) {
-      MessageStatus.sending => Icon(
-          Icons.check,
-          size: 16,
-          color: iconColor,
-        ), // Treat as sent
+      // Don't show any icon for sending - let it be invisible during upload
+      MessageStatus.sending => const SizedBox.shrink(),
+      
+      // Single gray check mark for sent (message reached server)
       MessageStatus.sent => Icon(
           Icons.check,
           size: 16,
           color: iconColor,
         ),
+      
+      // Double gray check marks for delivered (message delivered to recipient's device)
       MessageStatus.delivered => Icon(
           Icons.done_all,
           size: 16,
           color: iconColor,
         ),
+      
+      // Double blue check marks for read (message opened/read by recipient)
       MessageStatus.read => const Icon(
           Icons.done_all,
           size: 16,
-          color: Colors.lightBlue,
+          color: Colors.blue,
         ),
+      
+      // Error icon for failed
       MessageStatus.failed => Icon(
           Icons.error_outline,
           size: 16,

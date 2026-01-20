@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:logger/logger.dart';
 
 import '../../data/chat_service.dart';
 import '../../domain/entities/conversation.dart';
@@ -10,8 +11,14 @@ part 'conversations_event.dart';
 part 'conversations_state.dart';
 
 /// BLoC for managing the conversations list.
+///
+/// Maintains a persistent Firestore stream for real-time updates.
+/// The stream is initialized once on first load and remains active
+/// throughout the app lifecycle, ensuring instant navigation and
+/// live data updates without repeated loading states.
 class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   final ChatService _chatService;
+  final Logger _logger = Logger();
 
   StreamSubscription<List<Conversation>>? _conversationsSubscription;
 
@@ -32,20 +39,68 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsLoad event,
     Emitter<ConversationsState> emit,
   ) async {
-    emit(state.copyWith(
-      status: ConversationsStatus.loading,
-      currentUserId: event.userId,
-    ));
+    // Handle user switching - if different user, force reload
+    final isDifferentUser = state.currentUserId != null && 
+        state.currentUserId != event.userId;
+    
+    // If already loading or loaded for the same user, don't reload.
+    // This prevents redundant loads when navigating between pages.
+    // NOTE: The Firestore stream remains active and continues to emit
+    // real-time updates - new messages will appear automatically!
+    if (!isDifferentUser &&
+        state.currentUserId == event.userId &&
+        (state.status == ConversationsStatus.loading ||
+         state.status == ConversationsStatus.success)) {
+      _logger.i('Conversations already loaded/loading for user ${event.userId}, skipping reload');
+      _logger.i('Real-time stream remains active - new messages will appear automatically');
+      return;
+    }
+
+    // If switching users, cancel existing subscription first and clear old data
+    if (isDifferentUser) {
+      _logger.i('User changed from ${state.currentUserId} to ${event.userId}, reloading');
+      await _conversationsSubscription?.cancel();
+      _conversationsSubscription = null;
+      emit(state.copyWith(
+        status: ConversationsStatus.loading,
+        currentUserId: event.userId,
+        conversations: const [], // Clear old user's data
+        totalUnreadCount: 0,
+      ));
+    } else if (state.conversations.isEmpty) {
+      // Only show loading state if we have no cached data
+      // This provides instant UI for returning users
+      emit(state.copyWith(
+        status: ConversationsStatus.loading,
+        currentUserId: event.userId,
+      ));
+    } else {
+      // Keep showing existing data while refreshing in background
+      emit(state.copyWith(
+        currentUserId: event.userId,
+      ));
+    }
 
     await _conversationsSubscription?.cancel();
 
     _conversationsSubscription =
         _chatService.getConversationsStream(event.userId).listen(
-              (conversations) => add(_ConversationsUpdated(conversations)),
-              onError: (error) => emit(state.copyWith(
-                status: ConversationsStatus.error,
-                errorMessage: error.toString(),
-              )),
+              (conversations) {
+                // Guard against events after bloc is closed
+                if (!isClosed) {
+                  add(_ConversationsUpdated(conversations));
+                }
+              },
+              onError: (error) {
+                _logger.e('Error in conversations stream', error: error);
+                // Only show error if we have no cached data and bloc is still open
+                if (!isClosed && state.conversations.isEmpty) {
+                  emit(state.copyWith(
+                    status: ConversationsStatus.error,
+                    errorMessage: error.toString(),
+                  ));
+                }
+              },
             );
   }
 
@@ -53,8 +108,16 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsRefresh event,
     Emitter<ConversationsState> emit,
   ) async {
+    // For explicit refresh, force a reload by temporarily clearing state
     if (state.currentUserId != null) {
-      add(ConversationsLoad(userId: state.currentUserId!));
+      final userId = state.currentUserId!;
+      // Cancel existing subscription to force a fresh one
+      await _conversationsSubscription?.cancel();
+      _conversationsSubscription = null;
+      // Reset to initial status to allow reload
+      emit(state.copyWith(status: ConversationsStatus.initial));
+      // Now trigger the load
+      add(ConversationsLoad(userId: userId));
     }
   }
 

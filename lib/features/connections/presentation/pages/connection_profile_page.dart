@@ -286,29 +286,41 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               ),
             ),
           ),
-          if (bio != null && bio.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                bio,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
-                textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              bio?.isNotEmpty == true ? bio! : 'No bio set',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: bio?.isNotEmpty == true
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.outlineVariant,
+                fontStyle: bio?.isNotEmpty == true
+                    ? FontStyle.normal
+                    : FontStyle.italic,
               ),
+              textAlign: TextAlign.center,
             ),
-          ],
+          ),
           const SizedBox(height: 24),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (vibe != null && vibe.isNotEmpty)
-                _InfoChip(icon: Icons.mood, label: vibe),
-              if (mood != null && mood.isNotEmpty)
-                _InfoChip(icon: Icons.sentiment_satisfied_alt, label: mood),
-              if (gender != null && gender.isNotEmpty)
-                _InfoChip(icon: Icons.person_outline, label: gender),
+              _InfoChip(
+                icon: Icons.mood,
+                label: vibe?.isNotEmpty == true ? vibe! : 'Vibe not set',
+                isEmpty: vibe?.isNotEmpty != true,
+              ),
+              _InfoChip(
+                icon: Icons.sentiment_satisfied_alt,
+                label: mood?.isNotEmpty == true ? mood! : 'Mood not set',
+                isEmpty: mood?.isNotEmpty != true,
+              ),
+              _InfoChip(
+                icon: Icons.person_outline,
+                label: gender?.isNotEmpty == true ? gender! : 'Gender not set',
+                isEmpty: gender?.isNotEmpty != true,
+              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -357,10 +369,12 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool isEmpty;
 
   const _InfoChip({
     required this.icon,
     required this.label,
+    this.isEmpty = false,
   });
 
   @override
@@ -369,18 +383,29 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
+        color: isEmpty
+            ? theme.colorScheme.surfaceContainerHighest
+            : theme.colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: theme.colorScheme.onSecondaryContainer),
+          Icon(
+            icon,
+            size: 14,
+            color: isEmpty
+                ? theme.colorScheme.outline
+                : theme.colorScheme.onSecondaryContainer,
+          ),
           const SizedBox(width: 6),
           Text(
             label,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSecondaryContainer,
+              color: isEmpty
+                  ? theme.colorScheme.outline
+                  : theme.colorScheme.onSecondaryContainer,
+              fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
             ),
           ),
         ],

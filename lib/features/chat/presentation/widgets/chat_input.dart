@@ -260,10 +260,6 @@ class _ChatInputState extends State<ChatInput> {
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.15),
-                    width: 0.5,
-                  ),
                 ),
                 child: TextField(
                   controller: _controller,
@@ -282,6 +278,13 @@ class _ChatInputState extends State<ChatInput> {
                       vertical: 12,
                     ),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    filled: false,
+                    isDense: true,
                   ),
                 ),
               ),

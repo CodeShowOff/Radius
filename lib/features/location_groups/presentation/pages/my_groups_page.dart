@@ -19,12 +19,18 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
   @override
   void initState() {
     super.initState();
-    // Only load if not already loaded (status is initial)
-    // This prevents reloading when navigating back to the page
+    // Only load if not already loaded for this user
+    // The BLoC will handle checking if data is already available
+    // and will skip redundant loads while keeping real-time streams active
     final groupState = context.read<LocationGroupBloc>().state;
-    if (groupState.status == GroupBlocStatus.initial ||
-        (groupState.userGroups.isEmpty && !groupState.isLoading)) {
-      _loadUserGroups();
+    final authState = context.read<AuthBloc>().state;
+    
+    if (authState is AuthAuthenticated) {
+      // Only trigger load if status is initial or data is for a different user
+      if (groupState.status == GroupBlocStatus.initial ||
+          groupState.userGroupsUserId != authState.user.id) {
+        _loadUserGroups();
+      }
     }
   }
 

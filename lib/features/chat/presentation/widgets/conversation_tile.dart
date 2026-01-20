@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/conversation.dart';
+import '../../domain/entities/message.dart';
 
 /// Shared widget for displaying a conversation tile.
 /// Used in both Conversations screen and Home page preview.
@@ -56,10 +57,9 @@ class ConversationTile extends StatelessWidget {
           if (conversation.lastMessageSenderId == currentUserId)
             Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: Icon(
-                Icons.done_all,
-                size: 14,
-                color: theme.colorScheme.outline,
+              child: _buildStatusIcon(
+                conversation.lastMessageStatus ?? MessageStatus.sent,
+                theme,
               ),
             ),
           Expanded(
@@ -134,6 +134,37 @@ class ConversationTile extends StatelessWidget {
       return days[time.weekday - 1];
     } else {
       return '${time.day}/${time.month}/${time.year}';
+    }
+  }
+
+  Widget _buildStatusIcon(MessageStatus status, ThemeData theme) {
+    switch (status) {
+      case MessageStatus.sending:
+        return const SizedBox.shrink(); // Hidden while sending
+      case MessageStatus.sent:
+        return Icon(
+          Icons.done,
+          size: 14,
+          color: theme.colorScheme.outline,
+        );
+      case MessageStatus.delivered:
+        return Icon(
+          Icons.done_all,
+          size: 14,
+          color: theme.colorScheme.outline,
+        );
+      case MessageStatus.read:
+        return const Icon(
+          Icons.done_all,
+          size: 14,
+          color: Colors.blue,
+        );
+      case MessageStatus.failed:
+        return Icon(
+          Icons.error,
+          size: 14,
+          color: theme.colorScheme.error,
+        );
     }
   }
 }
