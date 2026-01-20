@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
@@ -28,6 +29,7 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<SendGroupMessage>(_onSendGroupMessage);
     on<LoadMoreGroupMessages>(_onLoadMoreGroupMessages);
     on<_GroupMessagesReceived>(_onGroupMessagesReceived);
+    on<_GroupChatStreamError>(_onGroupChatStreamError);
     on<DeleteGroupMessage>(_onDeleteGroupMessage);
   }
 
@@ -48,9 +50,22 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       currentUserPhotoUrl: event.currentUserPhotoUrl,
       messages: [],
       hasMore: true,
+      errorMessage: null,
     ));
 
     try {
+      final canRead = await _chatService.isActiveMember(
+        groupId: event.groupId,
+        userId: event.currentUserId,
+      );
+      if (!canRead) {
+        emit(state.copyWith(
+          status: GroupChatStatus.error,
+          errorMessage: 'You are not a member of this group.',
+        ));
+        return;
+      }
+
       // Start listening to messages
       _messagesSubscription = _chatService
           .watchMessages(event.groupId, limit: 50)
@@ -58,9 +73,21 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
             (messages) => add(_GroupMessagesReceived(messages)),
             onError: (error) {
               _logger.e('Error watching messages: $error');
-              add(const _GroupMessagesReceived([]));
+
+              if (error is FirebaseException && error.code == 'permission-denied') {
+                add(const _GroupChatStreamError('You no longer have access to this group chat.'));
+                return;
+              }
+
+              add(const _GroupChatStreamError('Failed to load messages.'));
             },
           );
+
+      // Reset unread count when opening the chat
+      unawaited(_chatService.markGroupAsRead(
+        groupId: event.groupId,
+        userId: event.currentUserId,
+      ));
     } catch (e, stack) {
       _logger.e('Error opening group chat', error: e, stackTrace: stack);
       emit(state.copyWith(
@@ -68,6 +95,21 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         errorMessage: 'Failed to load messages',
       ));
     }
+  }
+
+  Future<void> _onGroupChatStreamError(
+    _GroupChatStreamError event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    await _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+
+    emit(state.copyWith(
+      status: GroupChatStatus.error,
+      errorMessage: event.message,
+      messages: const [],
+      hasMore: false,
+    ));
   }
 
   Future<void> _onCloseGroupChat(
@@ -154,6 +196,8 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
   ) {
     _logger.d('Received ${event.messages.length} messages');
 
+    const pageSize = 50;
+
     // Merge with any older messages we've loaded via pagination
     final currentOldMessages = state.messages.where((m) {
       // Keep messages that are older than the oldest message in the new list
@@ -161,10 +205,19 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       return m.sentAt.isBefore(event.messages.last.sentAt);
     }).toList();
 
+    // Always set status to loaded when we receive messages to clear loading state
     emit(state.copyWith(
       status: GroupChatStatus.loaded,
       messages: [...event.messages, ...currentOldMessages],
+      hasMore: event.messages.length >= pageSize,
     ));
+
+    if (state.groupId != null && state.currentUserId != null) {
+      unawaited(_chatService.markGroupAsRead(
+        groupId: state.groupId!,
+        userId: state.currentUserId!,
+      ));
+    }
   }
 
   Future<void> _onDeleteGroupMessage(

@@ -53,6 +53,12 @@ class GroupMembership extends Equatable {
   /// When the membership was last updated
   final DateTime? updatedAt;
 
+  /// Unread message count for this group (per user)
+  final int unreadCount;
+
+  /// When the user last read messages in this group
+  final DateTime? lastReadAt;
+
   /// Who approved this membership (for request-to-join)
   final String? approvedByUserId;
 
@@ -69,6 +75,8 @@ class GroupMembership extends Equatable {
     required this.status,
     required this.joinedAt,
     this.updatedAt,
+    this.unreadCount = 0,
+    this.lastReadAt,
     this.approvedByUserId,
     this.note,
   });
@@ -95,6 +103,8 @@ class GroupMembership extends Equatable {
     MembershipStatus? status,
     DateTime? joinedAt,
     DateTime? updatedAt,
+    int? unreadCount,
+    DateTime? lastReadAt,
     String? approvedByUserId,
     String? note,
   }) {
@@ -108,6 +118,8 @@ class GroupMembership extends Equatable {
       status: status ?? this.status,
       joinedAt: joinedAt ?? this.joinedAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      unreadCount: unreadCount ?? this.unreadCount,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
       approvedByUserId: approvedByUserId ?? this.approvedByUserId,
       note: note ?? this.note,
     );
@@ -124,6 +136,8 @@ class GroupMembership extends Equatable {
         status,
         joinedAt,
         updatedAt,
+      unreadCount,
+      lastReadAt,
         approvedByUserId,
         note,
       ];

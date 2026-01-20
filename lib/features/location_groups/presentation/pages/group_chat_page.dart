@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/group_message.dart';
 import '../bloc/group_chat_bloc.dart';
@@ -96,6 +97,38 @@ class _GroupChatPageState extends State<GroupChatPage> {
     });
   }
 
+  void _confirmClearChat() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear Chat'),
+        content: const Text('Are you sure you want to clear all messages?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<LocationGroupBloc>().add(ClearGroupChat(
+                    groupId: widget.groupId,
+                    adminUserId: authState.user.id,
+                  ));
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -107,25 +140,47 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(groupName),
-                if (group != null)
-                  Text(
-                    '${group.memberCount} members',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            title: InkWell(
+              onTap: () => context.push(
+                Routes.locationGroupDetailWith(widget.groupId),
+              ),
+              borderRadius: BorderRadius.circular(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(groupName),
+                  if (group != null)
+                    Text(
+                      '${group.memberCount} members',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
             actions: [
               IconButton(
-                onPressed: () => context.pop(),
+                onPressed: () => context.push(
+                  Routes.locationGroupDetailWith(widget.groupId),
+                ),
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'Group Info',
               ),
+              if (groupState.isAdmin)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'clear') {
+                      _confirmClearChat();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Text('Clear chat'),
+                    ),
+                  ],
+                ),
             ],
           ),
           body: BlocConsumer<GroupChatBloc, GroupChatState>(
@@ -146,7 +201,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
               }
             },
             builder: (context, state) {
-              if (state.isLoading && state.messages.isEmpty) {
+              // Only show loading spinner during initial load (no messages yet)
+              if (state.status == GroupChatStatus.loading && state.messages.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
@@ -425,6 +481,7 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Sender name for other users
                     if (!isMe && showSenderInfo && message.senderName != null)
@@ -451,13 +508,23 @@ class _MessageBubble extends StatelessWidget {
 
                     // Timestamp
                     const SizedBox(height: 4),
-                    Text(
-                      _formatTime(message.sentAt),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isMe
-                            ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          _formatTime(message.sentAt),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: isMe
+                                ? theme.colorScheme
+                                    .onPrimaryContainer
+                                    .withValues(alpha: 0.7)
+                                : theme.colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

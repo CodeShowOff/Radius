@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../domain/entities/guess_me_stats.dart';
@@ -18,15 +19,33 @@ class GuessMeLobbyPage extends StatefulWidget {
   State<GuessMeLobbyPage> createState() => _GuessMeLobbyPageState();
 }
 
-class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
+class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
+    with WidgetsBindingObserver {
   bool _isScanning = false;
   bool _hasScanned = false;
+  bool _bluetoothEnabled = false;
+  bool _checkingBluetooth = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeGuessMe();
-    _startInitialScan();
+    _checkBluetoothAndStartScan();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopScan();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkBluetoothStatus();
+    }
   }
 
   void _initializeGuessMe() {
@@ -36,35 +55,106 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
     }
   }
 
-  /// Starts a BLE scan when the page loads
-  void _startInitialScan() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  /// Checks Bluetooth status and starts scan if enabled
+  void _checkBluetoothAndStartScan() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       
-      // Ensure advertising is initialized before scanning
-      final authState = context.read<AuthBloc>().state;
-      if (authState is AuthAuthenticated) {
-        final nearbyBloc = context.read<NearbyUsersBloc>();
-        
-        // Initialize if not already initialized
-        nearbyBloc.add(NearbyUsersInitialize(
-          userId: authState.user.id,
-          username: authState.user.username,
-        ));
-        
-        // Wait a moment for initialization, then start scan
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _startScan();
-          }
-        });
+      await _checkBluetoothStatus();
+      
+      if (!mounted) return;
+      
+      // Only start scan if Bluetooth is enabled
+      if (_bluetoothEnabled) {
+        // Ensure advertising is initialized before scanning
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          final nearbyBloc = context.read<NearbyUsersBloc>();
+          
+          // Initialize if not already initialized
+          nearbyBloc.add(NearbyUsersInitialize(
+            userId: authState.user.id,
+            username: authState.user.username,
+          ));
+          
+          // Wait a moment for initialization, then start scan
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _startScan();
+            }
+          });
+        }
       }
     });
+  }
+
+  /// Check Bluetooth status
+  Future<void> _checkBluetoothStatus() async {
+    setState(() => _checkingBluetooth = true);
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      final isEnabled = await bluetoothService.isBluetoothEnabled();
+      if (mounted) {
+        final wasDisabled = !_bluetoothEnabled;
+        setState(() {
+          _bluetoothEnabled = isEnabled;
+          _checkingBluetooth = false;
+        });
+        
+        // If Bluetooth just turned on, start scanning
+        if (wasDisabled && isEnabled && !_isScanning && !_hasScanned) {
+          final authState = context.read<AuthBloc>().state;
+          if (authState is AuthAuthenticated) {
+            final nearbyBloc = context.read<NearbyUsersBloc>();
+            nearbyBloc.add(NearbyUsersInitialize(
+              userId: authState.user.id,
+              username: authState.user.username,
+            ));
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                _startScan();
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _bluetoothEnabled = false;
+          _checkingBluetooth = false;
+        });
+      }
+    }
+  }
+
+  /// Request to turn on Bluetooth
+  Future<void> _requestBluetoothOn() async {
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      await bluetoothService.requestBluetoothOn();
+      // Wait a bit for Bluetooth to turn on
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _checkBluetoothStatus();
+    } catch (e) {
+      // Ignore errors
+    }
   }
 
   /// Triggers a BLE scan for nearby users
   void _startScan() {
     if (_isScanning) return;
+    
+    // Check if Bluetooth is enabled first
+    if (!_bluetoothEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please turn on Bluetooth first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     
     setState(() {
       _isScanning = true;
@@ -90,6 +180,25 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
         }
       }
     });
+  }
+
+  /// Stop the current BLE scan
+  void _stopScan() {
+    if (!_isScanning) return;
+    
+    setState(() {
+      _isScanning = false;
+    });
+    
+    final nearbyBloc = context.read<NearbyUsersBloc>();
+    nearbyBloc.add(const NearbyUsersStopScan());
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Scan stopped'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
   
   /// Show error message when scan fails
@@ -218,11 +327,25 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header card explaining the game
-                  _buildInfoCard(context),
-                  const SizedBox(height: 24),
-                  // Scanning status indicator
-                  if (_isScanning) ...[
+                  // Bluetooth status banner
+                  if (!_bluetoothEnabled && !_checkingBluetooth) ...[
+                    _buildBluetoothBanner(context),
+                    const SizedBox(height: 16),
+                  ],
+                  // Fade content when Bluetooth is off
+                  Opacity(
+                    opacity: _bluetoothEnabled ? 1.0 : 0.4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Stats card at top
+                        if (state.stats != null) ...[
+                          _buildStatsCard(context, state.stats!),
+                          const SizedBox(height: 24),
+                        ],
+                        
+                        // Scanning status indicator
+                        if (_isScanning) ...[
                     _buildScanningIndicator(context),
                     const SizedBox(height: 24),
                   ],
@@ -236,14 +359,15 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Stats card
-                  if (state.stats != null) ...[
-                    _buildStatsCard(context, state.stats!),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Join queue / In queue section
-                  _buildQueueSection(context, state),
+                        // Join queue / In queue section
+                        _buildQueueSection(context, state),
+                        const SizedBox(height: 24),
+                        
+                        // How to Play dropdown at bottom
+                        _buildHowToPlayDropdown(context),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -253,61 +377,135 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
     );
   }
 
-  Widget _buildInfoCard(BuildContext context) {
+  Widget _buildBluetoothBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.bluetooth_disabled,
+                color: theme.colorScheme.error,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bluetooth is Off',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Turn on Bluetooth to discover nearby players',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _requestBluetoothOn,
+                  icon: const Icon(Icons.bluetooth),
+                  label: const Text('Turn On Bluetooth'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: theme.colorScheme.onError,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _checkBluetoothStatus,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHowToPlayDropdown(BuildContext context) {
     final theme = Theme.of(context);
 
     return Card(
       elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Icon(
+            Icons.psychology,
+            color: theme.colorScheme.primary,
+            size: 28,
+          ),
+          title: Text(
+            'How to Play',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.psychology,
-                  color: theme.colorScheme.primary,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'How to Play',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildInfoItem(
+                    context,
+                    Icons.person_search,
+                    'Get matched with a nearby user anonymously',
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildInfoItem(
-              context,
-              Icons.person_search,
-              'Get matched with a nearby user anonymously',
-            ),
-            const SizedBox(height: 8),
-            _buildInfoItem(
-              context,
-              Icons.chat_bubble_outline,
-              'Chat for up to 1 hour without knowing who they are',
-            ),
-            const SizedBox(height: 8),
-            _buildInfoItem(
-              context,
-              Icons.lightbulb_outline,
-              'Think you know who it is? Use your "Guess Check"!',
-            ),
-            const SizedBox(height: 8),
-            _buildInfoItem(
-              context,
-              Icons.emoji_events_outlined,
-              'Correct guesses earn you badges visible to others',
+                  const SizedBox(height: 12),
+                  _buildInfoItem(
+                    context,
+                    Icons.chat_bubble_outline,
+                    'Chat for up to 1 hour without knowing who they are',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoItem(
+                    context,
+                    Icons.lightbulb_outline,
+                    'Think you know who it is? Use your "Guess Check"!',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoItem(
+                    context,
+                    Icons.emoji_events_outlined,
+                    'Correct guesses earn you badges visible to others',
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
+
+
 
   Widget _buildInfoItem(BuildContext context, IconData icon, String text) {
     final theme = Theme.of(context);
@@ -745,6 +943,16 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _stopScan,
+              icon: const Icon(Icons.stop),
+              label: const Text('Stop'),
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.errorContainer,
+                foregroundColor: theme.colorScheme.onErrorContainer,
               ),
             ),
           ],

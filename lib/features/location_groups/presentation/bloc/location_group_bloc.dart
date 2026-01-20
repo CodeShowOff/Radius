@@ -18,6 +18,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
   StreamSubscription<List<LocationGroup>>? _groupsSubscription;
   StreamSubscription<List<LocationGroup>>? _userGroupsSubscription;
+  StreamSubscription<List<GroupMembership>>? _userGroupMembershipsSubscription;
   StreamSubscription<LocationGroup?>? _currentGroupSubscription;
   StreamSubscription<List<GroupMembership>>? _membersSubscription;
   StreamSubscription<List<GroupJoinRequest>>? _requestsSubscription;
@@ -43,6 +44,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<ClearGroupError>(_onClearGroupError);
     on<ResetGroupState>(_onResetGroupState);
     on<ChangeSortOption>(_onChangeSortOption);
+    on<DeleteGroup>(_onDeleteGroup);
+    on<ClearGroupChat>(_onClearGroupChat);
 
     // Private events for stream updates
     on<_GroupsUpdated>((event, emit) {
@@ -57,6 +60,15 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         status: GroupBlocStatus.loaded,
         userGroups: event.groups,
       ));
+    });
+
+    on<_UserGroupMembershipsUpdated>((event, emit) {
+      final unreadMap = <String, int>{
+        for (final membership in event.memberships)
+          membership.groupId: membership.unreadCount,
+      };
+
+      emit(state.copyWith(userGroupUnreadCounts: unreadMap));
     });
 
     on<_GroupDetailsUpdated>((event, emit) {
@@ -97,6 +109,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     await _groupsSubscription?.cancel();
 
+    // Stream now handles errors internally and never emits error events
+    // Empty results are a valid state (no groups in this location yet)
     _groupsSubscription = _groupService
         .streamGroupsForLocation(
           countryCode: event.countryCode,
@@ -106,10 +120,6 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         .listen(
           (groups) {
             add(_GroupsUpdated(groups));
-          },
-          onError: (error) {
-            _logger.e('Error streaming groups', error: error);
-            add(_GroupsError(error.toString()));
           },
         );
   }
@@ -121,15 +131,22 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     emit(state.copyWith(status: GroupBlocStatus.loading));
 
     await _userGroupsSubscription?.cancel();
+    await _userGroupMembershipsSubscription?.cancel();
 
+    // Streams now handle errors internally and never emit error events
+    // Empty results are a valid state (user has no groups)
     _userGroupsSubscription = _groupService.streamUserGroups(event.userId).listen(
           (groups) {
             add(_UserGroupsUpdated(groups));
           },
-          onError: (error) {
-            _logger.e('Error streaming user groups', error: error);
-          },
         );
+
+    _userGroupMembershipsSubscription =
+        _groupService.streamUserMemberships(event.userId).listen(
+      (memberships) {
+        add(_UserGroupMembershipsUpdated(memberships));
+      },
+    );
   }
 
   Future<void> _onCreateGroup(
@@ -408,6 +425,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
       name: event.name,
       description: event.description,
       visibility: event.visibility,
+      avatarUrl: event.avatarUrl,
     );
 
     switch (result) {
@@ -457,9 +475,63 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     }
   }
 
+  Future<void> _onDeleteGroup(
+    DeleteGroup event,
+    Emitter<LocationGroupState> emit,
+  ) async {
+    emit(state.copyWith(status: GroupBlocStatus.loading));
+
+    final result = await _groupService.deleteGroup(
+      groupId: event.groupId,
+      adminUserId: event.adminUserId,
+    );
+
+    switch (result) {
+      case GroupSuccess():
+        _logger.i('Group ${event.groupId} deleted successfully');
+        emit(state.copyWith(
+          status: GroupBlocStatus.loaded,
+          currentGroup: null,
+        ));
+        break;
+      case GroupFailure(:final message):
+        _logger.e('Failed to delete group: $message');
+        emit(state.copyWith(
+          status: GroupBlocStatus.error,
+          errorMessage: message,
+        ));
+        break;
+    }
+  }
+
+  Future<void> _onClearGroupChat(
+    ClearGroupChat event,
+    Emitter<LocationGroupState> emit,
+  ) async {
+    emit(state.copyWith(status: GroupBlocStatus.loading));
+
+    final result = await _groupService.clearGroupMessages(
+      groupId: event.groupId,
+      adminUserId: event.adminUserId,
+    );
+
+    switch (result) {
+      case GroupSuccess():
+        emit(state.copyWith(status: GroupBlocStatus.loaded));
+        break;
+      case GroupFailure(:final message):
+        emit(state.copyWith(
+          status: GroupBlocStatus.error,
+          errorMessage: message,
+        ));
+        break;
+    }
+  }
+
   void _cancelSubscriptions() {
     _groupsSubscription?.cancel();
     _userGroupsSubscription?.cancel();
+    _userGroupMembershipsSubscription?.cancel();
     _currentGroupSubscription?.cancel();
     _membersSubscription?.cancel();
     _requestsSubscription?.cancel();
@@ -481,6 +553,11 @@ class _GroupsUpdated extends LocationGroupEvent {
 class _UserGroupsUpdated extends LocationGroupEvent {
   final List<LocationGroup> groups;
   const _UserGroupsUpdated(this.groups);
+}
+
+class _UserGroupMembershipsUpdated extends LocationGroupEvent {
+  final List<GroupMembership> memberships;
+  const _UserGroupMembershipsUpdated(this.memberships);
 }
 
 class _GroupDetailsUpdated extends LocationGroupEvent {

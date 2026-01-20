@@ -56,6 +56,16 @@ class _GroupMessagesReceived extends GroupChatEvent {
   List<Object?> get props => [messages];
 }
 
+/// Internal event: stream error when watching messages.
+class _GroupChatStreamError extends GroupChatEvent {
+  final String message;
+
+  const _GroupChatStreamError(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}
+
 /// Deletes a message (soft delete).
 class DeleteGroupMessage extends GroupChatEvent {
   final String messageId;

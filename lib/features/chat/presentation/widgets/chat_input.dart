@@ -216,107 +216,106 @@ class _ChatInputState extends State<ChatInput> {
     }
 
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
 
     return Container(
       padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: 8 + MediaQuery.of(context).padding.bottom,
+        left: 12,
+        right: 12,
+        top: 12,
+        bottom: 12 + mediaQuery.viewInsets.bottom / 2,
       ),
-      color: theme.colorScheme.surface,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Attachment button
-          IconButton(
-            onPressed: widget.enabled ? _showAttachmentOptions : null,
-            icon: const Icon(Icons.add_circle_outline),
-            color: theme.colorScheme.primary,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
           ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Attachment button
+            IconButton(
+              onPressed: widget.enabled ? _showAttachmentOptions : null,
+              icon: const Icon(Icons.add_circle_outline),
+              color: theme.colorScheme.primary,
+              iconSize: 28,
+            ),
 
-          // Text field
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 120),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
-                  width: 1,
+            const SizedBox(width: 4),
+
+            // Text field - fully rounded
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(
+                  minHeight: 48,
+                  maxHeight: 120,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.shadow.withValues(alpha: 0.03),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                    width: 0.5,
                   ),
-                ],
-              ),
-              child: TextField(
-                controller: _controller,
-                enabled: widget.enabled,
-                maxLines: null,
-                textCapitalization: TextCapitalization.sentences,
-                textInputAction: TextInputAction.newline,
-                style: theme.textTheme.bodyLarge,
-                decoration: InputDecoration(
-                  hintText: widget.hintText ?? 'Type a message...',
-                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                ),
+                child: TextField(
+                  controller: _controller,
+                  enabled: widget.enabled,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.newline,
+                  style: theme.textTheme.bodyLarge,
+                  decoration: InputDecoration(
+                    hintText: widget.hintText ?? 'Type a message...',
+                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    border: InputBorder.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  border: InputBorder.none,
                 ),
               ),
             ),
-          ),
 
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
 
-          // Send button or voice button
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            width: 48,
-            height: 48,
-            child: _hasText
-                ? Material(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(24),
-                    child: InkWell(
-                      onTap: widget.enabled ? _sendMessage : null,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Center(
-                        child: Icon(
-                          Icons.send_rounded,
-                          size: 22,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      ),
-                    ),
-                  )
-                : Material(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(24),
-                    child: InkWell(
-                      onTap: widget.enabled ? _startVoiceRecording : null,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Center(
-                        child: Icon(
-                          Icons.mic,
-                          size: 22,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      ),
+            // Send button or voice button
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: widget.enabled
+                      ? (_hasText ? _sendMessage : _startVoiceRecording)
+                      : null,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Center(
+                    child: Icon(
+                      _hasText ? Icons.send_rounded : Icons.mic,
+                      size: 22,
+                      color: theme.colorScheme.onPrimary,
                     ),
                   ),
-          ),
-        ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

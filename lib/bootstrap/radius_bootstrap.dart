@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -53,6 +54,22 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 12));
+
+      // App Check is optional, but when enabled in the Firebase console it can
+      // block Firestore/Functions/Storage calls. In debug builds we activate the
+      // Debug provider to avoid placeholder tokens.
+      if (kDebugMode) {
+        _setPhase(_InitPhase.initializing, 'Activating App Check…');
+        try {
+          await FirebaseAppCheck.instance.activate(
+            androidProvider: AndroidProvider.debug,
+            appleProvider: AppleProvider.debug,
+          ).timeout(const Duration(seconds: 5));
+        } catch (e, st) {
+          debugPrint('[Bootstrap] App Check activation failed: $e');
+          debugPrintStack(stackTrace: st);
+        }
+      }
 
       // Register background message handler
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);

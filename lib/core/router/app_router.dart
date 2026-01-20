@@ -7,19 +7,20 @@ import '../../features/auth/presentation/pages/email_verification_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/bloc/chat_bloc.dart';
-import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
+import '../../features/connections/presentation/pages/connection_profile_page.dart';
 import '../../features/connections/presentation/pages/connections_page.dart';
 import '../../features/guess_me/guess_me.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
-import '../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../features/location_groups/presentation/pages/create_group_page.dart';
 import '../../features/location_groups/presentation/pages/find_groups_page.dart';
 import '../../features/location_groups/presentation/pages/group_chat_page.dart';
 import '../../features/location_groups/presentation/pages/group_detail_page.dart';
+import '../../features/location_groups/presentation/pages/my_groups_page.dart';
+import '../../features/main_scaffold.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
@@ -144,12 +145,40 @@ GoRouter get appRouter {
         builder: (context, state) => const EmailVerificationPage(),
       ),
 
-      // Main app routes (authenticated)
-      GoRoute(
-        path: Routes.home,
-        name: 'home',
-        builder: (context, state) => const HomePage(),
+      // Main app routes (authenticated) with bottom navigation
+      ShellRoute(
+        builder: (context, state, child) {
+          return MainScaffold(
+            location: state.uri.path,
+            child: child,
+          );
+        },
+        routes: [
+          GoRoute(
+            path: Routes.home,
+            name: 'home',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: HomePage(),
+            ),
+          ),
+          GoRoute(
+            path: Routes.connections,
+            name: 'connections',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ConnectionsPage(),
+            ),
+          ),
+          GoRoute(
+            path: Routes.myGroups,
+            name: 'myGroups',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: MyGroupsPage(),
+            ),
+          ),
+        ],
       ),
+
+      // Other routes without bottom navigation
       GoRoute(
         path: Routes.nearby,
         name: 'nearby',
@@ -191,16 +220,25 @@ GoRouter get appRouter {
         builder: (context, state) => const HelpSupportPage(),
       ),
 
-      // Connection routes
-      GoRoute(
-        path: Routes.connections,
-        name: 'connections',
-        builder: (context, state) => const ConnectionsPage(),
-      ),
+      // Connection requests route (connection details are within main connections page)
       GoRoute(
         path: Routes.connectionRequests,
         name: 'connectionRequests',
         builder: (context, state) => const ConnectionRequestsScreen(),
+      ),
+      GoRoute(
+        path: Routes.userProfile,
+        name: 'userProfile',
+        builder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          final extra = state.extra as Map<String, dynamic>?;
+
+          return ConnectionProfilePage(
+            otherUserId: userId,
+            initialName: extra?['displayName'] as String?,
+            initialPhotoUrl: extra?['photoUrl'] as String?,
+          );
+        },
       ),
 
       // Chat routes
@@ -212,27 +250,24 @@ GoRouter get appRouter {
           final currentUserId =
               authState is AuthAuthenticated ? authState.user.id : '';
 
-          return BlocProvider(
-            create: (_) => getIt<ConversationsBloc>(),
-            child: ConversationsScreen(
-              currentUserId: currentUserId,
-              onConversationTap: (conversation) {
-                final otherUserId =
-                    conversation.getOtherParticipantId(currentUserId);
-                final otherInfo =
-                    conversation.getOtherParticipantInfo(currentUserId);
+          return ConversationsScreen(
+            currentUserId: currentUserId,
+            onConversationTap: (conversation) {
+              final otherUserId =
+                  conversation.getOtherParticipantId(currentUserId);
+              final otherInfo =
+                  conversation.getOtherParticipantInfo(currentUserId);
 
-                context.push(
-                  Routes.chatWith(conversation.id),
-                  extra: {
-                    'currentUserId': currentUserId,
-                    'otherUserId': otherUserId,
-                    'otherUserName': otherInfo?.displayName ?? 'Unknown',
-                    'otherUserPhotoUrl': otherInfo?.photoUrl,
-                  },
-                );
-              },
-            ),
+              context.push(
+                Routes.chatWith(conversation.id),
+                extra: {
+                  'currentUserId': currentUserId,
+                  'otherUserId': otherUserId,
+                  'otherUserName': otherInfo?.displayName ?? 'Unknown',
+                  'otherUserPhotoUrl': otherInfo?.photoUrl,
+                },
+              );
+            },
           );
         },
       ),
@@ -275,7 +310,7 @@ GoRouter get appRouter {
           final extra = state.extra as Map<String, dynamic>?;
           final sessionId = extra?['sessionId'] as String? ?? '';
 
-          return GuessmeGamePage(sessionId: sessionId);
+          return GuessMeGamePage(sessionId: sessionId);
         },
       ),
 
@@ -284,20 +319,14 @@ GoRouter get appRouter {
         path: Routes.locationGroups,
         name: 'locationGroups',
         builder: (context, state) {
-          return BlocProvider(
-            create: (_) => getIt<LocationGroupBloc>(),
-            child: const FindGroupsPage(),
-          );
+          return const FindGroupsPage();
         },
       ),
       GoRoute(
         path: Routes.createLocationGroup,
         name: 'createLocationGroup',
         builder: (context, state) {
-          return BlocProvider(
-            create: (_) => getIt<LocationGroupBloc>(),
-            child: const CreateGroupPage(),
-          );
+          return const CreateGroupPage();
         },
       ),
       GoRoute(
@@ -305,15 +334,8 @@ GoRouter get appRouter {
         name: 'locationGroupDetail',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (_) => getIt<LocationGroupBloc>(),
-              ),
-              BlocProvider(
-                create: (_) => getIt<GroupChatBloc>(),
-              ),
-            ],
+          return BlocProvider(
+            create: (_) => getIt<GroupChatBloc>(),
             child: GroupDetailPage(groupId: groupId),
           );
         },
@@ -323,15 +345,8 @@ GoRouter get appRouter {
         name: 'locationGroupChat',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (_) => getIt<LocationGroupBloc>(),
-              ),
-              BlocProvider(
-                create: (_) => getIt<GroupChatBloc>(),
-              ),
-            ],
+          return BlocProvider(
+            create: (_) => getIt<GroupChatBloc>(),
             child: GroupChatPage(groupId: groupId),
           );
         },

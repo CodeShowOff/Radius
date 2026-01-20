@@ -257,51 +257,22 @@ class _ConversationTileState extends State<_ConversationTile> {
             ? theme.colorScheme.errorContainer.withValues(alpha: 0.1)
             : null,
         child: ListTile(
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundImage: otherParticipant?.photoUrl != null
-                    ? NetworkImage(otherParticipant!.photoUrl!)
-                    : null,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: otherParticipant?.photoUrl == null
-                    ? Text(
-                        (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
-                        style: TextStyle(
-                          color: theme.colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      )
-                    : null,
-              ),
-              // Unread indicator
-              if (unreadCount > 0)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
+          leading: CircleAvatar(
+            radius: 28,
+            backgroundImage: otherParticipant?.photoUrl != null
+                ? NetworkImage(otherParticipant!.photoUrl!)
+                : null,
+            backgroundColor: theme.colorScheme.primaryContainer,
+            child: otherParticipant?.photoUrl == null
+                ? Text(
+                    (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
                     ),
-                    constraints:
-                        const BoxConstraints(minWidth: 20, minHeight: 20),
-                    child: Center(
-                      child: Text(
-                        unreadCount > 99 ? '99+' : unreadCount.toString(),
-                        style: TextStyle(
-                          color: theme.colorScheme.onPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+                  )
+                : null,
           ),
           title: Row(
             children: [
@@ -401,14 +372,41 @@ class _ConversationTileState extends State<_ConversationTile> {
               ),
             ],
           ),
-          trailing: Text(
-            _formatTime(widget.conversation.lastMessageAt),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: unreadCount > 0
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
-              fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-            ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatTime(widget.conversation.lastMessageAt),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: unreadCount > 0
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline,
+                  fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              if (unreadCount > 0) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           onTap: widget.onTap,
         ),

@@ -67,21 +67,26 @@ class ChatState extends Equatable {
     // Merge pending messages with confirmed messages
     final Map<String, Message> messageMap = {};
 
-    // Add confirmed messages
+    // Add confirmed messages from Firestore first
     for (final msg in messages) {
       messageMap[msg.id] = msg;
     }
 
-    // Add/update with pending messages (by localId or id)
+    // Add pending messages only if not already confirmed
     for (final pending in pendingMessages.values) {
-      // Check if this pending message was confirmed
-      final confirmed = messages.any((m) =>
-          m.localId == pending.localId ||
-          (m.sentAt.difference(pending.sentAt).abs().inSeconds < 2 &&
-              m.text == pending.text &&
-              m.senderId == pending.senderId));
+      // Check if this pending message already exists in confirmed messages
+      final alreadyConfirmed = messages.any((m) {
+        // Match by localId
+        if (m.localId != null && m.localId == pending.localId) return true;
+        
+        // Fuzzy match: same sender, same text, within 5 seconds
+        return m.senderId == pending.senderId &&
+            m.text == pending.text &&
+            m.sentAt.difference(pending.sentAt).abs().inSeconds < 5;
+      });
 
-      if (!confirmed) {
+      // Only add pending message if it hasn't been confirmed yet
+      if (!alreadyConfirmed) {
         messageMap[pending.localId ?? pending.id] = pending;
       }
     }

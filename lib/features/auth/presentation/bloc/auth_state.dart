@@ -74,9 +74,10 @@ class AuthAwaitingEmailVerification extends AuthState {
 /// State when verification email was resent successfully.
 class AuthVerificationEmailSent extends AuthState {
   final String email;
+  final User user;
 
-  const AuthVerificationEmailSent(this.email);
+  const AuthVerificationEmailSent(this.email, this.user);
 
   @override
-  List<Object?> get props => [email];
+  List<Object?> get props => [email, user];
 }

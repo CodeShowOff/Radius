@@ -1,0 +1,171 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/router/routes.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../bloc/location_group_bloc.dart';
+import '../widgets/group_card.dart';
+
+/// Page displaying all location groups the user has joined.
+class MyGroupsPage extends StatefulWidget {
+  const MyGroupsPage({super.key});
+
+  @override
+  State<MyGroupsPage> createState() => _MyGroupsPageState();
+}
+
+class _MyGroupsPageState extends State<MyGroupsPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Only load if not already loaded (status is initial)
+    // This prevents reloading when navigating back to the page
+    final groupState = context.read<LocationGroupBloc>().state;
+    if (groupState.status == GroupBlocStatus.initial ||
+        (groupState.userGroups.isEmpty && !groupState.isLoading)) {
+      _loadUserGroups();
+    }
+  }
+
+  void _loadUserGroups() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      context.read<LocationGroupBloc>().add(LoadUserGroups(userId: authState.user.id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Groups'),
+        actions: [
+          IconButton(
+            onPressed: () => context.push(Routes.locationGroups),
+            icon: const Icon(Icons.search),
+            tooltip: 'Find Groups',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _loadUserGroups();
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: BlocBuilder<LocationGroupBloc, LocationGroupState>(
+          builder: (context, state) {
+            if (state.isLoading && state.userGroups.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (state.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Failed to load groups',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                    if (state.errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        state.errorMessage!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: _loadUserGroups,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (state.userGroups.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.groups_outlined,
+                        size: 80,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'No Groups Yet',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'You haven\'t joined any location groups yet.\nFind groups near you to connect with people in your area.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      FilledButton.icon(
+                        onPressed: () => context.push(Routes.locationGroups),
+                        icon: const Icon(Icons.search),
+                        label: const Text('Find Groups'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: state.userGroups.length,
+              itemBuilder: (context, index) {
+                final group = state.userGroups[index];
+                final unreadCount =
+                    state.userGroupUnreadCounts[group.id] ?? 0;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: GroupCard(
+                    group: group,
+                    showChatPreview: true,
+                    unreadCount: unreadCount,
+                    onTap: () {
+                      context.push(Routes.locationGroupChatWith(group.id));
+                    },
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(Routes.locationGroups),
+        icon: const Icon(Icons.search),
+        label: const Text('Find Groups'),
+      ),
+    );
+  }
+}

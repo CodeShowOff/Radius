@@ -155,6 +155,8 @@ class LocationGroupService {
         role: GroupRole.admin,
         status: MembershipStatus.active,
         joinedAt: now,
+        unreadCount: 0,
+        lastReadAt: now,
       );
 
       // Batch write: group + membership
@@ -251,9 +253,18 @@ class LocationGroupService {
     }
 
     return query.limit(limit).snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => LocationGroupModel.fromFirestore(doc))
-          .toList();
+      try {
+        return snapshot.docs
+            .map((doc) => LocationGroupModel.fromFirestore(doc))
+            .toList();
+      } catch (e) {
+        _logger.e('Error in streamGroupsForLocation map', error: e);
+        // Return empty list instead of propagating error
+        return <LocationGroup>[];
+      }
+    }).handleError((error) {
+      _logger.e('Error in streamGroupsForLocation stream', error: error);
+      // Errors are logged but not propagated - stream continues with empty data
     });
   }
 
@@ -272,8 +283,15 @@ class LocationGroupService {
   /// Streams a single group with real-time updates.
   Stream<LocationGroup?> streamGroup(String groupId) {
     return _groupsRef.doc(groupId).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return LocationGroupModel.fromFirestore(doc);
+      try {
+        if (!doc.exists) return null;
+        return LocationGroupModel.fromFirestore(doc);
+      } catch (e) {
+        _logger.e('Error in streamGroup map', error: e);
+        return null;
+      }
+    }).handleError((error) {
+      _logger.e('Error in streamGroup stream', error: error);
     });
   }
 
@@ -291,7 +309,9 @@ class LocationGroupService {
       if (membershipQuery.docs.isEmpty) return [];
 
       // Get group IDs
-      final groupIds = membershipQuery.docs.map((doc) {
+      final groupIds = membershipQuery.docs
+          .where((doc) => doc.reference.parent.parent != null)
+          .map((doc) {
         // Path: location_groups/{groupId}/members/{memberId}
         return doc.reference.parent.parent!.id;
       }).toSet();
@@ -327,27 +347,64 @@ class LocationGroupService {
         .where('status', isEqualTo: 'active')
         .snapshots()
         .asyncMap((snapshot) async {
-      if (snapshot.docs.isEmpty) return <LocationGroup>[];
+      try {
+        if (snapshot.docs.isEmpty) return <LocationGroup>[];
 
-      final groupIds = snapshot.docs.map((doc) {
-        return doc.reference.parent.parent!.id;
-      }).toSet();
+        final groupIds = snapshot.docs
+            .where((doc) => doc.reference.parent.parent != null)
+            .map((doc) {
+          return doc.reference.parent.parent!.id;
+        }).toSet();
 
-      final groups = <LocationGroup>[];
-      for (final groupId in groupIds) {
-        final group = await getGroupById(groupId);
-        if (group != null && group.isActive) {
-          groups.add(group);
+        final groups = <LocationGroup>[];
+        for (final groupId in groupIds) {
+          final group = await getGroupById(groupId);
+          if (group != null && group.isActive) {
+            groups.add(group);
+          }
         }
+
+        groups.sort((a, b) {
+          final aTime = a.lastActivityAt ?? a.createdAt;
+          final bTime = b.lastActivityAt ?? b.createdAt;
+          return bTime.compareTo(aTime);
+        });
+
+        return groups;
+      } catch (e) {
+        _logger.e('Error in streamUserGroups asyncMap', error: e);
+        // Return empty list instead of propagating error
+        return <LocationGroup>[];
       }
+    }).handleError((error) {
+      _logger.e('Error in streamUserGroups stream', error: error);
+      // Errors are logged but not propagated - stream continues with empty data
+    });
+  }
 
-      groups.sort((a, b) {
-        final aTime = a.lastActivityAt ?? a.createdAt;
-        final bTime = b.lastActivityAt ?? b.createdAt;
-        return bTime.compareTo(aTime);
-      });
-
-      return groups;
+  /// Streams the user's memberships (for unread counts).
+  Stream<List<GroupMembership>> streamUserMemberships(String userId) {
+    return _firestore
+        .collectionGroup('members')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snapshot) {
+      try {
+        return snapshot.docs
+            .where((doc) => doc.reference.parent.parent != null)
+            .map((doc) {
+          final groupId = doc.reference.parent.parent!.id;
+          return GroupMembershipModel.fromFirestore(doc, groupId);
+        }).toList();
+      } catch (e) {
+        _logger.e('Error in streamUserMemberships map', error: e);
+        // Return empty list instead of propagating error
+        return <GroupMembership>[];
+      }
+    }).handleError((error) {
+      _logger.e('Error in streamUserMemberships stream', error: error);
+      // Errors are logged but not propagated - stream continues with empty data
     });
   }
 
@@ -406,6 +463,8 @@ class LocationGroupService {
         role: GroupRole.member,
         status: MembershipStatus.active,
         joinedAt: DateTime.now(),
+        unreadCount: 0,
+        lastReadAt: DateTime.now(),
       );
 
       // Update membership and increment member count
@@ -571,6 +630,8 @@ class LocationGroupService {
         status: MembershipStatus.active,
         joinedAt: DateTime.now(),
         approvedByUserId: adminUserId,
+        unreadCount: 0,
+        lastReadAt: DateTime.now(),
       );
 
       // Batch: create membership, delete request, increment count
@@ -655,9 +716,16 @@ class LocationGroupService {
         .orderBy('requestedAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => GroupJoinRequestModel.fromFirestore(doc, groupId))
-          .toList();
+      try {
+        return snapshot.docs
+            .map((doc) => GroupJoinRequestModel.fromFirestore(doc, groupId))
+            .toList();
+      } catch (e) {
+        _logger.e('Error in streamJoinRequests map', error: e);
+        return <GroupJoinRequest>[];
+      }
+    }).handleError((error) {
+      _logger.e('Error in streamJoinRequests stream', error: error);
     });
   }
 
@@ -753,9 +821,16 @@ class LocationGroupService {
         .orderBy('joinedAt')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => GroupMembershipModel.fromFirestore(doc, groupId))
-          .toList();
+      try {
+        return snapshot.docs
+            .map((doc) => GroupMembershipModel.fromFirestore(doc, groupId))
+            .toList();
+      } catch (e) {
+        _logger.e('Error in streamGroupMembers map', error: e);
+        return <GroupMembership>[];
+      }
+    }).handleError((error) {
+      _logger.e('Error in streamGroupMembers stream', error: error);
     });
   }
 
@@ -860,6 +935,7 @@ class LocationGroupService {
     String? name,
     String? description,
     GroupVisibility? visibility,
+    String? avatarUrl,
   }) async {
     try {
       // Verify caller is admin
@@ -910,6 +986,10 @@ class LocationGroupService {
 
       if (visibility != null) {
         updates['visibility'] = visibility.name;
+      }
+
+      if (avatarUrl != null) {
+        updates['avatarUrl'] = avatarUrl;
       }
 
       if (updates.isEmpty) {
@@ -963,6 +1043,83 @@ class LocationGroupService {
     }
   }
 
+  /// Deletes a group permanently (admin only).
+  /// This will delete the group document and all subcollections.
+  Future<GroupResult<void>> deleteGroup({
+    required String groupId,
+    required String adminUserId,
+  }) async {
+    try {
+      final callerMembership = await _getMembership(groupId, adminUserId);
+      if (callerMembership == null || !callerMembership.isAdmin) {
+        return const GroupFailure(
+          'Only admins can delete groups',
+          GroupErrorType.notAuthorized,
+        );
+      }
+
+      await _deleteSubcollection(groupId, 'join_requests');
+      // NOTE: Group messages are soft-deleted by design (see Firestore rules).
+      // Hard-deleting message documents from clients is not permitted.
+
+      // Delete members, but keep the admin membership until the very end.
+      // Otherwise subsequent admin-gated operations (including group delete)
+      // can fail with permission-denied.
+      await _deleteSubcollection(
+        groupId,
+        'members',
+        skipDocIds: {adminUserId},
+      );
+
+      // Delete the group document itself
+      await _groupsRef.doc(groupId).delete();
+
+      // Finally delete the admin membership doc.
+      // This is allowed because the admin is deleting their own member doc.
+      await _groupsRef.doc(groupId).collection('members').doc(adminUserId).delete();
+
+      _logger.i('Group $groupId deleted by admin $adminUserId');
+      return const GroupSuccess(null);
+    } catch (e) {
+      _logger.e('Error deleting group', error: e);
+      return const GroupFailure(
+        'Failed to delete group',
+        GroupErrorType.unknown,
+      );
+    }
+  }
+
+  /// Clears all messages in a group (admin only).
+  Future<GroupResult<void>> clearGroupMessages({
+    required String groupId,
+    required String adminUserId,
+  }) async {
+    try {
+      final callerMembership = await _getMembership(groupId, adminUserId);
+      if (callerMembership == null || !callerMembership.isAdmin) {
+        return const GroupFailure(
+          'Only admins can clear chat',
+          GroupErrorType.notAuthorized,
+        );
+      }
+
+      await _softDeleteGroupMessages(groupId);
+
+      await _groupsRef.doc(groupId).update({
+        'lastActivityAt': FieldValue.serverTimestamp(),
+        'lastMessagePreview': null,
+      });
+
+      return const GroupSuccess(null);
+    } catch (e) {
+      _logger.e('Error clearing group messages', error: e);
+      return const GroupFailure(
+        'Failed to clear chat',
+        GroupErrorType.unknown,
+      );
+    }
+  }
+
   // ==================== HELPER METHODS ====================
 
   Future<GroupMembership?> _getMembership(String groupId, String userId) async {
@@ -990,6 +1147,55 @@ class LocationGroupService {
       });
     } catch (e) {
       _logger.w('Error updating last activity', error: e);
+    }
+  }
+
+  Future<void> _deleteSubcollection(
+    String groupId,
+    String subcollection, {
+    int batchSize = 400,
+    Set<String> skipDocIds = const {},
+  }) async {
+    final collectionRef = _groupsRef.doc(groupId).collection(subcollection);
+
+    while (true) {
+      final snapshot = await collectionRef.limit(batchSize).get();
+      if (snapshot.docs.isEmpty) break;
+
+      final docsToDelete = snapshot.docs.where((d) => !skipDocIds.contains(d.id)).toList();
+      if (docsToDelete.isEmpty) break;
+
+      final batch = _firestore.batch();
+      for (final doc in docsToDelete) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      if (snapshot.size < batchSize) break;
+    }
+  }
+
+  Future<void> _softDeleteGroupMessages(
+    String groupId, {
+    int batchSize = 400,
+  }) async {
+    final collectionRef = _groupsRef.doc(groupId).collection('messages');
+
+    while (true) {
+      final snapshot = await collectionRef
+          .where('isDeleted', isEqualTo: false)
+          .limit(batchSize)
+          .get();
+
+      if (snapshot.docs.isEmpty) break;
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, const {'isDeleted': true});
+      }
+      await batch.commit();
+
+      if (snapshot.size < batchSize) break;
     }
   }
 }

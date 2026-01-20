@@ -7,12 +7,16 @@ class GroupCard extends StatelessWidget {
   final LocationGroup group;
   final VoidCallback? onTap;
   final bool showLocation;
+  final bool showChatPreview;
+  final int unreadCount;
 
   const GroupCard({
     super.key,
     required this.group,
     this.onTap,
     this.showLocation = false,
+    this.showChatPreview = false,
+    this.unreadCount = 0,
   });
 
   @override
@@ -122,8 +126,69 @@ class GroupCard extends StatelessWidget {
                 ],
               ),
 
-              // Description
-              if (group.description != null &&
+              // Description or chat preview
+              if (showChatPreview) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        group.lastMessagePreview ?? 'No messages yet',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: unreadCount > 0
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (group.lastActivityAt != null)
+                          Text(
+                            _formatLastActivity(group.lastActivityAt!),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: unreadCount > 0
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                              fontWeight: unreadCount > 0
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        if (unreadCount > 0) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints:
+                                const BoxConstraints(minWidth: 22, minHeight: 22),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                style: TextStyle(
+                                  color: theme.colorScheme.onPrimary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ] else if (group.description != null &&
                   group.description!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(

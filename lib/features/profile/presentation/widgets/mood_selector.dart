@@ -76,7 +76,7 @@ class MoodSelector extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              currentMood ?? 'Set Mood',
+              currentMood ?? '😊 Chill',
               style: theme.textTheme.labelMedium?.copyWith(
                 color: currentMood != null
                     ? theme.colorScheme.onSecondaryContainer
@@ -89,17 +89,6 @@ class MoodSelector extends StatelessWidget {
       ),
       onSelected: (mood) => _updateMood(context, mood),
       itemBuilder: (context) => [
-        PopupMenuItem<String?>(
-          value: null,
-          child: Row(
-            children: [
-              Icon(Icons.clear, size: 20, color: theme.colorScheme.outline),
-              const SizedBox(width: 12),
-              const Text('Clear Mood'),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
         ...moods.entries.map((entry) {
           final isSelected = currentMood == entry.value;
           return PopupMenuItem<String?>(
@@ -122,6 +111,8 @@ class MoodSelector extends StatelessWidget {
 
   Widget _buildFullSelector(BuildContext context, String? currentMood) {
     final theme = Theme.of(context);
+    // Default to Chill if no mood is set
+    final displayMood = currentMood ?? '😊 Chill';
 
     return Card(
       child: Padding(
@@ -163,31 +154,44 @@ class MoodSelector extends StatelessWidget {
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilterChip(
-                  label: const Text('None'),
-                  selected: currentMood == null,
-                  onSelected: (selected) {
-                    if (selected) _updateMood(context, null);
-                  },
-                  selectedColor: theme.colorScheme.surfaceContainerHighest,
+                const SizedBox(width: 8),
+                // Dropdown button
+                PopupMenuButton<String>(
+                  icon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        displayMood,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ],
+                  ),
+                  onSelected: (mood) => _updateMood(context, mood),
+                  itemBuilder: (context) => moods.entries.map((entry) {
+                    final isSelected = displayMood == entry.value;
+                    return PopupMenuItem<String>(
+                      value: entry.value,
+                      child: Row(
+                        children: [
+                          if (isSelected)
+                            Icon(Icons.check, size: 20, color: theme.colorScheme.primary)
+                          else
+                            const SizedBox(width: 20),
+                          const SizedBox(width: 12),
+                          Text(entry.key),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
-                ...moods.entries.map((entry) {
-                  return FilterChip(
-                    label: Text(entry.key),
-                    selected: currentMood == entry.value,
-                    onSelected: (selected) {
-                      _updateMood(context, selected ? entry.value : null);
-                    },
-                    selectedColor: theme.colorScheme.secondaryContainer,
-                  );
-                }),
               ],
             ),
           ],

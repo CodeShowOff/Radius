@@ -22,6 +22,12 @@ abstract class Routes {
   static const String connectionRequests = '/connections/requests';
   static const String connectionDetails = '/connection/:id';
 
+    // User profile (other user) routes
+    static const String userProfile = '/users/:userId';
+
+    /// Helper to build a user profile route with user ID.
+    static String userProfileWith(String userId) => '/users/$userId';
+
   // Chat routes
   static const String conversations = '/conversations';
   static const String chat = '/chat/:conversationId';
@@ -47,6 +53,7 @@ abstract class Routes {
 
   // Location Groups routes
   static const String locationGroups = '/location-groups';
+  static const String myGroups = '/my-groups';
   static const String createLocationGroup = '/location-groups/create';
   static const String locationGroupDetail = '/location-groups/:groupId';
   static const String locationGroupChat = '/location-groups/:groupId/chat';

@@ -8,9 +8,11 @@ import 'core/services/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/chat/presentation/bloc/conversations_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
 import 'features/guess_me/presentation/bloc/guess_me_bloc.dart';
+import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
 
@@ -39,6 +41,10 @@ class RadiusApp extends StatelessWidget {
           BlocProvider<ConnectionBloc>(
             create: (_) => getIt<ConnectionBloc>(),
           ),
+          // Conversations BLoC for chat list and unread counts (app-wide)
+          BlocProvider<ConversationsBloc>(
+            create: (_) => getIt<ConversationsBloc>(),
+          ),
           // Profile BLoC for managing user profile app-wide
           BlocProvider<ProfileBloc>(
             create: (_) => getIt<ProfileBloc>(),
@@ -51,6 +57,11 @@ class RadiusApp extends StatelessWidget {
           // Guess Me BLoC (used by both lobby and game pages)
           BlocProvider<GuessmeBloc>(
             create: (_) => getIt<GuessmeBloc>(),
+          ),
+
+          // Location Groups BLoC (app-wide for preloading)
+          BlocProvider<LocationGroupBloc>(
+            create: (_) => getIt<LocationGroupBloc>(),
           ),
 
           // Theme settings
@@ -213,6 +224,24 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
           });
         } catch (_) {
           // Ignore if blocs aren't available in the tree yet.
+        }
+
+        // Initialize ConversationsBloc to preload chats and unread counts
+        try {
+          context
+              .read<ConversationsBloc>()
+              .add(ConversationsLoad(userId: newUserId));
+        } catch (_) {
+          // Ignore if ConversationsBloc isn't available in the tree yet.
+        }
+
+        // Initialize LocationGroupBloc to preload user's groups
+        // This preloads groups so the my groups page loads instantly
+        try {
+          final groupBloc = context.read<LocationGroupBloc>();
+          groupBloc.add(LoadUserGroups(userId: newUserId));
+        } catch (_) {
+          // Ignore if bloc isn't available in the tree yet.
         }
 
         // Initialize BLE advertising to be discoverable

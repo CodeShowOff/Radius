@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
@@ -211,6 +213,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: BlocBuilder<ChatBloc, ChatState>(
@@ -233,6 +236,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 name: effectiveName,
                 photoUrl: effectivePhotoUrl,
                 onBackPressed: () => Navigator.of(context).pop(),
+                onProfileTap: () {
+                  context.push(
+                    Routes.userProfileWith(widget.otherUserId),
+                    extra: {
+                      'displayName': effectiveName,
+                      'photoUrl': effectivePhotoUrl,
+                    },
+                  );
+                },
                 onMenuSelected: (value) => _handleMenuAction(context, value),
                 isDisconnected: isDisconnected,
                 isBlocked: isBlocked,
@@ -241,10 +253,11 @@ class _ChatScreenState extends State<ChatScreen> {
             },
           ),
         ),
-        body: Column(
-          children: [
-            // Disconnection banner
-            if (isDisconnected)
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Disconnection banner
+              if (isDisconnected)
               Container(
                 width: double.infinity,
                 padding:
@@ -388,7 +401,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -643,6 +657,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String name;
   final String? photoUrl;
   final VoidCallback onBackPressed;
+  final VoidCallback onProfileTap;
   final void Function(String) onMenuSelected;
   final bool isDisconnected;
   final bool isBlocked;
@@ -652,6 +667,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.name,
     this.photoUrl,
     required this.onBackPressed,
+    required this.onProfileTap,
     required this.onMenuSelected,
     this.isDisconnected = false,
     this.isBlocked = false,
@@ -670,40 +686,44 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         icon: const Icon(Icons.arrow_back),
         onPressed: onBackPressed,
       ),
-      title: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: photoUrl == null
-                ? Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                // Could show online status here
-              ],
+      title: InkWell(
+        onTap: onProfileTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: photoUrl == null
+                  ? Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Could show online status here
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         PopupMenuButton<String>(

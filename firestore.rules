@@ -335,6 +335,29 @@ service cloud.firestore {
       allow delete: if isAuthenticated()
         && resource.data.userId == request.auth.uid;
     }
+
+    // GuessMe connection requests (for pending matchmaking)
+    match /guessme_connection_requests/{requestId} {
+      // RULE: Users can read their own requests
+      allow read: if isAuthenticated() 
+        && (resource.data.senderId == request.auth.uid 
+            || resource.data.receiverId == request.auth.uid);
+      
+      // RULE: Users can create connection requests
+      allow create: if isAuthenticated()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.keys().hasAll(['senderId', 'receiverId', 'expiresAt']);
+      
+      // RULE: Users can update their own requests
+      allow update: if isAuthenticated() 
+        && (resource.data.senderId == request.auth.uid 
+            || resource.data.receiverId == request.auth.uid);
+      
+      // RULE: Users can delete their own requests
+      allow delete: if isAuthenticated()
+        && (resource.data.senderId == request.auth.uid 
+            || resource.data.receiverId == request.auth.uid);
+    }
     
     // GuessMe game sessions
     match /guess_me_sessions/{sessionId} {
@@ -410,6 +433,27 @@ service cloud.firestore {
     
     // GuessMe user stats - stored under profiles/{userId}/stats/guessme for privacy
     // Access is controlled by the profiles/{userId}/stats/** rule
+
+    // GuessMe sessions (alternative structure using players array)
+    match /guessme_sessions/{sessionId} {
+      // RULE: Only participants can read their session
+      allow read: if isAuthenticated() 
+        && request.auth != null
+        && request.auth.uid in resource.data.players;
+      
+      // RULE: Only participants can create sessions
+      allow create: if isAuthenticated()
+        && request.auth != null
+        && request.auth.uid in request.resource.data.players
+        && request.resource.data.keys().hasAll(['players', 'status', 'createdAt']);
+      
+      // RULE: Only participants can update session
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.id;
+      
+      // RULE: No deletes - sessions expire naturally
+      allow delete: if false;
+    }
     
     // ============================================================
     // LOCATION GROUPS
@@ -418,6 +462,9 @@ service cloud.firestore {
     match /location_groups/{groupId} {
       /// Check if user is a member of this group
       function isGroupMember() {
+        // IMPORTANT: This function reads the caller's membership document.
+        // The members/{uid} rule must allow the caller to read their own doc,
+        // otherwise list queries can fail with PERMISSION_DENIED.
         return exists(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid))
           && get(/databases/$(database)/documents/location_groups/$(groupId)/members/$(request.auth.uid)).data.status == 'active';
       }
@@ -450,15 +497,36 @@ service cloud.firestore {
       
       // Members subcollection
       match /members/{memberId} {
-        // RULE: Members can read member list
-        allow read: if isAuthenticated() && isGroupMember();
+        // RULE: A user can always read their own membership doc.
+        // This is required so isGroupMember()/isGroupAdmin() can safely call get()
+        // without causing rule recursion failures.
+        allow get: if isAuthenticated() && memberId == request.auth.uid;
+
+        // RULE: Allow listing the caller's own memberships (collectionGroup queries)
+        // This uses resource.data to check the userId field in the document itself
+        // to avoid circular dependency issues when using collectionGroup queries
+        allow list: if isAuthenticated() 
+          && resource.data.userId == request.auth.uid;
+
+        // RULE: Active members can read/list the full member list for a group.
+        allow get, list: if isAuthenticated() && isGroupMember();
         
-        // RULE: User can join public groups directly
+        // RULE: User can create themselves as a member in these cases:
+        // 1. Creating group (as admin with active status)
+        // 2. Joining public group (as member with active status)  
+        // 3. Requesting to join private group (as member with pending status)
         allow create: if isAuthenticated()
           && memberId == request.auth.uid
           && request.resource.data.userId == request.auth.uid
-          && (get(/databases/$(database)/documents/location_groups/$(groupId)).data.visibility == 'public'
-              || request.resource.data.status == 'pending');
+          && (
+            // Case 1: Group creator adding themselves as admin (group may not exist yet in batch)
+            (request.resource.data.role == 'admin' 
+             && request.resource.data.status == 'active')
+            // Case 2 & 3: Regular member joining or requesting
+            || (!exists(/databases/$(database)/documents/location_groups/$(groupId))
+                || get(/databases/$(database)/documents/location_groups/$(groupId)).data.visibility == 'public'
+                || request.resource.data.status == 'pending')
+          );
         
         // RULE: Admins can update any member (for promotion, ban)
         // Users can update their own membership (for leaving)

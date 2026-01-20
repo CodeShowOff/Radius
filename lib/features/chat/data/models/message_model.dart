@@ -20,6 +20,7 @@ import '../../domain/entities/message.dart';
 ///   - readAt: timestamp?
 ///   - status: string ('sending', 'sent', 'delivered', 'read', 'failed')
 ///   - isDeleted: boolean
+///   - localId: string? (client-side optimistic ID for deduplication)
 /// ```
 class MessageModel extends Message {
   const MessageModel({
@@ -60,7 +61,9 @@ class MessageModel extends Message {
       mediaFileSize: data['mediaFileSize'] as int?,
       duration: data['duration'] as int?,
       thumbnailUrl: data['thumbnailUrl'] as String?,
-      sentAt: (data['sentAt'] as Timestamp).toDate(),
+      sentAt: data['sentAt'] != null
+          ? (data['sentAt'] as Timestamp).toDate()
+          : DateTime.now(), // Handle null during optimistic send
       deliveredAt: data['deliveredAt'] != null
           ? (data['deliveredAt'] as Timestamp).toDate()
           : null,
@@ -69,6 +72,7 @@ class MessageModel extends Message {
           : null,
       status: _parseStatus(data['status'] as String? ?? 'sent'),
       isDeleted: data['isDeleted'] as bool? ?? false,
+      localId: data['localId'] as String?, // Read localId for matching
     );
   }
 
@@ -144,6 +148,7 @@ class MessageModel extends Message {
       'readAt': readAt != null ? Timestamp.fromDate(readAt!) : null,
       'status': status.name,
       'isDeleted': isDeleted,
+      if (localId != null) 'localId': localId, // Store for optimistic matching
     };
   }
 

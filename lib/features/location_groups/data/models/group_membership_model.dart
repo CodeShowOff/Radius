@@ -16,6 +16,8 @@ import '../../domain/entities/group_membership.dart';
 ///   - updatedAt: timestamp?
 ///   - approvedByUserId: string?
 ///   - note: string?
+///   - unreadCount: number
+///   - lastReadAt: timestamp?
 /// ```
 class GroupMembershipModel extends GroupMembership {
   const GroupMembershipModel({
@@ -28,6 +30,8 @@ class GroupMembershipModel extends GroupMembership {
     required super.status,
     required super.joinedAt,
     super.updatedAt,
+    super.unreadCount,
+    super.lastReadAt,
     super.approvedByUserId,
     super.note,
   });
@@ -51,6 +55,10 @@ class GroupMembershipModel extends GroupMembership {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      unreadCount: (data['unreadCount'] as int?) ?? 0,
+      lastReadAt: data['lastReadAt'] != null
+          ? (data['lastReadAt'] as Timestamp).toDate()
+          : null,
       approvedByUserId: data['approvedByUserId'] as String?,
       note: data['note'] as String?,
     );
@@ -68,6 +76,8 @@ class GroupMembershipModel extends GroupMembership {
       status: membership.status,
       joinedAt: membership.joinedAt,
       updatedAt: membership.updatedAt,
+      unreadCount: membership.unreadCount,
+      lastReadAt: membership.lastReadAt,
       approvedByUserId: membership.approvedByUserId,
       note: membership.note,
     );
@@ -83,6 +93,8 @@ class GroupMembershipModel extends GroupMembership {
       'status': status.name,
       'joinedAt': Timestamp.fromDate(joinedAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'unreadCount': unreadCount,
+      'lastReadAt': lastReadAt != null ? Timestamp.fromDate(lastReadAt!) : null,
       'approvedByUserId': approvedByUserId,
       'note': note,
     };
@@ -98,6 +110,8 @@ class GroupMembershipModel extends GroupMembership {
       'status': status.name,
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': null,
+      'unreadCount': unreadCount,
+      'lastReadAt': FieldValue.serverTimestamp(),
       'approvedByUserId': approvedByUserId,
       'note': note,
     };

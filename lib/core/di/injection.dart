@@ -141,7 +141,7 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<LocationGroupBloc>()) {
-    getIt.registerFactory<LocationGroupBloc>(
+    getIt.registerLazySingleton<LocationGroupBloc>(
       () => LocationGroupBloc(
         groupService: getIt<LocationGroupService>(),
       ),

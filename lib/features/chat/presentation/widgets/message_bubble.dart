@@ -39,20 +39,28 @@ class MessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment:
                 isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Message content
               Container(
                 padding: message.isMediaMessage
                     ? const EdgeInsets.all(4)
-                    : const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                    : const EdgeInsets.only(
+                        left: 12,
+                        right: 12,
+                        top: 8,
+                        bottom: 8,
                       ),
                 decoration: BoxDecoration(
                   color: isMe
                       ? theme.colorScheme.primary
                       : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(18),
+                    topRight: const Radius.circular(18),
+                    bottomLeft: Radius.circular(isMe && showTail ? 18 : 4),
+                    bottomRight: Radius.circular(!isMe && showTail ? 18 : 4),
+                  ),
                 ),
                 child: message.isDeleted
                     ? _DeletedMessage(isMe: isMe, theme: theme)
@@ -86,25 +94,30 @@ class MessageBubble extends StatelessWidget {
                           // Text-only message
                           if (!message.isMediaMessage &&
                               message.text.isNotEmpty)
-                            _MessageText(
-                              message: message,
-                              isMe: isMe,
-                              theme: theme,
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _MessageText(
+                                message: message,
+                                isMe: isMe,
+                                theme: theme,
+                              ),
                             ),
+
+                          // Timestamp and status (inside bubble, bottom-right)
+                          Align(
+                            alignment: Alignment.bottomRight,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: _MessageMeta(
+                                message: message,
+                                isMe: isMe,
+                                theme: theme,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
               ),
-
-              // Timestamp and status
-              if (showTail)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
-                  child: _MessageMeta(
-                    message: message,
-                    isMe: isMe,
-                    theme: theme,
-                  ),
-                ),
             ],
           ),
         ),
@@ -191,12 +204,15 @@ class _MessageMeta extends StatelessWidget {
         Text(
           _formatTime(message.sentAt),
           style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
+            color: isMe
+                ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
+                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            fontSize: 11,
           ),
         ),
         if (isMe) ...[
           const SizedBox(width: 4),
-          _StatusIcon(status: message.status, theme: theme),
+          _StatusIcon(status: message.status, theme: theme, isMe: isMe),
         ],
       ],
     );
@@ -212,41 +228,47 @@ class _MessageMeta extends StatelessWidget {
 class _StatusIcon extends StatelessWidget {
   final MessageStatus status;
   final ThemeData theme;
+  final bool isMe;
 
   const _StatusIcon({
     required this.status,
     required this.theme,
+    required this.isMe,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = isMe
+        ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
+        : theme.colorScheme.onSurfaceVariant;
+
     return switch (status) {
       MessageStatus.sending => SizedBox(
           width: 12,
           height: 12,
           child: CircularProgressIndicator(
             strokeWidth: 1.5,
-            color: theme.colorScheme.outline,
+            color: iconColor,
           ),
         ),
       MessageStatus.sent => Icon(
           Icons.check,
-          size: 14,
-          color: theme.colorScheme.outline,
+          size: 16,
+          color: iconColor,
         ),
       MessageStatus.delivered => Icon(
           Icons.done_all,
-          size: 14,
-          color: theme.colorScheme.outline,
+          size: 16,
+          color: iconColor,
         ),
-      MessageStatus.read => Icon(
+      MessageStatus.read => const Icon(
           Icons.done_all,
-          size: 14,
-          color: theme.colorScheme.primary,
+          size: 16,
+          color: Colors.lightBlue,
         ),
       MessageStatus.failed => Icon(
           Icons.error_outline,
-          size: 14,
+          size: 16,
           color: theme.colorScheme.error,
         ),
     };

@@ -28,3 +28,4 @@ export 'presentation/widgets/message_bubble.dart';
 export 'presentation/widgets/chat_input.dart';
 export 'presentation/widgets/media_message_content.dart';
 export 'presentation/widgets/voice_recorder_widget.dart';
+export 'presentation/widgets/conversation_tile.dart';

@@ -141,14 +141,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
     }
 
-    // Mark messages as delivered when opening chat
+    // Mark messages as delivered AND read when opening chat
+    // This clears badges immediately (WhatsApp behavior)
     // Don't let this block the chat from opening
     _chatService.markMessagesAsDelivered(
       conversationId: event.conversationId,
       userId: event.currentUserId,
     ).catchError((e) {
       _logger.d('Failed to mark messages as delivered: $e');
-      // Non-critical error, continue anyway
+    });
+
+    // Mark as read immediately to clear badges everywhere
+    _chatService.markMessagesAsRead(
+      conversationId: event.conversationId,
+      userId: event.currentUserId,
+    ).catchError((e) {
+      _logger.d('Failed to mark messages as read: $e');
     });
 
     emit(state.copyWith(status: ChatStatus.loaded));
@@ -191,27 +199,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       isTyping: false,
     );
 
-    // Send message with optimistic update
-    final sentMessage = await _chatService.sendMessage(
-      conversationId: state.conversationId!,
-      senderId: state.currentUserId!,
-      text: event.text,
-      recipientId: state.otherUserId,
-    );
+    try {
+      // Send message - service returns optimistic message
+      final sentMessage = await _chatService.sendMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        text: event.text,
+        recipientId: state.otherUserId,
+      );
 
-    // Add to pending messages for optimistic UI
-    if (sentMessage.status == MessageStatus.sending ||
-        sentMessage.status == MessageStatus.failed) {
-      final pending = Map<String, Message>.from(state.pendingMessages);
-      pending[sentMessage.localId ?? sentMessage.id] = sentMessage;
-      emit(state.copyWith(pendingMessages: pending));
-    }
+      // Only add to pending if it's still sending or failed
+      if (sentMessage.status == MessageStatus.sending ||
+          sentMessage.status == MessageStatus.failed) {
+        final pending = Map<String, Message>.from(state.pendingMessages);
+        pending[sentMessage.localId ?? sentMessage.id] = sentMessage;
+        emit(state.copyWith(pendingMessages: pending));
+      }
 
-    // Remove from pending if sent successfully
-    if (sentMessage.status == MessageStatus.sent) {
-      final pending = Map<String, Message>.from(state.pendingMessages);
-      pending.remove(sentMessage.localId);
-      emit(state.copyWith(pendingMessages: pending));
+      // The Firestore stream will automatically update with the real message
+      // and _onMessagesUpdated will remove it from pending
+    } catch (e) {
+      _logger.e('Error sending message', error: e);
+      emit(state.copyWith(
+        errorMessage: 'Failed to send message: $e',
+      ));
     }
   }
 
@@ -524,21 +535,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) {
+    const pageSize = 50;
     // Remove confirmed messages from pending
     final pending = Map<String, Message>.from(state.pendingMessages);
 
     for (final message in event.messages) {
-      // Check if this message matches a pending one
-      pending.removeWhere((key, pendingMsg) =>
-          pendingMsg.localId == message.localId ||
-          (pendingMsg.text == message.text &&
-              pendingMsg.senderId == message.senderId &&
-              message.sentAt.difference(pendingMsg.sentAt).abs().inSeconds <
-                  5));
+      // Remove from pending by ID match or by localId match
+      pending.removeWhere((key, pendingMsg) {
+        // Direct ID match
+        if (key == message.id) return true;
+        
+        // LocalId match (message from Firestore has the localId we set)
+        if (pendingMsg.localId != null && message.localId == pendingMsg.localId) {
+          return true;
+        }
+        
+        // Fuzzy match: same sender, same text, sent within 5 seconds
+        final isSameSender = pendingMsg.senderId == message.senderId;
+        final isSameText = pendingMsg.text == message.text;
+        final sentWithin5Seconds = 
+            message.sentAt.difference(pendingMsg.sentAt).abs().inSeconds < 5;
+        
+        return isSameSender && isSameText && sentWithin5Seconds;
+      });
     }
 
+    // Ensure status is loaded when messages are received
     emit(state.copyWith(
+      status: ChatStatus.loaded,
       messages: event.messages,
+      hasMore: event.messages.length >= pageSize,
       pendingMessages: pending,
     ));
   }

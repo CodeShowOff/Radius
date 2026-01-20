@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/error/failures.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
@@ -78,24 +79,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
 
+      Failure? signInFailure;
+      User? signedInUser;
       result.fold(
-        (failure) => emit(AuthError(failure.message)),
-        (user) async {
-          // Check if email is verified before allowing sign in
-          if (!_authRepository.isEmailVerified) {
-            // Send verification email if not already sent recently
-            try {
-              await _authRepository.sendEmailVerification();
-            } catch (e) {
-              // Ignore errors (email might have been sent recently)
-              // User can still use the resend button
-            }
-            emit(AuthAwaitingEmailVerification(email: user.email, user: user));
-          } else {
-            emit(AuthAuthenticated(user));
-          }
-        },
+        (failure) => signInFailure = failure,
+        (user) => signedInUser = user,
       );
+
+      if (emit.isDone) return;
+
+      if (signInFailure != null) {
+        emit(AuthError(signInFailure!.message));
+        return;
+      }
+
+      final user = signedInUser!;
+
+      // Check if email is verified before allowing sign in
+      if (!_authRepository.isEmailVerified) {
+        // Send verification email if not already sent recently
+        try {
+          await _authRepository.sendEmailVerification();
+        } catch (_) {
+          // Ignore errors (email might have been sent recently)
+          // User can still use the resend button
+        }
+
+        if (emit.isDone) return;
+        emit(AuthAwaitingEmailVerification(email: user.email, user: user));
+      } else {
+        emit(AuthAuthenticated(user));
+      }
     } finally {
       _operationInProgress = false;
     }
@@ -186,29 +200,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     final result = await _authRepository.sendEmailVerification();
 
+    Failure? failureToShow;
     result.fold(
-      (failure) {
-        // Show error briefly then return to awaiting state
-        emit(AuthError(failure.message));
-        Future.delayed(const Duration(seconds: 2)).then((_) {
-          if (state is AuthError) {
-            add(const AuthCheckRequested());
-          }
-        });
-      },
-      (_) {
-        emit(AuthVerificationEmailSent(currentState.email));
-        // Return to awaiting verification state after showing success
-        Future.delayed(const Duration(seconds: 2)).then((_) {
-          if (state is AuthVerificationEmailSent) {
-            emit(AuthAwaitingEmailVerification(
-              email: currentState.email,
-              user: currentState.user,
-            ));
-          }
-        });
-      },
+      (failure) => failureToShow = failure,
+      (_) {},
     );
+
+    if (emit.isDone) return;
+
+    if (failureToShow != null) {
+      // Emit error for UI feedback, then immediately return to awaiting state.
+      // Keeping the awaiting state ensures the periodic verification check keeps running.
+      emit(AuthError(failureToShow!.message));
+      emit(AuthAwaitingEmailVerification(
+        email: currentState.email,
+        user: currentState.user,
+      ));
+      return;
+    }
+
+    // Emit a one-shot success state for UI feedback, then return to awaiting state.
+    emit(AuthVerificationEmailSent(currentState.email, currentState.user));
+    emit(AuthAwaitingEmailVerification(
+      email: currentState.email,
+      user: currentState.user,
+    ));
   }
 
   Future<void> _onCheckEmailVerificationRequested(
@@ -216,44 +232,54 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     final currentState = state;
-    if (currentState is! AuthAwaitingEmailVerification) return;
+
+    final User verificationUser;
+    if (currentState is AuthAwaitingEmailVerification) {
+      verificationUser = currentState.user;
+    } else if (currentState is AuthVerificationEmailSent) {
+      verificationUser = currentState.user;
+    } else {
+      return;
+    }
 
     final result = await _authRepository.checkEmailVerified();
 
+    Failure? verificationFailure;
+    bool? isVerified;
     result.fold(
-      (failure) {
-        // Silently ignore errors during background checks
-        // Only log in debug mode
-        assert(() {
-          // ignore: avoid_print
-          print('Email verification check error: ${failure.message}');
-          return true;
-        }());
-        // Don't emit error state, just stay in current state
-      },
-      (isVerified) async {
-        if (isVerified) {
-          // Email is verified! Fetch the updated user from Firestore
-          final userResult = await _authRepository.getCurrentUser();
-          userResult.fold(
-            (failure) {
-              // Failed to get user, but email is verified
-              // Use the user from current state
-              emit(AuthAuthenticated(currentState.user));
-            },
-            (user) {
-              if (user != null) {
-                emit(AuthAuthenticated(user));
-              } else {
-                // User doesn't exist in Firestore (shouldn't happen)
-                emit(AuthAuthenticated(currentState.user));
-              }
-            },
-          );
-        }
-        // If not verified, stay in current state (no change needed)
-      },
+      (failure) => verificationFailure = failure,
+      (value) => isVerified = value,
     );
+
+    if (verificationFailure != null) {
+      // Silently ignore errors during background checks
+      // Only log in debug mode
+      assert(() {
+        // ignore: avoid_print
+        print('Email verification check error: ${verificationFailure!.message}');
+        return true;
+      }());
+      return;
+    }
+
+    if (isVerified != true) {
+      return;
+    }
+
+    if (emit.isDone) return;
+
+    // Email is verified! Fetch the updated user from Firestore
+    final userResult = await _authRepository.getCurrentUser();
+
+    if (emit.isDone) return;
+
+    User? firestoreUser;
+    userResult.fold(
+      (_) {},
+      (user) => firestoreUser = user,
+    );
+
+    emit(AuthAuthenticated(firestoreUser ?? verificationUser));
   }
 
   void _onAuthStateChanged(

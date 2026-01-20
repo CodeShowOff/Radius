@@ -28,7 +28,7 @@ abstract class ChatModule {
         mediaUploadService: mediaUploadService,
       );
 
-  @injectable
-  ConversationsBloc conversationsBloc(ChatService chatService) =>
+    @lazySingleton
+    ConversationsBloc conversationsBloc(ChatService chatService) =>
       ConversationsBloc(chatService: chatService);
 }

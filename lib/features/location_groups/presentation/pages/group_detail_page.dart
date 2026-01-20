@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/cloudinary_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/location_group.dart';
 import '../../domain/entities/group_membership.dart';
@@ -24,6 +28,8 @@ class GroupDetailPage extends StatefulWidget {
 class _GroupDetailPageState extends State<GroupDetailPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _imagePicker = ImagePicker();
+  final _cloudinaryService = CloudinaryService();
 
   @override
   void initState() {
@@ -156,6 +162,207 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     );
   }
 
+  void _showDeleteGroupDialog() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Group'),
+        content: const Text(
+          'Are you sure you want to permanently delete this group? This action cannot be undone and will remove all messages and member data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<LocationGroupBloc>().add(DeleteGroup(
+                    groupId: widget.groupId,
+                    adminUserId: authState.user.id,
+                  ));
+              // Navigate back to my groups page
+              context.go(Routes.myGroups);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGroupSettings() {
+    final state = context.read<LocationGroupBloc>().state;
+    final group = state.currentGroup;
+    if (group == null) return;
+
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final nameController = TextEditingController(text: group.name);
+    final descriptionController = TextEditingController(text: group.description);
+    GroupVisibility selectedVisibility = group.visibility;
+    String? avatarUrl = group.avatarUrl;
+    bool isUploading = false;
+
+    Future<void> pickAndUploadImage(StateSetter setState) async {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() => isUploading = true);
+
+      try {
+        final url = await _cloudinaryService.uploadImage(
+          File(pickedFile.path),
+          folder: 'radius/groups',
+          tags: {'group_avatar': 'true'},
+        );
+
+        setState(() {
+          avatarUrl = url;
+          isUploading = false;
+        });
+      } catch (e) {
+        setState(() => isUploading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload image: $e')),
+        );
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Group Settings'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundImage:
+                          avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+                      child: avatarUrl == null
+                          ? Text(
+                              group.name.isNotEmpty
+                                  ? group.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: isUploading
+                            ? null
+                            : () => pickAndUploadImage(setState),
+                        icon: isUploading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.photo_camera),
+                        label: Text(isUploading ? 'Uploading...' : 'Change Photo'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Group Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLength: 50,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                  maxLength: 200,
+                ),
+                const SizedBox(height: 16),
+                const Text('Privacy', style: TextStyle(fontWeight: FontWeight.bold)),
+                RadioGroup<GroupVisibility>(
+                  groupValue: selectedVisibility,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => selectedVisibility = value);
+                  },
+                  child: const Column(
+                    children: [
+                      RadioListTile<GroupVisibility>(
+                        title: Text('Public'),
+                        subtitle: Text('Anyone can join'),
+                        value: GroupVisibility.public,
+                      ),
+                      RadioListTile<GroupVisibility>(
+                        title: Text('Request to Join'),
+                        subtitle: Text('Admins approve members'),
+                        value: GroupVisibility.requestToJoin,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                context.read<LocationGroupBloc>().add(UpdateGroupSettings(
+                      groupId: widget.groupId,
+                      adminUserId: authState.user.id,
+                      name: nameController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      visibility: selectedVisibility,
+                      avatarUrl: avatarUrl != group.avatarUrl ? avatarUrl : null,
+                    ));
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -274,10 +481,13 @@ class _GroupDetailPageState extends State<GroupDetailPage>
             onSelected: (value) {
               switch (value) {
                 case 'settings':
-                  // TODO: Navigate to settings page
+                  _showGroupSettings();
                   break;
                 case 'requests':
                   _showJoinRequests();
+                  break;
+                case 'delete':
+                  _showDeleteGroupDialog();
                   break;
               }
             },
@@ -303,6 +513,14 @@ class _GroupDetailPageState extends State<GroupDetailPage>
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text('Delete Group', style: TextStyle(color: Colors.red)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ],
           ),
       ],

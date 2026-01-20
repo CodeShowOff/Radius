@@ -223,6 +223,7 @@ class UpdateGroupSettings extends LocationGroupEvent {
   final String? name;
   final String? description;
   final GroupVisibility? visibility;
+  final String? avatarUrl;
 
   const UpdateGroupSettings({
     required this.groupId,
@@ -230,10 +231,32 @@ class UpdateGroupSettings extends LocationGroupEvent {
     this.name,
     this.description,
     this.visibility,
+    this.avatarUrl,
   });
 
   @override
-  List<Object?> get props => [groupId, adminUserId, name, description, visibility];
+  List<Object?> get props => [
+        groupId,
+        adminUserId,
+        name,
+        description,
+        visibility,
+        avatarUrl,
+      ];
+}
+
+/// Clear all messages in a group (admin).
+class ClearGroupChat extends LocationGroupEvent {
+  final String groupId;
+  final String adminUserId;
+
+  const ClearGroupChat({
+    required this.groupId,
+    required this.adminUserId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, adminUserId];
 }
 
 /// Clear any error state.
@@ -254,4 +277,18 @@ class ChangeSortOption extends LocationGroupEvent {
 
   @override
   List<Object?> get props => [sortBy];
+}
+
+/// Delete a group (admin only).
+class DeleteGroup extends LocationGroupEvent {
+  final String groupId;
+  final String adminUserId;
+
+  const DeleteGroup({
+    required this.groupId,
+    required this.adminUserId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, adminUserId];
 }
