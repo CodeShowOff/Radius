@@ -151,8 +151,12 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   }
 
   void _showGuessCheckReceivedDialog() {
-    if (_guessCheckDialogShown) return;
+    if (_guessCheckDialogShown) {
+      debugPrint('GuessMe: Guess check dialog already shown, skipping');
+      return;
+    }
     _guessCheckDialogShown = true;
+    debugPrint('GuessMe: Showing guess check dialog');
 
     showDialog(
       context: context,
@@ -477,6 +481,7 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
 
         // Show guess check dialog when received
         if (state.status == GuessmeStatus.receivedGuessCheck) {
+          debugPrint('GuessMe: Received guess check, showing dialog. Already shown: $_guessCheckDialogShown');
           _showGuessCheckReceivedDialog();
         }
 

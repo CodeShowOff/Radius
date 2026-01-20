@@ -282,8 +282,11 @@ GoRouter get appRouter {
 
           final extra = state.extra as Map<String, dynamic>?;
 
-          return BlocProvider(
-            create: (_) => getIt<ChatBloc>(),
+          // Use BlocProvider.value to use the existing singleton ChatBloc
+          // instead of creating a new one on each navigation.
+          // This enables instant navigation without loading spinners.
+          return BlocProvider.value(
+            value: getIt<ChatBloc>(),
             child: ChatScreen(
               conversationId: conversationId,
               currentUserId: currentUserId,
@@ -334,8 +337,8 @@ GoRouter get appRouter {
         name: 'locationGroupDetail',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return BlocProvider(
-            create: (_) => getIt<GroupChatBloc>(),
+          return BlocProvider.value(
+            value: getIt<GroupChatBloc>(),
             child: GroupDetailPage(groupId: groupId),
           );
         },
@@ -345,8 +348,8 @@ GoRouter get appRouter {
         name: 'locationGroupChat',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return BlocProvider(
-            create: (_) => getIt<GroupChatBloc>(),
+          return BlocProvider.value(
+            value: getIt<GroupChatBloc>(),
             child: GroupChatPage(groupId: groupId),
           );
         },

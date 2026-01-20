@@ -201,17 +201,22 @@ class _GroupChatPageState extends State<GroupChatPage> {
               }
             },
             builder: (context, state) {
-              // Only show loading spinner during initial load (no messages yet)
+              // Only show loading spinner during initial load (no cached messages)
               if (state.status == GroupChatStatus.loading && state.messages.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
+              // Determine if we're truly empty or still loading
+              final isLoading = state.status == GroupChatStatus.loading;
+              
               return Column(
                 children: [
                   // Messages list
                   Expanded(
                     child: state.messages.isEmpty
-                        ? _buildEmptyState(theme)
+                        ? (isLoading
+                            ? const SizedBox.shrink() // Don't show empty state while loading
+                            : _buildEmptyState(theme))
                         : _buildMessagesList(state),
                   ),
 

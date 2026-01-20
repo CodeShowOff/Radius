@@ -8,6 +8,43 @@ enum ConnectionBlocStatus {
   error,
 }
 
+/// Cached profile data for a user.
+class CachedProfile extends Equatable {
+  final String id;
+  final String displayName;
+  final String? avatarUrl;
+  final String? bio;
+  final String? vibe;
+  final String? mood;
+  final String? gender;
+  final DateTime cachedAt;
+
+  const CachedProfile({
+    required this.id,
+    required this.displayName,
+    this.avatarUrl,
+    this.bio,
+    this.vibe,
+    this.mood,
+    this.gender,
+    required this.cachedAt,
+  });
+
+  /// Convert to Map for UI compatibility
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'bio': bio,
+        'vibe': vibe,
+        'mood': mood,
+        'gender': gender,
+      };
+
+  @override
+  List<Object?> get props => [id, displayName, avatarUrl, bio, vibe, mood, gender, cachedAt];
+}
+
 /// State for the connection bloc.
 class ConnectionBlocState extends Equatable {
   /// Current status.
@@ -27,6 +64,10 @@ class ConnectionBlocState extends Equatable {
 
   /// Connection states with specific users (cached for UI).
   final Map<String, UserConnectionState> userConnectionStates;
+  
+  /// Cached profile data for connected users (keyed by userId).
+  /// This eliminates per-tile loading on tab switches.
+  final Map<String, CachedProfile> profileCache;
 
   /// Error message if any.
   final String? errorMessage;
@@ -44,6 +85,7 @@ class ConnectionBlocState extends Equatable {
     this.receivedRequests = const [],
     this.sentRequests = const [],
     this.userConnectionStates = const {},
+    this.profileCache = const {},
     this.errorMessage,
     this.isActionLoading = false,
     this.processingId,
@@ -90,6 +132,17 @@ class ConnectionBlocState extends Equatable {
     }
   }
 
+  /// Gets cached profile for a user, returns null if not cached.
+  CachedProfile? getCachedProfile(String userId) => profileCache[userId];
+
+  /// Checks if a profile is cached and still fresh (within 5 minutes).
+  bool hasValidCachedProfile(String userId) {
+    final cached = profileCache[userId];
+    if (cached == null) return false;
+    // Cache is valid for 5 minutes
+    return DateTime.now().difference(cached.cachedAt).inMinutes < 5;
+  }
+
   ConnectionBlocState copyWith({
     ConnectionBlocStatus? status,
     String? userId,
@@ -97,6 +150,7 @@ class ConnectionBlocState extends Equatable {
     List<ConnectionRequest>? receivedRequests,
     List<ConnectionRequest>? sentRequests,
     Map<String, UserConnectionState>? userConnectionStates,
+    Map<String, CachedProfile>? profileCache,
     String? errorMessage,
     bool? isActionLoading,
     String? processingId,
@@ -108,6 +162,7 @@ class ConnectionBlocState extends Equatable {
       receivedRequests: receivedRequests ?? this.receivedRequests,
       sentRequests: sentRequests ?? this.sentRequests,
       userConnectionStates: userConnectionStates ?? this.userConnectionStates,
+      profileCache: profileCache ?? this.profileCache,
       errorMessage: errorMessage,
       isActionLoading: isActionLoading ?? this.isActionLoading,
       processingId: processingId,
@@ -122,6 +177,7 @@ class ConnectionBlocState extends Equatable {
         receivedRequests,
         sentRequests,
         userConnectionStates,
+        profileCache,
         errorMessage,
         isActionLoading,
         processingId,

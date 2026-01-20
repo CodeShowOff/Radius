@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../connections/data/connection_service.dart';
@@ -320,13 +321,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   }
                 },
                 builder: (context, state) {
-                  if (state.status == ChatStatus.loading &&
-                      state.messages.isEmpty) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
+                  // Show error state
                   if (state.status == ChatStatus.error) {
                     return Center(
                       child: Column(
@@ -355,12 +350,28 @@ class _ChatScreenState extends State<ChatScreen> {
                     );
                   }
 
+                  // KEY FIX: Only show full-screen spinner on FIRST load (no cached messages).
+                  // If we have cached messages from a previous session, show them immediately
+                  // while the stream reconnects in the background.
+                  final hasMessages = state.allMessages.isNotEmpty;
+                  final isInitialLoading = state.status == ChatStatus.loading && !hasMessages;
+                  
+                  if (isInitialLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  // Show messages list (may be empty for new conversations)
+                  // The _MessagesList handles empty state internally
                   return _MessagesList(
                     messages: state.allMessages,
                     currentUserId: state.currentUserId ?? widget.currentUserId,
                     isTyping: state.isOtherUserTyping,
                     hasMore: state.hasMore,
                     scrollController: _scrollController,
+                    // Pass loading state so list can show subtle indicator
+                    isLoading: state.status == ChatStatus.loading,
                   );
                 },
               ),
@@ -691,19 +702,10 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         borderRadius: BorderRadius.circular(24),
         child: Row(
           children: [
-            CircleAvatar(
+            CachedAvatar(
+              imageUrl: photoUrl,
+              name: name,
               radius: 18,
-              backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: photoUrl == null
-                  ? Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -779,6 +781,7 @@ class _MessagesList extends StatelessWidget {
   final bool isTyping;
   final bool hasMore;
   final ScrollController scrollController;
+  final bool isLoading;
 
   const _MessagesList({
     required this.messages,
@@ -786,11 +789,17 @@ class _MessagesList extends StatelessWidget {
     required this.isTyping,
     required this.hasMore,
     required this.scrollController,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (messages.isEmpty && !isTyping) {
+    // Only show empty state if:
+    // 1. Not loading (stream has emitted at least once)
+    // 2. No messages
+    // 3. No typing indicator
+    // This prevents the "No messages yet" flash during initial load
+    if (messages.isEmpty && !isTyping && !isLoading) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -817,6 +826,11 @@ class _MessagesList extends StatelessWidget {
           ],
         ),
       );
+    }
+    
+    // If loading with no messages yet, show nothing (parent handles spinner)
+    if (messages.isEmpty && isLoading) {
+      return const SizedBox.shrink();
     }
 
     return ListView.builder(

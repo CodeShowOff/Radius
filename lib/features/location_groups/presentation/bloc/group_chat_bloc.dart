@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
+import '../../data/group_chat_cache_service.dart';
 import '../../data/group_chat_service.dart';
 import '../../domain/entities/group_message.dart';
 
@@ -14,14 +15,17 @@ part 'group_chat_state.dart';
 /// BLoC for managing group chat messages.
 class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
   final GroupChatService _chatService;
+  final GroupChatCacheService _cacheService;
   final Logger _logger;
 
   StreamSubscription<List<GroupMessage>>? _messagesSubscription;
 
   GroupChatBloc({
     required GroupChatService chatService,
+    required GroupChatCacheService cacheService,
     Logger? logger,
   })  : _chatService = chatService,
+        _cacheService = cacheService,
         _logger = logger ?? Logger(),
         super(const GroupChatState()) {
     on<OpenGroupChat>(_onOpenGroupChat);
@@ -42,16 +46,41 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     // Cancel any existing subscription
     await _messagesSubscription?.cancel();
 
-    emit(state.copyWith(
-      status: GroupChatStatus.loading,
-      groupId: event.groupId,
-      currentUserId: event.currentUserId,
-      currentUserName: event.currentUserName,
-      currentUserPhotoUrl: event.currentUserPhotoUrl,
-      messages: [],
-      hasMore: true,
-      errorMessage: null,
-    ));
+    // ========================================================================
+    // CRITICAL: Load cached messages IMMEDIATELY for instant display
+    // This is the key to WhatsApp/Telegram-level performance
+    // ========================================================================
+    final cachedMessages = _cacheService.getMessages(event.groupId);
+    final hasCache = cachedMessages.isNotEmpty;
+    final cachedEntry = _cacheService.getCache(event.groupId);
+
+    if (hasCache) {
+      // INSTANT DISPLAY: Show cached messages immediately, no loading spinner
+      _logger.i('Cache hit for group ${event.groupId}: ${cachedMessages.length} messages');
+      emit(state.copyWith(
+        status: GroupChatStatus.loaded, // Already loaded from cache!
+        groupId: event.groupId,
+        currentUserId: event.currentUserId,
+        currentUserName: event.currentUserName,
+        currentUserPhotoUrl: event.currentUserPhotoUrl,
+        messages: cachedMessages,
+        hasMore: cachedEntry?.hasMore ?? true,
+        errorMessage: null,
+      ));
+    } else {
+      // No cache - show loading (first time opening this group)
+      _logger.i('Cache miss for group ${event.groupId}, showing loading');
+      emit(state.copyWith(
+        status: GroupChatStatus.loading,
+        groupId: event.groupId,
+        currentUserId: event.currentUserId,
+        currentUserName: event.currentUserName,
+        currentUserPhotoUrl: event.currentUserPhotoUrl,
+        messages: [],
+        hasMore: true,
+        errorMessage: null,
+      ));
+    }
 
     try {
       final canRead = await _chatService.isActiveMember(
@@ -120,7 +149,9 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     await _messagesSubscription?.cancel();
     _messagesSubscription = null;
 
-    emit(const GroupChatState());
+    // Preserve messages for instant display on revisit
+    // Only clear the subscription, not the cached data
+    emit(state.copyWith(errorMessage: null));
   }
 
   Future<void> _onSendGroupMessage(
@@ -179,9 +210,19 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         limit: 30,
       );
 
+      final hasMore = olderMessages.length >= 30;
+      final allMessages = [...state.messages, ...olderMessages];
+
+      // Update the cache with paginated messages
+      _cacheService.addPaginatedMessages(
+        groupId: state.groupId!,
+        olderMessages: olderMessages,
+        hasMore: hasMore,
+      );
+
       emit(state.copyWith(
-        messages: [...state.messages, ...olderMessages],
-        hasMore: olderMessages.length >= 30,
+        messages: allMessages,
+        hasMore: hasMore,
       ));
     } catch (e, stack) {
       _logger.e('Error loading more messages', error: e, stackTrace: stack);
@@ -205,11 +246,26 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       return m.sentAt.isBefore(event.messages.last.sentAt);
     }).toList();
 
+    final allMessages = [...event.messages, ...currentOldMessages];
+    final hasMore = event.messages.length >= pageSize;
+
+    // ========================================================================
+    // CRITICAL: Update the global cache with new messages
+    // This enables instant display when returning to this group later
+    // ========================================================================
+    if (state.groupId != null) {
+      _cacheService.updateCache(
+        groupId: state.groupId!,
+        messages: allMessages,
+        hasMore: hasMore,
+      );
+    }
+
     // Always set status to loaded when we receive messages to clear loading state
     emit(state.copyWith(
       status: GroupChatStatus.loaded,
-      messages: [...event.messages, ...currentOldMessages],
-      hasMore: event.messages.length >= pageSize,
+      messages: allMessages,
+      hasMore: hasMore,
     ));
 
     if (state.groupId != null && state.currentUserId != null) {

@@ -77,7 +77,7 @@ class _BleDiagnosticsPanelState extends State<BleDiagnosticsPanel> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Diagnostics',
+                    'Status',
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
@@ -98,7 +98,7 @@ class _BleDiagnosticsPanelState extends State<BleDiagnosticsPanel> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Raw:${_diagnostics.rawDeviceCount} | Radius:${_diagnostics.parsedDeviceCount}',
+                    'Radius:${_diagnostics.parsedDeviceCount}',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontFamily: 'monospace',
@@ -174,25 +174,11 @@ class _BleDiagnosticsPanelState extends State<BleDiagnosticsPanel> {
                   const SizedBox(height: 8),
 
                   // Device counts
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DiagnosticItem(
-                          icon: Icons.bluetooth,
-                          label: 'Raw BLE Devices',
-                          value: '${_diagnostics.rawDeviceCount}',
-                          valueColor: Colors.orange,
-                        ),
-                      ),
-                      Expanded(
-                        child: _DiagnosticItem(
-                          icon: Icons.person_search,
-                          label: 'Radius Devices',
-                          value: '${_diagnostics.parsedDeviceCount}',
-                          valueColor: Colors.green,
-                        ),
-                      ),
-                    ],
+                  _DiagnosticItem(
+                    icon: Icons.person_search,
+                    label: 'Radius Devices',
+                    value: '${_diagnostics.parsedDeviceCount}',
+                    valueColor: Colors.green,
                   ),
 
                   // Error display
@@ -221,79 +207,6 @@ class _BleDiagnosticsPanelState extends State<BleDiagnosticsPanel> {
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-
-                  // Raw devices list (scrollable, limited height)
-                  if (_diagnostics.rawDevices.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'Nearby BLE Devices (${_diagnostics.rawDevices.length}):',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant,
-                        ),
-                      ),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(4),
-                        itemCount: _diagnostics.rawDevices.length,
-                        itemBuilder: (context, index) {
-                          final device = _diagnostics.rawDevices[index];
-                          final hasRadiusUuid = device.serviceUuids.any(
-                            (uuid) => uuid.toLowerCase().contains('beef'),
-                          );
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  hasRadiusUuid
-                                      ? Icons.check_circle
-                                      : Icons.bluetooth,
-                                  size: 14,
-                                  color: hasRadiusUuid
-                                      ? Colors.green
-                                      : colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    device.name.isEmpty
-                                        ? device.deviceId.substring(0, 17)
-                                        : device.name,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontFamily: 'monospace',
-                                      fontSize: 10,
-                                      color: hasRadiusUuid
-                                          ? Colors.green
-                                          : colorScheme.onSurface,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(
-                                  '${device.rssi}dBm',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontFamily: 'monospace',
-                                    fontSize: 10,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
                       ),
                     ),
                   ],

@@ -3,10 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/presentation/bloc/conversations_bloc.dart';
 import '../../../chat/presentation/widgets/conversation_tile.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
 
@@ -161,45 +163,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     String? photoUrl;
                     String displayName = 'U';
 
-                    if (authState is AuthAuthenticated) {
+                    // Use profile data as primary source (same logic as connections page)
+                    if (profileState is ProfileLoaded) {
+                      photoUrl = profileState.profile.photoUrl;
+                      displayName = profileState.profile.name.isNotEmpty 
+                          ? profileState.profile.name 
+                          : 'U';
+                    } else if (authState is AuthAuthenticated) {
+                      // Fallback to auth data only if profile not loaded
                       photoUrl = authState.user.avatarUrl;
                       displayName = authState.user.displayName ?? 'U';
-                    }
-
-                    if (profileState is ProfileLoaded) {
-                      if (profileState.profile.photoUrl != null &&
-                          profileState.profile.photoUrl!.isNotEmpty) {
-                        photoUrl = profileState.profile.photoUrl;
-                      }
-                      if (profileState.profile.name.isNotEmpty) {
-                        displayName = profileState.profile.name;
-                      }
                     }
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: IconButton(
                         onPressed: () => context.push(Routes.profile),
-                        icon: CircleAvatar(
+                        icon: CachedAvatar(
+                          imageUrl: photoUrl,
+                          name: displayName,
                           radius: 16,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          backgroundImage:
-                              photoUrl != null ? NetworkImage(photoUrl) : null,
-                          child: photoUrl == null
-                              ? Text(
-                                  displayName.isNotEmpty
-                                      ? displayName[0].toUpperCase()
-                                      : 'U',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onPrimaryContainer,
-                                  ),
-                                )
-                              : null,
                         ),
                       ),
                     );
@@ -372,19 +355,35 @@ class _RecentConversationsList extends StatelessWidget {
           itemBuilder: (context, index) {
             final conversation = recentConversations[index];
             final otherUserId = conversation.getOtherParticipantId(userId);
-            final otherParticipant = conversation.getOtherParticipantInfo(userId);
 
-            return ConversationTile(
-              conversation: conversation,
-              currentUserId: userId,
-              onTap: () {
-                context.push(
-                  Routes.chatWith(conversation.id),
-                  extra: {
-                    'currentUserId': userId,
-                    'otherUserId': otherUserId,
-                    'otherUserName': otherParticipant?.displayName ?? 'User',
-                    'otherUserPhotoUrl': otherParticipant?.photoUrl,
+            return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+              builder: (context, connectionState) {
+                // Get fresh profile from ConnectionBloc cache
+                final cachedProfile = connectionState.getCachedProfile(otherUserId);
+                final profile = cachedProfile?.toMap();
+                
+                // Use cached profile data if available, otherwise fall back to conversation participantInfo
+                final otherParticipant = conversation.getOtherParticipantInfo(userId);
+                final displayName = profile?['displayName'] as String? ?? 
+                                    otherParticipant?.displayName ?? 'User';
+                final photoUrl = profile?['avatarUrl'] as String? ?? 
+                                 otherParticipant?.photoUrl;
+
+                return ConversationTile(
+                  conversation: conversation,
+                  currentUserId: userId,
+                  overrideDisplayName: displayName,
+                  overridePhotoUrl: photoUrl,
+                  onTap: () {
+                    context.push(
+                      Routes.chatWith(conversation.id),
+                      extra: {
+                        'currentUserId': userId,
+                        'otherUserId': otherUserId,
+                        'otherUserName': displayName,
+                        'otherUserPhotoUrl': photoUrl,
+                      },
+                    );
                   },
                 );
               },

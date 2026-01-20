@@ -675,14 +675,34 @@ class LocationGroupService {
       return GroupSuccess(membership);
     } on FirebaseException catch (e) {
       _logger.e('Firebase error joining group', error: e);
-      return const GroupFailure(
-        'Failed to join group',
-        GroupErrorType.networkError,
-      );
+      
+      // Provide more specific error messages based on Firebase error codes
+      String errorMessage = 'Failed to join group';
+      GroupErrorType errorType = GroupErrorType.networkError;
+      
+      switch (e.code) {
+        case 'permission-denied':
+          errorMessage = 'You don\'t have permission to join this group';
+          errorType = GroupErrorType.notAuthorized;
+          break;
+        case 'not-found':
+          errorMessage = 'Group not found';
+          errorType = GroupErrorType.notFound;
+          break;
+        case 'unavailable':
+          errorMessage = 'Network error. Please check your connection and try again';
+          errorType = GroupErrorType.networkError;
+          break;
+        default:
+          errorMessage = 'Failed to join group: ${e.message ?? e.code}';
+          errorType = GroupErrorType.networkError;
+      }
+      
+      return GroupFailure(errorMessage, errorType);
     } catch (e) {
       _logger.e('Error joining group', error: e);
-      return const GroupFailure(
-        'An unexpected error occurred',
+      return GroupFailure(
+        'An unexpected error occurred: ${e.toString()}',
         GroupErrorType.unknown,
       );
     }
@@ -767,14 +787,34 @@ class LocationGroupService {
       return GroupSuccess(request);
     } on FirebaseException catch (e) {
       _logger.e('Firebase error requesting to join', error: e);
-      return const GroupFailure(
-        'Failed to send request',
-        GroupErrorType.networkError,
-      );
+      
+      // Provide more specific error messages
+      String errorMessage = 'Failed to send request';
+      GroupErrorType errorType = GroupErrorType.networkError;
+      
+      switch (e.code) {
+        case 'permission-denied':
+          errorMessage = 'You don\'t have permission to request to join this group';
+          errorType = GroupErrorType.notAuthorized;
+          break;
+        case 'not-found':
+          errorMessage = 'Group not found';
+          errorType = GroupErrorType.notFound;
+          break;
+        case 'unavailable':
+          errorMessage = 'Network error. Please check your connection and try again';
+          errorType = GroupErrorType.networkError;
+          break;
+        default:
+          errorMessage = 'Failed to send request: ${e.message ?? e.code}';
+          errorType = GroupErrorType.networkError;
+      }
+      
+      return GroupFailure(errorMessage, errorType);
     } catch (e) {
       _logger.e('Error requesting to join', error: e);
-      return const GroupFailure(
-        'An unexpected error occurred',
+      return GroupFailure(
+        'An unexpected error occurred: ${e.toString()}',
         GroupErrorType.unknown,
       );
     }

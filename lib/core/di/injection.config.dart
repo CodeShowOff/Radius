@@ -23,6 +23,7 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/i_auth_repository.dart'
     as _i589;
+import '../../features/chat/data/chat_cache_service.dart' as _i125;
 import '../../features/chat/data/chat_service.dart' as _i621;
 import '../../features/chat/data/media_upload_service.dart' as _i356;
 import '../../features/chat/presentation/bloc/chat_bloc.dart' as _i65;
@@ -79,8 +80,13 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i974.FirebaseFirestore>(),
           gh<_i974.Logger>(),
         ));
-    gh.factory<_i346.ConversationsBloc>(
+    gh.lazySingleton<_i346.ConversationsBloc>(
         () => chatModule.conversationsBloc(gh<_i621.ChatService>()));
+    gh.lazySingleton<_i65.ChatBloc>(() => chatModule.chatBloc(
+          gh<_i621.ChatService>(),
+          gh<_i356.MediaUploadService>(),
+          gh<_i125.ChatCacheService>(),
+        ));
     gh.lazySingleton<_i485.NotificationService>(
         () => notificationModule.notificationService(
               gh<_i892.FirebaseMessaging>(),
@@ -89,10 +95,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i491.FirebaseAuthService>(() => _i491.FirebaseAuthService(
           firebaseAuth: gh<_i59.FirebaseAuth>(),
           googleSignIn: gh<_i116.GoogleSignIn>(),
-        ));
-    gh.factory<_i65.ChatBloc>(() => chatModule.chatBloc(
-          gh<_i621.ChatService>(),
-          gh<_i356.MediaUploadService>(),
         ));
     gh.lazySingleton<_i589.IAuthRepository>(() => _i153.AuthRepositoryImpl(
           authService: gh<_i491.FirebaseAuthService>(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/cached_avatar.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/entities/message.dart';
 
@@ -9,12 +10,16 @@ class ConversationTile extends StatelessWidget {
   final Conversation conversation;
   final String currentUserId;
   final VoidCallback onTap;
+  final String? overrideDisplayName;
+  final String? overridePhotoUrl;
 
   const ConversationTile({
     super.key,
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
+    this.overrideDisplayName,
+    this.overridePhotoUrl,
   });
 
   @override
@@ -22,27 +27,30 @@ class ConversationTile extends StatelessWidget {
     final theme = Theme.of(context);
     final otherParticipant = conversation.getOtherParticipantInfo(currentUserId);
     final unreadCount = conversation.getUnreadCount(currentUserId);
-    final displayName = otherParticipant?.displayName ?? 'Unknown';
-    final photoUrl = otherParticipant?.photoUrl;
+    // Use override values if provided (from ConnectionBloc cache), otherwise use conversation data
+    final displayName = overrideDisplayName ?? otherParticipant?.displayName ?? 'Unknown';
+    final photoUrl = overridePhotoUrl ?? otherParticipant?.photoUrl;
     final lastMessage = conversation.lastMessageText ?? 'No messages yet';
     final lastMessageTime = conversation.lastMessageAt;
 
-    return ListTile(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CircleAvatar(
+      leading: CachedAvatar(
+        imageUrl: photoUrl,
+        name: displayName,
         radius: 24,
-        backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
-        backgroundColor: theme.colorScheme.primaryContainer,
-        child: photoUrl == null
-            ? Text(
-                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              )
-            : null,
       ),
       title: Text(
         displayName,
@@ -116,7 +124,8 @@ class ConversationTile extends StatelessWidget {
               ],
             )
           : null,
-      onTap: onTap,
+      ),
+      ),
     );
   }
 

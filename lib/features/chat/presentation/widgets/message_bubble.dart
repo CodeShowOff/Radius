@@ -323,8 +323,12 @@ class _StatusIcon extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
 
     return switch (status) {
-      // Don't show any icon for sending - let it be invisible during upload
-      MessageStatus.sending => const SizedBox.shrink(),
+      // Show a small clock icon for sending (like WhatsApp does)
+      MessageStatus.sending => Icon(
+          Icons.access_time,
+          size: 14,
+          color: iconColor.withValues(alpha: 0.5),
+        ),
       
       // Single gray check mark for sent (message reached server)
       MessageStatus.sent => Icon(

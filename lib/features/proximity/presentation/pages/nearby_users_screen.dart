@@ -787,7 +787,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                 ),
               ),
 
-              // Diagnostics panel at bottom with safe padding
+              // Status panel at bottom with safe padding
               Padding(
                 padding: EdgeInsets.only(
                   bottom: MediaQuery.of(context).padding.bottom,
@@ -989,18 +989,21 @@ class _NearbyUsersListState extends State<_NearbyUsersList> {
   List<NearbyUser> get _filteredUsers {
     var filtered = widget.users;
 
-    // Apply mood filter - include users with matching mood OR users with no mood set
+    // Apply mood filter - only include users with exact matching mood (trimmed and compared)
     if (_selectedMoodFilter != null) {
       filtered = filtered.where((user) {
-        return user.mood == _selectedMoodFilter || user.mood == null;
+        final userMood = user.mood?.trim();
+        final filterMood = _selectedMoodFilter?.trim();
+        return userMood != null && userMood == filterMood;
       }).toList();
     }
 
-    // Apply gender filter - include users with matching gender OR users with no gender set
+    // Apply gender filter - only include users with exact matching gender (trimmed and compared)
     if (_selectedGenderFilter != null) {
       filtered = filtered.where((user) {
-        // Include users with matching gender or users with no gender set
-        return user.gender == _selectedGenderFilter || user.gender == null;
+        final userGender = user.gender?.trim();
+        final filterGender = _selectedGenderFilter?.trim();
+        return userGender != null && userGender == filterGender;
       }).toList();
     }
 

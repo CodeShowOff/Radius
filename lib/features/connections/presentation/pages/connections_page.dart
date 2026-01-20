@@ -1,13 +1,12 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
-import '../../../../core/services/firebase/firestore_service.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../chat/domain/entities/conversation.dart';
+import '../../../chat/presentation/bloc/conversations_bloc.dart';
+import '../../../../core/widgets/cached_avatar.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
@@ -362,8 +361,11 @@ class _ConnectionsList extends StatelessWidget {
   }
 }
 
-/// Individual connection tile that fetches user profile.
-class _ConnectionUserTile extends StatefulWidget {
+/// Individual connection tile that uses cached profile from bloc.
+/// 
+/// This widget uses the profile cache in ConnectionBloc instead of
+/// fetching profiles individually, eliminating loading spinners on tab switches.
+class _ConnectionUserTile extends StatelessWidget {
   final Connection connection;
   final String userId;
   final String searchQuery;
@@ -379,228 +381,112 @@ class _ConnectionUserTile extends StatefulWidget {
   });
 
   @override
-  State<_ConnectionUserTile> createState() => _ConnectionUserTileState();
-}
-
-class _ConnectionUserTileState extends State<_ConnectionUserTile> {
-  Map<String, dynamic>? _profile;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    try {
-      // Public data lives under `/profiles/{userId}` (see firestore.rules).
-      // Normalize to the legacy keys this UI expects.
-      // Add timeout to prevent infinite loading
-      final doc = await getIt<FirestoreService>()
-          .getDocument('profiles/${widget.userId}')
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => null,
-          );
-
-      Map<String, dynamic> normalized;
-      if (doc == null) {
-        normalized = {'id': widget.userId, 'displayName': 'User'};
-      } else {
-        final displayName =
-            (doc['name'] as String?)?.trim().isNotEmpty == true
-                ? (doc['name'] as String).trim()
-                : (doc['displayName'] as String?)?.trim().isNotEmpty == true
-                    ? (doc['displayName'] as String).trim()
-                    : 'User';
-
-        final avatarUrl = (doc['photoUrl'] as String?)?.trim().isNotEmpty ==
-                true
-            ? (doc['photoUrl'] as String).trim()
-            : (doc['avatarUrl'] as String?)?.trim().isNotEmpty == true
-                ? (doc['avatarUrl'] as String).trim()
-                : null;
-
-        final bio = (doc['bio'] as String?)?.trim();
-        final vibe = (doc['vibe'] as String?)?.trim();
-        final mood = (doc['mood'] as String?)?.trim();
-        final gender = (doc['gender'] as String?)?.trim();
-
-        normalized = {
-          'id': widget.userId,
-          'displayName': displayName,
-          'avatarUrl': avatarUrl,
-          'bio': bio,
-          'vibe': vibe,
-          'mood': mood,
-          'gender': gender,
-        };
-      }
-
-      if (mounted) {
-        setState(() {
-          _profile = normalized;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _profile = {'id': widget.userId, 'displayName': 'User'};
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const ListTile(
-        leading: CircleAvatar(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-        title: Text('Loading...'),
-      );
-    }
+    return BlocSelector<ConnectionBloc, ConnectionBlocState, CachedProfile?>(
+      selector: (state) => state.getCachedProfile(userId),
+      builder: (context, cachedProfile) {
+        // Use cached profile or show minimal loading state
+        final profile = cachedProfile?.toMap() ?? 
+            {'id': userId, 'displayName': 'User'};
+        
+        final displayName = profile['displayName'] as String? ?? 'User';
+        final avatarUrl = profile['avatarUrl'] as String?;
+        
+        // If profile is being loaded, show a subtle loading indicator
+        // but still show the tile with placeholder data
+        final isLoading = cachedProfile == null;
 
-    final profile = _profile!;
-    final displayName = profile['displayName'] as String? ?? 'User';
-    final avatarUrl = profile['avatarUrl'] as String?;
-    final bio = profile['bio'] as String?;
-    final vibe = profile['vibe'] as String?;
-    final mood = profile['mood'] as String?;
+        // Filter by search query
+        if (searchQuery.isNotEmpty) {
+          final query = searchQuery.toLowerCase();
+          if (!displayName.toLowerCase().contains(query)) {
+            return const SizedBox.shrink();
+          }
+        }
 
-    // Filter by search query
-    if (widget.searchQuery.isNotEmpty) {
-      final query = widget.searchQuery.toLowerCase();
-      if (!displayName.toLowerCase().contains(query)) {
-        return const SizedBox.shrink();
-      }
-    }
+        final theme = Theme.of(context);
+        final conversationId = Conversation.createConversationId(
+          connection.userId1,
+          connection.userId2,
+        );
 
-    final theme = Theme.of(context);
+        return BlocBuilder<ConversationsBloc, ConversationsState>(
+          builder: (context, conversationsState) {
+            // Find the conversation for this connection
+            final conversation = conversationsState.conversations.firstWhere(
+              (conv) => conv.id == conversationId,
+              orElse: () => Conversation(
+                id: conversationId,
+                participantIds: [connection.userId1, connection.userId2],
+                participantInfo: const {},
+                createdAt: connection.connectedAt,
+                lastMessageAt: null,
+              ),
+            );
 
-    return ListTile(
-      leading: GestureDetector(
-        onTap: () => widget.onProfilePhotoTap(profile),
-        child: Hero(
-          tag: 'avatar_${widget.userId}',
-          child: CircleAvatar(
-            radius: 26,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            backgroundImage: avatarUrl != null
-                ? CachedNetworkImageProvider(avatarUrl)
-                : null,
-            child: avatarUrl == null
-                ? Text(
-                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 18,
-                    ),
-                  )
-                : null,
-          ),
-        ),
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              displayName,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          if (vibe != null && vibe.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.tertiaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.mood,
-                    size: 12,
-                    color: theme.colorScheme.tertiary,
+            final lastMessage = conversation.lastMessageText;
+            final hasMessages = lastMessage != null && lastMessage.isNotEmpty;
+
+            return InkWell(
+              onTap: () => onTap(profile),
+              child: ListTile(
+                leading: GestureDetector(
+                  onTap: () => onProfilePhotoTap(profile),
+                  child: Hero(
+                    tag: 'avatar_$userId',
+                    child: isLoading 
+                        ? CircleAvatar(
+                            radius: 26,
+                            backgroundColor: theme.colorScheme.primaryContainer,
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          )
+                        : CachedAvatar(
+                            imageUrl: avatarUrl,
+                            name: displayName,
+                            radius: 26,
+                          ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    vibe,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onTertiaryContainer,
-                      fontWeight: FontWeight.w500,
-                    ),
+                ),
+                title: Text(
+                  displayName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: hasMessages
+                    ? Text(
+                        lastMessage,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      )
+                    : Text(
+                        'Connected ${_formatTimeAgo(connection.connectedAt)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.message_outlined),
+                  onPressed: () => onTap(profile),
+                  tooltip: 'Message',
+                ),
               ),
-            ),
-          ],
-          if (mood != null && mood.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.sentiment_satisfied_alt,
-                    size: 12,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    mood,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-      subtitle: bio != null && bio.isNotEmpty
-          ? Text(
-              bio,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            )
-          : Text(
-              'Connected ${_formatTimeAgo(widget.connection.connectedAt)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
-      trailing: IconButton(
-        icon: const Icon(Icons.message_outlined),
-        onPressed: () => widget.onTap(profile),
-        tooltip: 'Message',
-      ),
-      onTap: () => widget.onTap(profile),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -679,24 +565,10 @@ class _UserDetailsSheet extends StatelessWidget {
                     Center(
                       child: Hero(
                         tag: 'avatar_$otherUserId',
-                        child: CircleAvatar(
+                        child: CachedAvatar(
+                          imageUrl: avatarUrl,
+                          name: displayName,
                           radius: 60,
-                          backgroundColor: theme.colorScheme.primaryContainer,
-                          backgroundImage: avatarUrl != null
-                              ? CachedNetworkImageProvider(avatarUrl)
-                              : null,
-                          child: avatarUrl == null
-                              ? Text(
-                                  displayName.isNotEmpty
-                                      ? displayName[0].toUpperCase()
-                                      : '?',
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onPrimaryContainer,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 40,
-                                  ),
-                                )
-                              : null,
                         ),
                       ),
                     ),

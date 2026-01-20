@@ -8,6 +8,7 @@ import 'package:logger/logger.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../data/chat_cache_service.dart';
 import '../../data/chat_service.dart';
 import '../../data/media_upload_service.dart';
 import '../../domain/entities/conversation.dart';
@@ -20,6 +21,7 @@ part 'chat_state.dart';
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
   final MediaUploadService _mediaUploadService;
+  final ChatCacheService _cacheService;
   final Logger _logger = Logger();
 
   StreamSubscription<List<Message>>? _messagesSubscription;
@@ -31,8 +33,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required ChatService chatService,
     required MediaUploadService mediaUploadService,
+    required ChatCacheService cacheService,
   })  : _chatService = chatService,
         _mediaUploadService = mediaUploadService,
+        _cacheService = cacheService,
         super(const ChatState()) {
     on<ChatOpen>(_onOpen);
     on<ChatClose>(_onClose);
@@ -57,16 +61,76 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatOpen event,
     Emitter<ChatState> emit,
   ) async {
-    emit(state.copyWith(
-      status: ChatStatus.loading,
-      conversationId: event.conversationId,
-      currentUserId: event.currentUserId,
-      otherUserId: event.otherUserId,
-      otherUserName: event.otherUserName,
-      otherUserPhotoUrl: event.otherUserPhotoUrl,
-    ));
+    // OPTIMIZATION: If same conversation is already loaded with active streams, just update
+    if (state.conversationId == event.conversationId &&
+        state.currentUserId == event.currentUserId &&
+        (state.status == ChatStatus.loaded || state.status == ChatStatus.loadingMore)) {
+      _logger.i('Chat already loaded for conversation ${event.conversationId}, skipping reload');
+      
+      // Just update user info if changed (photo/name updates)
+      if (state.otherUserName != event.otherUserName ||
+          state.otherUserPhotoUrl != event.otherUserPhotoUrl) {
+        emit(state.copyWith(
+          otherUserName: event.otherUserName,
+          otherUserPhotoUrl: event.otherUserPhotoUrl,
+        ));
+      }
+      
+      // Re-mark messages as read (in case new ones arrived while away)
+      _chatService.markMessagesAsRead(
+        conversationId: event.conversationId,
+        userId: event.currentUserId,
+      ).catchError((e) {
+        _logger.d('Failed to mark messages as read: $e');
+      });
+      return;
+    }
+    
+    // If switching conversations, cancel existing subscriptions first
+    if (state.conversationId != null && 
+        state.conversationId != event.conversationId) {
+      _logger.i('Switching from conversation ${state.conversationId} to ${event.conversationId}');
+      await _cancelSubscriptions();
+    }
 
-    // Cancel existing subscriptions
+    // ========================================================================
+    // CRITICAL: Load cached messages IMMEDIATELY for instant display
+    // This is the key to WhatsApp/Telegram-level performance
+    // ========================================================================
+    final cachedMessages = _cacheService.getMessages(event.conversationId);
+    final hasCache = cachedMessages.isNotEmpty;
+    final cachedEntry = _cacheService.getCache(event.conversationId);
+
+    if (hasCache) {
+      // INSTANT DISPLAY: Show cached messages immediately, no loading spinner
+      _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages');
+      emit(state.copyWith(
+        status: ChatStatus.loaded, // Already loaded from cache!
+        conversationId: event.conversationId,
+        currentUserId: event.currentUserId,
+        otherUserId: event.otherUserId,
+        otherUserName: event.otherUserName,
+        otherUserPhotoUrl: event.otherUserPhotoUrl,
+        messages: cachedMessages,
+        hasMore: cachedEntry?.hasMore ?? true,
+        pendingMessages: const {},
+      ));
+    } else {
+      // No cache - show loading (first time opening this chat)
+      _logger.i('Cache miss for ${event.conversationId}, showing loading');
+      emit(state.copyWith(
+        status: ChatStatus.loading,
+        conversationId: event.conversationId,
+        currentUserId: event.currentUserId,
+        otherUserId: event.otherUserId,
+        otherUserName: event.otherUserName,
+        otherUserPhotoUrl: event.otherUserPhotoUrl,
+        messages: const [],
+        pendingMessages: const {},
+      ));
+    }
+
+    // Cancel existing subscriptions (safety - may already be cancelled above)
     await _cancelSubscriptions();
 
     // Ensure the conversation exists before subscribing.
@@ -142,17 +206,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
     }
 
-    // Mark messages as delivered AND read when opening chat
+    // Mark messages as read when opening chat
     // This clears badges immediately (WhatsApp behavior)
+    // Note: We skip markMessagesAsDelivered since read implies delivered
     // Don't let this block the chat from opening
-    _chatService.markMessagesAsDelivered(
-      conversationId: event.conversationId,
-      userId: event.currentUserId,
-    ).catchError((e) {
-      _logger.d('Failed to mark messages as delivered: $e');
-    });
-
-    // Mark as read immediately to clear badges everywhere
     _chatService.markMessagesAsRead(
       conversationId: event.conversationId,
       userId: event.currentUserId,
@@ -160,7 +217,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _logger.d('Failed to mark messages as read: $e');
     });
 
-    emit(state.copyWith(status: ChatStatus.loaded));
+    // NOTE: Don't emit ChatStatus.loaded here!
+    // Let _onMessagesUpdated set the status to loaded when first snapshot arrives.
+    // This prevents the "No messages yet" flash before messages load.
+    _logger.i('Chat streams subscribed, waiting for first message snapshot...');
   }
 
   Future<void> _onClose(
@@ -179,7 +239,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _cancelSubscriptions();
     _typingDebounce?.cancel();
 
-    emit(const ChatState());
+    // IMPORTANT: Don't clear the state here!
+    // Preserve messages in cache so that reopening the same chat is instant.
+    // The state will be refreshed when ChatOpen is called for the same or different conversation.
+    // Only clear typing status to prevent stale indicators.
+    emit(state.copyWith(
+      isOtherUserTyping: false,
+    ));
   }
 
   Future<void> _onSendMessage(
@@ -194,34 +260,71 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     // Clear typing indicator
     _typingDebounce?.cancel();
-    await _chatService.setTyping(
+    _chatService.setTyping(
       conversationId: state.conversationId!,
       userId: state.currentUserId!,
       isTyping: false,
+    ).catchError((e) => _logger.d('Failed to clear typing: $e'));
+
+    // ========================================================================
+    // OPTIMISTIC UI: Create and display message IMMEDIATELY
+    // This is the industry-standard pattern used by WhatsApp, Telegram, Slack
+    // ========================================================================
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: event.text.trim(),
+      sentAt: DateTime.now(),
+      status: MessageStatus.sending, // Show as "sending" initially
+      localId: localId,
     );
 
+    // Add to pending messages IMMEDIATELY - UI will show it right away
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // ========================================================================
+    // SEND TO SERVER: Now actually send the message
+    // ========================================================================
     try {
-      // Send message - service returns optimistic message
       final sentMessage = await _chatService.sendMessage(
         conversationId: state.conversationId!,
         senderId: state.currentUserId!,
         text: event.text,
         recipientId: state.otherUserId,
+        localId: localId, // Pass localId so Firestore message matches pending
       );
 
-      // Only add to pending if it failed (needs retry)
       if (sentMessage.status == MessageStatus.failed) {
-        final pending = Map<String, Message>.from(state.pendingMessages);
-        pending[sentMessage.localId ?? sentMessage.id] = sentMessage;
-        emit(state.copyWith(pendingMessages: pending));
+        // Update pending message to show failed status
+        final updatedPending = Map<String, Message>.from(state.pendingMessages);
+        updatedPending[localId] = optimisticMessage.copyWith(
+          status: MessageStatus.failed,
+        );
+        emit(state.copyWith(pendingMessages: updatedPending));
+      } else {
+        // Success! Update to 'sent' status while waiting for stream confirmation
+        final updatedPending = Map<String, Message>.from(state.pendingMessages);
+        updatedPending[localId] = optimisticMessage.copyWith(
+          id: sentMessage.id, // Use real server ID
+          status: MessageStatus.sent,
+        );
+        emit(state.copyWith(pendingMessages: updatedPending));
+        // The Firestore stream will remove this from pending when it arrives
       }
-
-      // The Firestore stream will automatically update with the real message
-      // and _onMessagesUpdated will remove it from pending
     } catch (e) {
       _logger.e('Error sending message', error: e);
+      // Update pending message to show failed status
+      final updatedPending = Map<String, Message>.from(state.pendingMessages);
+      updatedPending[localId] = optimisticMessage.copyWith(
+        status: MessageStatus.failed,
+      );
       emit(state.copyWith(
-        errorMessage: 'Failed to send message: $e',
+        pendingMessages: updatedPending,
+        errorMessage: 'Failed to send message',
       ));
     }
   }
@@ -485,10 +588,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
+    final hasMore = olderMessages.length >= 50;
+    final allMessages = [...olderMessages, ...state.messages];
+
+    // Update the cache with paginated messages
+    _cacheService.addPaginatedMessages(
+      conversationId: state.conversationId!,
+      olderMessages: olderMessages,
+      hasMore: hasMore,
+    );
+
     emit(state.copyWith(
       status: ChatStatus.loaded,
-      messages: [...olderMessages, ...state.messages],
-      hasMore: olderMessages.length >= 50,
+      messages: allMessages,
+      hasMore: hasMore,
     ));
   }
 
@@ -612,6 +725,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         
         return isSameSender && isSameText && sentWithin5Seconds;
       });
+    }
+
+    // ========================================================================
+    // CRITICAL: Update the global cache with new messages
+    // This enables instant display when returning to this chat later
+    // ========================================================================
+    if (state.conversationId != null) {
+      _cacheService.updateCache(
+        conversationId: state.conversationId!,
+        messages: event.messages,
+        hasMore: event.messages.length >= pageSize,
+      );
     }
 
     // Ensure status is loaded when messages are received

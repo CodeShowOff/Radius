@@ -88,6 +88,8 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
   /// Determine the correct BLoC status from session state.
   GuessmeStatus _getStatusFromSession(GuessmeSession session) {
+    _logger.d('Determining status - sessionStatus: ${session.status}, awaitingConn: ${session.awaitingConnectionConfirmations}, guessCheckPending: ${session.guessCheckPending}, initiator: ${session.guessCheckInitiator}, currentUser: $_currentUserId');
+    
     if (session.status == GuessmeSessionStatus.completed ||
         session.status == GuessmeSessionStatus.cancelled ||
         session.status == GuessmeSessionStatus.expired) {
@@ -100,8 +102,10 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     if (session.guessCheckPending && session.guessCheckInitiator != null) {
       if (session.guessCheckInitiator == _currentUserId) {
+        _logger.d('User is guess check initiator - returning awaitingGuessResponse');
         return GuessmeStatus.awaitingGuessResponse;
       } else {
+        _logger.d('User received guess check - returning receivedGuessCheck');
         return GuessmeStatus.receivedGuessCheck;
       }
     }
@@ -159,12 +163,32 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     GuessmeSendMessage event,
     Emitter<GuessmeState> emit,
   ) async {
-    if (_currentUserId == null || _currentSessionId == null) return;
+    if (_currentUserId == null || _currentSessionId == null) {
+      _logger.w('Cannot send message: currentUserId=$_currentUserId, currentSessionId=$_currentSessionId');
+      return;
+    }
 
     // Don't send messages if game has ended
     if (state.status == GuessmeStatus.gameEnded) {
       return;
     }
+
+    _logger.d('Sending message: ${event.text.substring(0, event.text.length.clamp(0, 20))}...');
+
+    // ========================================================================
+    // OPTIMISTIC UI: Show message immediately while waiting for Firestore
+    // ========================================================================
+    final optimisticMessage = GuessmeMessage(
+      id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
+      sessionId: _currentSessionId!,
+      senderId: _currentUserId!,
+      text: event.text,
+      sentAt: DateTime.now(),
+    );
+
+    emit(state.copyWith(
+      messages: [...state.messages, optimisticMessage],
+    ));
 
     try {
       await _service.sendMessage(
@@ -172,9 +196,12 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
         senderId: _currentUserId!,
         text: event.text,
       );
+      // Message will be updated by the stream with the real ID
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
+      // Remove the optimistic message on error
       emit(state.copyWith(
+        messages: state.messages.where((m) => m.id != optimisticMessage.id).toList(),
         errorMessage: 'Failed to send message',
       ));
     }
@@ -209,7 +236,9 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     }
 
     try {
+      _logger.i('Initiating guess check - sessionId: $_currentSessionId, userId: $_currentUserId');
       await _service.initiateGuessCheck(_currentSessionId!, _currentUserId!);
+      _logger.i('Guess check initiated successfully');
       // State will be updated via session subscription
     } catch (e, stack) {
       _logger.e('Error initiating guess check', error: e, stackTrace: stack);
@@ -226,11 +255,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     if (_currentUserId == null || _currentSessionId == null) return;
 
     try {
+      _logger.i('Responding to guess check - sessionId: $_currentSessionId, isCorrect: ${event.isCorrect}');
       await _service.respondToGuessCheck(
         sessionId: _currentSessionId!,
         responderId: _currentUserId!,
         isCorrect: event.isCorrect,
       );
+      _logger.i('Guess check response sent successfully');
       // State will be updated via session subscription
     } catch (e, stack) {
       _logger.e('Error responding to guess check', error: e, stackTrace: stack);
@@ -315,6 +346,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     // Determine status from session
     final newStatus = _getStatusFromSession(session);
+    _logger.d('Session updated - guessCheckPending: ${session.guessCheckPending}, initiator: ${session.guessCheckInitiator}, newStatus: $newStatus');
 
     // Start expiry timer if not already running and game is active
     if (newStatus == GuessmeStatus.inGame && 
@@ -333,7 +365,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _GuessmeMessagesUpdated event,
     Emitter<GuessmeState> emit,
   ) {
-    emit(state.copyWith(messages: event.messages));
+    _logger.d('Emitting ${event.messages.length} messages to state');
+    
+    // Remove any pending (optimistic) messages since the stream has the real data
+    // Pending messages have IDs starting with 'pending_'
+    final streamMessages = event.messages;
+    
+    emit(state.copyWith(messages: streamMessages));
   }
 
   void _onStatsUpdated(
@@ -358,15 +396,21 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
   void _subscribeToSession(String sessionId) {
     _currentSessionId = sessionId;
     _stopQueueMonitoring();
+    _logger.i('Subscribing to session: $sessionId');
 
     _sessionSubscription?.cancel();
     _sessionSubscription = _service.getSessionStream(sessionId).listen(
           (session) => add(_GuessmeSessionUpdated(session)),
+          onError: (e) => _logger.e('Session stream error', error: e),
         );
 
     _messagesSubscription?.cancel();
     _messagesSubscription = _service.getMessagesStream(sessionId).listen(
-          (messages) => add(_GuessmeMessagesUpdated(messages)),
+          (messages) {
+            _logger.d('Received ${messages.length} messages from stream');
+            add(_GuessmeMessagesUpdated(messages));
+          },
+          onError: (e) => _logger.e('Messages stream error', error: e),
         );
   }
 

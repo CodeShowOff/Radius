@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
@@ -14,6 +15,7 @@ part 'connection_state.dart';
 /// BLoC for managing user connections.
 class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   final ConnectionService _connectionService;
+  final FirebaseFirestore _firestore;
   final Logger _logger = Logger();
 
   StreamSubscription<List<Connection>>? _connectionsSubscription;
@@ -24,8 +26,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   String? _currentUserDisplayName;
   String? _currentUserPhotoUrl;
 
-  ConnectionBloc({required ConnectionService connectionService})
-      : _connectionService = connectionService,
+  ConnectionBloc({
+    required ConnectionService connectionService,
+    FirebaseFirestore? firestore,
+  })  : _connectionService = connectionService,
+        _firestore = firestore ?? FirebaseFirestore.instance,
         super(const ConnectionBlocState()) {
     on<ConnectionLoadAll>(_onLoadAll);
     on<ConnectionSendRequest>(_onSendRequest);
@@ -39,6 +44,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     on<_ConnectionsUpdated>(_onConnectionsUpdated);
     on<_ReceivedRequestsUpdated>(_onReceivedRequestsUpdated);
     on<_SentRequestsUpdated>(_onSentRequestsUpdated);
+    on<_ProfileCached>(_onProfileCached);
   }
 
   /// Sets current user info for request metadata.
@@ -514,6 +520,90 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       connections: event.connections,
       status: newStatus,
     ));
+    
+    // Fetch profiles for any new connections that aren't cached
+    _fetchMissingProfiles(event.connections);
+  }
+  
+  /// Fetches profiles for connections that aren't in the cache.
+  /// This runs in background and updates the cache incrementally.
+  void _fetchMissingProfiles(List<Connection> connections) {
+    if (_currentUserId == null) return;
+    
+    for (final connection in connections) {
+      final otherUserId = connection.getOtherUserId(_currentUserId!);
+      
+      // Skip if already cached and valid
+      if (state.hasValidCachedProfile(otherUserId)) continue;
+      
+      // Fetch profile in background
+      _fetchAndCacheProfile(otherUserId);
+    }
+  }
+  
+  /// Fetches a single profile and adds it to the cache.
+  Future<void> _fetchAndCacheProfile(String userId) async {
+    try {
+      final doc = await _firestore
+          .collection('profiles')
+          .doc(userId)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      
+      if (isClosed) return;
+      
+      final data = doc.data();
+      
+      final displayName = data != null
+          ? ((data['name'] as String?)?.trim().isNotEmpty == true
+              ? (data['name'] as String).trim()
+              : (data['displayName'] as String?)?.trim().isNotEmpty == true
+                  ? (data['displayName'] as String).trim()
+                  : 'User')
+          : 'User';
+      
+      final avatarUrl = data != null
+          ? ((data['photoUrl'] as String?)?.trim().isNotEmpty == true
+              ? (data['photoUrl'] as String).trim()
+              : (data['avatarUrl'] as String?)?.trim().isNotEmpty == true
+                  ? (data['avatarUrl'] as String).trim()
+                  : null)
+          : null;
+      
+      final profile = CachedProfile(
+        id: userId,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+        bio: data?['bio'] as String?,
+        vibe: data?['vibe'] as String?,
+        mood: data?['mood'] as String?,
+        gender: data?['gender'] as String?,
+        cachedAt: DateTime.now(),
+      );
+      
+      if (!isClosed) {
+        add(_ProfileCached(profile));
+      }
+    } catch (e) {
+      _logger.w('Failed to fetch profile for $userId', error: e);
+      // Cache a fallback profile so we don't keep retrying
+      if (!isClosed) {
+        add(_ProfileCached(CachedProfile(
+          id: userId,
+          displayName: 'User',
+          cachedAt: DateTime.now(),
+        )));
+      }
+    }
+  }
+  
+  void _onProfileCached(
+    _ProfileCached event,
+    Emitter<ConnectionBlocState> emit,
+  ) {
+    final updatedCache = Map<String, CachedProfile>.from(state.profileCache);
+    updatedCache[event.profile.id] = event.profile;
+    emit(state.copyWith(profileCache: updatedCache));
   }
 
   void _onReceivedRequestsUpdated(

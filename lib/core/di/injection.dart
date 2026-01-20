@@ -8,9 +8,11 @@ import '../services/firebase/username_service.dart';
 import '../services/realtime/realtime_connection_service.dart';
 import '../services/realtime/realtime_data_manager.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/chat/data/chat_cache_service.dart';
 import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
+import '../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../features/location_groups/data/group_chat_service.dart';
 import '../../features/location_groups/data/location_data_service.dart';
 import '../../features/location_groups/data/location_group_service.dart';
@@ -150,6 +152,15 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<GroupChatService>(() => GroupChatService());
   }
 
+  // Chat cache services - global in-memory caches for instant chat loading
+  if (!getIt.isRegistered<ChatCacheService>()) {
+    getIt.registerLazySingleton<ChatCacheService>(() => ChatCacheService());
+  }
+
+  if (!getIt.isRegistered<GroupChatCacheService>()) {
+    getIt.registerLazySingleton<GroupChatCacheService>(() => GroupChatCacheService());
+  }
+
   if (!getIt.isRegistered<LocationGroupBloc>()) {
     getIt.registerLazySingleton<LocationGroupBloc>(
       () => LocationGroupBloc(
@@ -159,8 +170,11 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<GroupChatBloc>()) {
-    getIt.registerFactory<GroupChatBloc>(
-      () => GroupChatBloc(chatService: getIt<GroupChatService>()),
+    getIt.registerLazySingleton<GroupChatBloc>(
+      () => GroupChatBloc(
+        chatService: getIt<GroupChatService>(),
+        cacheService: getIt<GroupChatCacheService>(),
+      ),
     );
   }
 

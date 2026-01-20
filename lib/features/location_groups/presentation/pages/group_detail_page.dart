@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/cloudinary_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/location_group.dart';
 import '../../domain/entities/group_membership.dart';
 import '../bloc/location_group_bloc.dart';
@@ -67,19 +68,38 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     final group = state.currentGroup;
     if (group == null) return;
 
+    // Get latest profile info if available
+    String? userName = authState.user.displayName;
+    String? userPhotoUrl = authState.user.avatarUrl;
+    
+    try {
+      final profileState = context.read<ProfileBloc>().state;
+      if (profileState is ProfileLoaded) {
+        if (profileState.profile.name.isNotEmpty) {
+          userName = profileState.profile.name;
+        }
+        if (profileState.profile.photoUrl != null && 
+            profileState.profile.photoUrl!.isNotEmpty) {
+          userPhotoUrl = profileState.profile.photoUrl;
+        }
+      }
+    } catch (_) {
+      // ProfileBloc might not be available, use auth data as fallback
+    }
+
     if (group.isPublic) {
       context.read<LocationGroupBloc>().add(JoinPublicGroup(
             groupId: widget.groupId,
             userId: authState.user.id,
-            userName: authState.user.displayName,
-            userPhotoUrl: authState.user.avatarUrl,
+            userName: userName,
+            userPhotoUrl: userPhotoUrl,
           ));
     } else {
-      _showRequestDialog(authState);
+      _showRequestDialog(authState, userName, userPhotoUrl);
     }
   }
 
-  void _showRequestDialog(AuthAuthenticated authState) {
+  void _showRequestDialog(AuthAuthenticated authState, String? userName, String? userPhotoUrl) {
     final messageController = TextEditingController();
 
     showDialog(
@@ -116,8 +136,8 @@ class _GroupDetailPageState extends State<GroupDetailPage>
               context.read<LocationGroupBloc>().add(RequestToJoinGroup(
                     groupId: widget.groupId,
                     userId: authState.user.id,
-                    userName: authState.user.displayName,
-                    userPhotoUrl: authState.user.avatarUrl,
+                    userName: userName,
+                    userPhotoUrl: userPhotoUrl,
                     message: messageController.text.trim().isEmpty
                         ? null
                         : messageController.text.trim(),

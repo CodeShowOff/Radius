@@ -226,38 +226,42 @@ class ChatService {
   ///
   /// Returns the optimistic message immediately for UI update.
   /// The actual message is written to Firestore asynchronously.
+  /// 
+  /// [localId] - Optional local ID for matching optimistic messages.
+  /// If not provided, a UUID will be generated.
   Future<Message> sendMessage({
     required String conversationId,
     required String senderId,
     required String text,
     String? recipientId,
+    String? localId,
   }) async {
-    final localId = _uuid.v4();
+    final messageLocalId = localId ?? _uuid.v4();
     final now = DateTime.now();
 
     // Sanitize input text
     final sanitizedText = _sanitizeText(text);
     if (sanitizedText.isEmpty) {
       return Message(
-        id: localId,
+        id: messageLocalId,
         conversationId: conversationId,
         senderId: senderId,
         text: '',
         sentAt: now,
         status: MessageStatus.failed,
-        localId: localId,
+        localId: messageLocalId,
       );
     }
 
     // Create optimistic message for immediate UI (show as sent)
     final optimisticMessage = Message(
-      id: localId,
+      id: messageLocalId,
       conversationId: conversationId,
       senderId: senderId,
       text: sanitizedText,
       sentAt: now,
       status: MessageStatus.sent,
-      localId: localId,
+      localId: messageLocalId,
     );
 
     try {
@@ -482,10 +486,18 @@ class ChatService {
       final now = Timestamp.now();
 
       for (final doc in unreadMessages.docs) {
-        batch.update(doc.reference, {
+        // Update both deliveredAt (if not set) and readAt
+        // This ensures proper status progression: sent → delivered → read
+        final data = doc.data();
+        final updates = <String, dynamic>{
           'readAt': now,
           'status': MessageStatus.read.name,
-        });
+        };
+        // Also set deliveredAt if not already set
+        if (data['deliveredAt'] == null) {
+          updates['deliveredAt'] = now;
+        }
+        batch.update(doc.reference, updates);
       }
 
       // Check if the last message in the conversation was sent by the other user

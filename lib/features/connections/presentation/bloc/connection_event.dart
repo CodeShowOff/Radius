@@ -143,3 +143,13 @@ class ConnectionCheckState extends ConnectionEvent {
   @override
   List<Object?> get props => [otherUserId];
 }
+
+/// Cache a profile for a user (internal).
+class _ProfileCached extends ConnectionEvent {
+  final CachedProfile profile;
+
+  const _ProfileCached(this.profile);
+
+  @override
+  List<Object?> get props => [profile];
+}
