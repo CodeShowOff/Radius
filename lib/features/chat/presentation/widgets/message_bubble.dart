@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/message.dart';
+import '../bloc/chat_bloc.dart';
 import 'media_message_content.dart';
 
 /// Message bubble widget for chat.
@@ -118,6 +120,45 @@ class MessageBubble extends StatelessWidget {
                         ],
                       ),
               ),
+              // Retry button for failed messages
+              if (isMe && message.status == MessageStatus.failed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: InkWell(
+                    onTap: () {
+                      context.read<ChatBloc>().add(ChatRetryMessage(message));
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.refresh,
+                            size: 14,
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Tap to retry',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -243,14 +284,11 @@ class _StatusIcon extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
 
     return switch (status) {
-      MessageStatus.sending => SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.5,
-            color: iconColor,
-          ),
-        ),
+      MessageStatus.sending => Icon(
+          Icons.check,
+          size: 16,
+          color: iconColor,
+        ), // Treat as sent
       MessageStatus.sent => Icon(
           Icons.check,
           size: 16,

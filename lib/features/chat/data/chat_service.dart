@@ -249,14 +249,14 @@ class ChatService {
       );
     }
 
-    // Create optimistic message for immediate UI
+    // Create optimistic message for immediate UI (show as sent)
     final optimisticMessage = Message(
       id: localId,
       conversationId: conversationId,
       senderId: senderId,
       text: sanitizedText,
       sentAt: now,
-      status: MessageStatus.sending,
+      status: MessageStatus.sent,
       localId: localId,
     );
 
@@ -265,8 +265,11 @@ class ChatService {
       final messagesRef =
           _conversationsRef.doc(conversationId).collection('messages');
 
+      // Convert to Firestore data, but override status to 'sent' for server
       final messageData =
           MessageModel.fromEntity(optimisticMessage).toFirestore();
+      messageData['status'] = MessageStatus.sent.name; // Save as 'sent' in Firestore
+      
       final docRef = await messagesRef.add(messageData);
 
       // Update conversation metadata in a batch
@@ -318,7 +321,7 @@ class ChatService {
     final localId = _uuid.v4();
     final now = DateTime.now();
 
-    // Create optimistic message for immediate UI
+    // Create optimistic message for immediate UI (show as sent)
     final optimisticMessage = Message(
       id: localId,
       conversationId: conversationId,
@@ -331,7 +334,7 @@ class ChatService {
       duration: duration,
       thumbnailUrl: thumbnailUrl,
       sentAt: now,
-      status: MessageStatus.sending,
+      status: MessageStatus.sent,
       localId: localId,
     );
 
@@ -340,8 +343,11 @@ class ChatService {
       final messagesRef =
           _conversationsRef.doc(conversationId).collection('messages');
 
+      // Convert to Firestore data, but override status to 'sent' for server
       final messageData =
           MessageModel.fromEntity(optimisticMessage).toFirestore();
+      messageData['status'] = MessageStatus.sent.name; // Save as 'sent' in Firestore
+      
       final docRef = await messagesRef.add(messageData);
 
       // Update conversation metadata
@@ -729,7 +735,7 @@ class ChatService {
 
       // Update conversation to clear last message
       await _conversationsRef.doc(conversationId).update({
-        'lastMessage': '',
+        'lastMessageText': '',
         'lastMessageAt': FieldValue.serverTimestamp(),
       });
 

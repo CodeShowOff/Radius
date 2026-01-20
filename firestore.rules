@@ -261,10 +261,13 @@ service cloud.firestore {
           && request.resource.data.type in ['text', 'image', 'audio', 'document', 'sticker', 'video'];
         
         // RULE: Sender can edit/delete, recipient can only mark as read/delivered
+        // Participants can mark messages as deleted when clearing chat
         allow update: if isAuthenticated() && isConversationMember()
           && (isMessageSender() 
               || request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['status', 'deliveredAt', 'readAt']));
+                  .hasOnly(['status', 'deliveredAt', 'readAt'])
+              || request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['isDeleted', 'text', 'mediaUrl']));
         
         // RULE: Only sender can delete their messages
         allow delete: if isMessageSender();
@@ -497,19 +500,15 @@ service cloud.firestore {
       
       // Members subcollection
       match /members/{memberId} {
-        // RULE: A user can always read their own membership doc.
-        // This is required so isGroupMember()/isGroupAdmin() can safely call get()
-        // without causing rule recursion failures.
-        allow get: if isAuthenticated() && memberId == request.auth.uid;
-
-        // RULE: Allow listing the caller's own memberships (collectionGroup queries)
-        // This uses resource.data to check the userId field in the document itself
-        // to avoid circular dependency issues when using collectionGroup queries
-        allow list: if isAuthenticated() 
-          && resource.data.userId == request.auth.uid;
-
-        // RULE: Active members can read/list the full member list for a group.
-        allow get, list: if isAuthenticated() && isGroupMember();
+        // RULE: Users can read their own membership doc (for helper functions)
+        // OR read any member doc if they're an active member of the group (for member lists)
+        // OR list members in collectionGroup queries (for finding user's groups)
+        allow get: if isAuthenticated() 
+          && (memberId == request.auth.uid || isGroupMember());
+        
+        // RULE: Allow listing members - either for collectionGroup queries
+        // (filtered by userId on client) or for viewing group member lists
+        allow list: if isAuthenticated();
         
         // RULE: User can create themselves as a member in these cases:
         // 1. Creating group (as admin with active status)

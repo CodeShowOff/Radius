@@ -55,6 +55,16 @@ class ChatSendMessage extends ChatEvent {
   List<Object?> get props => [text];
 }
 
+/// Retry sending a failed message.
+class ChatRetryMessage extends ChatEvent {
+  final Message message;
+
+  const ChatRetryMessage(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}
+
 /// Send an image message.
 class ChatSendImage extends ChatEvent {
   final File file;

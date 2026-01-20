@@ -23,7 +23,10 @@ enum GuessmeStatus {
   /// Partner initiated a guess check, waiting for our response.
   receivedGuessCheck,
 
-  /// Game completed (time expired or someone left).
+  /// Correct guess made, waiting for both players to decide on connection.
+  awaitingConnectionConfirmation,
+
+  /// Game completed (time expired, someone left, or connection decision made).
   gameEnded,
 
   /// Error state.
@@ -47,17 +50,11 @@ class GuessmeState extends Equatable {
   /// The current user's stats.
   final GuessmeStats? stats;
 
-  /// The other player's display name (revealed after game or when viewing badges).
+  /// The other player's display name (revealed after game ends).
   final String? otherPlayerName;
 
   /// Error message (if any).
   final String? errorMessage;
-
-  /// Time remaining in the current session (null if not in a game).
-  final Duration? timeRemaining;
-
-  /// Whether this user initiated the guess check (waiting for response).
-  final bool isGuessCheckInitiator;
 
   const GuessmeState({
     this.status = GuessmeStatus.initial,
@@ -67,8 +64,6 @@ class GuessmeState extends Equatable {
     this.stats,
     this.otherPlayerName,
     this.errorMessage,
-    this.timeRemaining,
-    this.isGuessCheckInitiator = false,
   });
 
   /// Creates a copy with specified changes.
@@ -83,9 +78,6 @@ class GuessmeState extends Equatable {
     bool clearOtherPlayerName = false,
     String? errorMessage,
     bool clearError = false,
-    Duration? timeRemaining,
-    bool clearTimeRemaining = false,
-    bool? isGuessCheckInitiator,
   }) {
     return GuessmeState(
       status: status ?? this.status,
@@ -97,10 +89,6 @@ class GuessmeState extends Equatable {
           ? null
           : (otherPlayerName ?? this.otherPlayerName),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      timeRemaining:
-          clearTimeRemaining ? null : (timeRemaining ?? this.timeRemaining),
-      isGuessCheckInitiator:
-          isGuessCheckInitiator ?? this.isGuessCheckInitiator,
     );
   }
 
@@ -108,7 +96,8 @@ class GuessmeState extends Equatable {
   bool get isInGame =>
       status == GuessmeStatus.inGame ||
       status == GuessmeStatus.awaitingGuessResponse ||
-      status == GuessmeStatus.receivedGuessCheck;
+      status == GuessmeStatus.receivedGuessCheck ||
+      status == GuessmeStatus.awaitingConnectionConfirmation;
 
   /// The other player's ID in the current session.
   String? get otherPlayerId {
@@ -119,24 +108,38 @@ class GuessmeState extends Equatable {
   }
 
   /// Whether this user has already used their guess in this session.
-  /// True if this user correctly guessed the other player.
   bool get hasUsedGuess {
     if (session == null || currentUserId == null) return false;
-    // Check if we've initiated a guess check that was resolved
-    // If I'm player1 and I guessed player2 correctly, player2Guessed is true
-    // If I'm player2 and I guessed player1 correctly, player1Guessed is true
+    // If I initiated a guess and it was responded to (correct or not)
+    // Check if we've been the initiator and the guess check is no longer pending
     final weArePlayer1 = session!.player1Id == currentUserId;
+    // A user has "used" their guess if they guessed the other player correctly
     return weArePlayer1 ? session!.player2Guessed : session!.player1Guessed;
   }
 
-  /// Whether the other player has used their guess.
-  /// True if the other player correctly guessed us.
-  bool get otherPlayerHasUsedGuess {
+  /// Whether the other player has used their guess (guessed us correctly).
+  bool get otherPlayerHasGuessed {
     if (session == null || currentUserId == null) return false;
-    // If I'm player1 and player2 guessed me correctly, player1Guessed is true
-    // If I'm player2 and player1 guessed me correctly, player2Guessed is true
     final weArePlayer1 = session!.player1Id == currentUserId;
     return weArePlayer1 ? session!.player1Guessed : session!.player2Guessed;
+  }
+
+  /// Whether we've responded to the connection prompt.
+  bool get hasRespondedToConnectionPrompt {
+    if (session == null || currentUserId == null) return false;
+    final response = session!.getPlayerConnectionResponse(currentUserId!);
+    return response != null;
+  }
+
+  /// Our response to the connection prompt (null if not responded yet).
+  bool? get connectionPromptResponse {
+    if (session == null || currentUserId == null) return null;
+    return session!.getPlayerConnectionResponse(currentUserId!);
+  }
+
+  /// Whether the game ended with a mutual connection.
+  bool get mutualConnectionSuccess {
+    return session?.mutualConnectionSuccess ?? false;
   }
 
   @override
@@ -148,7 +151,5 @@ class GuessmeState extends Equatable {
         stats,
         otherPlayerName,
         errorMessage,
-        timeRemaining,
-        isGuessCheckInitiator,
       ];
 }

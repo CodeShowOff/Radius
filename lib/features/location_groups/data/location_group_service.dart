@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 
@@ -58,6 +59,7 @@ enum GroupErrorType {
 /// - `location_groups/{groupId}/messages` - Group chat messages
 class LocationGroupService {
   final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
   final Logger _logger;
   final Uuid _uuid;
 
@@ -66,11 +68,26 @@ class LocationGroupService {
 
   LocationGroupService({
     FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
     Logger? logger,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance,
         _logger = logger ?? Logger(),
         _uuid = const Uuid() {
     _groupsRef = _firestore.collection('location_groups');
+  }
+
+  bool _canAccessUserScopedData(String userId) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      _logger.w('Skipped user-scoped group query because no authenticated user');
+      return false;
+    }
+    if (currentUserId != userId) {
+      _logger.w('Skipped user-scoped group query for mismatched userId (requested: $userId, auth: $currentUserId)');
+      return false;
+    }
+    return true;
   }
 
   // ==================== GROUP CREATION ====================
@@ -262,10 +279,13 @@ class LocationGroupService {
         // Return empty list instead of propagating error
         return <LocationGroup>[];
       }
-    }).handleError((error) {
-      _logger.e('Error in streamGroupsForLocation stream', error: error);
-      // Errors are logged but not propagated - stream continues with empty data
-    });
+    }).transform(StreamTransformer.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        // On error, emit empty list to ensure UI receives data
+        _logger.e('Error in streamGroupsForLocation, emitting empty list', error: error);
+        sink.add(<LocationGroup>[]);
+      },
+    ));
   }
 
   /// Gets a single group by ID.
@@ -290,13 +310,21 @@ class LocationGroupService {
         _logger.e('Error in streamGroup map', error: e);
         return null;
       }
-    }).handleError((error) {
-      _logger.e('Error in streamGroup stream', error: error);
-    });
+    }).transform(StreamTransformer.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        // On error, emit null to ensure UI receives data
+        _logger.e('Error in streamGroup, emitting null', error: error);
+        sink.add(null);
+      },
+    ));
   }
 
   /// Gets groups the user is a member of.
   Future<List<LocationGroup>> getUserGroups(String userId) async {
+    if (!_canAccessUserScopedData(userId)) {
+      return [];
+    }
+
     try {
       // Query all groups where user is an active member
       // This requires a collection group query
@@ -340,71 +368,192 @@ class LocationGroupService {
   }
 
   /// Streams groups the user is a member of.
+  ///
+  /// Uses idTokenChanges() instead of authStateChanges() to ensure the
+  /// Firebase ID token is ready before making Firestore queries. This prevents
+  /// PERMISSION_DENIED errors that occur when authStateChanges fires but the
+  /// token hasn't been propagated to Firestore yet.
   Stream<List<LocationGroup>> streamUserGroups(String userId) {
-    return _firestore
-        .collectionGroup('members')
-        .where('userId', isEqualTo: userId)
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .asyncMap((snapshot) async {
-      try {
-        if (snapshot.docs.isEmpty) return <LocationGroup>[];
+    return Stream<List<LocationGroup>>.multi((controller) {
+      StreamSubscription<User?>? authSub;
+      StreamSubscription<List<LocationGroup>>? dataSub;
+      bool hasEmittedInitial = false;
 
-        final groupIds = snapshot.docs
-            .where((doc) => doc.reference.parent.parent != null)
-            .map((doc) {
-          return doc.reference.parent.parent!.id;
-        }).toSet();
-
-        final groups = <LocationGroup>[];
-        for (final groupId in groupIds) {
-          final group = await getGroupById(groupId);
-          if (group != null && group.isActive) {
-            groups.add(group);
-          }
-        }
-
-        groups.sort((a, b) {
-          final aTime = a.lastActivityAt ?? a.createdAt;
-          final bTime = b.lastActivityAt ?? b.createdAt;
-          return bTime.compareTo(aTime);
-        });
-
-        return groups;
-      } catch (e) {
-        _logger.e('Error in streamUserGroups asyncMap', error: e);
-        // Return empty list instead of propagating error
-        return <LocationGroup>[];
+      void cancelData() {
+        dataSub?.cancel();
+        dataSub = null;
       }
-    }).handleError((error) {
-      _logger.e('Error in streamUserGroups stream', error: error);
-      // Errors are logged but not propagated - stream continues with empty data
+
+      Stream<List<LocationGroup>> buildDataStream() {
+        return _firestore
+            .collectionGroup('members')
+            .where('userId', isEqualTo: userId)
+            .where('status', isEqualTo: 'active')
+            .snapshots()
+            .asyncMap((snapshot) async {
+          try {
+            if (snapshot.docs.isEmpty) return <LocationGroup>[];
+
+            final groupIds = snapshot.docs
+                .where((doc) => doc.reference.parent.parent != null)
+                .map((doc) => doc.reference.parent.parent!.id)
+                .toSet();
+
+            final groups = <LocationGroup>[];
+            for (final groupId in groupIds) {
+              final group = await getGroupById(groupId);
+              if (group != null && group.isActive) {
+                groups.add(group);
+              }
+            }
+
+            groups.sort((a, b) {
+              final aTime = a.lastActivityAt ?? a.createdAt;
+              final bTime = b.lastActivityAt ?? b.createdAt;
+              return bTime.compareTo(aTime);
+            });
+
+            return groups;
+          } catch (e) {
+            _logger.e('Error in streamUserGroups asyncMap', error: e);
+            return <LocationGroup>[];
+          }
+        });
+      }
+
+      // Use idTokenChanges() which fires when:
+      // 1. User signs in (token becomes available)
+      // 2. Token is refreshed
+      // 3. User signs out (token becomes null)
+      // This ensures the ID token is ready for Firestore before we query.
+      authSub = _auth.idTokenChanges().listen(
+        (user) async {
+          if (user == null || user.uid != userId) {
+            cancelData();
+            if (!hasEmittedInitial) {
+              hasEmittedInitial = true;
+              controller.add(<LocationGroup>[]);
+            }
+            return;
+          }
+
+          // Ensure token is fresh before making Firestore query
+          try {
+            await user.getIdToken();
+          } catch (e) {
+            _logger.w('Failed to get ID token, skipping Firestore query', error: e);
+            if (!hasEmittedInitial) {
+              hasEmittedInitial = true;
+              controller.add(<LocationGroup>[]);
+            }
+            return;
+          }
+
+          cancelData();
+          dataSub = buildDataStream().listen(
+                (groups) {
+                  hasEmittedInitial = true;
+                  controller.add(groups);
+                },
+                onError: (error, stackTrace) {
+                  _logger.e('Error in streamUserGroups, emitting empty list', error: error);
+                  hasEmittedInitial = true;
+                  controller.add(<LocationGroup>[]);
+                },
+              );
+        },
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+
+      controller.onCancel = () {
+        cancelData();
+        authSub?.cancel();
+      };
     });
   }
 
   /// Streams the user's memberships (for unread counts).
+  ///
+  /// Uses idTokenChanges() instead of authStateChanges() to ensure the
+  /// Firebase ID token is ready before making Firestore queries.
   Stream<List<GroupMembership>> streamUserMemberships(String userId) {
-    return _firestore
-        .collectionGroup('members')
-        .where('userId', isEqualTo: userId)
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .map((snapshot) {
-      try {
-        return snapshot.docs
-            .where((doc) => doc.reference.parent.parent != null)
-            .map((doc) {
-          final groupId = doc.reference.parent.parent!.id;
-          return GroupMembershipModel.fromFirestore(doc, groupId);
-        }).toList();
-      } catch (e) {
-        _logger.e('Error in streamUserMemberships map', error: e);
-        // Return empty list instead of propagating error
-        return <GroupMembership>[];
+    return Stream<List<GroupMembership>>.multi((controller) {
+      StreamSubscription<User?>? authSub;
+      StreamSubscription<List<GroupMembership>>? dataSub;
+      bool hasEmittedInitial = false;
+
+      void cancelData() {
+        dataSub?.cancel();
+        dataSub = null;
       }
-    }).handleError((error) {
-      _logger.e('Error in streamUserMemberships stream', error: error);
-      // Errors are logged but not propagated - stream continues with empty data
+
+      Stream<List<GroupMembership>> buildDataStream() {
+        return _firestore
+            .collectionGroup('members')
+            .where('userId', isEqualTo: userId)
+            .where('status', isEqualTo: 'active')
+            .snapshots()
+            .map((snapshot) {
+          try {
+            return snapshot.docs
+                .where((doc) => doc.reference.parent.parent != null)
+                .map((doc) {
+              final groupId = doc.reference.parent.parent!.id;
+              return GroupMembershipModel.fromFirestore(doc, groupId);
+            }).toList();
+          } catch (e) {
+            _logger.e('Error in streamUserMemberships map', error: e);
+            return <GroupMembership>[];
+          }
+        });
+      }
+
+      // Use idTokenChanges() to ensure the ID token is ready for Firestore
+      authSub = _auth.idTokenChanges().listen(
+        (user) async {
+          if (user == null || user.uid != userId) {
+            cancelData();
+            if (!hasEmittedInitial) {
+              hasEmittedInitial = true;
+              controller.add(<GroupMembership>[]);
+            }
+            return;
+          }
+
+          // Ensure token is fresh before making Firestore query
+          try {
+            await user.getIdToken();
+          } catch (e) {
+            _logger.w('Failed to get ID token, skipping Firestore query', error: e);
+            if (!hasEmittedInitial) {
+              hasEmittedInitial = true;
+              controller.add(<GroupMembership>[]);
+            }
+            return;
+          }
+
+          cancelData();
+          dataSub = buildDataStream().listen(
+                (memberships) {
+                  hasEmittedInitial = true;
+                  controller.add(memberships);
+                },
+                onError: (error, stackTrace) {
+                  _logger.e('Error in streamUserMemberships, emitting empty list', error: error);
+                  hasEmittedInitial = true;
+                  controller.add(<GroupMembership>[]);
+                },
+              );
+        },
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+
+      controller.onCancel = () {
+        cancelData();
+        authSub?.cancel();
+      };
     });
   }
 
@@ -724,9 +873,13 @@ class LocationGroupService {
         _logger.e('Error in streamJoinRequests map', error: e);
         return <GroupJoinRequest>[];
       }
-    }).handleError((error) {
-      _logger.e('Error in streamJoinRequests stream', error: error);
-    });
+    }).transform(StreamTransformer.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        // On error, emit empty list to ensure UI receives data
+        _logger.e('Error in streamJoinRequests, emitting empty list', error: error);
+        sink.add(<GroupJoinRequest>[]);
+      },
+    ));
   }
 
   /// Leaves a group.
@@ -829,9 +982,13 @@ class LocationGroupService {
         _logger.e('Error in streamGroupMembers map', error: e);
         return <GroupMembership>[];
       }
-    }).handleError((error) {
-      _logger.e('Error in streamGroupMembers stream', error: error);
-    });
+    }).transform(StreamTransformer.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        // On error, emit empty list to ensure UI receives data
+        _logger.e('Error in streamGroupMembers, emitting empty list', error: error);
+        sink.add(<GroupMembership>[]);
+      },
+    ));
   }
 
   // ==================== ADMIN ACTIONS ====================

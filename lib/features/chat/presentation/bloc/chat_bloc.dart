@@ -37,6 +37,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatOpen>(_onOpen);
     on<ChatClose>(_onClose);
     on<ChatSendMessage>(_onSendMessage);
+    on<ChatRetryMessage>(_onRetryMessage);
     on<ChatSendImage>(_onSendImage);
     on<ChatSendAudio>(_onSendAudio);
     on<ChatSendDocument>(_onSendDocument);
@@ -208,9 +209,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipientId: state.otherUserId,
       );
 
-      // Only add to pending if it's still sending or failed
-      if (sentMessage.status == MessageStatus.sending ||
-          sentMessage.status == MessageStatus.failed) {
+      // Only add to pending if it failed (needs retry)
+      if (sentMessage.status == MessageStatus.failed) {
         final pending = Map<String, Message>.from(state.pendingMessages);
         pending[sentMessage.localId ?? sentMessage.id] = sentMessage;
         emit(state.copyWith(pendingMessages: pending));
@@ -222,6 +222,60 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _logger.e('Error sending message', error: e);
       emit(state.copyWith(
         errorMessage: 'Failed to send message: $e',
+      ));
+    }
+  }
+
+  Future<void> _onRetryMessage(
+    ChatRetryMessage event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    final failedMessage = event.message;
+
+    // Remove from pending
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending.remove(failedMessage.localId ?? failedMessage.id);
+    emit(state.copyWith(pendingMessages: pending));
+
+    try {
+      // Retry sending based on message type
+      late Message sentMessage;
+
+      if (failedMessage.isMediaMessage) {
+        // For media messages, we can't retry from the failed message alone
+        // since we don't have the file anymore
+        emit(state.copyWith(
+          errorMessage: 'Cannot retry media messages. Please send again.',
+        ));
+        return;
+      } else {
+        // Retry text message
+        sentMessage = await _chatService.sendMessage(
+          conversationId: state.conversationId!,
+          senderId: state.currentUserId!,
+          text: failedMessage.text,
+          recipientId: state.otherUserId,
+        );
+      }
+
+      // If it failed again, add back to pending
+      if (sentMessage.status == MessageStatus.failed) {
+        final updatedPending = Map<String, Message>.from(state.pendingMessages);
+        updatedPending[sentMessage.localId ?? sentMessage.id] = sentMessage;
+        emit(state.copyWith(pendingMessages: updatedPending));
+      }
+    } catch (e) {
+      _logger.e('Error retrying message', error: e);
+      // Add back to pending on error
+      final updatedPending = Map<String, Message>.from(state.pendingMessages);
+      updatedPending[failedMessage.localId ?? failedMessage.id] = failedMessage;
+      emit(state.copyWith(
+        pendingMessages: updatedPending,
+        errorMessage: 'Failed to retry message: $e',
       ));
     }
   }

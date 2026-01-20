@@ -8,7 +8,7 @@ enum GuessmeSessionStatus {
   /// Game is active, players are chatting.
   active,
 
-  /// Game completed (either guessed correctly or expired).
+  /// Game completed (guessed correctly or mutual connection decision made).
   completed,
 
   /// Game was cancelled by a player.
@@ -62,6 +62,18 @@ class GuessmeSession extends Equatable {
   /// Whether a guess check is currently pending.
   final bool guessCheckPending;
 
+  /// Whether we're waiting for both players to confirm connection.
+  final bool awaitingConnectionConfirmations;
+
+  /// Whether player 1 wants to connect permanently.
+  final bool? player1WantsToConnect;
+
+  /// Whether player 2 wants to connect permanently.
+  final bool? player2WantsToConnect;
+
+  /// Whether both players agreed to connect.
+  final bool? mutualConnectionSuccess;
+
   const GuessmeSession({
     required this.id,
     required this.player1Id,
@@ -77,6 +89,10 @@ class GuessmeSession extends Equatable {
     this.player2Guessed = false,
     this.guessCheckInitiator,
     this.guessCheckPending = false,
+    this.awaitingConnectionConfirmations = false,
+    this.player1WantsToConnect,
+    this.player2WantsToConnect,
+    this.mutualConnectionSuccess,
   });
 
   /// Returns true if the session is still active and not expired.
@@ -120,6 +136,19 @@ class GuessmeSession extends Equatable {
     return false;
   }
 
+  /// Check if a specific player has responded to the connection prompt.
+  bool? getPlayerConnectionResponse(String playerId) {
+    if (playerId == player1Id) return player1WantsToConnect;
+    if (playerId == player2Id) return player2WantsToConnect;
+    return null;
+  }
+
+  /// Check if we're waiting for a connection response from a specific player.
+  bool isWaitingForPlayerResponse(String playerId) {
+    if (!awaitingConnectionConfirmations) return false;
+    return getPlayerConnectionResponse(playerId) == null;
+  }
+
   GuessmeSession copyWith({
     String? id,
     String? player1Id,
@@ -135,6 +164,10 @@ class GuessmeSession extends Equatable {
     bool? player2Guessed,
     String? guessCheckInitiator,
     bool? guessCheckPending,
+    bool? awaitingConnectionConfirmations,
+    bool? player1WantsToConnect,
+    bool? player2WantsToConnect,
+    bool? mutualConnectionSuccess,
   }) {
     return GuessmeSession(
       id: id ?? this.id,
@@ -151,6 +184,10 @@ class GuessmeSession extends Equatable {
       player2Guessed: player2Guessed ?? this.player2Guessed,
       guessCheckInitiator: guessCheckInitiator ?? this.guessCheckInitiator,
       guessCheckPending: guessCheckPending ?? this.guessCheckPending,
+      awaitingConnectionConfirmations: awaitingConnectionConfirmations ?? this.awaitingConnectionConfirmations,
+      player1WantsToConnect: player1WantsToConnect ?? this.player1WantsToConnect,
+      player2WantsToConnect: player2WantsToConnect ?? this.player2WantsToConnect,
+      mutualConnectionSuccess: mutualConnectionSuccess ?? this.mutualConnectionSuccess,
     );
   }
 
@@ -170,6 +207,10 @@ class GuessmeSession extends Equatable {
         player2Guessed,
         guessCheckInitiator,
         guessCheckPending,
+        awaitingConnectionConfirmations,
+        player1WantsToConnect,
+        player2WantsToConnect,
+        mutualConnectionSuccess,
       ];
 }
 

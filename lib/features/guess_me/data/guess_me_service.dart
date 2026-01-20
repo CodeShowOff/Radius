@@ -9,12 +9,25 @@ import 'models/guess_me_models.dart';
 import 'models/guess_me_stats_model.dart';
 
 /// Service for managing GuessMe game sessions.
+/// 
+/// Game Flow:
+/// 1. User taps "Play Game" -> joinQueue() called with nearby user IDs
+/// 2. Service finds first available user and creates session immediately
+/// 3. Both users chat anonymously for up to 1 hour
+/// 4. Either can initiate guess check -> other must confirm
+/// 5. On correct guess -> awaitingConnectionConfirmations = true
+/// 6. Both users must confirm to connect -> recordMutualConnection()
+/// 7. If either declines or timer expires -> session ends normally
+/// 8. Stats only update on mutual connection success
 class GuessmeService {
   final FirebaseFirestore _firestore;
   final Logger _logger = Logger();
 
   /// Session duration: 1 hour
   static const sessionDuration = Duration(hours: 1);
+
+  /// Connection confirmation timeout: 5 minutes
+  static const connectionConfirmationTimeout = Duration(minutes: 5);
 
   /// Queue timeout: 5 minutes
   static const queueTimeout = Duration(minutes: 5);
@@ -44,7 +57,6 @@ class GuessmeService {
       _logger.d('Set user $userId in game status');
     } catch (e) {
       _logger.w('Error setting user game status', error: e);
-      // Non-critical, don't rethrow
     }
   }
 
@@ -59,7 +71,6 @@ class GuessmeService {
       _logger.d('Cleared user $userId game status');
     } catch (e) {
       _logger.w('Error clearing user game status', error: e);
-      // Non-critical, don't rethrow
     }
   }
 
@@ -68,7 +79,7 @@ class GuessmeService {
     await _clearUserGameStatus(userId);
   }
 
-  /// Checks if a user is available for matching (not in game, not in queue).
+  /// Checks if a user is available for matching (not in active game).
   Future<bool> _isUserAvailable(String userId) async {
     try {
       // Check if user has an active session
@@ -92,8 +103,6 @@ class GuessmeService {
         }
       }
 
-      // User in queue IS available for matching!
-      // Only unavailable if they're already in an active game
       return true;
     } catch (e) {
       _logger.w('Error checking user availability for $userId', error: e);
@@ -104,7 +113,8 @@ class GuessmeService {
   // ==================== QUEUE MANAGEMENT ====================
 
   /// Joins the matchmaking queue.
-  /// Returns session ID if immediately matched, null if waiting.
+  /// INSTANTLY matches with the first available nearby user.
+  /// Returns session ID if matched, null if no one available.
   Future<String?> joinQueue({
     required String userId,
     required List<String> nearbyUserIds,
@@ -113,22 +123,13 @@ class GuessmeService {
       // First, check if user already has an active session
       final existingSession = await getActiveSession(userId);
       if (existingSession != null) {
-        _logger.i(
-            'User $userId already has active session: ${existingSession.id}');
+        _logger.i('User $userId already has active session: ${existingSession.id}');
         return existingSession.id;
-      }
-
-      // Check if already in queue
-      final existingQueueEntry = await _queueRef.doc(userId).get();
-      if (existingQueueEntry.exists) {
-        _logger.i('User $userId already in queue');
-        // Still try to find a match from updated nearby list
       }
 
       _logger.i('Attempting to match user $userId with ${nearbyUserIds.length} nearby users');
 
-      // Try to find ONE available nearby user to match with
-      // This works like the Nearby page - automatically select first available user
+      // Try to find ONE available nearby user to match with IMMEDIATELY
       for (final nearbyUserId in nearbyUserIds) {
         // Skip self
         if (nearbyUserId == userId) continue;
@@ -144,10 +145,10 @@ class GuessmeService {
         _logger.i('Found available user $nearbyUserId, creating session');
         final sessionId = await _createSession(userId, nearbyUserId);
 
-        // Remove both users from queue if they were in queue
+        // Remove both users from queue if they were there
         await Future.wait([
-          if (existingQueueEntry.exists) _queueRef.doc(userId).delete(),
-          _queueRef.doc(nearbyUserId).delete(), // Remove matched user from queue too
+          _queueRef.doc(userId).delete().catchError((e) {}),
+          _queueRef.doc(nearbyUserId).delete().catchError((e) {}),
         ]);
 
         // Set both users' game status
@@ -159,18 +160,18 @@ class GuessmeService {
         return sessionId;
       }
 
-      // No available users found, add to queue to wait
-      _logger.i('No available users found, adding $userId to queue');
+      // No available users found - add to queue briefly
+      // But mainly, return null to indicate no match
+      _logger.i('No available users found for $userId');
+      
       final queueEntry = {
         'userId': userId,
         'nearbyUserIds': nearbyUserIds,
         'joinedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(DateTime.now().add(queueTimeout)),
       };
-
       await _queueRef.doc(userId).set(queueEntry);
-      _logger.i('User $userId joined queue');
+      
       return null;
     } catch (e, stack) {
       _logger.e('Error joining queue', error: e, stackTrace: stack);
@@ -194,7 +195,6 @@ class GuessmeService {
   }
 
   /// Stream that detects when a user gets an active session.
-  /// Used to monitor when a queued user gets matched.
   Stream<GuessmeSession?> getActiveSessionStream(String userId) {
     return _sessionsRef
         .where('players', arrayContains: userId)
@@ -212,8 +212,7 @@ class GuessmeService {
   /// Fetches a user's display name from their profile.
   Future<String?> _getUserDisplayName(String userId) async {
     try {
-      final profileDoc =
-          await _firestore.collection('profiles').doc(userId).get();
+      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
       if (profileDoc.exists) {
         final data = profileDoc.data();
         return data?['displayName'] as String? ?? data?['name'] as String?;
@@ -225,7 +224,7 @@ class GuessmeService {
     }
   }
 
-  /// Creates a new game session.
+  /// Creates a new game session between two players.
   Future<String> _createSession(String player1Id, String player2Id) async {
     final now = DateTime.now();
     final sessionId = _sessionsRef.doc().id;
@@ -236,25 +235,31 @@ class GuessmeService {
 
     final session = GuessmeSessionModel(
       id: sessionId,
+      players: [player1Id, player2Id],
       player1Id: player1Id,
-      player1Name: player1Name,
+      player1Name: player1Name ?? 'Mystery User A',
       player2Id: player2Id,
-      player2Name: player2Name,
-      status: GuessmeSessionStatus.active,
+      player2Name: player2Name ?? 'Mystery User B',
+      status: GuessmeSessionStatus.active.name,
       createdAt: now,
-      startedAt: now,
       expiresAt: now.add(sessionDuration),
+      player1Guessed: false,
+      player2Guessed: false,
+      guessCheckPending: false,
+      guessCheckInitiator: null,
+      awaitingConnectionConfirmations: false,
+      connectionRequestId: null,
     );
 
     await _sessionsRef.doc(sessionId).set(session.toFirestore());
 
-    // Send system message
+    // Send initial system message
     await sendSystemMessage(
       sessionId: sessionId,
-      text:
-          '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
+      text: '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
     );
 
+    _logger.i('Created session $sessionId between $player1Id and $player2Id');
     return sessionId;
   }
 
@@ -281,12 +286,10 @@ class GuessmeService {
 
       if (query.docs.isEmpty) return null;
 
-      final session =
-          GuessmeSessionModel.fromFirestore(query.docs.first).toEntity();
+      final session = GuessmeSessionModel.fromFirestore(query.docs.first).toEntity();
 
       // Check if session has expired
-      if (session.expiresAt != null &&
-          DateTime.now().isAfter(session.expiresAt!)) {
+      if (session.expiresAt != null && DateTime.now().isAfter(session.expiresAt!)) {
         await expireSession(session.id);
         return null;
       }
@@ -307,7 +310,7 @@ class GuessmeService {
   }
 
   /// Cancels/leaves a session.
-  Future<void> cancelSession(String sessionId, String userId) async {
+  Future<void> cancelSession(String sessionId, String leavingUserId) async {
     try {
       final session = await getSession(sessionId);
       if (session == null) return;
@@ -315,6 +318,7 @@ class GuessmeService {
       await _sessionsRef.doc(sessionId).update({
         'status': GuessmeSessionStatus.cancelled.name,
         'endedAt': FieldValue.serverTimestamp(),
+        'cancelledBy': leavingUserId,
       });
 
       await sendSystemMessage(
@@ -322,47 +326,45 @@ class GuessmeService {
         text: '👋 The other player has left the game.',
       );
 
-      // Update stats for both players (game played without completing)
-      await Future.wait([
-        incrementGamesPlayedNoGuess(session.player1Id),
-        if (session.player2Id != null) incrementGamesPlayedNoGuess(session.player2Id!),
-      ]);
-
       // Clear game status for both players
-      await Future.wait([
-        _clearUserGameStatus(session.player1Id),
-        if (session.player2Id != null) _clearUserGameStatus(session.player2Id!),
-      ]);
+      final clearTasks = [_clearUserGameStatus(session.player1Id)];
+      if (session.player2Id != null) {
+        clearTasks.add(_clearUserGameStatus(session.player2Id!));
+      }
+      await Future.wait(clearTasks);
 
-      _logger.i('Session $sessionId cancelled by $userId');
+      _logger.i('Session $sessionId cancelled by $leavingUserId');
     } catch (e, stack) {
       _logger.e('Error cancelling session', error: e, stackTrace: stack);
       rethrow;
     }
   }
 
-  /// Expires a session.
+  /// Expires a session (timer ran out).
   Future<void> expireSession(String sessionId) async {
     try {
       final session = await getSession(sessionId);
       if (session == null) return;
+      
+      // Don't expire if already ended
+      if (session.status != GuessmeSessionStatus.active) return;
 
       await _sessionsRef.doc(sessionId).update({
         'status': GuessmeSessionStatus.expired.name,
         'endedAt': FieldValue.serverTimestamp(),
       });
 
-      // Update stats for both players (game played without correct guess)
-      await Future.wait([
-        incrementGamesPlayedNoGuess(session.player1Id),
-        if (session.player2Id != null) incrementGamesPlayedNoGuess(session.player2Id!),
-      ]);
+      await sendSystemMessage(
+        sessionId: sessionId,
+        text: '⏰ Time\'s up! The game has ended.',
+      );
 
       // Clear game status for both players
-      await Future.wait([
-        _clearUserGameStatus(session.player1Id),
-        if (session.player2Id != null) _clearUserGameStatus(session.player2Id!),
-      ]);
+      final clearTasks = [_clearUserGameStatus(session.player1Id)];
+      if (session.player2Id != null) {
+        clearTasks.add(_clearUserGameStatus(session.player2Id!));
+      }
+      await Future.wait(clearTasks);
 
       _logger.i('Session $sessionId expired');
     } catch (e, stack) {
@@ -372,9 +374,17 @@ class GuessmeService {
 
   // ==================== GUESS MECHANISM ====================
 
-  /// Initiates a guess check.
+  /// Initiates a guess check. The other player must confirm/deny.
   Future<void> initiateGuessCheck(String sessionId, String initiatorId) async {
     try {
+      final session = await getSession(sessionId);
+      if (session == null) throw Exception('Session not found');
+      
+      // Prevent if guess check already pending
+      if (session.guessCheckPending) {
+        throw Exception('Guess check already in progress');
+      }
+
       await _sessionsRef.doc(sessionId).update({
         'guessCheckInitiator': initiatorId,
         'guessCheckPending': true,
@@ -382,8 +392,7 @@ class GuessmeService {
 
       await sendSystemMessage(
         sessionId: sessionId,
-        text:
-            '🤔 A player thinks they know who you are! Please confirm if they guessed correctly.',
+        text: '🤔 A player thinks they know who you are! Please confirm if they guessed correctly.',
       );
 
       _logger.i('Guess check initiated in session $sessionId by $initiatorId');
@@ -394,6 +403,8 @@ class GuessmeService {
   }
 
   /// Responds to a guess check.
+  /// If correct -> awaitingConnectionConfirmations = true
+  /// If incorrect -> game continues
   Future<bool> respondToGuessCheck({
     required String sessionId,
     required String responderId,
@@ -408,59 +419,184 @@ class GuessmeService {
         throw Exception('No guess check in progress');
       }
 
-      // Update session based on response
       final updates = <String, dynamic>{
         'guessCheckPending': false,
         'guessCheckInitiator': null,
       };
 
       if (isCorrect) {
-        // Mark the responder as guessed
+        // Mark who was guessed correctly
         if (responderId == session.player1Id) {
           updates['player1Guessed'] = true;
         } else if (responderId == session.player2Id) {
           updates['player2Guessed'] = true;
         }
 
-        // If both are now guessed, complete the session
-        final bothGuessed = (session.player1Guessed ||
-                (responderId == session.player1Id)) &&
-            (session.player2Guessed || (responderId == session.player2Id));
+        // Start the mutual connection confirmation process
+        updates['awaitingConnectionConfirmations'] = true;
+        updates['connectionConfirmationStartedAt'] = FieldValue.serverTimestamp();
+        updates['player1WantsToConnect'] = null;
+        updates['player2WantsToConnect'] = null;
 
-        if (bothGuessed) {
-          updates['status'] = GuessmeSessionStatus.completed.name;
-          updates['endedAt'] = FieldValue.serverTimestamp();
-          
-          // Clear game status for both players when game completes
-          await Future.wait([
-            _clearUserGameStatus(session.player1Id),
-            if (session.player2Id != null) _clearUserGameStatus(session.player2Id!),
-          ]);
-        }
-
-        // Update stats
-        await _incrementCorrectGuess(initiatorId);
-        await _incrementTimesGuessed(responderId);
+        await _sessionsRef.doc(sessionId).update(updates);
 
         await sendSystemMessage(
           sessionId: sessionId,
-          text:
-              '🎉 Correct! ${session.getPlayerDisplayName(initiatorId)} guessed who ${session.getPlayerDisplayName(responderId)} is!',
+          text: '🎉 Correct guess! Both players can now choose to connect permanently.',
         );
+
+        _logger.i('Correct guess in session $sessionId');
+        return true;
       } else {
+        await _sessionsRef.doc(sessionId).update(updates);
+
         await sendSystemMessage(
           sessionId: sessionId,
           text: '❌ Not quite! Keep chatting and try again later.',
+        );
+
+        _logger.i('Incorrect guess in session $sessionId');
+        return false;
+      }
+    } catch (e, stack) {
+      _logger.e('Error responding to guess check', error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
+  // ==================== CONNECTION CONFIRMATION ====================
+
+  /// Records a player's decision to connect or not after successful guess.
+  /// Returns true if both have now responded (regardless of outcome).
+  Future<ConnectionConfirmationResult> respondToConnectionPrompt({
+    required String sessionId,
+    required String userId,
+    required bool wantsToConnect,
+  }) async {
+    try {
+      final session = await getSession(sessionId);
+      if (session == null) {
+        return ConnectionConfirmationResult(
+          bothResponded: false,
+          bothWantToConnect: false,
+          error: 'Session not found',
+        );
+      }
+
+      if (!session.awaitingConnectionConfirmations) {
+        return ConnectionConfirmationResult(
+          bothResponded: false,
+          bothWantToConnect: false,
+          error: 'Not awaiting connection confirmations',
+        );
+      }
+
+      // Record this user's response
+      final updates = <String, dynamic>{};
+      bool? otherPlayerWants;
+
+      if (userId == session.player1Id) {
+        updates['player1WantsToConnect'] = wantsToConnect;
+        // Check if player2 already responded
+        final doc = await _sessionsRef.doc(sessionId).get();
+        otherPlayerWants = doc.data()?['player2WantsToConnect'] as bool?;
+      } else if (userId == session.player2Id) {
+        updates['player2WantsToConnect'] = wantsToConnect;
+        // Check if player1 already responded
+        final doc = await _sessionsRef.doc(sessionId).get();
+        otherPlayerWants = doc.data()?['player1WantsToConnect'] as bool?;
+      } else {
+        return ConnectionConfirmationResult(
+          bothResponded: false,
+          bothWantToConnect: false,
+          error: 'User not in session',
         );
       }
 
       await _sessionsRef.doc(sessionId).update(updates);
 
-      _logger.i('Guess check response: ${isCorrect ? "correct" : "incorrect"}');
-      return isCorrect;
+      // If both have responded, process the result
+      if (otherPlayerWants != null) {
+        final bothWantToConnect = wantsToConnect && otherPlayerWants;
+        
+        if (bothWantToConnect) {
+          // Both want to connect - complete with success
+          await _sessionsRef.doc(sessionId).update({
+            'status': GuessmeSessionStatus.completed.name,
+            'endedAt': FieldValue.serverTimestamp(),
+            'awaitingConnectionConfirmations': false,
+            'mutualConnectionSuccess': true,
+          });
+
+          // Update stats for BOTH players - this is the ONLY place stats are updated
+          final statsTasks = [_incrementCorrectGuess(session.player1Id)];
+          if (session.player2Id != null) {
+            statsTasks.add(_incrementCorrectGuess(session.player2Id!));
+          }
+          await Future.wait(statsTasks);
+
+          await sendSystemMessage(
+            sessionId: sessionId,
+            text: '🤝 Both players want to connect! You can now chat permanently.',
+          );
+
+          // Clear game status
+          final clearTasks = [_clearUserGameStatus(session.player1Id)];
+          if (session.player2Id != null) {
+            clearTasks.add(_clearUserGameStatus(session.player2Id!));
+          }
+          await Future.wait(clearTasks);
+
+          _logger.i('Mutual connection success in session $sessionId');
+        } else {
+          // One or both declined - end game without connection
+          await _sessionsRef.doc(sessionId).update({
+            'status': GuessmeSessionStatus.completed.name,
+            'endedAt': FieldValue.serverTimestamp(),
+            'awaitingConnectionConfirmations': false,
+            'mutualConnectionSuccess': false,
+          });
+
+          await sendSystemMessage(
+            sessionId: sessionId,
+            text: '👋 The connection was declined. Thanks for playing!',
+          );
+
+          // Clear game status
+          final clearTasks = [_clearUserGameStatus(session.player1Id)];
+          if (session.player2Id != null) {
+            clearTasks.add(_clearUserGameStatus(session.player2Id!));
+          }
+          await Future.wait(clearTasks);
+
+          _logger.i('Connection declined in session $sessionId');
+        }
+
+        return ConnectionConfirmationResult(
+          bothResponded: true,
+          bothWantToConnect: bothWantToConnect,
+        );
+      }
+
+      // Only this user has responded so far
+      await sendSystemMessage(
+        sessionId: sessionId,
+        text: wantsToConnect
+            ? '✅ You want to connect! Waiting for the other player...'
+            : '❌ You declined to connect. Waiting for the other player...',
+      );
+
+      return ConnectionConfirmationResult(
+        bothResponded: false,
+        bothWantToConnect: false,
+      );
     } catch (e, stack) {
-      _logger.e('Error responding to guess check', error: e, stackTrace: stack);
-      rethrow;
+      _logger.e('Error responding to connection prompt', error: e, stackTrace: stack);
+      return ConnectionConfirmationResult(
+        bothResponded: false,
+        bothWantToConnect: false,
+        error: e.toString(),
+      );
     }
   }
 
@@ -483,9 +619,7 @@ class GuessmeService {
         sentAt: DateTime.now(),
       );
 
-      await _messagesRef
-          .doc(messageId)
-          .set(message.toFirestore(useServerTimestamp: true));
+      await _messagesRef.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
       rethrow;
@@ -509,9 +643,7 @@ class GuessmeService {
         type: GuessmeMessageType.system,
       );
 
-      await _messagesRef
-          .doc(messageId)
-          .set(message.toFirestore(useServerTimestamp: true));
+      await _messagesRef.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
     } catch (e, stack) {
       _logger.e('Error sending system message', error: e, stackTrace: stack);
     }
@@ -562,7 +694,8 @@ class GuessmeService {
     });
   }
 
-  /// Increments correct guess count.
+  /// Increments stats for a successful mutual connection.
+  /// This is the ONLY place where stats are updated.
   Future<void> _incrementCorrectGuess(String userId) async {
     try {
       final statsRef = _firestore
@@ -597,31 +730,9 @@ class GuessmeService {
       // Also update the badge count on the public profile
       await _updatePublicBadgeCount(userId);
 
-      _logger.i('Incremented correct guess for $userId');
+      _logger.i('Updated stats for $userId');
     } catch (e, stack) {
-      _logger.e('Error incrementing correct guess',
-          error: e, stackTrace: stack);
-    }
-  }
-
-  /// Increments times guessed count.
-  Future<void> _incrementTimesGuessed(String userId) async {
-    try {
-      final statsRef = _firestore
-          .collection('profiles')
-          .doc(userId)
-          .collection('stats')
-          .doc('guess_me');
-
-      await statsRef.set({
-        'timesGuessed': FieldValue.increment(1),
-        'lastPlayed': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      _logger.i('Incremented times guessed for $userId');
-    } catch (e, stack) {
-      _logger.e('Error incrementing times guessed',
-          error: e, stackTrace: stack);
+      _logger.e('Error incrementing correct guess', error: e, stackTrace: stack);
     }
   }
 
@@ -633,29 +744,20 @@ class GuessmeService {
         'guessmeCorrectGuesses': stats.correctGuesses,
       });
     } catch (e, stack) {
-      _logger.e('Error updating public badge count',
-          error: e, stackTrace: stack);
+      _logger.e('Error updating public badge count', error: e, stackTrace: stack);
     }
   }
+}
 
-  /// Increments games played without a correct guess (resets streak).
-  Future<void> incrementGamesPlayedNoGuess(String userId) async {
-    try {
-      final statsRef = _firestore
-          .collection('profiles')
-          .doc(userId)
-          .collection('stats')
-          .doc('guess_me');
+/// Result of a connection confirmation response.
+class ConnectionConfirmationResult {
+  final bool bothResponded;
+  final bool bothWantToConnect;
+  final String? error;
 
-      await statsRef.set({
-        'gamesPlayed': FieldValue.increment(1),
-        'currentStreak': 0, // Reset streak
-        'lastPlayed': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      _logger.i('Incremented games played for $userId');
-    } catch (e, stack) {
-      _logger.e('Error incrementing games played', error: e, stackTrace: stack);
-    }
-  }
+  ConnectionConfirmationResult({
+    required this.bothResponded,
+    required this.bothWantToConnect,
+    this.error,
+  });
 }

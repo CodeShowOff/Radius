@@ -58,6 +58,16 @@ class GuessmeRespondToGuessCheck extends GuessmeEvent {
   List<Object?> get props => [isCorrect];
 }
 
+/// Respond to the connection prompt after a successful guess.
+class GuessmeRespondToConnectionPrompt extends GuessmeEvent {
+  final bool wantsToConnect;
+
+  const GuessmeRespondToConnectionPrompt(this.wantsToConnect);
+
+  @override
+  List<Object?> get props => [wantsToConnect];
+}
+
 /// Leave the current game.
 class GuessmeLeaveGame extends GuessmeEvent {
   const GuessmeLeaveGame();

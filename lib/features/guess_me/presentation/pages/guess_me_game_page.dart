@@ -11,43 +11,65 @@ import '../bloc/guess_me_bloc.dart';
 
 /// The game chat screen for GuessMe.
 /// Anonymous chat with timer and guess functionality.
-class GuessmeGamePage extends StatefulWidget {
+/// 
+/// Flow:
+/// 1. Active game -> chat and guess check available
+/// 2. Guess check initiated -> waiting for response
+/// 3. Correct guess -> Connection prompt shown to BOTH users
+/// 4. Both respond -> Show result and end game
+class GuessMeGamePage extends StatefulWidget {
   final String sessionId;
 
-  const GuessmeGamePage({
+  const GuessMeGamePage({
     super.key,
     required this.sessionId,
   });
 
   @override
-  State<GuessmeGamePage> createState() => _GuessmeGamePageState();
+  State<GuessMeGamePage> createState() => _GuessMeGamePageState();
 }
 
-class _GuessmeGamePageState extends State<GuessmeGamePage> {
+class _GuessMeGamePageState extends State<GuessMeGamePage>
+    with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
   Timer? _countdownTimer;
   Duration _timeRemaining = const Duration(hours: 1);
+  bool _connectionPromptShown = false;
+  bool _guessCheckDialogShown = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startCountdown();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _countdownTimer?.cancel();
+    _messageController.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App went to background - the BLoC will handle cleanup if needed
+    } else if (state == AppLifecycleState.resumed) {
+      // Refresh timer
+      _refreshTimer();
+    }
   }
 
   void _startCountdown() {
     final state = context.read<GuessmeBloc>().state;
-    if (state.session != null) {
-      final endTime = state.session!.expiresAt;
-      final now = DateTime.now();
-      if (endTime != null && endTime.isAfter(now)) {
-        _timeRemaining = endTime.difference(now);
-      } else {
-        _timeRemaining = Duration.zero;
-      }
-    }
+    _refreshTimerFromState(state);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -62,13 +84,21 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     });
   }
 
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    _messageController.dispose();
-    _scrollController.dispose();
-    _focusNode.dispose();
-    super.dispose();
+  void _refreshTimer() {
+    final state = context.read<GuessmeBloc>().state;
+    _refreshTimerFromState(state);
+  }
+
+  void _refreshTimerFromState(GuessmeState state) {
+    if (state.session != null) {
+      final endTime = state.session!.expiresAt;
+      final now = DateTime.now();
+      if (endTime != null && endTime.isAfter(now)) {
+        _timeRemaining = endTime.difference(now);
+      } else {
+        _timeRemaining = Duration.zero;
+      }
+    }
   }
 
   void _sendMessage() {
@@ -120,7 +150,10 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     );
   }
 
-  void _showGuessCheckReceived() {
+  void _showGuessCheckReceivedDialog() {
+    if (_guessCheckDialogShown) return;
+    _guessCheckDialogShown = true;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -140,6 +173,7 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
           OutlinedButton(
             onPressed: () {
               Navigator.pop(dialogContext);
+              _guessCheckDialogShown = false;
               context
                   .read<GuessmeBloc>()
                   .add(const GuessmeRespondToGuessCheck(false));
@@ -149,6 +183,7 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
+              _guessCheckDialogShown = false;
               context
                   .read<GuessmeBloc>()
                   .add(const GuessmeRespondToGuessCheck(true));
@@ -160,7 +195,225 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     );
   }
 
-  void _leaveGame({bool findNewMatch = false}) {
+  void _showConnectionPromptDialog(GuessmeState state) {
+    if (_connectionPromptShown) return;
+    if (state.hasRespondedToConnectionPrompt) return;
+    _connectionPromptShown = true;
+
+    final otherPlayerId = state.otherPlayerId;
+
+    // Fetch the other player's profile
+    _fetchOtherPlayerProfile(otherPlayerId).then((profile) {
+      if (!mounted) return;
+
+      final otherPlayerName = profile?['name'] as String? ?? 'this user';
+      final otherPlayerPhoto = profile?['photoUrl'] as String?;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.celebration, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Correct Guess!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Show the other player's profile
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundImage: otherPlayerPhoto != null
+                        ? NetworkImage(otherPlayerPhoto)
+                        : null,
+                    child: otherPlayerPhoto == null
+                        ? Text(
+                            otherPlayerName.isNotEmpty
+                                ? otherPlayerName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'You were chatting with:',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          otherPlayerName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Would you like to connect and continue chatting permanently?',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Both players must agree to connect.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                context
+                    .read<GuessmeBloc>()
+                    .add(const GuessmeRespondToConnectionPrompt(false));
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('No Thanks'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                context
+                    .read<GuessmeBloc>()
+                    .add(const GuessmeRespondToConnectionPrompt(true));
+              },
+              icon: const Icon(Icons.person_add),
+              label: const Text('Connect'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _showGameEndedDialog(GuessmeState state) {
+    final session = state.session;
+    if (session == null) {
+      context.pop();
+      return;
+    }
+
+    final mutualSuccess = session.mutualConnectionSuccess ?? false;
+    final wasExpired = session.status == GuessmeSessionStatus.expired;
+    final wasCancelled = session.status == GuessmeSessionStatus.cancelled;
+    final otherPlayerId = state.otherPlayerId;
+
+    _fetchOtherPlayerProfile(otherPlayerId).then((profile) {
+      if (!mounted) return;
+
+      final otherPlayerName = profile?['name'] as String? ?? 'Unknown';
+      final otherPlayerPhoto = profile?['photoUrl'] as String?;
+
+      String title;
+      IconData icon;
+      Color iconColor;
+      String message;
+
+      if (mutualSuccess) {
+        title = 'Connected!';
+        icon = Icons.celebration;
+        iconColor = Colors.green;
+        message = 'You and $otherPlayerName are now connected! You can continue chatting in your connections.';
+      } else if (wasExpired) {
+        title = 'Time\'s Up!';
+        icon = Icons.timer_off;
+        iconColor = Colors.orange;
+        message = 'You were chatting with $otherPlayerName. Better luck next time!';
+      } else if (wasCancelled) {
+        title = 'Game Ended';
+        icon = Icons.exit_to_app;
+        iconColor = Colors.grey;
+        message = 'The game has ended. You were chatting with $otherPlayerName.';
+      } else {
+        // Connection was declined
+        title = 'Maybe Next Time';
+        icon = Icons.sentiment_neutral;
+        iconColor = Colors.blue;
+        message = 'The connection was not made. You were chatting with $otherPlayerName.';
+      }
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(icon, color: iconColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 40,
+                backgroundImage: otherPlayerPhoto != null
+                    ? NetworkImage(otherPlayerPhoto)
+                    : null,
+                child: otherPlayerPhoto == null
+                    ? Text(
+                        otherPlayerName.isNotEmpty
+                            ? otherPlayerName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                context.pop();
+              },
+              child: const Text('Back to Lobby'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _leaveGame() {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -178,24 +431,11 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
             onPressed: () {
               Navigator.pop(dialogContext);
               context.read<GuessmeBloc>().add(const GuessmeLeaveGame());
-              if (findNewMatch) {
-                // Pop back to lobby, which will allow user to join queue again
-                context.pop();
-              }
+              context.pop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Leave'),
           ),
-          if (!findNewMatch)
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                context.read<GuessmeBloc>().add(const GuessmeLeaveGame());
-                // User can immediately find a new match from lobby
-                context.pop();
-              },
-              child: const Text('Find New Match'),
-            ),
         ],
       ),
     );
@@ -212,27 +452,38 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  Future<Map<String, dynamic>?> _fetchOtherPlayerProfile(String? userId) async {
+    if (userId == null) return null;
+    try {
+      final connectionService = getIt<ConnectionService>();
+      return await connectionService.getUserProfile(userId);
+    } catch (e) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<GuessmeBloc, GuessmeState>(
       listenWhen: (previous, current) =>
           previous.status != current.status ||
-          previous.session?.expiresAt != current.session?.expiresAt,
+          previous.session?.expiresAt != current.session?.expiresAt ||
+          previous.session?.awaitingConnectionConfirmations != current.session?.awaitingConnectionConfirmations,
       listener: (context, state) {
         // Update countdown timer if expiry time changed
         if (state.session?.expiresAt != null) {
-          final endTime = state.session!.expiresAt!;
-          final now = DateTime.now();
-          if (endTime.isAfter(now)) {
-            setState(() {
-              _timeRemaining = endTime.difference(now);
-            });
-          }
+          _refreshTimerFromState(state);
         }
 
         // Show guess check dialog when received
         if (state.status == GuessmeStatus.receivedGuessCheck) {
-          _showGuessCheckReceived();
+          _showGuessCheckReceivedDialog();
+        }
+
+        // Show connection prompt when awaiting confirmation
+        if (state.status == GuessmeStatus.awaitingConnectionConfirmation &&
+            !state.hasRespondedToConnectionPrompt) {
+          _showConnectionPromptDialog(state);
         }
 
         // Handle game ended
@@ -252,13 +503,19 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
             appBar: _buildAppBar(context, state),
             body: Column(
               children: [
+                // Connection confirmation banner
+                if (state.status == GuessmeStatus.awaitingConnectionConfirmation)
+                  _buildConnectionConfirmationBanner(context, state),
+
                 // Messages
                 Expanded(
                   child: _buildMessagesList(context, state),
                 ),
 
-                // Guess check button (if not used)
-                if (state.isInGame && !state.hasUsedGuess)
+                // Guess check button (if not used and not in connection phase)
+                if (state.isInGame && 
+                    !state.hasUsedGuess && 
+                    state.status != GuessmeStatus.awaitingConnectionConfirmation)
                   _buildGuessCheckBar(context, state),
 
                 // Input
@@ -268,6 +525,38 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildConnectionConfirmationBanner(BuildContext context, GuessmeState state) {
+    final theme = Theme.of(context);
+    final hasResponded = state.hasRespondedToConnectionPrompt;
+    final response = state.connectionPromptResponse;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.green.withValues(alpha: 0.1),
+      child: Row(
+        children: [
+          Icon(
+            hasResponded ? Icons.check_circle : Icons.hourglass_top,
+            color: Colors.green,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hasResponded
+                  ? (response == true
+                      ? 'You want to connect! Waiting for the other player...'
+                      : 'You declined. Waiting for the other player...')
+                  : 'Correct guess! Decide if you want to connect.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -298,38 +587,25 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
       ),
       centerTitle: true,
       actions: [
-        if (state.isInGame)
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'leave') {
-                _leaveGame();
-              } else if (value == 'find_new') {
-                _leaveGame(findNewMatch: true);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'find_new',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Find New Match'),
-                  ],
-                ),
+        PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'leave') {
+              _leaveGame();
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'leave',
+              child: Row(
+                children: [
+                  Icon(Icons.exit_to_app, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('Leave Game', style: TextStyle(color: Colors.red)),
+                ],
               ),
-              const PopupMenuItem(
-                value: 'leave',
-                child: Row(
-                  children: [
-                    Icon(Icons.exit_to_app, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Leave Game', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -407,6 +683,7 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
               style: theme.textTheme.bodySmall?.copyWith(
                 fontStyle: FontStyle.italic,
               ),
+              textAlign: TextAlign.center,
             ),
           ),
         ),
@@ -430,11 +707,13 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
               children: [
                 const Icon(Icons.psychology, color: Colors.orange, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  message.text,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade800,
+                Flexible(
+                  child: Text(
+                    message.text,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade800,
+                    ),
                   ),
                 ),
               ],
@@ -452,7 +731,6 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
-            // Show initial instead of avatar (no profile picture)
             CircleAvatar(
               radius: 16,
               backgroundColor: theme.colorScheme.secondary,
@@ -552,7 +830,7 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
 
   Widget _buildMessageInput(BuildContext context, GuessmeState state) {
     final theme = Theme.of(context);
-    final canSend = state.isInGame; // Can only send when game is active
+    final canSend = state.isInGame && state.status != GuessmeStatus.gameEnded;
 
     return Container(
       padding: EdgeInsets.only(
@@ -601,183 +879,5 @@ class _GuessmeGamePageState extends State<GuessmeGamePage> {
         ],
       ),
     );
-  }
-
-  void _showGameEndedDialog(GuessmeState state) {
-    final session = state.session;
-    final wasSuccessfulGuess =
-        session?.status == GuessmeSessionStatus.completed;
-    final otherPlayerId = state.otherPlayerId;
-
-    // Fetch the other player's profile to show real name and photo
-    _fetchOtherPlayerProfile(otherPlayerId).then((profile) {
-      if (!mounted) return;
-
-      final otherPlayerName = profile?['name'] as String? ?? 'this user';
-      final otherPlayerPhoto = profile?['photoUrl'] as String?;
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(
-                wasSuccessfulGuess ? Icons.celebration : Icons.timer_off,
-                color: wasSuccessfulGuess ? Colors.green : Colors.orange,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  wasSuccessfulGuess ? 'Correct Guess!' : 'Time\'s Up!',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Show the other player's profile
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundImage: otherPlayerPhoto != null
-                        ? NetworkImage(otherPlayerPhoto)
-                        : null,
-                    child: otherPlayerPhoto == null
-                        ? Text(
-                            otherPlayerName.isNotEmpty
-                                ? otherPlayerName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'You were chatting with:',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        Text(
-                          otherPlayerName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (wasSuccessfulGuess) ...[
-                const Text(
-                  'Would you like to connect and continue chatting?',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ] else ...[
-                const Text('Maybe next time you\'ll figure it out faster!'),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                context.pop();
-              },
-              child: Text(wasSuccessfulGuess ? 'No Thanks' : 'Back to Lobby'),
-            ),
-            if (wasSuccessfulGuess && otherPlayerId != null)
-              FilledButton.icon(
-                onPressed: () async {
-                  Navigator.pop(dialogContext);
-                  await _sendConnectionRequest(
-                    otherPlayerId,
-                    otherPlayerName,
-                    state.currentUserId!,
-                  );
-                  if (mounted) {
-                    context.pop();
-                  }
-                },
-                icon: const Icon(Icons.person_add),
-                label: const Text('Connect'),
-              ),
-            if (!wasSuccessfulGuess)
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  context.pop();
-                },
-                child: const Text('Find New Match'),
-              ),
-          ],
-        ),
-      );
-    });
-  }
-
-  Future<Map<String, dynamic>?> _fetchOtherPlayerProfile(String? userId) async {
-    if (userId == null) return null;
-    try {
-      final connectionService = getIt<ConnectionService>();
-      return await connectionService.getUserProfile(userId);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<void> _sendConnectionRequest(
-    String otherUserId,
-    String otherUserName,
-    String currentUserId,
-  ) async {
-    try {
-      final connectionService = getIt<ConnectionService>();
-      final result = await connectionService.sendRequest(
-        senderId: currentUserId,
-        receiverId: otherUserId,
-        source: 'guessme',
-      );
-      if (mounted) {
-        switch (result) {
-          case ConnectionSuccess():
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Connection request sent to $otherUserName!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          case ConnectionFailure(:final message):
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to send request: $message'),
-                backgroundColor: Colors.red,
-              ),
-            );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send request: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }

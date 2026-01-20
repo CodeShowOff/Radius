@@ -183,7 +183,7 @@
       ]
     },
     {
-      "collectionGroup": "guessme_sessions",
+      "collectionGroup": "guess_me_sessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -306,6 +306,20 @@
         },
         {
           "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
           "order": "ASCENDING"
         }
       ]
