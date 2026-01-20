@@ -762,13 +762,33 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
                   bottomRight: Radius.circular(isMe ? 4 : 16),
                 ),
               ),
-              child: Text(
-                message.text,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: isMe
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.onSurface,
-                ),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  Text(
+                    message.text,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: isMe
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurface,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Text(
+                      '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: isMe
+                            ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

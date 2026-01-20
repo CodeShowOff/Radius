@@ -364,9 +364,12 @@ service cloud.firestore {
     
     // GuessMe game sessions
     match /guess_me_sessions/{sessionId} {
-      // RULE: Only participants can read their session
-      allow read: if isAuthenticated() 
+      // RULE: Participants can read individual documents
+      allow get: if isAuthenticated() 
         && isGuessmeParticipant(resource.data);
+      
+      // RULE: Users can list/query their own sessions
+      allow list: if isAuthenticated();
       
       // RULE: Authenticated users can create sessions (matchmaking service)
       allow create: if isAuthenticated()

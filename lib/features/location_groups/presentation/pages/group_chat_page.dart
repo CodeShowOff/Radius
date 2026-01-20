@@ -496,32 +496,35 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
 
-                    // Message text
-                    Text(
-                      message.text,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: isMe
-                            ? theme.colorScheme.onPrimaryContainer
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-
-                    // Timestamp
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    // Message text with inline time (WhatsApp style)
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.end,
                       children: [
                         Text(
-                          _formatTime(message.sentAt),
-                          style: theme.textTheme.labelSmall?.copyWith(
+                          message.text,
+                          style: theme.textTheme.bodyLarge?.copyWith(
                             color: isMe
-                                ? theme.colorScheme
-                                    .onPrimaryContainer
-                                    .withValues(alpha: 0.7)
-                                : theme.colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.5),
+                                ? theme.colorScheme.onPrimaryContainer
+                                : theme.colorScheme.onSurface,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 1),
+                          child: Text(
+                            _formatTime(message.sentAt),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: isMe
+                                  ? theme.colorScheme
+                                      .onPrimaryContainer
+                                      .withValues(alpha: 0.5)
+                                  : theme.colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.5),
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       ],
