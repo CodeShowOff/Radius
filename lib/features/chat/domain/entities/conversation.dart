@@ -26,15 +26,15 @@ class Conversation extends Equatable {
   final MessageStatus? lastMessageStatus;
 
   /// Count of unread messages for each participant.
-  /// Map<userId, unreadCount>
+  /// Map\<userId, unreadCount\>
   final Map<String, int> unreadCounts;
 
   /// Whether the conversation is muted for each participant.
-  /// Map<userId, isMuted>
+  /// Map\<userId, isMuted\>
   final Map<String, bool> mutedBy;
 
   /// Participant info (denormalized for fast UI).
-  /// Map<userId, {displayName, photoUrl}>
+  /// Map\<userId, {displayName, photoUrl}\>
   final Map<String, ParticipantInfo> participantInfo;
 
   /// Whether either user has archived this conversation.

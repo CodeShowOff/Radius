@@ -41,7 +41,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
   Future<void> _loadProfile() async {
     try {
       final doc = await getIt<FirestoreService>()
-          .getDocument('profiles/${widget.otherUserId}')
+          .getDocument('users/${widget.otherUserId}')
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () => null,
@@ -62,17 +62,13 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         };
       } else {
         final displayName =
-            (doc['name'] as String?)?.trim().isNotEmpty == true
-                ? (doc['name'] as String).trim()
-                : (doc['displayName'] as String?)?.trim().isNotEmpty == true
-                    ? (doc['displayName'] as String).trim()
-                    : (widget.initialName ?? 'User');
+            (doc['displayName'] as String?)?.trim().isNotEmpty == true
+                ? (doc['displayName'] as String).trim()
+                : (widget.initialName ?? 'User');
 
         final avatarUrl = (doc['photoUrl'] as String?)?.trim().isNotEmpty == true
             ? (doc['photoUrl'] as String).trim()
-            : (doc['avatarUrl'] as String?)?.trim().isNotEmpty == true
-                ? (doc['avatarUrl'] as String).trim()
-                : widget.initialPhotoUrl;
+            : widget.initialPhotoUrl;
 
         final bio = (doc['bio'] as String?)?.trim();
         final vibe = (doc['vibe'] as String?)?.trim();

@@ -12,12 +12,13 @@ import '../../error/exceptions.dart';
 class FirebaseAuthService {
   final firebase.FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
+  bool _isInitialized = false;
 
   FirebaseAuthService({
     firebase.FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
   })  : _firebaseAuth = firebaseAuth ?? firebase.FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn();
+        _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
   /// Stream of authentication state changes.
   ///
@@ -117,23 +118,26 @@ class FirebaseAuthService {
   /// Throws [AuthException] on failure.
   Future<firebase.User> signInWithGoogle() async {
     try {
-      // Trigger the Google Sign-In flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-
-      if (googleUser == null) {
-        throw const AuthException(
-          message: 'Google sign in was cancelled',
-          code: 'cancelled',
+      // Initialize GoogleSignIn if not already done (required in v7.x)
+      if (!_isInitialized) {
+        await _googleSignIn.initialize(
+          // Required for google_sign_in 7.x on Android
+          // This is the web OAuth client ID from google-services.json
+          serverClientId:
+              '486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com',
         );
+        _isInitialized = true;
       }
 
-      // Obtain the auth details from the Google Sign-In
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      // Trigger the Google Sign-In flow (v7 API)
+      final GoogleSignInAccount googleUser =
+          await _googleSignIn.authenticate(scopeHint: ['email']);
 
-      // Create a new credential
+      // Obtain the auth details from the Google Sign-In (now synchronous in v7)
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      // Create a new credential using idToken (accessToken not needed for Firebase)
       final credential = firebase.GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 

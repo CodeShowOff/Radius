@@ -49,7 +49,7 @@ class GuessmeService {
   /// Sets user's game status to indicate they're in a GuessMe game.
   Future<void> _setUserInGame(String userId, String sessionId) async {
     try {
-      await _firestore.collection('profiles').doc(userId).update({
+      await _firestore.collection('users').doc(userId).update({
         'isInGuessMeGame': true,
         'guessMeSessionId': sessionId,
         'guessMeJoinedAt': FieldValue.serverTimestamp(),
@@ -63,7 +63,7 @@ class GuessmeService {
   /// Clears user's game status.
   Future<void> _clearUserGameStatus(String userId) async {
     try {
-      await _firestore.collection('profiles').doc(userId).update({
+      await _firestore.collection('users').doc(userId).update({
         'isInGuessMeGame': false,
         'guessMeSessionId': FieldValue.delete(),
         'guessMeJoinedAt': FieldValue.delete(),
@@ -94,7 +94,7 @@ class GuessmeService {
       }
 
       // Check profile status
-      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
+      final profileDoc = await _firestore.collection('users').doc(userId).get();
       if (profileDoc.exists) {
         final data = profileDoc.data();
         final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
@@ -212,10 +212,10 @@ class GuessmeService {
   /// Fetches a user's display name from their profile.
   Future<String?> _getUserDisplayName(String userId) async {
     try {
-      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
+      final profileDoc = await _firestore.collection('users').doc(userId).get();
       if (profileDoc.exists) {
         final data = profileDoc.data();
-        return data?['displayName'] as String? ?? data?['name'] as String?;
+        return data?['displayName'] as String?;
       }
       return null;
     } catch (e) {
@@ -666,7 +666,7 @@ class GuessmeService {
   Future<GuessmeStats> getStats(String userId) async {
     try {
       final doc = await _firestore
-          .collection('profiles')
+          .collection('users')
           .doc(userId)
           .collection('stats')
           .doc('guess_me')
@@ -683,7 +683,7 @@ class GuessmeService {
   /// Stream of user's stats.
   Stream<GuessmeStats> getStatsStream(String userId) {
     return _firestore
-        .collection('profiles')
+        .collection('users')
         .doc(userId)
         .collection('stats')
         .doc('guess_me')
@@ -699,7 +699,7 @@ class GuessmeService {
   Future<void> _incrementCorrectGuess(String userId) async {
     try {
       final statsRef = _firestore
-          .collection('profiles')
+          .collection('users')
           .doc(userId)
           .collection('stats')
           .doc('guess_me');
@@ -740,7 +740,7 @@ class GuessmeService {
   Future<void> _updatePublicBadgeCount(String userId) async {
     try {
       final stats = await getStats(userId);
-      await _firestore.collection('profiles').doc(userId).update({
+      await _firestore.collection('users').doc(userId).update({
         'guessmeCorrectGuesses': stats.correctGuesses,
       });
     } catch (e, stack) {

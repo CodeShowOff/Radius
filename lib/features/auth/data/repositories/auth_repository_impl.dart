@@ -160,7 +160,7 @@ class AuthRepositoryImpl implements IAuthRepository {
           firebaseUser.uid,
           firebaseUser.email ?? '',
           firebaseUser.displayName,
-          avatarUrl: firebaseUser.photoURL,
+          photoUrl: firebaseUser.photoURL, // Use photoUrl not avatarUrl
         );
       }
 
@@ -330,7 +330,7 @@ class AuthRepositoryImpl implements IAuthRepository {
     String uid,
     String email,
     String? displayName, {
-    String? avatarUrl,
+    String? photoUrl, // Changed from avatarUrl to photoUrl for consistency
   }) async {
     try {
       // Generate unique username using Firestore transaction
@@ -340,7 +340,7 @@ class AuthRepositoryImpl implements IAuthRepository {
         id: uid,
         email: email,
         displayName: displayName,
-        avatarUrl: avatarUrl,
+        avatarUrl: photoUrl, // Store as avatarUrl in UserModel (will be saved as photoUrl to DB)
         username: username,
         createdAt: null, // Will be set by server timestamp
         isDiscoverable: true,
@@ -363,7 +363,7 @@ class AuthRepositoryImpl implements IAuthRepository {
         userId: uid,
         name: displayName ?? '',
         bio: '',
-        photoUrl: avatarUrl,
+        photoUrl: photoUrl,
         isVisible: true,
         showOnlineStatus: true,
         allowConnectionRequests: true,

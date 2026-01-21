@@ -6,9 +6,6 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../chat/presentation/bloc/conversations_bloc.dart';
-import '../../../chat/presentation/widgets/conversation_tile.dart';
-import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
 
@@ -29,21 +26,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkBluetoothStatus();
-    
-    // Ensure conversations are loaded for the recent conversations list
-    // The BLoC handles redundant loads gracefully - if already loaded,
-    // this will be a no-op while keeping real-time streams active
-    final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
-      final convState = context.read<ConversationsBloc>().state;
-      // Only explicitly trigger load if in initial state
-      // Otherwise, streams are already active from app initialization
-      if (convState.status == ConversationsStatus.initial) {
-        context.read<ConversationsBloc>().add(
-              ConversationsLoad(userId: authState.user.id),
-            );
-      }
-    }
   }
 
   @override
@@ -234,163 +216,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-
-                // Connections section header with "View All" button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Connections',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    TextButton(
-                      onPressed: () => context.push(Routes.connections),
-                      child: const Text('View All'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Recent conversations list
-                BlocBuilder<AuthBloc, AuthState>(
-                  builder: (context, authState) {
-                    if (authState is! AuthAuthenticated) {
-                      return const Expanded(
-                        child: Center(
-                          child: Text('Please sign in'),
-                        ),
-                      );
-                    }
-
-                    return Expanded(
-                      child: _RecentConversationsList(
-                        userId: authState.user.id,
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Widget that displays recent conversations preview.
-/// Uses ConversationsBloc as single source of truth.
-class _RecentConversationsList extends StatelessWidget {
-  final String userId;
-
-  const _RecentConversationsList({required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<ConversationsBloc, ConversationsState>(
-      builder: (context, state) {
-        if (state.status == ConversationsStatus.loading &&
-            state.conversations.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (state.status == ConversationsStatus.error &&
-            state.conversations.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Failed to load conversations',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Take only the first 10 conversations (preview)
-        final recentConversations = state.conversations.take(10).toList();
-
-        if (recentConversations.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No conversations yet',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Connect with people and start chatting',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          itemCount: recentConversations.length,
-          itemBuilder: (context, index) {
-            final conversation = recentConversations[index];
-            final otherUserId = conversation.getOtherParticipantId(userId);
-
-            return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-              builder: (context, connectionState) {
-                // Get fresh profile from ConnectionBloc cache
-                final cachedProfile = connectionState.getCachedProfile(otherUserId);
-                final profile = cachedProfile?.toMap();
-                
-                // Use cached profile data if available, otherwise fall back to conversation participantInfo
-                final otherParticipant = conversation.getOtherParticipantInfo(userId);
-                final displayName = profile?['displayName'] as String? ?? 
-                                    otherParticipant?.displayName ?? 'User';
-                final photoUrl = profile?['avatarUrl'] as String? ?? 
-                                 otherParticipant?.photoUrl;
-
-                return ConversationTile(
-                  conversation: conversation,
-                  currentUserId: userId,
-                  overrideDisplayName: displayName,
-                  overridePhotoUrl: photoUrl,
-                  onTap: () {
-                    context.push(
-                      Routes.chatWith(conversation.id),
-                      extra: {
-                        'currentUserId': userId,
-                        'otherUserId': otherUserId,
-                        'otherUserName': displayName,
-                        'otherUserPhotoUrl': photoUrl,
-                      },
-                    );
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
     );
   }
 }

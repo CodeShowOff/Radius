@@ -335,8 +335,10 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
       
       // RULE: Users can delete their own queue entry
+      // Allow delete if queueId matches user's ID (even if doc doesn't exist)
       allow delete: if isAuthenticated()
-        && resource.data.userId == request.auth.uid;
+        && (queueId == request.auth.uid 
+            || (resource != null && resource.data.userId == request.auth.uid));
     }
 
     // GuessMe connection requests (for pending matchmaking)

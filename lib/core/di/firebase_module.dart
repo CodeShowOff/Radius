@@ -18,7 +18,7 @@ abstract class FirebaseModule {
   FirebaseStorage get firebaseStorage => FirebaseStorage.instance;
 
   @lazySingleton
-  GoogleSignIn get googleSignIn => GoogleSignIn();
+  GoogleSignIn get googleSignIn => GoogleSignIn.instance;
 
   @lazySingleton
   Logger get logger => Logger(

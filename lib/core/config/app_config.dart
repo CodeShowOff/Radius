@@ -48,14 +48,8 @@ class AppConfig {
   /// Whether to enable debug logging.
   static bool get enableDebugLogging => !isProduction;
 
-  /// Whether to enable analytics.
-  static bool get enableAnalytics => isProduction || isStaging;
-
   /// Whether to enable crash reporting.
   static bool get enableCrashReporting => isProduction || isStaging;
-
-  /// Whether to enable performance monitoring.
-  static bool get enablePerformanceMonitoring => isProduction;
 
   /// API timeout duration.
   static Duration get apiTimeout {

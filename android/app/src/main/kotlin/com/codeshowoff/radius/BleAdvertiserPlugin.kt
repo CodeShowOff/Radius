@@ -172,6 +172,11 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         serviceData: ByteArray,
         result: MethodChannel.Result
     ) {
+        // Re-initialize advertiser if it's null (can happen if Bluetooth was off during plugin init)
+        if (advertiser == null) {
+            advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
+        }
+        
         if (advertiser == null) {
             result.error("BLE_UNAVAILABLE", "BLE advertising not supported on this device", null)
             return

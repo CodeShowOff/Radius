@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../../chat/domain/entities/conversation.dart';
 import '../../../chat/presentation/bloc/conversations_bloc.dart';
+import '../../../chat/presentation/widgets/conversation_tile.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
@@ -324,6 +325,7 @@ class _RequestsBadge extends StatelessWidget {
 }
 
 /// List of connections with user profiles.
+/// Sorted by last message time (most recent first), just like home page.
 class _ConnectionsList extends StatelessWidget {
   final List<Connection> connections;
   final String currentUserId;
@@ -341,20 +343,59 @@ class _ConnectionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
-      itemCount: connections.length,
-      itemBuilder: (context, index) {
-        final connection = connections[index];
-        final otherUserId = connection.getOtherUserId(currentUserId);
+    return BlocBuilder<ConversationsBloc, ConversationsState>(
+      builder: (context, conversationsState) {
+        // Sort connections by last message time (most recent first)
+        final sortedConnections = List<Connection>.from(connections);
+        sortedConnections.sort((a, b) {
+          final conversationIdA = Conversation.createConversationId(a.userId1, a.userId2);
+          final conversationIdB = Conversation.createConversationId(b.userId1, b.userId2);
+          
+          final conversationA = conversationsState.conversations.firstWhere(
+            (conv) => conv.id == conversationIdA,
+            orElse: () => Conversation(
+              id: conversationIdA,
+              participantIds: [a.userId1, a.userId2],
+              participantInfo: const {},
+              createdAt: a.connectedAt,
+              lastMessageAt: null,
+            ),
+          );
+          
+          final conversationB = conversationsState.conversations.firstWhere(
+            (conv) => conv.id == conversationIdB,
+            orElse: () => Conversation(
+              id: conversationIdB,
+              participantIds: [b.userId1, b.userId2],
+              participantInfo: const {},
+              createdAt: b.connectedAt,
+              lastMessageAt: null,
+            ),
+          );
+          
+          // Sort by last message time, most recent first
+          // If no messages, use connection time
+          final timeA = conversationA.lastMessageAt ?? a.connectedAt;
+          final timeB = conversationB.lastMessageAt ?? b.connectedAt;
+          return timeB.compareTo(timeA); // Descending order (newest first)
+        });
 
-        return _ConnectionUserTile(
-          connection: connection,
-          userId: otherUserId,
-          searchQuery: searchQuery,
-          onTap: (profile) => onUserTap(connection, profile),
-          onProfilePhotoTap: (profile) =>
-              onProfilePhotoTap(connection, profile),
+        return ListView.builder(
+          padding: const EdgeInsets.only(top: 8, bottom: 80),
+          itemCount: sortedConnections.length,
+          itemBuilder: (context, index) {
+            final connection = sortedConnections[index];
+            final otherUserId = connection.getOtherUserId(currentUserId);
+
+            return _ConnectionUserTile(
+              connection: connection,
+              userId: otherUserId,
+              searchQuery: searchQuery,
+              onTap: (profile) => onUserTap(connection, profile),
+              onProfilePhotoTap: (profile) =>
+                  onProfilePhotoTap(connection, profile),
+            );
+          },
         );
       },
     );
@@ -365,6 +406,7 @@ class _ConnectionsList extends StatelessWidget {
 /// 
 /// This widget uses the profile cache in ConnectionBloc instead of
 /// fetching profiles individually, eliminating loading spinners on tab switches.
+/// Uses ConversationTile to match the home page display style and logic.
 class _ConnectionUserTile extends StatelessWidget {
   final Connection connection;
   final String userId;
@@ -391,10 +433,6 @@ class _ConnectionUserTile extends StatelessWidget {
         
         final displayName = profile['displayName'] as String? ?? 'User';
         final avatarUrl = profile['avatarUrl'] as String?;
-        
-        // If profile is being loaded, show a subtle loading indicator
-        // but still show the tile with placeholder data
-        final isLoading = cachedProfile == null;
 
         // Filter by search query
         if (searchQuery.isNotEmpty) {
@@ -404,7 +442,6 @@ class _ConnectionUserTile extends StatelessWidget {
           }
         }
 
-        final theme = Theme.of(context);
         final conversationId = Conversation.createConversationId(
           connection.userId1,
           connection.userId2,
@@ -424,92 +461,22 @@ class _ConnectionUserTile extends StatelessWidget {
               ),
             );
 
-            final lastMessage = conversation.lastMessageText;
-            final hasMessages = lastMessage != null && lastMessage.isNotEmpty;
+            // Get current user ID for the ConversationTile
+            final authState = context.read<AuthBloc>().state;
+            final currentUserId = authState is AuthAuthenticated ? authState.user.id : '';
 
-            return InkWell(
+            // Use ConversationTile which has all the perfect logic from home page
+            return ConversationTile(
+              conversation: conversation,
+              currentUserId: currentUserId,
+              overrideDisplayName: displayName,
+              overridePhotoUrl: avatarUrl,
               onTap: () => onTap(profile),
-              child: ListTile(
-                leading: GestureDetector(
-                  onTap: () => onProfilePhotoTap(profile),
-                  child: Hero(
-                    tag: 'avatar_$userId',
-                    child: isLoading 
-                        ? CircleAvatar(
-                            radius: 26,
-                            backgroundColor: theme.colorScheme.primaryContainer,
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: theme.colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          )
-                        : CachedAvatar(
-                            imageUrl: avatarUrl,
-                            name: displayName,
-                            radius: 26,
-                          ),
-                  ),
-                ),
-                title: Text(
-                  displayName,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: hasMessages
-                    ? Text(
-                        lastMessage,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      )
-                    : Text(
-                        'Connected ${_formatTimeAgo(connection.connectedAt)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.message_outlined),
-                  onPressed: () => onTap(profile),
-                  tooltip: 'Message',
-                ),
-              ),
             );
           },
         );
       },
     );
-  }
-
-  String _formatTimeAgo(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inDays == 0) {
-      return 'today';
-    } else if (diff.inDays == 1) {
-      return 'yesterday';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays} days ago';
-    } else if (diff.inDays < 30) {
-      final weeks = (diff.inDays / 7).floor();
-      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
-    } else if (diff.inDays < 365) {
-      final months = (diff.inDays / 30).floor();
-      return '$months ${months == 1 ? 'month' : 'months'} ago';
-    } else {
-      final years = (diff.inDays / 365).floor();
-      return '$years ${years == 1 ? 'year' : 'years'} ago';
-    }
   }
 }
 

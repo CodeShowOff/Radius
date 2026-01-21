@@ -51,7 +51,8 @@ class UserModel {
       id: id,
       email: email,
       displayName: doc['displayName'] as String?,
-      avatarUrl: doc['avatarUrl'] as String?,
+      // Read from either photoUrl (new) or avatarUrl (legacy) for backward compatibility
+      avatarUrl: doc['photoUrl'] as String? ?? doc['avatarUrl'] as String?,
       username: username,
       createdAt: (doc['createdAt'] as Timestamp?)?.toDate(),
       isDiscoverable: doc['isDiscoverable'] as bool? ?? true,
@@ -74,11 +75,12 @@ class UserModel {
   /// Converts this model to a Firestore document.
   /// When [useServerTimestamp] is true, createdAt will use FieldValue.serverTimestamp()
   /// which is required by Firestore security rules for document creation.
+  /// Saves photo as 'photoUrl' (standardized field name)
   Map<String, dynamic> toFirestore({bool useServerTimestamp = false}) {
     return {
       'email': email,
       'displayName': displayName,
-      'avatarUrl': avatarUrl,
+      'photoUrl': avatarUrl, // Save as photoUrl in DB for consistency
       'username': username,
       'createdAt': useServerTimestamp
           ? FieldValue.serverTimestamp()

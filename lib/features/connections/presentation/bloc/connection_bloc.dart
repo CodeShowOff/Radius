@@ -542,10 +542,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   }
   
   /// Fetches a single profile and adds it to the cache.
+  /// Now uses 'users' collection only (single source of truth)
   Future<void> _fetchAndCacheProfile(String userId) async {
     try {
       final doc = await _firestore
-          .collection('profiles')
+          .collection('users')
           .doc(userId)
           .get()
           .timeout(const Duration(seconds: 5));
@@ -555,19 +556,15 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       final data = doc.data();
       
       final displayName = data != null
-          ? ((data['name'] as String?)?.trim().isNotEmpty == true
-              ? (data['name'] as String).trim()
-              : (data['displayName'] as String?)?.trim().isNotEmpty == true
-                  ? (data['displayName'] as String).trim()
-                  : 'User')
+          ? ((data['displayName'] as String?)?.trim().isNotEmpty == true
+              ? (data['displayName'] as String).trim()
+              : 'User')
           : 'User';
       
       final avatarUrl = data != null
           ? ((data['photoUrl'] as String?)?.trim().isNotEmpty == true
               ? (data['photoUrl'] as String).trim()
-              : (data['avatarUrl'] as String?)?.trim().isNotEmpty == true
-                  ? (data['avatarUrl'] as String).trim()
-                  : null)
+              : null)
           : null;
       
       final profile = CachedProfile(

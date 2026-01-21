@@ -61,8 +61,11 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       if (kDebugMode) {
         _setPhase(_InitPhase.initializing, 'Activating App Check…');
         try {
+          // ignore: deprecated_member_use
           await FirebaseAppCheck.instance.activate(
+            // ignore: deprecated_member_use
             androidProvider: AndroidProvider.debug,
+            // ignore: deprecated_member_use
             appleProvider: AppleProvider.debug,
           ).timeout(const Duration(seconds: 5));
         } catch (e, st) {

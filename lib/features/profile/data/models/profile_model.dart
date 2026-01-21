@@ -38,12 +38,14 @@ class ProfileModel {
   });
 
   /// Creates ProfileModel from Firestore document.
+  /// Reads from users collection which uses 'displayName' and 'photoUrl'
   factory ProfileModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return ProfileModel(
       id: doc.id,
       userId: data['userId'] as String? ?? doc.id,
-      name: data['name'] as String? ?? '',
+      // Read from 'displayName' (users collection) or fallback to 'name' (legacy)
+      name: data['displayName'] as String? ?? data['name'] as String? ?? '',
       bio: data['bio'] as String? ?? '',
       photoUrl: data['photoUrl'] as String?,
       isVisible: data['isVisible'] as bool? ?? true,
@@ -79,13 +81,15 @@ class ProfileModel {
   }
 
   /// Converts to Firestore document map.
+  /// Stores in users collection with 'displayName' (not 'name')
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
-      'name': name,
+      'displayName': name, // Use displayName for users collection
       'bio': bio,
       'photoUrl': photoUrl,
       'isVisible': isVisible,
+      'isDiscoverable': isVisible, // Keep both for compatibility
       'showOnlineStatus': showOnlineStatus,
       'allowConnectionRequests': allowConnectionRequests,
       'showLastSeen': showLastSeen,
@@ -118,6 +122,7 @@ class ProfileModel {
   }
 
   /// Creates a map for partial updates (only changed fields).
+  /// Uses 'displayName' for users collection consistency
   static Map<String, dynamic> toUpdateMap({
     String? name,
     String? bio,
@@ -134,10 +139,13 @@ class ProfileModel {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (name != null) map['name'] = name;
+    if (name != null) map['displayName'] = name; // Use displayName for users collection
     if (bio != null) map['bio'] = bio;
     if (photoUrl != null) map['photoUrl'] = photoUrl;
-    if (isVisible != null) map['isVisible'] = isVisible;
+    if (isVisible != null) {
+      map['isVisible'] = isVisible;
+      map['isDiscoverable'] = isVisible; // Keep both for compatibility
+    }
     if (showOnlineStatus != null) map['showOnlineStatus'] = showOnlineStatus;
     if (allowConnectionRequests != null) {
       map['allowConnectionRequests'] = allowConnectionRequests;

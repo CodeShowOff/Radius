@@ -32,7 +32,6 @@ import '../../features/proximity/presentation/pages/nearby_users_screen.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
 import '../config/app_config.dart';
 import '../di/injection.dart';
-import '../services/analytics/analytics_service.dart';
 import 'routes.dart';
 
 /// Routes that don't require authentication.
@@ -46,14 +45,8 @@ const _publicRoutes = {
 GoRouter? _router;
 
 List<NavigatorObserver> _buildObservers() {
-  if (!AppConfig.enableAnalytics) return const [];
-  try {
-    return [getIt<AnalyticsService>().observer];
-  } catch (_) {
-    // DI may not be ready in unusual initialization scenarios.
-    // Prefer a working app without analytics over a startup crash.
-    return const [];
-  }
+  // Analytics removed - no navigation tracking
+  return const [];
 }
 
 /// Application router configuration using GoRouter.

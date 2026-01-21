@@ -924,17 +924,18 @@ class ConnectionService {
   // ==================== USER PROFILE FETCHING ====================
 
   /// Fetches user profile by ID.
+  /// Now uses 'users' collection only (single source of truth)
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
     try {
-      // Privacy: fetch public profile data from `profiles` instead of `users`.
-      final doc = await _firestore.collection('profiles').doc(userId).get();
+      // Fetch from users collection (single source of truth)
+      final doc = await _firestore.collection('users').doc(userId).get();
       if (!doc.exists) return null;
 
       final data = doc.data()!;
       return {
         'id': doc.id,
-        'displayName': data['name'] ?? 'User',
-        'avatarUrl': data['photoUrl'],
+        'displayName': data['displayName'] ?? 'User',
+        'avatarUrl': data['photoUrl'], // Return as avatarUrl for compatibility
         'bio': data['bio'],
         'vibe': data['vibe'],
         'mood': data['mood'],
@@ -949,6 +950,7 @@ class ConnectionService {
   }
 
   /// Fetches multiple user profiles by IDs.
+  /// Now uses 'users' collection only (single source of truth)
   Future<Map<String, Map<String, dynamic>>> getUserProfiles(
       List<String> userIds) async {
     if (userIds.isEmpty) return {};
@@ -967,7 +969,7 @@ class ConnectionService {
 
       for (final chunk in chunks) {
         final snapshot = await _firestore
-            .collection('profiles')
+            .collection('users')
             .where(FieldPath.documentId, whereIn: chunk)
             .get();
 
@@ -975,8 +977,8 @@ class ConnectionService {
           final data = doc.data();
           results[doc.id] = {
             'id': doc.id,
-            'displayName': data['name'] ?? 'User',
-            'avatarUrl': data['photoUrl'],
+            'displayName': data['displayName'] ?? 'User',
+            'avatarUrl': data['photoUrl'], // Return as avatarUrl for compatibility
             'bio': data['bio'],
             'vibe': data['vibe'],
             'mood': data['mood'],
