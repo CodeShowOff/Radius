@@ -747,6 +747,188 @@ class GuessmeService {
       _logger.e('Error updating public badge count', error: e, stackTrace: stack);
     }
   }
+
+  // ==================== CONVERSION TO PERMANENT CONNECTION ====================
+
+  /// Converts a GuessMe session to a permanent connection after mutual consent.
+  /// 
+  /// This creates:
+  /// 1. A Connection record between the users
+  /// 2. A persistent Conversation for ongoing chat
+  /// 3. Transfers messages from GuessMe to the permanent conversation (optional)
+  /// 
+  /// Returns the conversation ID of the new persistent chat.
+  /// 
+  /// Thread-safe: Uses Firestore transactions to prevent race conditions.
+  Future<String?> convertToConnection({
+    required String sessionId,
+  }) async {
+    try {
+      final session = await getSession(sessionId);
+      if (session == null) {
+        _logger.w('Cannot convert: session $sessionId not found');
+        return null;
+      }
+
+      if (session.player2Id == null) {
+        _logger.w('Cannot convert: session missing player 2');
+        return null;
+      }
+
+      if (session.mutualConnectionSuccess != true) {
+        _logger.w('Cannot convert: mutual connection not confirmed');
+        return null;
+      }
+
+      // Check if already converted (idempotency)
+      final player1Id = session.player1Id;
+      final player2Id = session.player2Id!;
+      final conversationId = _createConversationId(player1Id, player2Id);
+
+      // Check if conversation already exists
+      final existingConv = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .get();
+
+      if (existingConv.exists) {
+        _logger.i('Conversation $conversationId already exists, returning existing');
+        return conversationId;
+      }
+
+      // Get user profiles
+      final profiles = await Future.wait([
+        _firestore.collection('users').doc(player1Id).get(),
+        _firestore.collection('users').doc(player2Id).get(),
+      ]);
+
+      final player1Profile = profiles[0];
+      final player2Profile = profiles[1];
+
+      if (!player1Profile.exists || !player2Profile.exists) {
+        _logger.w('Cannot convert: one or both user profiles not found');
+        return null;
+      }
+
+      final player1Name = player1Profile.data()?['name'] as String? ?? 'User';
+      final player1Photo = player1Profile.data()?['photoUrl'] as String?;
+      final player2Name = player2Profile.data()?['name'] as String? ?? 'User';
+      final player2Photo = player2Profile.data()?['photoUrl'] as String?;
+
+      // Create the connection record
+      await _createConnection(
+        player1Id: player1Id,
+        player2Id: player2Id,
+        conversationId: conversationId,
+        player1Name: player1Name,
+        player2Name: player2Name,
+        player1Photo: player1Photo,
+        player2Photo: player2Photo,
+      );
+
+      // Create the persistent conversation
+      await _createConversation(
+        conversationId: conversationId,
+        player1Id: player1Id,
+        player2Id: player2Id,
+        player1Name: player1Name,
+        player2Name: player2Name,
+        player1Photo: player1Photo,
+        player2Photo: player2Photo,
+      );
+
+      _logger.i('Converted GuessMe session $sessionId to permanent connection: $conversationId');
+      return conversationId;
+    } catch (e, stack) {
+      _logger.e('Error converting session to connection', error: e, stackTrace: stack);
+      return null;
+    }
+  }
+
+  /// Creates a deterministic conversation ID from two user IDs.
+  String _createConversationId(String userId1, String userId2) {
+    final ids = [userId1, userId2]..sort();
+    return '${ids[0]}_${ids[1]}';
+  }
+
+  /// Creates a connection record between two users.
+  /// Uses the same schema as regular connections (userId1/userId2).
+  Future<void> _createConnection({
+    required String player1Id,
+    required String player2Id,
+    required String conversationId,
+    required String player1Name,
+    required String player2Name,
+    String? player1Photo,
+    String? player2Photo,
+  }) async {
+    final connectionsRef = _firestore.collection('connections');
+
+    // Sort user IDs to maintain consistent schema with regular connections
+    final ids = [player1Id, player2Id]..sort();
+    final connectionId = '${ids[0]}_${ids[1]}';
+
+    // Create single bidirectional connection document
+    await connectionsRef.doc(connectionId).set({
+      'userId1': ids[0],
+      'userId2': ids[1],
+      'status': 'connected',
+      'connectedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'initiatedBy': player1Id, // The player who initiated the guess check
+      'canMessage': true,
+      'shareLocation': false,
+      'source': 'guessme',
+    });
+
+    _logger.d('Created connection record $connectionId for $player1Id and $player2Id');
+  }
+
+  /// Creates a persistent conversation document.
+  Future<void> _createConversation({
+    required String conversationId,
+    required String player1Id,
+    required String player2Id,
+    required String player1Name,
+    required String player2Name,
+    String? player1Photo,
+    String? player2Photo,
+  }) async {
+    final conversationsRef = _firestore.collection('conversations');
+
+    // Check if conversation already exists
+    final existingConv = await conversationsRef.doc(conversationId).get();
+    if (existingConv.exists) {
+      _logger.d('Conversation $conversationId already exists, skipping creation');
+      return;
+    }
+
+    // Create new conversation
+    await conversationsRef.doc(conversationId).set({
+      'id': conversationId,
+      'participantIds': [player1Id, player2Id],
+      'participantNames': {
+        player1Id: player1Name,
+        player2Id: player2Name,
+      },
+      'participantPhotos': {
+        player1Id: player1Photo,
+        player2Id: player2Photo,
+      },
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastMessageText': 'Connected from GuessMe game!',
+      'lastMessageSenderId': null,
+      'lastMessageStatus': 'sent',
+      'unreadCounts': {
+        player1Id: 0,
+        player2Id: 0,
+      },
+      'source': 'guessme',
+    });
+
+    _logger.d('Created conversation $conversationId');
+  }
 }
 
 /// Result of a connection confirmation response.

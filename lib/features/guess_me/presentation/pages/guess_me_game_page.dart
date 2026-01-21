@@ -5,6 +5,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/router/routes.dart';
+import '../../../chat/data/adapters/guessme_message_adapter.dart';
+import '../../../chat/domain/entities/chat_config.dart';
+import '../../../chat/presentation/widgets/shared_chat_input.dart';
+import '../../../chat/presentation/widgets/shared_messages_list.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../domain/entities/guess_me_session.dart';
 import '../bloc/guess_me_bloc.dart';
@@ -17,6 +22,7 @@ import '../bloc/guess_me_bloc.dart';
 /// 2. Guess check initiated -> waiting for response
 /// 3. Correct guess -> Connection prompt shown to BOTH users
 /// 4. Both respond -> Show result and end game
+/// 5. If both agree -> Convert to permanent connection and redirect to Connections chat
 class GuessMeGamePage extends StatefulWidget {
   final String sessionId;
 
@@ -31,9 +37,7 @@ class GuessMeGamePage extends StatefulWidget {
 
 class _GuessMeGamePageState extends State<GuessMeGamePage>
     with WidgetsBindingObserver {
-  final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
 
   Timer? _countdownTimer;
   Duration _timeRemaining = const Duration(hours: 1);
@@ -51,9 +55,7 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
-    _messageController.dispose();
     _scrollController.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -101,19 +103,16 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
     }
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+  void _sendMessage(String text) {
+    if (text.trim().isEmpty) return;
 
     context.read<GuessmeBloc>().add(GuessmeSendMessage(text));
-    _messageController.clear();
-    _focusNode.requestFocus();
 
     // Scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0, // Reverse list, 0 is bottom
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -335,12 +334,32 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
       IconData icon;
       Color iconColor;
       String message;
+      String? actionLabel;
+      VoidCallback? onAction;
 
       if (mutualSuccess) {
         title = 'Connected!';
         icon = Icons.celebration;
         iconColor = Colors.green;
         message = 'You and $otherPlayerName are now connected! You can continue chatting in your connections.';
+        actionLabel = 'Go to Chat';
+        onAction = () {
+          Navigator.pop(context); // Close dialog
+          context.pop(); // Close game page
+          
+          // Navigate to the new permanent chat
+          if (state.convertedConversationId != null && otherPlayerId != null) {
+            context.push(
+              Routes.chatWith(state.convertedConversationId!),
+              extra: {
+                'currentUserId': state.currentUserId,
+                'otherUserId': otherPlayerId,
+                'otherUserName': otherPlayerName,
+                'otherUserPhotoUrl': otherPlayerPhoto,
+              },
+            );
+          }
+        };
       } else if (wasExpired) {
         title = 'Time\'s Up!';
         icon = Icons.timer_off;
@@ -404,13 +423,19 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
             ],
           ),
           actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                context.pop();
-              },
-              child: const Text('Back to Lobby'),
-            ),
+            if (actionLabel != null && onAction != null)
+              FilledButton(
+                onPressed: onAction,
+                child: Text(actionLabel),
+              )
+            else
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  context.pop();
+                },
+                child: const Text('Back to Lobby'),
+              ),
           ],
         ),
       );
@@ -616,190 +641,20 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   }
 
   Widget _buildMessagesList(BuildContext context, GuessmeState state) {
-    final theme = Theme.of(context);
-    final messages = state.messages;
+    // Convert GuessMe messages to standard Message format for shared component
+    final messages = GuessmeMessageAdapter.toMessages(state.messages);
 
-    if (messages.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 64,
-                color: theme.colorScheme.primary.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Start chatting!',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Say hi to your mystery partner.\nTry to figure out who they are!',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        final isMe = message.senderId == state.currentUserId;
-
-        return _buildMessageBubble(context, message, isMe);
-      },
+    // Create config for anonymous GuessMe chat
+    final config = ChatConfig.guessMe(
+      expiresAt: state.session?.expiresAt,
     );
-  }
 
-  Widget _buildMessageBubble(
-    BuildContext context,
-    GuessmeMessage message,
-    bool isMe,
-  ) {
-    final theme = Theme.of(context);
-
-    // System messages
-    if (message.type == GuessmeMessageType.system) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              message.text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Guess check messages
-    if (message.type == GuessmeMessageType.guessCheck) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.psychology, color: Colors.orange, size: 18),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    message.text,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Regular messages
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: theme.colorScheme.secondary,
-              child: const Text(
-                '?',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          IntrinsicWidth(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 16),
-                ),
-              ),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.end,
-                children: [
-                  Text(
-                    message.text,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: isMe
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurface,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 1),
-                    child: Text(
-                      '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isMe
-                            ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
-                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (isMe) const SizedBox(width: 40),
-        ],
-      ),
+    return SharedMessagesList(
+      messages: messages,
+      currentUserId: state.currentUserId ?? '',
+      config: config,
+      scrollController: _scrollController,
+      isLoading: false,
     );
   }
 
@@ -857,55 +712,18 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   }
 
   Widget _buildMessageInput(BuildContext context, GuessmeState state) {
-    final theme = Theme.of(context);
     final canSend = state.isInGame && state.status != GuessmeStatus.gameEnded;
 
-    return Container(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              focusNode: _focusNode,
-              enabled: canSend,
-              decoration: InputDecoration(
-                hintText: canSend ? 'Type a message...' : 'Game ended',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-              ),
-              textInputAction: TextInputAction.send,
-              onSubmitted: canSend ? (_) => _sendMessage() : null,
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            onPressed: canSend ? _sendMessage : null,
-            icon: const Icon(Icons.send),
-          ),
-        ],
-      ),
+    // Create config for anonymous GuessMe chat
+    final config = ChatConfig.guessMe(
+      expiresAt: state.session?.expiresAt,
+    );
+
+    return SharedChatInput(
+      config: config,
+      onSend: _sendMessage,
+      enabled: canSend,
+      disabledMessage: canSend ? null : 'Game ended',
     );
   }
 }

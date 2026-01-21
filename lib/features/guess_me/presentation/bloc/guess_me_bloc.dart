@@ -291,6 +291,22 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
         return;
       }
 
+      // If both responded and both want to connect, convert to permanent connection
+      if (result.bothResponded && result.bothWantToConnect) {
+        _logger.i('Both users agreed to connect - converting session to permanent connection');
+        
+        // Convert the session to a permanent connection
+        final conversationId = await _service.convertToConnection(
+          sessionId: _currentSessionId!,
+        );
+
+        if (conversationId != null) {
+          emit(state.copyWith(
+            convertedConversationId: conversationId,
+          ));
+        }
+      }
+
       // State will be updated via session subscription
       // The session listener will handle transitioning to gameEnded
     } catch (e, stack) {

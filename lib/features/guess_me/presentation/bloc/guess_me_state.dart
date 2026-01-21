@@ -56,6 +56,9 @@ class GuessmeState extends Equatable {
   /// Error message (if any).
   final String? errorMessage;
 
+  /// Conversation ID if session was converted to permanent connection.
+  final String? convertedConversationId;
+
   const GuessmeState({
     this.status = GuessmeStatus.initial,
     this.currentUserId,
@@ -64,6 +67,7 @@ class GuessmeState extends Equatable {
     this.stats,
     this.otherPlayerName,
     this.errorMessage,
+    this.convertedConversationId,
   });
 
   /// Creates a copy with specified changes.
@@ -78,6 +82,8 @@ class GuessmeState extends Equatable {
     bool clearOtherPlayerName = false,
     String? errorMessage,
     bool clearError = false,
+    String? convertedConversationId,
+    bool clearConvertedConversationId = false,
   }) {
     return GuessmeState(
       status: status ?? this.status,
@@ -89,6 +95,9 @@ class GuessmeState extends Equatable {
           ? null
           : (otherPlayerName ?? this.otherPlayerName),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      convertedConversationId: clearConvertedConversationId
+          ? null
+          : (convertedConversationId ?? this.convertedConversationId),
     );
   }
 
@@ -151,5 +160,6 @@ class GuessmeState extends Equatable {
         stats,
         otherPlayerName,
         errorMessage,
+        convertedConversationId,
       ];
 }

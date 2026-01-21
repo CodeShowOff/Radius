@@ -147,24 +147,45 @@ service cloud.firestore {
     // ============================================================
     
     match /connections/{connectionId} {
+      // Helper: Check if user is one of the participants
+      function isParticipant() {
+        return isAuthenticated() 
+          && (resource.data.userId1 == request.auth.uid 
+              || resource.data.userId2 == request.auth.uid);
+      }
+      
+      // Helper: Check if user will be a participant (for creates)
+      function willBeParticipant() {
+        return isAuthenticated()
+          && (request.resource.data.userId1 == request.auth.uid 
+              || request.resource.data.userId2 == request.auth.uid);
+      }
+      
       // RULE: Only participants can read their connections
-      allow read: if isAuthenticated() && isConnectionParticipant();
+      // Connection docs use userId1/userId2 (sorted alphabetically)
+      allow read: if isAuthenticated() && isParticipant();
       
-      // RULE: Participants can create connections (via accepting request)
+      // RULE: Participants can create connections
+      // This supports both manual connections and GuessMe conversions
       allow create: if isAuthenticated() 
-        && request.auth.uid in request.resource.data.users
-        && request.resource.data.users.size() == 2
-        && request.resource.data.status == 'connected'
-        && !hasBlockRelationship(request.resource.data.users[0], request.resource.data.users[1]);
+        && willBeParticipant()
+        && request.resource.data.keys().hasAll(['userId1', 'userId2', 'status', 'connectedAt', 'updatedAt', 'initiatedBy', 'canMessage', 'shareLocation'])
+        && request.resource.data.userId1 != request.resource.data.userId2
+        && request.resource.data.status in ['connected', 'blocked', 'disconnected']
+        && (request.resource.data.initiatedBy == request.resource.data.userId1 
+            || request.resource.data.initiatedBy == request.resource.data.userId2)
+        && !hasBlockRelationship(request.resource.data.userId1, request.resource.data.userId2);
       
-      // RULE: Only participants can update (but cannot change core fields)
+      // RULE: Only participants can update (but cannot change core user fields)
       allow update: if isAuthenticated() 
-        && isConnectionParticipant()
-        && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['users', 'createdAt']);
+        && isParticipant()
+        && request.resource.data.userId1 == resource.data.userId1
+        && request.resource.data.userId2 == resource.data.userId2
+        && request.resource.data.connectedAt == resource.data.connectedAt
+        && request.resource.data.initiatedBy == resource.data.initiatedBy;
       
       // RULE: Either participant can delete the connection
-      allow delete: if isAuthenticated() && isConnectionParticipant();
+      allow delete: if isAuthenticated() && isParticipant();
     }
     
     // Connection requests
@@ -218,12 +239,15 @@ service cloud.firestore {
       // RULE: Only participants can read conversations
       allow read: if isChatParticipant();
       
-      // RULE: Create requires: participant, exactly 2 users, users are connected, not blocked
+      // RULE: Create requires participant and exactly 2 users
+      // For GuessMe conversions: connection may be created simultaneously
+      // For manual chats: connection should exist (enforced by app logic)
       allow create: if willBeChatParticipant()
         && request.resource.data.participantIds.size() == 2
-        && areConnected(request.resource.data.participantIds[0], request.resource.data.participantIds[1])
+        && request.resource.data.participantIds[0] != request.resource.data.participantIds[1]
         && !hasBlockRelationship(request.resource.data.participantIds[0], request.resource.data.participantIds[1])
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasAll(['id', 'participantIds', 'participantNames', 'createdAt', 'lastMessageAt']);
       
       // RULE: Participants can update (last message, unread counts, mute, archive)
       allow update: if isChatParticipant()
