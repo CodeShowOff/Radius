@@ -165,17 +165,28 @@ class _ConnectionTileState extends State<_ConnectionTile> {
     final otherUserId = widget.connection.getOtherUserId(widget.currentUserId);
     try {
       final doc = await getIt<FirestoreService>()
-          .getDocument('users/$otherUserId')
+          .getDocument('profiles/$otherUserId')
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () => null,
           );
 
       if (doc == null) {
-        return {'id': otherUserId, 'name': 'User', 'photoUrl': null, 'bio': '', 'vibe': '', 'mood': '', 'gender': null};
+        return {
+          'id': otherUserId,
+          'name': 'User',
+          'photoUrl': null,
+          'bio': '',
+          'vibe': '',
+          'mood': '',
+          'gender': null,
+        };
       }
 
-      final name = (doc['displayName'] as String?)?.trim();
+      // Prefer 'displayName' but fall back to legacy 'name'
+      final rawName =
+          (doc['displayName'] as String?) ?? (doc['name'] as String?);
+      final name = rawName?.trim();
       final photoUrl = (doc['photoUrl'] as String?)?.trim();
       final bio = (doc['bio'] as String?)?.trim();
       final vibe = (doc['vibe'] as String?)?.trim();

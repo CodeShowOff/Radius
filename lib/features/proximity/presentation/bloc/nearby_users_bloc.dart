@@ -78,13 +78,21 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     // Subscribe to nearby users stream
     _nearbyUsersSubscription?.cancel();
     _nearbyUsersSubscription = _proximityService.nearbyUsersStream.listen(
-      (users) => add(NearbyUsersUpdated(users)),
+      (users) {
+        if (!isClosed) {
+          add(NearbyUsersUpdated(users));
+        }
+      },
     );
 
     // Subscribe to service state
     _serviceStateSubscription?.cancel();
     _serviceStateSubscription = _proximityService.stateStream.listen(
-      (serviceState) => add(NearbyUsersServiceStateChanged(serviceState)),
+      (serviceState) {
+        if (!isClosed) {
+          add(NearbyUsersServiceStateChanged(serviceState));
+        }
+      },
     );
 
     emit(state.copyWith(

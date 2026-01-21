@@ -47,6 +47,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSendDocument>(_onSendDocument);
     on<ChatSendSticker>(_onSendSticker);
     on<ChatLoadMore>(_onLoadMore);
+    on<ChatPreload>(_onPreload);
     on<ChatMarkAsRead>(_onMarkAsRead);
     on<ChatSetTyping>(_onSetTyping);
     on<ChatDeleteMessage>(_onDeleteMessage);
@@ -86,10 +87,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     
-    // If switching conversations, cancel existing subscriptions first
+    // If switching conversations, immediately update user details and cancel subscriptions
+    // This prevents briefly showing the previous user's name/photo
     if (state.conversationId != null && 
         state.conversationId != event.conversationId) {
       _logger.i('Switching from conversation ${state.conversationId} to ${event.conversationId}');
+      
+      // CRITICAL: Immediately update to new user details to prevent visual glitch
+      emit(state.copyWith(
+        status: ChatStatus.loading,
+        conversationId: event.conversationId,
+        currentUserId: event.currentUserId,
+        otherUserId: event.otherUserId,
+        otherUserName: event.otherUserName,
+        otherUserPhotoUrl: event.otherUserPhotoUrl,
+        messages: const [],
+        pendingMessages: const {},
+        conversation: null,
+        isOtherUserTyping: false,
+      ));
+      
       await _cancelSubscriptions();
     }
 
@@ -100,10 +117,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final cachedMessages = _cacheService.getMessages(event.conversationId);
     final hasCache = cachedMessages.isNotEmpty;
     final cachedEntry = _cacheService.getCache(event.conversationId);
+    
+    // Check if cache is expired (TTL-based)
+    // We still show expired cache for instant display, but will refresh via stream
+    final isExpired = _cacheService.isCacheExpired(event.conversationId);
+    if (isExpired && hasCache) {
+      _logger.d('Cache expired for ${event.conversationId}, will refresh via stream');
+    }
 
     if (hasCache) {
       // INSTANT DISPLAY: Show cached messages immediately, no loading spinner
-      _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages');
+      _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages (expired: $isExpired)');
       emit(state.copyWith(
         status: ChatStatus.loaded, // Already loaded from cache!
         conversationId: event.conversationId,
@@ -183,15 +207,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Subscribe to messages stream
     _messagesSubscription =
         _chatService.getMessagesStream(event.conversationId).listen(
-              (messages) => add(_ChatMessagesUpdated(messages)),
-              onError: (error) => add(_ChatErrorOccurred(error.toString())),
+              (messages) {
+                if (!isClosed) {
+                  add(_ChatMessagesUpdated(messages));
+                }
+              },
+              onError: (error) {
+                if (!isClosed) {
+                  add(_ChatErrorOccurred(error.toString()));
+                }
+              },
             );
 
     // Subscribe to conversation updates
     _conversationSubscription =
         _chatService.getConversationStream(event.conversationId).listen(
-              (conversation) => add(_ChatConversationUpdated(conversation)),
-              onError: (error) => add(_ChatErrorOccurred(error.toString())),
+              (conversation) {
+                if (!isClosed) {
+                  add(_ChatConversationUpdated(conversation));
+                }
+              },
+              onError: (error) {
+                if (!isClosed) {
+                  add(_ChatErrorOccurred(error.toString()));
+                }
+              },
             );
 
     // Subscribe to typing indicator when we know the other participant.
@@ -201,14 +241,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _typingSubscription = _chatService
           .getTypingStream(event.conversationId, event.otherUserId)
           .listen(
-            (isTyping) => add(_ChatTypingUpdated(isTyping)),
-            onError: (error) => add(_ChatErrorOccurred(error.toString())),
+            (isTyping) {
+              if (!isClosed) {
+                add(_ChatTypingUpdated(isTyping));
+              }
+            },
+            onError: (error) {
+              if (!isClosed) {
+                add(_ChatErrorOccurred(error.toString()));
+              }
+            },
           );
     }
 
     // Mark messages as read when opening chat
     // This clears badges immediately (WhatsApp behavior)
-    // Note: We skip markMessagesAsDelivered since read implies delivered
+    // Delivery status (sent → delivered) is handled in _onMessagesUpdated
+    // when the messages stream fires - that's when recipient's app receives them.
     // Don't let this block the chat from opening
     _chatService.markMessagesAsRead(
       conversationId: event.conversationId,
@@ -605,6 +654,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
   }
 
+  /// Preload chat messages into cache without subscribing to streams.
+  /// This is triggered on long-press of a conversation tile to warm the cache
+  /// before navigation, making the chat open instantly even on cache miss.
+  Future<void> _onPreload(
+    ChatPreload event,
+    Emitter<ChatState> emit,
+  ) async {
+    // Skip if already cached with valid TTL
+    if (_cacheService.hasValidCache(
+      event.conversationId,
+      ttl: ChatCacheService.defaultTtl,
+    )) {
+      _logger.d('Preload skipped: ${event.conversationId} already cached');
+      return;
+    }
+
+    // Skip if this is the currently open conversation
+    if (state.conversationId == event.conversationId) {
+      _logger.d('Preload skipped: ${event.conversationId} is currently open');
+      return;
+    }
+
+    _logger.i('Preloading messages for ${event.conversationId}');
+
+    try {
+      // Fetch initial batch of messages (one-time read, no stream)
+      final snapshot = await _chatService.getMessagesOnce(event.conversationId);
+
+      if (snapshot.isNotEmpty) {
+        // Warm the cache with these messages (mark as preload for TTL tracking)
+        _cacheService.updateCache(
+          conversationId: event.conversationId,
+          messages: snapshot,
+          hasMore: snapshot.length >= 50,
+          isPreload: true,
+        );
+        _logger.i('Preloaded ${snapshot.length} messages for ${event.conversationId}');
+      }
+    } catch (e) {
+      // Preload failures are silent - don't affect UX
+      _logger.d('Preload failed for ${event.conversationId}: $e');
+    }
+  }
+
   Future<void> _onMarkAsRead(
     ChatMarkAsRead event,
     Emitter<ChatState> emit,
@@ -728,6 +821,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // ========================================================================
+    // CRITICAL: Mark messages as DELIVERED when stream fires
+    // This is the WhatsApp pattern: sent → delivered (double check) → read (blue)
+    // Delivered = recipient's app received the message (listener fired)
+    // ========================================================================
+    if (state.conversationId != null && state.currentUserId != null) {
+      // Check if there are any undelivered messages from the other user
+      final hasUndeliveredMessages = event.messages.any((m) =>
+          m.senderId != state.currentUserId &&
+          m.deliveredAt == null &&
+          m.status == MessageStatus.sent);
+
+      if (hasUndeliveredMessages) {
+        // Mark messages as delivered in the background (non-blocking)
+        _chatService.markMessagesAsDelivered(
+          conversationId: state.conversationId!,
+          userId: state.currentUserId!,
+        ).catchError((e) {
+          _logger.d('Failed to mark messages as delivered: $e');
+        });
+      }
+    }
+
+    // ========================================================================
     // CRITICAL: Update the global cache with new messages
     // This enables instant display when returning to this chat later
     // ========================================================================
@@ -769,8 +885,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _typingSubscription = _chatService
           .getTypingStream(state.conversationId!, derivedOtherUserId)
           .listen(
-            (isTyping) => add(_ChatTypingUpdated(isTyping)),
-            onError: (error) => add(_ChatErrorOccurred(error.toString())),
+            (isTyping) {
+              if (!isClosed) {
+                add(_ChatTypingUpdated(isTyping));
+              }
+            },
+            onError: (error) {
+              if (!isClosed) {
+                add(_ChatErrorOccurred(error.toString()));
+              }
+            },
           );
     }
 

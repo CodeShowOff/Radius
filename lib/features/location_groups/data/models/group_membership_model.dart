@@ -177,6 +177,7 @@ class GroupJoinRequestModel extends GroupJoinRequest {
       'userName': userName,
       'userPhotoUrl': userPhotoUrl,
       'message': message,
+      'status': 'pending',
       'requestedAt': FieldValue.serverTimestamp(),
     };
   }

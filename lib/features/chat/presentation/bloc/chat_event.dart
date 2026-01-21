@@ -114,6 +114,17 @@ class ChatLoadMore extends ChatEvent {
   const ChatLoadMore();
 }
 
+/// Preload chat data into cache without subscribing to streams.
+/// Used on long-press to warm cache before navigation for instant display.
+class ChatPreload extends ChatEvent {
+  final String conversationId;
+
+  const ChatPreload({required this.conversationId});
+
+  @override
+  List<Object?> get props => [conversationId];
+}
+
 /// Mark messages as read.
 class ChatMarkAsRead extends ChatEvent {
   const ChatMarkAsRead();

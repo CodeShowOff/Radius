@@ -425,6 +425,37 @@ class ChatService {
             .toList());
   }
 
+  /// One-time fetch of messages for cache preloading.
+  /// Used to warm the cache before navigation without subscribing to streams.
+  Future<List<Message>> getMessagesOnce(
+    String conversationId, {
+    int limit = _messagesPerPage,
+  }) async {
+    try {
+      final snapshot = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('sentAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return snapshot.docs
+          .map((doc) =>
+              MessageModel.fromFirestore(doc, conversationId).toEntity())
+          .toList();
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error fetching messages once', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
+    } catch (e, stack) {
+      _logger.e('Error fetching messages once', error: e, stackTrace: stack);
+      throw DatabaseException(
+        message: 'Failed to fetch messages',
+        code: 'chat-fetch-failed',
+        originalError: e,
+      );
+    }
+  }
+
   /// Loads older messages for pagination.
   Future<List<Message>> loadMoreMessages(
     String conversationId, {

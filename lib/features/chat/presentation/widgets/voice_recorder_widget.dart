@@ -72,6 +72,7 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
         path: path,
       );
 
+      if (!mounted) return;
       setState(() {
         _isRecording = true;
         _audioPath = path;
@@ -102,6 +103,7 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
       if (_isRecording) {
         final path = await _audioRecorder.stop();
 
+        if (!mounted) return;
         setState(() {
           _isRecording = false;
         });

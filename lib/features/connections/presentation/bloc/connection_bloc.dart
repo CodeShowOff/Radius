@@ -542,26 +542,39 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   }
   
   /// Fetches a single profile and adds it to the cache.
-  /// Now uses 'users' collection only (single source of truth)
+  /// Reads from public `profiles` (allowed by rules); falls back to `users` when caller is the same user.
   Future<void> _fetchAndCacheProfile(String userId) async {
     try {
-      final doc = await _firestore
-          .collection('users')
+      // Primary: public profiles collection
+      DocumentSnapshot<Map<String, dynamic>> doc = await _firestore
+          .collection('profiles')
           .doc(userId)
           .get()
           .timeout(const Duration(seconds: 5));
+
+      // Fallback: if viewing self and profile doc missing, read private users doc (permitted for owner)
+      if (!doc.exists && _currentUserId == userId) {
+        doc = await _firestore
+            .collection('users')
+            .doc(userId)
+            .get()
+            .timeout(const Duration(seconds: 5));
+      }
       
       if (isClosed) return;
       
-      final data = doc.data();
+        final data = doc.data();
+
+        // Prefer 'displayName' but gracefully fall back to legacy 'name'
+        String? rawName;
+        if (data != null) {
+        rawName = (data['displayName'] as String?) ?? (data['name'] as String?);
+        }
+
+        final displayName =
+          (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : 'User';
       
-      final displayName = data != null
-          ? ((data['displayName'] as String?)?.trim().isNotEmpty == true
-              ? (data['displayName'] as String).trim()
-              : 'User')
-          : 'User';
-      
-      final avatarUrl = data != null
+      final photoUrl = data != null
           ? ((data['photoUrl'] as String?)?.trim().isNotEmpty == true
               ? (data['photoUrl'] as String).trim()
               : null)
@@ -570,7 +583,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       final profile = CachedProfile(
         id: userId,
         displayName: displayName,
-        avatarUrl: avatarUrl,
+        photoUrl: photoUrl,
         bio: data?['bio'] as String?,
         vibe: data?['vibe'] as String?,
         mood: data?['mood'] as String?,

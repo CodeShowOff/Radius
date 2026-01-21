@@ -666,7 +666,7 @@ class GuessmeService {
   Future<GuessmeStats> getStats(String userId) async {
     try {
       final doc = await _firestore
-          .collection('users')
+          .collection('profiles')
           .doc(userId)
           .collection('stats')
           .doc('guess_me')
@@ -683,7 +683,7 @@ class GuessmeService {
   /// Stream of user's stats.
   Stream<GuessmeStats> getStatsStream(String userId) {
     return _firestore
-        .collection('users')
+        .collection('profiles')
         .doc(userId)
         .collection('stats')
         .doc('guess_me')
@@ -699,7 +699,7 @@ class GuessmeService {
   Future<void> _incrementCorrectGuess(String userId) async {
     try {
       final statsRef = _firestore
-          .collection('users')
+          .collection('profiles')
           .doc(userId)
           .collection('stats')
           .doc('guess_me');

@@ -99,9 +99,14 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       _messagesSubscription = _chatService
           .watchMessages(event.groupId, limit: 50)
           .listen(
-            (messages) => add(_GroupMessagesReceived(messages)),
+            (messages) {
+              if (!isClosed) {
+                add(_GroupMessagesReceived(messages));
+              }
+            },
             onError: (error) {
               _logger.e('Error watching messages: $error');
+              if (isClosed) return;
 
               if (error is FirebaseException && error.code == 'permission-denied') {
                 add(const _GroupChatStreamError('You no longer have access to this group chat.'));

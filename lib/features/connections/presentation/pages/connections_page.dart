@@ -251,7 +251,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         'currentUserId': currentUserId,
         'otherUserId': otherUserId,
         'otherUserName': profile['displayName'] ?? 'User',
-        'otherUserPhotoUrl': profile['avatarUrl'],
+        'otherUserPhotoUrl': profile['photoUrl'],
       },
     );
   }
@@ -432,7 +432,7 @@ class _ConnectionUserTile extends StatelessWidget {
             {'id': userId, 'displayName': 'User'};
         
         final displayName = profile['displayName'] as String? ?? 'User';
-        final avatarUrl = profile['avatarUrl'] as String?;
+        final photoUrl = profile['photoUrl'] as String?;
 
         // Filter by search query
         if (searchQuery.isNotEmpty) {
@@ -470,7 +470,7 @@ class _ConnectionUserTile extends StatelessWidget {
               conversation: conversation,
               currentUserId: currentUserId,
               overrideDisplayName: displayName,
-              overridePhotoUrl: avatarUrl,
+              overridePhotoUrl: photoUrl,
               onTap: () => onTap(profile),
             );
           },
@@ -496,7 +496,7 @@ class _UserDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final displayName = profile['displayName'] as String? ?? 'User';
-    final avatarUrl = profile['avatarUrl'] as String?;
+    final photoUrl = profile['photoUrl'] as String?;
     final bio = profile['bio'] as String?;
     final otherUserId = connection.getOtherUserId(currentUserId);
 
@@ -533,7 +533,7 @@ class _UserDetailsSheet extends StatelessWidget {
                       child: Hero(
                         tag: 'avatar_$otherUserId',
                         child: CachedAvatar(
-                          imageUrl: avatarUrl,
+                          imageUrl: photoUrl,
                           name: displayName,
                           radius: 60,
                         ),
@@ -618,7 +618,7 @@ class _UserDetailsSheet extends StatelessWidget {
                                   'currentUserId': currentUserId,
                                   'otherUserId': otherUserId,
                                   'otherUserName': displayName,
-                                  'otherUserPhotoUrl': avatarUrl,
+                                  'otherUserPhotoUrl': photoUrl,
                                 },
                               );
                             },

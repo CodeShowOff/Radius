@@ -42,12 +42,15 @@ class ConversationTile extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CachedAvatar(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: ListTile(
+        enabled: false, // Disable ListTile's own tap handling
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: CachedAvatar(
         imageUrl: photoUrl,
         name: displayName,
         radius: 24,
@@ -125,6 +128,7 @@ class ConversationTile extends StatelessWidget {
             )
           : null,
       ),
+        ),
       ),
     );
   }

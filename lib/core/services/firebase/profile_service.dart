@@ -3,12 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../features/profile/data/models/profile_model.dart';
 
 /// Service for profile-related Firestore operations.
-/// Now uses ONLY the 'users' collection - profiles collection removed.
+/// Writes to both `users` and `profiles` collections to keep data mirrored.
 /// Consistent field names: photoUrl (not avatarUrl), displayName (not name)
 class ProfileService {
   final FirebaseFirestore _firestore;
 
   static const String _usersCollection = 'users';
+  static const String _profilesCollection = 'profiles';
 
   ProfileService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -16,6 +17,25 @@ class ProfileService {
   /// Reference to users collection - the single source of truth.
   CollectionReference<Map<String, dynamic>> get _usersRef =>
       _firestore.collection(_usersCollection);
+
+  /// Reference to profiles collection (denormalized public profile view).
+  CollectionReference<Map<String, dynamic>> get _profilesRef =>
+      _firestore.collection(_profilesCollection);
+
+  /// Writes the same data to both users and profiles documents using merge.
+  Future<void> _writeToUserAndProfile(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
+    final batch = _firestore.batch();
+    final userDoc = _usersRef.doc(userId);
+    final profileDoc = _profilesRef.doc(userId);
+
+    batch.set(userDoc, data, SetOptions(merge: true));
+    batch.set(profileDoc, data, SetOptions(merge: true));
+
+    await batch.commit();
+  }
 
   /// Gets a profile by user ID.
   Future<ProfileModel?> getProfile(String userId) async {
@@ -31,10 +51,9 @@ class ProfileService {
   /// Creates a new profile.
   Future<void> createProfile(ProfileModel profile) async {
     try {
-      final userRef = _usersRef.doc(profile.userId);
       final profileData = profile.toFirestore();
-      
-      await userRef.set(profileData, SetOptions(merge: true));
+
+      await _writeToUserAndProfile(profile.userId, profileData);
     } catch (e) {
       throw ProfileServiceException('Failed to create profile: $e');
     }
@@ -43,8 +62,7 @@ class ProfileService {
   /// Updates an existing profile.
   Future<void> updateProfile(String userId, Map<String, dynamic> data) async {
     try {
-      final userRef = _usersRef.doc(userId);
-      await userRef.update(data);
+      await _writeToUserAndProfile(userId, data);
     } catch (e) {
       throw ProfileServiceException('Failed to update profile: $e');
     }
@@ -53,9 +71,7 @@ class ProfileService {
   /// Updates profile photo URL.
   Future<void> updateProfilePhoto(String userId, String photoUrl) async {
     try {
-      final userRef = _usersRef.doc(userId);
-      
-      await userRef.update({
+      await _writeToUserAndProfile(userId, {
         'photoUrl': photoUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -67,9 +83,7 @@ class ProfileService {
   /// Updates visibility status.
   Future<void> updateVisibility(String userId, bool isVisible) async {
     try {
-      final userRef = _usersRef.doc(userId);
-      
-      await userRef.update({
+      await _writeToUserAndProfile(userId, {
         'isVisible': isVisible,
         'isDiscoverable': isVisible,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -82,7 +96,10 @@ class ProfileService {
   /// Deletes a profile.
   Future<void> deleteProfile(String userId) async {
     try {
-      await _usersRef.doc(userId).delete();
+      final batch = _firestore.batch();
+      batch.delete(_usersRef.doc(userId));
+      batch.delete(_profilesRef.doc(userId));
+      await batch.commit();
     } catch (e) {
       throw ProfileServiceException('Failed to delete profile: $e');
     }

@@ -12,8 +12,8 @@ class ConnectedUser extends Equatable {
   /// The user's display name.
   final String displayName;
 
-  /// The user's avatar URL.
-  final String? avatarUrl;
+  /// The user's photo URL.
+  final String? photoUrl;
 
   /// The user's bio/status.
   final String? bio;
@@ -33,7 +33,7 @@ class ConnectedUser extends Equatable {
   const ConnectedUser({
     required this.id,
     required this.displayName,
-    this.avatarUrl,
+    this.photoUrl,
     this.bio,
     this.isOnline = false,
     this.lastSeen,
@@ -46,7 +46,7 @@ class ConnectedUser extends Equatable {
   ConnectedUser copyWith({
     String? id,
     String? displayName,
-    Object? avatarUrl = _sentinel,
+    Object? photoUrl = _sentinel,
     Object? bio = _sentinel,
     bool? isOnline,
     Object? lastSeen = _sentinel,
@@ -55,7 +55,7 @@ class ConnectedUser extends Equatable {
     return ConnectedUser(
       id: id ?? this.id,
       displayName: displayName ?? this.displayName,
-      avatarUrl: avatarUrl == _sentinel ? this.avatarUrl : avatarUrl as String?,
+      photoUrl: photoUrl == _sentinel ? this.photoUrl : photoUrl as String?,
       bio: bio == _sentinel ? this.bio : bio as String?,
       isOnline: isOnline ?? this.isOnline,
       lastSeen: lastSeen == _sentinel ? this.lastSeen : lastSeen as DateTime?,
@@ -67,7 +67,7 @@ class ConnectedUser extends Equatable {
   List<Object?> get props => [
         id,
         displayName,
-        avatarUrl,
+        photoUrl,
         bio,
         isOnline,
         lastSeen,

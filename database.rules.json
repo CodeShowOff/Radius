@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "status": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $userId",
+        ".validate": "newData.hasChildren(['state', 'lastSeen'])",
+        
+        "state": {
+          ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'away' || newData.val() === 'offline')"
+        },
+        "lastSeen": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

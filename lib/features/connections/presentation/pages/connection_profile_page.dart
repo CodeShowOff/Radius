@@ -41,7 +41,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
   Future<void> _loadProfile() async {
     try {
       final doc = await getIt<FirestoreService>()
-          .getDocument('users/${widget.otherUserId}')
+          .getDocument('profiles/${widget.otherUserId}')
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () => null,
@@ -52,7 +52,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         normalized = {
           'id': widget.otherUserId,
           'displayName': widget.initialName ?? 'User',
-          'avatarUrl': widget.initialPhotoUrl,
+          'photoUrl': widget.initialPhotoUrl,
           'bio': '',
           'vibe': '',
           'mood': '',
@@ -66,7 +66,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                 ? (doc['displayName'] as String).trim()
                 : (widget.initialName ?? 'User');
 
-        final avatarUrl = (doc['photoUrl'] as String?)?.trim().isNotEmpty == true
+        final photoUrl = (doc['photoUrl'] as String?)?.trim().isNotEmpty == true
             ? (doc['photoUrl'] as String).trim()
             : widget.initialPhotoUrl;
 
@@ -83,7 +83,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         normalized = {
           'id': widget.otherUserId,
           'displayName': displayName,
-          'avatarUrl': avatarUrl,
+          'photoUrl': photoUrl,
           'bio': bio,
           'vibe': vibe,
           'mood': mood,
@@ -105,7 +105,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           _profile = {
             'id': widget.otherUserId,
             'displayName': widget.initialName ?? 'User',
-            'avatarUrl': widget.initialPhotoUrl,
+            'photoUrl': widget.initialPhotoUrl,
           };
           _isLoading = false;
         });
@@ -224,7 +224,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
     final profile = _profile ?? {};
     final displayName = profile['displayName'] as String? ?? 'User';
-    final avatarUrl = profile['avatarUrl'] as String?;
+    final photoUrl = profile['photoUrl'] as String?;
     final bio = profile['bio'] as String?;
     final vibe = profile['vibe'] as String?;
     final mood = profile['mood'] as String?;
@@ -244,8 +244,8 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               radius: 60,
               backgroundColor: theme.colorScheme.primaryContainer,
               backgroundImage:
-                  avatarUrl != null ? CachedNetworkImageProvider(avatarUrl) : null,
-              child: avatarUrl == null
+                  photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
+              child: photoUrl == null
                   ? Text(
                       displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
                       style: TextStyle(

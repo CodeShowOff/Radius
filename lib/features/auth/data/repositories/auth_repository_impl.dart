@@ -164,6 +164,15 @@ class AuthRepositoryImpl implements IAuthRepository {
         );
       }
 
+      // Mirror latest Google display name/photo into both users and profiles collections
+      await _profileService.updateProfile(
+        firebaseUser.uid,
+        ProfileModel.toUpdateMap(
+          name: firebaseUser.displayName,
+          photoUrl: firebaseUser.photoURL,
+        ),
+      );
+
       // Record device session for security and debugging
       _recordDeviceSession(firebaseUser.uid, 'login');
 

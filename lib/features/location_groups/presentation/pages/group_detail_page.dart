@@ -242,6 +242,8 @@ class _GroupDetailPageState extends State<GroupDetailPage>
 
       if (pickedFile == null) return;
 
+      // Check if widget is still mounted before calling setState
+      if (!mounted) return;
       setState(() => isUploading = true);
 
       try {
@@ -251,12 +253,17 @@ class _GroupDetailPageState extends State<GroupDetailPage>
           tags: {'group_avatar': 'true'},
         );
 
+        // Check if widget is still mounted before calling setState
+        if (!mounted) return;
         setState(() {
           avatarUrl = url;
           isUploading = false;
         });
       } catch (e) {
+        // Check if widget is still mounted before calling setState
+        if (!mounted) return;
         setState(() => isUploading = false);
+        
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to upload image: $e')),
@@ -412,14 +419,16 @@ class _GroupDetailPageState extends State<GroupDetailPage>
       builder: (context, state) {
         final group = state.currentGroup;
 
-        if (state.status == GroupBlocStatus.loading && group == null) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
+        // Handle null group first: show loading for initial/loading, otherwise not found
         if (group == null) {
+          final isLoading = state.status == GroupBlocStatus.initial ||
+              state.status == GroupBlocStatus.loading;
+          if (isLoading) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
           return Scaffold(
             appBar: AppBar(),
             body: Center(
@@ -991,13 +1000,33 @@ class _MemberTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Prefer up-to-date profile info for the current user
+    String displayName = member.userName ?? 'Unknown User';
+    String? photoUrl = member.userPhotoUrl;
+
+    if (isCurrentUser) {
+      try {
+        final profileState = context.read<ProfileBloc>().state;
+        if (profileState is ProfileLoaded) {
+          if (profileState.profile.name.isNotEmpty) {
+            displayName = profileState.profile.name;
+          }
+          if (profileState.profile.photoUrl != null &&
+              profileState.profile.photoUrl!.isNotEmpty) {
+            photoUrl = profileState.profile.photoUrl;
+          }
+        }
+      } catch (_) {
+        // ProfileBloc might not be available; fall back to membership data
+      }
+    }
+
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage:
-            member.userPhotoUrl != null ? NetworkImage(member.userPhotoUrl!) : null,
-        child: member.userPhotoUrl == null
+        backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+        child: photoUrl == null
             ? Text(
-                (member.userName ?? '?')[0].toUpperCase(),
+                (displayName.isNotEmpty ? displayName[0] : '?').toUpperCase(),
               )
             : null,
       ),
@@ -1005,7 +1034,7 @@ class _MemberTile extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              member.userName ?? 'Unknown User',
+              displayName,
               overflow: TextOverflow.ellipsis,
             ),
           ),

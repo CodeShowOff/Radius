@@ -216,6 +216,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+
+                // Location Based Groups section - 25% shorter than square cards
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Calculate height: 75% of square card height (25% reduction)
+                    // Width of each square card = (total width - gap) / 2
+                    final squareCardWidth = (constraints.maxWidth - 12) / 2;
+                    return SizedBox(
+                      height: squareCardWidth * 0.75,
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.locationGroups),
+                        label: 'Location Based Groups',
+                        color: Theme.of(context).colorScheme.tertiary,
+                        backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                        isSquare: false,
+                        useVerticalLayout: true,
+                        animationType: _CardAnimationType.talking,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -232,6 +254,7 @@ class _AnimatedSquareCard extends StatelessWidget {
   final Color color;
   final Color backgroundColor;
   final bool isSquare;
+  final bool useVerticalLayout;
   final _CardAnimationType animationType;
 
   const _AnimatedSquareCard({
@@ -240,6 +263,7 @@ class _AnimatedSquareCard extends StatelessWidget {
     required this.color,
     required this.backgroundColor,
     this.isSquare = false,
+    this.useVerticalLayout = false,
     this.animationType = _CardAnimationType.wave,
   });
 
@@ -266,43 +290,9 @@ class _AnimatedSquareCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         color: backgroundColor,
-        child: isSquare
-            ? AspectRatio(
-                aspectRatio: 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _getIcon(),
-                          size: 34,
-                          color: color,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        label,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: color,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Container(
-                height: 80,
+        child: (isSquare || useVerticalLayout)
+            ? _buildVerticalContent(theme)
+            : Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -337,6 +327,60 @@ class _AnimatedSquareCard extends StatelessWidget {
               ),
       ),
     );
+  }
+
+  Widget _buildVerticalContent(ThemeData theme) {
+    final bool compact = !isSquare;
+    final EdgeInsets outerPadding =
+        compact ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12) : const EdgeInsets.all(18);
+    final double iconPad = compact ? 12 : 14;
+    final double iconSize = compact ? 28 : 34;
+    final double gap = compact ? 8 : 12;
+
+    final content = Padding(
+      padding: outerPadding,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: EdgeInsets.all(iconPad),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _getIcon(),
+              size: iconSize,
+              color: color,
+            ),
+          ),
+          SizedBox(height: gap),
+          Text(
+            label,
+            style: (compact
+                    ? theme.textTheme.titleMedium
+                    : theme.textTheme.titleLarge)
+                ?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+
+    if (isSquare) {
+      return AspectRatio(
+        aspectRatio: 1,
+        child: content,
+      );
+    }
+
+    return Center(child: content);
   }
 }
 

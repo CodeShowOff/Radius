@@ -37,7 +37,11 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     // Start listening to profile stream
     _profileSubscription = _profileRepository
         .profileStream(event.userId)
-        .listen((profile) => add(ProfileStreamUpdated(profile)));
+        .listen((profile) {
+          if (!isClosed) {
+            add(ProfileStreamUpdated(profile));
+          }
+        });
 
     // Also do an immediate fetch
     final result = await _profileRepository.getProfile(event.userId);

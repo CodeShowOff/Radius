@@ -105,6 +105,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         tags: {'profile_picture': 'true'},
       );
 
+      if (!mounted) return;
       setState(() {
         _profileImageUrl = url;
         _isUploadingImage = false;

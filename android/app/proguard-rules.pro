@@ -35,3 +35,6 @@
 # Keep Play Core (for deferred components / dynamic feature delivery)
 -keep class com.google.android.play.core.** { *; }
 -dontwarn com.google.android.play.core.**
+
+# Suppress missing Firebase Performance URLConnection class referenced by libraries
+-dontwarn com.google.firebase.perf.network.FirebasePerfUrlConnection

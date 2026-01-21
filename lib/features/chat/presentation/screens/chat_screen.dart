@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
+import '../../../../core/services/presence/presence_service.dart';
+import '../../../../core/services/realtime/realtime_data_manager.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
@@ -48,11 +51,16 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentUserName;
   String? _currentUserPhotoUrl;
 
+  // Presence tracking
+  PresenceState? _otherUserPresence;
+  StreamSubscription<Map<String, PresenceState>>? _presenceSubscription;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
+    _initPresenceTracking();
 
     // Cache current user's profile info (used when creating a new conversation).
     try {
@@ -85,6 +93,38 @@ class _ChatScreenState extends State<ChatScreen> {
         ));
   }
 
+  /// Initialize presence tracking for the other user.
+  void _initPresenceTracking() {
+    try {
+      final presenceService = getIt<RealTimeDataManager>().presenceService;
+      if (presenceService == null) return;
+
+      // Start watching the other user's presence
+      presenceService.watchPresence(widget.otherUserId);
+
+      // Listen for presence updates
+      _presenceSubscription = presenceService.presenceUpdates.listen((updates) {
+        final presence = updates[widget.otherUserId];
+        if (mounted && presence != _otherUserPresence) {
+          setState(() {
+            _otherUserPresence = presence;
+          });
+        }
+      });
+
+      // Get initial presence state
+      presenceService.getPresence(widget.otherUserId).then((presence) {
+        if (mounted) {
+          setState(() {
+            _otherUserPresence = presence;
+          });
+        }
+      });
+    } catch (_) {
+      // Presence service not available
+    }
+  }
+
   Future<void> _checkConnectionStatus() async {
     try {
       final connectionService = getIt<ConnectionService>();
@@ -102,19 +142,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  late final ChatBloc _chatBloc;
+  ChatBloc? _chatBloc;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Cache the BLoC reference for safe disposal
-    _chatBloc = context.read<ChatBloc>();
+    // Cache the BLoC reference for safe disposal. Assign only once to avoid
+    // LateInitializationError when dependencies change multiple times.
+    _chatBloc ??= context.read<ChatBloc>();
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    
+    // Stop watching presence
+    _presenceSubscription?.cancel();
+    try {
+      getIt<RealTimeDataManager>().presenceService?.unwatchPresence(widget.otherUserId);
+    } catch (_) {}
 
     // Notify notification service that user left this conversation
     try {
@@ -124,7 +171,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     // Use cached reference to avoid context access after disposal
-    _chatBloc.add(const ChatClose());
+    _chatBloc?.add(const ChatClose());
     super.dispose();
   }
 
@@ -236,6 +283,8 @@ class _ChatScreenState extends State<ChatScreen> {
               return _ChatAppBar(
                 name: effectiveName,
                 photoUrl: effectivePhotoUrl,
+                presenceState: _otherUserPresence,
+                isTyping: state.isOtherUserTyping,
                 onBackPressed: () => Navigator.of(context).pop(),
                 onProfileTap: () {
                   context.push(
@@ -667,6 +716,8 @@ class _ChatScreenState extends State<ChatScreen> {
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String name;
   final String? photoUrl;
+  final PresenceState? presenceState;
+  final bool isTyping;
   final VoidCallback onBackPressed;
   final VoidCallback onProfileTap;
   final void Function(String) onMenuSelected;
@@ -677,6 +728,8 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const _ChatAppBar({
     required this.name,
     this.photoUrl,
+    this.presenceState,
+    this.isTyping = false,
     required this.onBackPressed,
     required this.onProfileTap,
     required this.onMenuSelected,
@@ -688,9 +741,36 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
+  /// Get the subtitle text for the app bar (typing > online status > last seen).
+  String? _getSubtitleText() {
+    if (isTyping) {
+      return 'typing...';
+    }
+    if (presenceState != null) {
+      return presenceState!.displayText;
+    }
+    return null;
+  }
+
+  /// Get the color for the subtitle text.
+  Color? _getSubtitleColor(ThemeData theme) {
+    if (isTyping) {
+      return theme.colorScheme.primary;
+    }
+    if (presenceState?.isOnline == true) {
+      return Colors.green;
+    }
+    final baseColor = theme.textTheme.bodySmall?.color;
+    return baseColor != null
+        ? Color.fromRGBO(baseColor.r.toInt(), baseColor.g.toInt(), baseColor.b.toInt(), 0.7)
+        : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final subtitleText = _getSubtitleText();
+    final subtitleColor = _getSubtitleColor(theme);
 
     return AppBar(
       leading: IconButton(
@@ -702,10 +782,33 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         borderRadius: BorderRadius.circular(24),
         child: Row(
           children: [
-            CachedAvatar(
-              imageUrl: photoUrl,
-              name: name,
-              radius: 18,
+            // Avatar with online indicator
+            Stack(
+              children: [
+                CachedAvatar(
+                  imageUrl: photoUrl,
+                  name: name,
+                  radius: 18,
+                ),
+                // Online indicator dot
+                if (presenceState?.isOnline == true)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.surface,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -720,7 +823,15 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  // Could show online status here
+                  // Online status / typing indicator / last seen
+                  if (subtitleText != null)
+                    Text(
+                      subtitleText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: subtitleColor,
+                        fontWeight: isTyping ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
                 ],
               ),
             ),

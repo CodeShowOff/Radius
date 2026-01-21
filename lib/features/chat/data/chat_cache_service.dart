@@ -6,24 +6,33 @@ import '../domain/entities/message.dart';
 class ChatCacheEntry {
   final List<Message> messages;
   final DateTime lastUpdated;
+  final DateTime createdAt;
   final bool hasMore;
 
-  const ChatCacheEntry({
+  ChatCacheEntry({
     required this.messages,
     required this.lastUpdated,
+    DateTime? createdAt,
     this.hasMore = true,
-  });
+  }) : createdAt = createdAt ?? lastUpdated;
 
   ChatCacheEntry copyWith({
     List<Message>? messages,
     DateTime? lastUpdated,
+    DateTime? createdAt,
     bool? hasMore,
   }) {
     return ChatCacheEntry(
       messages: messages ?? this.messages,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      createdAt: createdAt ?? this.createdAt,
       hasMore: hasMore ?? this.hasMore,
     );
+  }
+
+  /// Check if this cache entry has expired based on TTL.
+  bool isExpired(Duration ttl) {
+    return DateTime.now().difference(createdAt) > ttl;
   }
 }
 
@@ -34,6 +43,8 @@ class ChatCacheEntry {
 /// 2. Providing cached data instantly when opening any conversation
 /// 3. Updating cache when Firestore streams emit new data
 /// 4. Maintaining cache across navigation (back/forward between chats)
+/// 5. TTL-based expiration for preloaded chats (90 seconds)
+/// 6. LRU eviction to prevent memory bloat
 ///
 /// This eliminates the "loading spinner on every chat switch" problem.
 class ChatCacheService {
@@ -42,21 +53,43 @@ class ChatCacheService {
   /// Map of conversationId -> cached messages (newest first)
   final Map<String, ChatCacheEntry> _cache = {};
 
+  /// LRU access order tracking (most recently accessed at end)
+  final List<String> _accessOrder = [];
+
   /// Maximum number of conversations to keep in cache
   static const int maxCachedConversations = 50;
 
   /// Maximum messages to keep per conversation
   static const int maxMessagesPerConversation = 100;
 
+  /// Default TTL for preloaded cache entries (90 seconds)
+  /// After this time, cache is considered "stale" and should be refreshed
+  static const Duration defaultTtl = Duration(seconds: 90);
+
   ChatCacheService({Logger? logger}) : _logger = logger ?? Logger();
 
   /// Get cached messages for a conversation.
   /// Returns null if no cache exists.
   ChatCacheEntry? getCache(String conversationId) {
+    _touchForLru(conversationId);
     return _cache[conversationId];
   }
 
-  /// Check if we have cached messages for a conversation.
+  /// Check if we have valid (non-expired) cached messages for a conversation.
+  bool hasValidCache(String conversationId, {Duration? ttl}) {
+    final entry = _cache[conversationId];
+    if (entry == null || entry.messages.isEmpty) return false;
+    
+    // If TTL is provided, check expiration
+    if (ttl != null && entry.isExpired(ttl)) {
+      _logger.d('Cache expired for $conversationId');
+      return false;
+    }
+    return true;
+  }
+
+  /// Check if we have cached messages for a conversation (ignores TTL).
+  /// Use hasValidCache() if you need TTL-aware checks.
   bool hasCache(String conversationId) {
     final entry = _cache[conversationId];
     return entry != null && entry.messages.isNotEmpty;
@@ -64,7 +97,21 @@ class ChatCacheService {
 
   /// Get cached messages for a conversation (empty list if no cache).
   List<Message> getMessages(String conversationId) {
+    _touchForLru(conversationId);
     return _cache[conversationId]?.messages ?? const [];
+  }
+
+  /// Check if cache entry is expired.
+  bool isCacheExpired(String conversationId, {Duration ttl = defaultTtl}) {
+    final entry = _cache[conversationId];
+    if (entry == null) return true;
+    return entry.isExpired(ttl);
+  }
+
+  /// Update LRU access order when a conversation is accessed.
+  void _touchForLru(String conversationId) {
+    _accessOrder.remove(conversationId);
+    _accessOrder.add(conversationId);
   }
 
   /// Update cache with new messages from Firestore stream.
@@ -73,8 +120,10 @@ class ChatCacheService {
     required String conversationId,
     required List<Message> messages,
     bool? hasMore,
+    bool isPreload = false,
   }) {
     final existing = _cache[conversationId];
+    final now = DateTime.now();
 
     // If we have existing paginated messages, merge them
     List<Message> mergedMessages;
@@ -108,17 +157,23 @@ class ChatCacheService {
       mergedMessages = mergedMessages.sublist(0, maxMessagesPerConversation);
     }
 
+    // For preloads, set createdAt to now (TTL starts now)
+    // For stream updates, preserve original createdAt (TTL continues)
     _cache[conversationId] = ChatCacheEntry(
       messages: mergedMessages,
-      lastUpdated: DateTime.now(),
+      lastUpdated: now,
+      createdAt: isPreload ? now : (existing?.createdAt ?? now),
       hasMore: hasMore ?? existing?.hasMore ?? true,
     );
+
+    // Update LRU access order
+    _touchForLru(conversationId);
 
     // Evict oldest entries if cache is too large
     _evictOldEntries();
 
     _logger.d(
-      'Cache updated for $conversationId: ${mergedMessages.length} messages',
+      'Cache updated for $conversationId: ${mergedMessages.length} messages (preload: $isPreload)',
     );
   }
 
@@ -166,28 +221,61 @@ class ChatCacheService {
   /// Clear cache for a specific conversation.
   void clearConversation(String conversationId) {
     _cache.remove(conversationId);
+    _accessOrder.remove(conversationId);
     _logger.d('Cleared cache for $conversationId');
   }
 
   /// Clear all cached data (e.g., on logout).
   void clearAll() {
     _cache.clear();
+    _accessOrder.clear();
     _logger.d('Cleared all chat cache');
   }
 
-  /// Evict oldest entries if cache exceeds max size.
+  /// Evict least recently used entries if cache exceeds max size.
+  /// Uses LRU (Least Recently Used) eviction strategy.
   void _evictOldEntries() {
     if (_cache.length <= maxCachedConversations) return;
 
-    // Sort by last updated and remove oldest
-    final entries = _cache.entries.toList()
-      ..sort((a, b) => a.value.lastUpdated.compareTo(b.value.lastUpdated));
-
-    final toRemove = entries.length - maxCachedConversations;
-    for (int i = 0; i < toRemove; i++) {
-      _cache.remove(entries[i].key);
+    final toRemove = _cache.length - maxCachedConversations;
+    
+    // Remove from the front of access order (least recently used)
+    for (int i = 0; i < toRemove && _accessOrder.isNotEmpty; i++) {
+      final conversationId = _accessOrder.removeAt(0);
+      _cache.remove(conversationId);
     }
 
-    _logger.d('Evicted $toRemove old cache entries');
+    _logger.d('LRU evicted $toRemove old cache entries');
+  }
+
+  /// Evict expired entries based on TTL.
+  void evictExpired({Duration ttl = defaultTtl}) {
+    final expiredKeys = _cache.entries
+        .where((e) => e.value.isExpired(ttl))
+        .map((e) => e.key)
+        .toList();
+
+    for (final key in expiredKeys) {
+      _cache.remove(key);
+      _accessOrder.remove(key);
+    }
+
+    if (expiredKeys.isNotEmpty) {
+      _logger.d('Evicted ${expiredKeys.length} expired cache entries');
+    }
+  }
+
+  /// Get cache statistics for debugging.
+  Map<String, dynamic> getCacheStats() {
+    return {
+      'totalConversations': _cache.length,
+      'totalMessages': _cache.values.fold<int>(0, (sum, e) => sum + e.messages.length),
+      'oldestEntry': _cache.values.isEmpty
+          ? null
+          : _cache.values.map((e) => e.createdAt).reduce((a, b) => a.isBefore(b) ? a : b).toIso8601String(),
+      'newestEntry': _cache.values.isEmpty
+          ? null
+          : _cache.values.map((e) => e.createdAt).reduce((a, b) => a.isAfter(b) ? a : b).toIso8601String(),
+    };
   }
 }

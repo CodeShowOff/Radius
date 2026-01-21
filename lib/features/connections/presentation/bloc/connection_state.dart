@@ -12,7 +12,7 @@ enum ConnectionBlocStatus {
 class CachedProfile extends Equatable {
   final String id;
   final String displayName;
-  final String? avatarUrl;
+  final String? photoUrl;
   final String? bio;
   final String? vibe;
   final String? mood;
@@ -22,7 +22,7 @@ class CachedProfile extends Equatable {
   const CachedProfile({
     required this.id,
     required this.displayName,
-    this.avatarUrl,
+    this.photoUrl,
     this.bio,
     this.vibe,
     this.mood,
@@ -34,7 +34,7 @@ class CachedProfile extends Equatable {
   Map<String, dynamic> toMap() => {
         'id': id,
         'displayName': displayName,
-        'avatarUrl': avatarUrl,
+        'photoUrl': photoUrl,
         'bio': bio,
         'vibe': vibe,
         'mood': mood,
@@ -42,7 +42,7 @@ class CachedProfile extends Equatable {
       };
 
   @override
-  List<Object?> get props => [id, displayName, avatarUrl, bio, vibe, mood, gender, cachedAt];
+  List<Object?> get props => [id, displayName, photoUrl, bio, vibe, mood, gender, cachedAt];
 }
 
 /// State for the connection bloc.

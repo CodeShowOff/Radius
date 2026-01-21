@@ -63,10 +63,17 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       currentUserId: event.userId,
     ));
 
-    // Subscribe to stats
+    // Load initial stats first
+    final initialStats = await _service.getStats(event.userId);
+    
+    // Subscribe to stats stream for updates
     _statsSubscription?.cancel();
     _statsSubscription = _service.getStatsStream(event.userId).listen(
-          (stats) => add(_GuessmeStatsUpdated(stats)),
+          (stats) {
+            if (!isClosed) {
+              add(_GuessmeStatsUpdated(stats));
+            }
+          },
         );
 
     // Check for existing active session
@@ -80,9 +87,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       emit(state.copyWith(
         status: status,
         session: existingSession,
+        stats: initialStats,
       ));
     } else {
-      emit(state.copyWith(status: GuessmeStatus.ready));
+      emit(state.copyWith(
+        status: GuessmeStatus.ready,
+        stats: initialStats,
+      ));
     }
   }
 
@@ -416,15 +427,21 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     _sessionSubscription?.cancel();
     _sessionSubscription = _service.getSessionStream(sessionId).listen(
-          (session) => add(_GuessmeSessionUpdated(session)),
+          (session) {
+            if (!isClosed) {
+              add(_GuessmeSessionUpdated(session));
+            }
+          },
           onError: (e) => _logger.e('Session stream error', error: e),
         );
 
     _messagesSubscription?.cancel();
     _messagesSubscription = _service.getMessagesStream(sessionId).listen(
           (messages) {
-            _logger.d('Received ${messages.length} messages from stream');
-            add(_GuessmeMessagesUpdated(messages));
+            if (!isClosed) {
+              _logger.d('Received ${messages.length} messages from stream');
+              add(_GuessmeMessagesUpdated(messages));
+            }
           },
           onError: (e) => _logger.e('Messages stream error', error: e),
         );
@@ -436,6 +453,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _queueMonitorSubscription?.cancel();
     _queueMonitorSubscription = _service.getActiveSessionStream(_currentUserId!).listen(
       (session) {
+        if (isClosed) return;
         if (session != null) {
           _logger.i('Detected new session ${session.id} while in queue');
           _subscribeToSession(session.id);

@@ -935,7 +935,7 @@ class ConnectionService {
       return {
         'id': doc.id,
         'displayName': data['displayName'] ?? 'User',
-        'avatarUrl': data['photoUrl'], // Return as avatarUrl for compatibility
+        'photoUrl': data['photoUrl'],
         'bio': data['bio'],
         'vibe': data['vibe'],
         'mood': data['mood'],
@@ -978,7 +978,7 @@ class ConnectionService {
           results[doc.id] = {
             'id': doc.id,
             'displayName': data['displayName'] ?? 'User',
-            'avatarUrl': data['photoUrl'], // Return as avatarUrl for compatibility
+            'photoUrl': data['photoUrl'],
             'bio': data['bio'],
             'vibe': data['vibe'],
             'mood': data['mood'],
@@ -1018,7 +1018,7 @@ class ConnectionService {
           'connection': connection,
           'userId': otherUserId,
           'displayName': profile?['displayName'] ?? 'User',
-          'avatarUrl': profile?['avatarUrl'],
+          'photoUrl': profile?['photoUrl'],
           'bio': profile?['bio'],
           'isOnline': profile?['isOnline'] ?? false,
           'lastSeen': profile?['lastSeen'],

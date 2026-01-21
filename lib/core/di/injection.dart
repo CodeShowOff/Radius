@@ -5,10 +5,13 @@ import 'package:injectable/injectable.dart';
 import '../services/bluetooth/bluetooth_service.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/firebase/username_service.dart';
+import '../services/presence/presence_service.dart';
 import '../services/realtime/realtime_connection_service.dart';
 import '../services/realtime/realtime_data_manager.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/chat/data/chat_cache_service.dart';
+import '../../features/chat/data/chat_preload_service.dart';
+import '../../features/chat/data/chat_service.dart';
 import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
@@ -75,6 +78,13 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<RealtimeConnectionService>()) {
     getIt.registerLazySingleton<RealtimeConnectionService>(
       () => RealtimeConnectionService(),
+    );
+  }
+
+  // Presence service for online/offline tracking via Firebase RTDB
+  if (!getIt.isRegistered<PresenceService>()) {
+    getIt.registerLazySingleton<PresenceService>(
+      () => PresenceService(),
     );
   }
 
@@ -161,6 +171,10 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<GroupChatCacheService>(() => GroupChatCacheService());
   }
 
+  // ChatPreloadService - preloads recent/unread chats on app startup
+  // Must be registered before RealTimeDataManager but after getIt.init() for ChatService
+  // Registration moved below getIt.init() to ensure ChatService is available
+
   if (!getIt.isRegistered<LocationGroupBloc>()) {
     getIt.registerLazySingleton<LocationGroupBloc>(
       () => LocationGroupBloc(
@@ -181,12 +195,26 @@ Future<void> configureDependencies() {
   // Run generated registrations last so modules can override defaults if needed.
   getIt.init();
 
+  // ChatPreloadService - preloads recent/unread chats on app startup for instant loading
+  // Must be registered after getIt.init() to ensure ChatService and ConversationsBloc are available
+  if (!getIt.isRegistered<ChatPreloadService>()) {
+    getIt.registerLazySingleton<ChatPreloadService>(
+      () => ChatPreloadService(
+        chatService: getIt<ChatService>(),
+        cacheService: getIt<ChatCacheService>(),
+        conversationsBloc: getIt<ConversationsBloc>(),
+      ),
+    );
+  }
+
   // Register RealTimeDataManager after all BLoCs are registered
   // This needs to be registered after getIt.init() so that ConversationsBloc is available
   if (!getIt.isRegistered<RealTimeDataManager>()) {
     getIt.registerLazySingleton<RealTimeDataManager>(
       () => RealTimeDataManager(
         connectionService: getIt<RealtimeConnectionService>(),
+        presenceService: getIt<PresenceService>(),
+        chatPreloadService: getIt<ChatPreloadService>(),
         connectionBloc: getIt<ConnectionBloc>(),
         conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),

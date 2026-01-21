@@ -26,7 +26,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   bool _isLoadingMore = false;
-  late final GroupChatBloc _chatBloc;
+  GroupChatBloc? _chatBloc;
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Cache the BLoC reference for safe disposal
-    _chatBloc = context.read<GroupChatBloc>();
+    _chatBloc ??= context.read<GroupChatBloc>();
   }
 
   void _openChat() {
@@ -61,7 +61,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
     _scrollController.dispose();
     _focusNode.dispose();
     // Use cached reference to avoid context access after disposal
-    _chatBloc.add(const CloseGroupChat());
+    _chatBloc?.add(const CloseGroupChat());
     super.dispose();
   }
 

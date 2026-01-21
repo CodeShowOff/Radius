@@ -5,6 +5,7 @@ import '../../../../core/di/injection.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
 import '../../domain/entities/conversation.dart';
+import '../bloc/chat_bloc.dart';
 import '../bloc/conversations_bloc.dart';
 
 /// Screen showing the list of conversations for a user.
@@ -118,6 +119,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     conversation: conversation,
                     currentUserId: widget.currentUserId,
                     onTap: () => widget.onConversationTap(conversation),
+                    onPreload: () {
+                      // Preload chat messages into cache on long-press
+                      // This makes navigation instant even on cache miss
+                      getIt<ChatBloc>().add(
+                        ChatPreload(conversationId: conversation.id),
+                      );
+                    },
                     onDismissed: (direction) {
                       if (direction == DismissDirection.endToStart) {
                         // Delete
@@ -188,12 +196,14 @@ class _ConversationTile extends StatefulWidget {
   final Conversation conversation;
   final String currentUserId;
   final VoidCallback onTap;
+  final VoidCallback? onPreload;
   final void Function(DismissDirection) onDismissed;
 
   const _ConversationTile({
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
+    this.onPreload,
     required this.onDismissed,
   });
 
@@ -261,15 +271,17 @@ class _ConversationTileState extends State<_ConversationTile> {
         ),
       ),
       onDismissed: widget.onDismissed,
-      child: Container(
-        color: isDisconnected || isBlocked
-            ? theme.colorScheme.errorContainer.withValues(alpha: 0.1)
-            : null,
-        child: ListTile(
-          leading: CircleAvatar(
-            radius: 28,
-            backgroundImage: otherParticipant?.photoUrl != null
-                ? NetworkImage(otherParticipant!.photoUrl!)
+      child: GestureDetector(
+        onLongPressStart: (_) => widget.onPreload?.call(),
+        child: Container(
+          color: isDisconnected || isBlocked
+              ? theme.colorScheme.errorContainer.withValues(alpha: 0.1)
+              : null,
+          child: ListTile(
+            leading: CircleAvatar(
+              radius: 28,
+              backgroundImage: otherParticipant?.photoUrl != null
+                  ? NetworkImage(otherParticipant!.photoUrl!)
                 : null,
             backgroundColor: theme.colorScheme.primaryContainer,
             child: otherParticipant?.photoUrl == null
@@ -418,6 +430,7 @@ class _ConversationTileState extends State<_ConversationTile> {
             ],
           ),
           onTap: widget.onTap,
+        ),
         ),
       ),
     );

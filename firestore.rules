@@ -27,20 +27,6 @@ service cloud.firestore {
       return isBlocked(userId1, userId2) || isBlocked(userId2, userId1);
     }
     
-    /// Check if two users are connected (accepted connection)
-    function areConnected(userId1, userId2) {
-      let connectionId = userId1 < userId2 
-        ? userId1 + '_' + userId2 
-        : userId2 + '_' + userId1;
-      return exists(/databases/$(database)/documents/connections/$(connectionId))
-        && get(/databases/$(database)/documents/connections/$(connectionId)).data.status == 'connected';
-    }
-    
-    /// Check if user is participant in connection
-    function isConnectionParticipant() {
-      return isAuthenticated() && request.auth.uid in resource.data.users;
-    }
-    
     /// Check rate limit for requests (10/hour, 30/day)
     function canSendRequest() {
       return !exists(/databases/$(database)/documents/users/$(request.auth.uid)/rate_limits/connection_requests)
@@ -161,9 +147,16 @@ service cloud.firestore {
               || request.resource.data.userId2 == request.auth.uid);
       }
       
-      // RULE: Only participants can read their connections
-      // Connection docs use userId1/userId2 (sorted alphabetically)
-      allow read: if isAuthenticated() && isParticipant();
+      // Helper: Check if user is in the users array (for list queries)
+      function isInUsersArray() {
+        return isAuthenticated() && request.auth.uid in resource.data.users;
+      }
+      
+      // RULE: Participants can read individual connections
+      allow get: if isAuthenticated() && isParticipant();
+      
+      // RULE: Users can list connections where they are a participant (for array-contains queries)
+      allow list: if isAuthenticated() && isInUsersArray();
       
       // RULE: Participants can create connections
       // This supports both manual connections and GuessMe conversions
@@ -481,7 +474,7 @@ service cloud.firestore {
       
       // RULE: Only participants can update session
       allow update: if isAuthenticated()
-        && request.auth.uid == resource.id;
+        && request.auth.uid in resource.data.players;
       
       // RULE: No deletes - sessions expire naturally
       allow delete: if false;
@@ -537,10 +530,24 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['name', 'countryCode', 'stateCode', 'visibility', 'status', 'createdByUserId', 'createdAt']);
       
       // RULE: Only admins can update group settings
+      // NOTE: Allow safe memberCount adjustments for join/leave by any authenticated user
       allow update: if isAuthenticated()
-        && isGroupAdmin()
-        && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['createdByUserId', 'createdAt', 'countryCode', 'stateCode']);
+        && (
+          (
+            // Admin path: settings updates (no immutable field changes)
+            isGroupAdmin()
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(['createdByUserId', 'createdAt', 'countryCode', 'stateCode'])
+          )
+          || (
+            // Non-admin path: only adjust memberCount by +1 or -1
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+            && (
+              request.resource.data.memberCount == resource.data.memberCount + 1
+              || request.resource.data.memberCount == resource.data.memberCount - 1
+            )
+          )
+        );
       
       // RULE: Only admins can delete (archive) groups
       allow delete: if isAuthenticated() && isGroupAdmin();

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../bloc/profile_bloc.dart';
 
 /// User profile page.
@@ -231,18 +232,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         const SizedBox(height: 24),
 
                         // Stats
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _StatItem(
-                              label: 'Connections',
-                              value: '0',
-                            ),
-                            _StatItem(
-                              label: 'Encounters',
-                              value: '0',
-                            ),
-                          ],
+                        BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                          builder: (context, connectionState) {
+                            final connectionsCount = connectionState.connections.length;
+                            // Encounters would be total nearby users ever discovered
+                            // For now, use 0 as placeholder until we add encounter tracking
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _StatItem(
+                                  label: 'Connections',
+                                  value: connectionsCount.toString(),
+                                ),
+                                const _StatItem(
+                                  label: 'Encounters',
+                                  value: '0',
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 32),
 
