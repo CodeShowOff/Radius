@@ -22,17 +22,28 @@ class ProfileService {
   CollectionReference<Map<String, dynamic>> get _profilesRef =>
       _firestore.collection(_profilesCollection);
 
-  /// Writes the same data to both users and profiles documents using merge.
+  /// Writes the same data to both users and profiles documents.
+  /// If [isCreate] is true, uses set() without merge for initial creation.
+  /// Otherwise uses merge for updates.
   Future<void> _writeToUserAndProfile(
     String userId,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    bool isCreate = false,
+  }) async {
     final batch = _firestore.batch();
     final userDoc = _usersRef.doc(userId);
     final profileDoc = _profilesRef.doc(userId);
 
-    batch.set(userDoc, data, SetOptions(merge: true));
-    batch.set(profileDoc, data, SetOptions(merge: true));
+    if (isCreate) {
+      // Use set without merge for initial document creation
+      // This ensures the 'create' rule is triggered in Firestore
+      batch.set(userDoc, data);
+      batch.set(profileDoc, data);
+    } else {
+      // Use merge for updates to preserve existing fields
+      batch.set(userDoc, data, SetOptions(merge: true));
+      batch.set(profileDoc, data, SetOptions(merge: true));
+    }
 
     await batch.commit();
   }
@@ -49,13 +60,32 @@ class ProfileService {
   }
 
   /// Creates a new profile.
+  /// Includes retry logic to handle race conditions during authentication.
   Future<void> createProfile(ProfileModel profile) async {
-    try {
-      final profileData = profile.toFirestore();
+    const maxRetries = 3;
+    const initialDelay = Duration(milliseconds: 500);
+    
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        final profileData = profile.toFirestore();
 
-      await _writeToUserAndProfile(profile.userId, profileData);
-    } catch (e) {
-      throw ProfileServiceException('Failed to create profile: $e');
+        // Use isCreate=true to trigger 'create' rule instead of 'update' rule
+        await _writeToUserAndProfile(profile.userId, profileData, isCreate: true);
+        return; // Success - exit the retry loop
+      } catch (e) {
+        final isPermissionError = e.toString().contains('permission-denied');
+        final isLastAttempt = attempt == maxRetries - 1;
+        
+        if (isPermissionError && !isLastAttempt) {
+          // Wait before retrying with exponential backoff
+          final delay = initialDelay * (attempt + 1);
+          await Future.delayed(delay);
+          continue; // Retry
+        }
+        
+        // If not a permission error or last attempt failed, throw
+        throw ProfileServiceException('Failed to create profile: $e');
+      }
     }
   }
 

@@ -45,6 +45,16 @@ class ChatClose extends ChatEvent {
   const ChatClose();
 }
 
+/// Resync the chat without full reload.
+/// Used when:
+/// - App returns to foreground
+/// - Network reconnects
+/// - Widget resumes visibility
+/// This resubscribes to streams to ensure real-time updates work.
+class ChatResync extends ChatEvent {
+  const ChatResync();
+}
+
 /// Send a message.
 class ChatSendMessage extends ChatEvent {
   final String text;
@@ -193,4 +203,21 @@ class _ChatErrorOccurred extends ChatEvent {
 
   @override
   List<Object?> get props => [message];
+}
+
+/// Internal: First unread message ID found.
+/// This is used to show the "Unread messages" divider in the chat.
+class _ChatFirstUnreadMessageFound extends ChatEvent {
+  final String messageId;
+
+  const _ChatFirstUnreadMessageFound(this.messageId);
+
+  @override
+  List<Object?> get props => [messageId];
+}
+
+/// Clear the first unread message marker.
+/// Called after user has seen the unread messages.
+class ChatClearFirstUnread extends ChatEvent {
+  const ChatClearFirstUnread();
 }

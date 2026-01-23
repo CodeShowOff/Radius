@@ -18,6 +18,13 @@ part 'chat_event.dart';
 part 'chat_state.dart';
 
 /// BLoC for managing a single chat conversation.
+///
+/// CRITICAL: This is a singleton BLoC shared across navigation.
+/// Subscriptions are managed carefully to ensure messages are always received:
+/// - Subscriptions are created on ChatOpen
+/// - Subscriptions are cancelled on ChatClose (when user leaves chat)
+/// - ChatResync resubscribes without full reload (for app resume/reconnect)
+/// - _hasActiveSubscriptions tracks actual subscription state
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
   final MediaUploadService _mediaUploadService;
@@ -30,6 +37,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Timer? _typingDebounce;
 
+  /// CRITICAL: Track if subscriptions are actually active.
+  /// This prevents the bug where state.status == loaded but subscriptions are null.
+  bool _hasActiveSubscriptions = false;
+
   ChatBloc({
     required ChatService chatService,
     required MediaUploadService mediaUploadService,
@@ -40,6 +51,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState()) {
     on<ChatOpen>(_onOpen);
     on<ChatClose>(_onClose);
+    on<ChatResync>(_onResync);
     on<ChatSendMessage>(_onSendMessage);
     on<ChatRetryMessage>(_onRetryMessage);
     on<ChatSendImage>(_onSendImage);
@@ -56,17 +68,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatConversationUpdated>(_onConversationUpdated);
     on<_ChatTypingUpdated>(_onTypingUpdated);
     on<_ChatErrorOccurred>(_onErrorOccurred);
+    on<_ChatFirstUnreadMessageFound>(_onFirstUnreadMessageFound);
+    on<ChatClearFirstUnread>(_onClearFirstUnread);
   }
+
+  /// Whether the bloc has active Firestore subscriptions.
+  /// Used by UI to determine if resync is needed on app resume.
+  bool get hasActiveSubscriptions => _hasActiveSubscriptions;
 
   Future<void> _onOpen(
     ChatOpen event,
     Emitter<ChatState> emit,
   ) async {
-    // OPTIMIZATION: If same conversation is already loaded with active streams, just update
-    if (state.conversationId == event.conversationId &&
-        state.currentUserId == event.currentUserId &&
-        (state.status == ChatStatus.loaded || state.status == ChatStatus.loadingMore)) {
-      _logger.i('Chat already loaded for conversation ${event.conversationId}, skipping reload');
+    // CRITICAL FIX: Check BOTH state AND actual subscription status.
+    // Previously, this only checked state.status which could be 'loaded' even
+    // when subscriptions were cancelled by ChatClose. This caused messages
+    // sent while user was away to never be received.
+    final bool isSameConversation = state.conversationId == event.conversationId &&
+        state.currentUserId == event.currentUserId;
+    final bool isAlreadyLoaded = state.status == ChatStatus.loaded || 
+        state.status == ChatStatus.loadingMore;
+    
+    // OPTIMIZATION: Only skip full reload if we have ACTIVE subscriptions
+    if (isSameConversation && isAlreadyLoaded && _hasActiveSubscriptions) {
+      _logger.i('Chat already loaded with active streams for ${event.conversationId}, skipping reload');
       
       // Just update user info if changed (photo/name updates)
       if (state.otherUserName != event.otherUserName ||
@@ -84,6 +109,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ).catchError((e) {
         _logger.d('Failed to mark messages as read: $e');
       });
+      return;
+    }
+    
+    // CRITICAL: If same conversation but no active subscriptions, we need to resubscribe!
+    // This happens when user left and returned to the same chat.
+    if (isSameConversation && isAlreadyLoaded && !_hasActiveSubscriptions) {
+      _logger.i('Same conversation ${event.conversationId} but subscriptions inactive, resubscribing...');
+      // Don't reset state - keep cached messages visible, just resubscribe
+      await _subscribeToStreams(event);
       return;
     }
     
@@ -184,18 +218,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         
         // Delay to ensure Firestore propagates the conversation write
         // This prevents race conditions with security rules checking conversation existence
-        // Increased to 200ms for better reliability on slow networks
-        await Future.delayed(const Duration(milliseconds: 200));
+        // Use retry logic with exponential backoff for reliability on slow networks
+        Conversation? conversation;
+        int retryCount = 0;
+        const maxRetries = 3;
         
-        // Verify conversation is readable before subscribing
-        final conversation = await _chatService.getConversation(event.conversationId);
+        while (conversation == null && retryCount < maxRetries) {
+          if (retryCount > 0) {
+            // Exponential backoff: 300ms, 600ms, 1200ms
+            final delay = Duration(milliseconds: 300 * (1 << (retryCount - 1)));
+            _logger.d('Retrying conversation verification (attempt ${retryCount + 1}/$maxRetries) after ${delay.inMilliseconds}ms');
+            await Future.delayed(delay);
+          } else {
+            // Initial delay of 800ms for first attempt (increased from 500ms)
+            // This gives Firestore more time to propagate the write
+            await Future.delayed(const Duration(milliseconds: 800));
+          }
+          
+          try {
+            conversation = await _chatService.getConversation(event.conversationId);
+            if (conversation != null) {
+              _logger.i('Conversation verified successfully on attempt ${retryCount + 1}');
+            }
+          } catch (e) {
+            _logger.w('Failed to verify conversation (attempt ${retryCount + 1}/$maxRetries): $e');
+            if (retryCount == maxRetries - 1) {
+              rethrow; // Re-throw on final attempt
+            }
+          }
+          retryCount++;
+        }
+        
         if (conversation == null) {
           throw const DatabaseException(
-            message: 'Conversation not found after creation',
+            message: 'Conversation not found after creation and retries',
             code: 'conversation-not-found',
           );
         }
       } catch (e) {
+        _logger.e('Failed to open conversation: $e');
         emit(state.copyWith(
           status: ChatStatus.error,
           errorMessage: e.toString(),
@@ -204,67 +265,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    // Subscribe to messages stream
-    _messagesSubscription =
-        _chatService.getMessagesStream(event.conversationId).listen(
-              (messages) {
-                if (!isClosed) {
-                  add(_ChatMessagesUpdated(messages));
-                }
-              },
-              onError: (error) {
-                if (!isClosed) {
-                  add(_ChatErrorOccurred(error.toString()));
-                }
-              },
-            );
-
-    // Subscribe to conversation updates
-    _conversationSubscription =
-        _chatService.getConversationStream(event.conversationId).listen(
-              (conversation) {
-                if (!isClosed) {
-                  add(_ChatConversationUpdated(conversation));
-                }
-              },
-              onError: (error) {
-                if (!isClosed) {
-                  add(_ChatErrorOccurred(error.toString()));
-                }
-              },
-            );
-
-    // Subscribe to typing indicator when we know the other participant.
-    // Deep links may open a chat without extra payload, so otherUserId can be
-    // empty until the conversation stream yields participant data.
-    if (event.otherUserId.trim().isNotEmpty) {
-      _typingSubscription = _chatService
-          .getTypingStream(event.conversationId, event.otherUserId)
-          .listen(
-            (isTyping) {
-              if (!isClosed) {
-                add(_ChatTypingUpdated(isTyping));
-              }
-            },
-            onError: (error) {
-              if (!isClosed) {
-                add(_ChatErrorOccurred(error.toString()));
-              }
-            },
-          );
-    }
-
-    // Mark messages as read when opening chat
-    // This clears badges immediately (WhatsApp behavior)
-    // Delivery status (sent → delivered) is handled in _onMessagesUpdated
-    // when the messages stream fires - that's when recipient's app receives them.
-    // Don't let this block the chat from opening
-    _chatService.markMessagesAsRead(
-      conversationId: event.conversationId,
-      userId: event.currentUserId,
-    ).catchError((e) {
-      _logger.d('Failed to mark messages as read: $e');
-    });
+    // CRITICAL: Use centralized subscription method to ensure _hasActiveSubscriptions is set
+    await _subscribeToStreams(event);
 
     // NOTE: Don't emit ChatStatus.loaded here!
     // Let _onMessagesUpdated set the status to loaded when first snapshot arrives.
@@ -707,6 +709,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     try {
+      // CRITICAL: Mark as delivered first, then as read
+      // This ensures proper status progression: sent → delivered → read
+      await _chatService.markMessagesAsDelivered(
+        conversationId: state.conversationId!,
+        userId: state.currentUserId!,
+      );
+      
       await _chatService.markMessagesAsRead(
         conversationId: state.conversationId!,
         userId: state.currentUserId!,
@@ -824,13 +833,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // CRITICAL: Mark messages as DELIVERED when stream fires
     // This is the WhatsApp pattern: sent → delivered (double check) → read (blue)
     // Delivered = recipient's app received the message (listener fired)
+    // 
+    // FIX: Check deliveredAt == null, don't require specific status
+    // Messages may have status other than 'sent' but still need delivery update
     // ========================================================================
     if (state.conversationId != null && state.currentUserId != null) {
       // Check if there are any undelivered messages from the other user
+      // CRITICAL FIX: Only check deliveredAt, not status
       final hasUndeliveredMessages = event.messages.any((m) =>
           m.senderId != state.currentUserId &&
-          m.deliveredAt == null &&
-          m.status == MessageStatus.sent);
+          m.deliveredAt == null);
 
       if (hasUndeliveredMessages) {
         // Mark messages as delivered in the background (non-blocking)
@@ -839,6 +851,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           userId: state.currentUserId!,
         ).catchError((e) {
           _logger.d('Failed to mark messages as delivered: $e');
+        });
+      }
+      
+      // ========================================================================
+      // CRITICAL: Also mark messages as READ since chat is open and visible
+      // This ensures WhatsApp-style behavior: opening chat = seeing messages = read
+      // ========================================================================
+      final hasUnreadMessages = event.messages.any((m) =>
+          m.senderId != state.currentUserId &&
+          m.readAt == null);
+      
+      if (hasUnreadMessages) {
+        // Mark messages as read in the background (non-blocking)
+        _chatService.markMessagesAsRead(
+          conversationId: state.conversationId!,
+          userId: state.currentUserId!,
+        ).catchError((e) {
+          _logger.d('Failed to mark messages as read: $e');
         });
       }
     }
@@ -927,6 +957,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
   }
 
+  /// Handler for when the first unread message is found.
+  /// Updates state to show "Unread messages" divider at this position.
+  void _onFirstUnreadMessageFound(
+    _ChatFirstUnreadMessageFound event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(state.copyWith(
+      firstUnreadMessageId: event.messageId,
+    ));
+  }
+
+  /// Handler to clear the first unread message marker.
+  /// Called after user has scrolled past unread messages.
+  void _onClearFirstUnread(
+    ChatClearFirstUnread event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(state.copyWith(
+      clearFirstUnreadMessageId: true,
+    ));
+  }
+
+  /// Cancels all Firestore stream subscriptions.
+  /// CRITICAL: Also sets _hasActiveSubscriptions = false to track state properly.
   Future<void> _cancelSubscriptions() async {
     await _messagesSubscription?.cancel();
     await _conversationSubscription?.cancel();
@@ -934,6 +988,140 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription = null;
     _conversationSubscription = null;
     _typingSubscription = null;
+    _hasActiveSubscriptions = false;
+    _logger.d('Subscriptions cancelled, _hasActiveSubscriptions = false');
+  }
+
+  /// Subscribes to Firestore streams for the current conversation.
+  /// This is extracted to allow resubscription without full state reset.
+  Future<void> _subscribeToStreams(ChatOpen event) async {
+    // Cancel any existing subscriptions first
+    await _cancelSubscriptions();
+
+    // Subscribe to messages stream with better error handling
+    _messagesSubscription =
+        _chatService.getMessagesStream(event.conversationId).listen(
+              (messages) {
+                if (!isClosed) {
+                  add(_ChatMessagesUpdated(messages));
+                }
+              },
+              onError: (error) {
+                _logger.e('Messages stream error: $error');
+                _hasActiveSubscriptions = false;
+                if (!isClosed) {
+                  String errorMessage = error.toString();
+                  if (errorMessage.contains('permission-denied') || 
+                      errorMessage.contains('PERMISSION_DENIED')) {
+                    errorMessage = 'Unable to access messages. The conversation may still be initializing. Please wait a moment and try again.';
+                  }
+                  add(_ChatErrorOccurred(errorMessage));
+                }
+              },
+            );
+
+    // Subscribe to conversation updates
+    _conversationSubscription =
+        _chatService.getConversationStream(event.conversationId).listen(
+              (conversation) {
+                if (!isClosed) {
+                  add(_ChatConversationUpdated(conversation));
+                }
+              },
+              onError: (error) {
+                if (!isClosed) {
+                  add(_ChatErrorOccurred(error.toString()));
+                }
+              },
+            );
+
+    // Subscribe to typing indicator when we know the other participant
+    if (event.otherUserId.trim().isNotEmpty) {
+      _typingSubscription = _chatService
+          .getTypingStream(event.conversationId, event.otherUserId)
+          .listen(
+            (isTyping) {
+              if (!isClosed) {
+                add(_ChatTypingUpdated(isTyping));
+              }
+            },
+            onError: (error) {
+              if (!isClosed) {
+                add(_ChatErrorOccurred(error.toString()));
+              }
+            },
+          );
+    }
+
+    // CRITICAL: Mark subscriptions as active
+    _hasActiveSubscriptions = true;
+    _logger.i('Subscriptions created, _hasActiveSubscriptions = true');
+
+    // IMPORTANT: Fetch first unread message ID BEFORE marking as read
+    // This allows us to show the "Unread messages" divider correctly
+    try {
+      final firstUnreadId = await _chatService.getFirstUnreadMessageId(
+        conversationId: event.conversationId,
+        userId: event.currentUserId,
+      );
+      
+      if (firstUnreadId != null && !isClosed) {
+        _logger.i('First unread message ID: $firstUnreadId');
+        // Update state with first unread ID - this will trigger UI to show divider
+        // We'll clear this after a delay to give user time to see it
+        add(_ChatFirstUnreadMessageFound(firstUnreadId));
+      }
+    } catch (e) {
+      _logger.w('Failed to get first unread message ID: $e');
+      // Continue without unread divider - not critical
+    }
+
+    // CRITICAL: Mark messages as delivered AND read when subscribing
+    // This ensures proper status updates even if stream hasn't fired yet
+    _chatService.markMessagesAsDelivered(
+      conversationId: event.conversationId,
+      userId: event.currentUserId,
+    ).catchError((e) {
+      _logger.d('Failed to mark messages as delivered: $e');
+    });
+    
+    // Delay marking as read slightly to allow unread divider to be shown
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!isClosed && _hasActiveSubscriptions) {
+        _chatService.markMessagesAsRead(
+          conversationId: event.conversationId,
+          userId: event.currentUserId,
+        ).catchError((e) {
+          _logger.d('Failed to mark messages as read: $e');
+        });
+      }
+    });
+  }
+
+  /// Handle resync request (app resume, network reconnect).
+  /// This resubscribes to streams without resetting state.
+  Future<void> _onResync(
+    ChatResync event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      _logger.d('Resync skipped: no active conversation');
+      return;
+    }
+
+    _logger.i('Resync requested for ${state.conversationId}');
+
+    // Create a ChatOpen event with current state info for resubscription
+    final openEvent = ChatOpen(
+      conversationId: state.conversationId!,
+      currentUserId: state.currentUserId!,
+      otherUserId: state.otherUserId ?? '',
+      otherUserName: state.otherUserName,
+      otherUserPhotoUrl: state.otherUserPhotoUrl,
+    );
+
+    // Cancel existing and resubscribe
+    await _subscribeToStreams(openEvent);
   }
 
   @override

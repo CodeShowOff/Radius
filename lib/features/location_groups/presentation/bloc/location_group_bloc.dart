@@ -11,7 +11,32 @@ import '../../domain/entities/group_membership.dart';
 part 'location_group_event.dart';
 part 'location_group_state.dart';
 
-/// BLoC for managing location groups.
+/// BLoC for managing location groups with role-based access control.
+///
+/// ## Security Model
+///
+/// This BLoC enforces **reactive role-based access control** for group admin features:
+///
+/// 1. **`isAdmin` is derived from `currentMembership`**: The getter in state
+///    returns `currentMembership?.isAdmin ?? false`, defaulting to `false`
+///    (safe) when membership is unknown.
+///
+/// 2. **Reactive membership updates**: When `groupMembers` stream updates,
+///    `currentMembership` is automatically synced to reflect role changes.
+///    This ensures that if an admin is demoted, the UI updates immediately.
+///
+/// 3. **Defense in depth**: Client-side admin checks are complemented by
+///    Firestore security rules that enforce `isGroupAdmin()` for:
+///    - Group settings updates
+///    - Join request management
+///    - Member removal/promotion
+///
+/// ## Admin State Transitions Handled
+///
+/// - User promoted to admin → `currentMembership.isAdmin` becomes true
+/// - User demoted from admin → `currentMembership.isAdmin` becomes false
+/// - User removed from group → `currentMembership` becomes null (not admin)
+/// - User leaves group → `currentMembership` cleared explicitly
 class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   final LocationGroupService _groupService;
   final Logger _logger = Logger();
@@ -22,6 +47,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   StreamSubscription<LocationGroup?>? _currentGroupSubscription;
   StreamSubscription<List<GroupMembership>>? _membersSubscription;
   StreamSubscription<List<GroupJoinRequest>>? _requestsSubscription;
+  StreamSubscription<List<GroupJoinRequest>>? _userPendingRequestSubscription;
 
   LocationGroupBloc({
     required LocationGroupService groupService,
@@ -42,6 +68,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<PromoteToAdmin>(_onPromoteToAdmin);
     on<UpdateGroupSettings>(_onUpdateGroupSettings);
     on<ClearGroupError>(_onClearGroupError);
+    on<ClearGroupDeletionFlag>(_onClearGroupDeletionFlag);
     on<ResetGroupState>(_onResetGroupState);
     on<ChangeSortOption>(_onChangeSortOption);
     on<DeleteGroup>(_onDeleteGroup);
@@ -81,11 +108,43 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     });
 
     on<_MembersUpdated>((event, emit) {
-      emit(state.copyWith(groupMembers: event.members));
+      // SECURITY: Reactively update currentMembership from the live members stream.
+      // This ensures role changes (admin->member or member->banned) are reflected
+      // immediately in the UI without requiring a page reload.
+      GroupMembership? updatedMembership = state.currentMembership;
+      bool shouldClearMembership = false;
+      
+      if (state.currentGroupUserId != null) {
+        // Find the current user's membership in the updated members list
+        final userMembership = event.members.cast<GroupMembership?>().firstWhere(
+          (m) => m?.userId == state.currentGroupUserId,
+          orElse: () => null,
+        );
+        
+        if (userMembership != null) {
+          // User is still a member - update with latest role/status
+          updatedMembership = userMembership;
+        } else if (state.currentMembership != null) {
+          // User was a member but is no longer in the active members list
+          // This means they were removed/banned - clear their membership
+          shouldClearMembership = true;
+          updatedMembership = null;
+        }
+      }
+      
+      emit(state.copyWith(
+        groupMembers: event.members,
+        currentMembership: updatedMembership,
+        clearCurrentMembership: shouldClearMembership,
+      ));
     });
 
     on<_JoinRequestsUpdated>((event, emit) {
       emit(state.copyWith(joinRequests: event.requests));
+    });
+
+    on<_PendingRequestUpdated>((event, emit) {
+      emit(state.copyWith(hasPendingRequest: event.hasPending));
     });
 
     on<_GroupsError>((event, emit) {
@@ -246,6 +305,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
           createdGroup: data,
+          errorMessage: null, // Clear any previous errors
         ));
         break;
       case GroupFailure(:final message):
@@ -253,6 +313,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         emit(state.copyWith(
           status: GroupBlocStatus.error,
           errorMessage: message,
+          createdGroup: null, // Clear created group on error
         ));
         break;
     }
@@ -274,9 +335,11 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     switch (result) {
       case GroupSuccess(:final data):
         _logger.i('Joined group: ${event.groupId}');
+        // Update state with new membership and clear pending request flag
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
           currentMembership: data,
+          hasPendingRequest: false,
         ));
         break;
       case GroupFailure(:final message):
@@ -337,7 +400,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         _logger.i('Left group: ${event.groupId}');
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
-          currentMembership: null,
+          clearCurrentMembership: true, // SECURITY: Explicitly clear membership
+          hasPendingRequest: false,
         ));
         break;
       case GroupFailure(:final message):
@@ -354,10 +418,20 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     LoadGroupDetails event,
     Emitter<LocationGroupState> emit,
   ) async {
-    emit(state.copyWith(status: GroupBlocStatus.loading));
+    // Set loading state and clear previous group data to prevent showing stale state
+    // SECURITY: Store currentGroupUserId for reactive membership updates
+    emit(state.copyWith(
+      status: GroupBlocStatus.loading,
+      currentGroup: null,
+      clearCurrentMembership: true, // Explicitly clear membership
+      hasPendingRequest: false,
+      groupMembers: const [],
+      currentGroupUserId: event.currentUserId,
+    ));
 
     await _currentGroupSubscription?.cancel();
     await _membersSubscription?.cancel();
+    await _userPendingRequestSubscription?.cancel();
 
     _currentGroupSubscription = _groupService.streamGroup(event.groupId).listen(
           (group) async {
@@ -367,6 +441,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
               bool hasPendingRequest = false;
 
               if (event.currentUserId != null) {
+                // CRITICAL: Keep loading state while checking membership
+                // This prevents UI from showing wrong buttons during async check
                 membership = await _groupService.getMembershipStatus(
                   event.groupId,
                   event.currentUserId!,
@@ -381,11 +457,15 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
                 }
               }
 
+              // NOW emit the loaded state with complete data
               if (!isClosed) add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
             }
           },
           onError: (error) {
             _logger.e('Error streaming group', error: error);
+            if (!isClosed) {
+              add(_GroupsError('Failed to load group details'));
+            }
           },
         );
 
@@ -397,6 +477,26 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
             _logger.e('Error streaming members', error: error);
           },
         );
+
+    // Stream pending request status for current user in real-time
+    if (event.currentUserId != null) {
+      _userPendingRequestSubscription = _groupService.streamJoinRequests(event.groupId).listen(
+        (requests) {
+          if (!isClosed) {
+            final hasPending = requests.any((r) => r.userId == event.currentUserId);
+            // Only update if membership is null or not active (to avoid overriding member state)
+            if (state.currentMembership == null || !state.currentMembership!.isActive) {
+              if (state.hasPendingRequest != hasPending) {
+                add(_PendingRequestUpdated(hasPending));
+              }
+            }
+          }
+        },
+        onError: (error) {
+          _logger.e('Error streaming user pending request', error: error);
+        },
+      );
+    }
   }
 
   Future<void> _onLoadJoinRequests(
@@ -527,6 +627,13 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     ));
   }
 
+  void _onClearGroupDeletionFlag(
+    ClearGroupDeletionFlag event,
+    Emitter<LocationGroupState> emit,
+  ) {
+    emit(state.copyWith(groupDeleted: false));
+  }
+
   void _onResetGroupState(
     ResetGroupState event,
     Emitter<LocationGroupState> emit,
@@ -565,6 +672,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
           currentGroup: null,
+          groupDeleted: true,
+          errorMessage: null,
         ));
         break;
       case GroupFailure(:final message):
@@ -608,6 +717,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     _currentGroupSubscription?.cancel();
     _membersSubscription?.cancel();
     _requestsSubscription?.cancel();
+    _userPendingRequestSubscription?.cancel();
   }
 
   @override
@@ -648,6 +758,11 @@ class _MembersUpdated extends LocationGroupEvent {
 class _JoinRequestsUpdated extends LocationGroupEvent {
   final List<GroupJoinRequest> requests;
   const _JoinRequestsUpdated(this.requests);
+}
+
+class _PendingRequestUpdated extends LocationGroupEvent {
+  final bool hasPending;
+  const _PendingRequestUpdated(this.hasPending);
 }
 
 class _GroupsError extends LocationGroupEvent {

@@ -488,35 +488,113 @@ class ChatService {
     }
   }
 
+  /// Gets the ID of the first unread message for a user based on lastReadAt.
+  ///
+  /// Returns null if:
+  /// - No unread messages exist
+  /// - lastReadAt is not set (all messages are unread - return oldest message ID)
+  /// - An error occurs (fails silently to avoid blocking chat load)
+  ///
+  /// This is used to:
+  /// 1. Scroll to the first unread message when opening chat
+  /// 2. Show "Unread messages" divider above this message
+  Future<String?> getFirstUnreadMessageId({
+    required String conversationId,
+    required String userId,
+  }) async {
+    try {
+      // Get conversation to find lastReadAt
+      final conversationDoc = await _conversationsRef.doc(conversationId).get();
+      if (!conversationDoc.exists) return null;
+
+      final data = conversationDoc.data();
+      final lastReadAtData = data?['lastReadAt'] as Map<String, dynamic>?;
+      final userLastReadAt = lastReadAtData?[userId];
+
+      if (userLastReadAt == null) {
+        // User never read this conversation - return earliest message
+        final firstMessageSnapshot = await _conversationsRef
+            .doc(conversationId)
+            .collection('messages')
+            .orderBy('sentAt', descending: false)
+            .limit(1)
+            .get();
+
+        if (firstMessageSnapshot.docs.isEmpty) return null;
+        return firstMessageSnapshot.docs.first.id;
+      }
+
+      final lastReadTimestamp = userLastReadAt as Timestamp;
+
+      // Find the first message AFTER lastReadAt that was NOT sent by this user
+      // These are the unread messages from the other participant
+      final unreadSnapshot = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .where('sentAt', isGreaterThan: lastReadTimestamp)
+          .orderBy('sentAt', descending: false)
+          .limit(50) // Reasonable limit to avoid loading too many
+          .get();
+
+      // Filter out messages sent by the current user
+      final unreadFromOthers = unreadSnapshot.docs.where((doc) {
+        final senderId = doc.data()['senderId'] as String?;
+        return senderId != userId;
+      }).toList();
+
+      if (unreadFromOthers.isEmpty) return null;
+      return unreadFromOthers.first.id;
+    } catch (e, stack) {
+      _logger.w('Error getting first unread message ID', error: e, stackTrace: stack);
+      return null; // Fail silently - don't block chat load
+    }
+  }
+
   // ==================== READ RECEIPTS ====================
 
-  /// Marks messages as read and resets unread count.
+  /// Marks messages as read, resets unread count, and updates lastReadAt.
   ///
   /// This is optimized to batch update multiple messages at once.
+  /// 
+  /// IMPORTANT: We fetch all recent messages and filter locally because
+  /// Firestore has limitations with isNotEqualTo + isNull compound queries.
+  /// 
+  /// CRITICAL: This method updates lastReadAt timestamp which is used to:
+  /// 1. Calculate unread counts (messages with sentAt > lastReadAt)
+  /// 2. Identify the first unread message for "Unread messages" divider
+  /// 3. Sync read state across devices
   Future<void> markMessagesAsRead({
     required String conversationId,
     required String userId,
   }) async {
     try {
       final batch = _firestore.batch();
-
-      // Reset unread count for this user
-      batch.update(_conversationsRef.doc(conversationId), {
-        'unreadCounts.$userId': 0,
-      });
-
-      // Get unread messages sent by the other user
-      final unreadMessages = await _conversationsRef
-          .doc(conversationId)
-          .collection('messages')
-          .where('senderId', isNotEqualTo: userId)
-          .where('readAt', isNull: true)
-          .limit(100) // Batch limit
-          .get();
-
       final now = Timestamp.now();
 
-      for (final doc in unreadMessages.docs) {
+      // Reset unread count AND update lastReadAt for this user
+      batch.update(_conversationsRef.doc(conversationId), {
+        'unreadCounts.$userId': 0,
+        'lastReadAt.$userId': now,
+      });
+
+      // CRITICAL FIX: Fetch recent messages and filter locally
+      // Using isNotEqualTo + isNull together is unreliable in Firestore
+      final recentMessages = await _conversationsRef
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('sentAt', descending: true)
+          .limit(100) // Batch limit
+          .get();
+      
+      // Filter for unread messages from other users
+      final unreadMessages = recentMessages.docs.where((doc) {
+        final data = doc.data();
+        final senderId = data['senderId'] as String?;
+        final readAt = data['readAt'];
+        return senderId != userId && readAt == null;
+      }).toList();
+
+      for (final doc in unreadMessages) {
         // Update both deliveredAt (if not set) and readAt
         // This ensures proper status progression: sent → delivered → read
         final data = doc.data();
@@ -547,7 +625,7 @@ class ChatService {
 
       await batch.commit();
 
-      _logger.d('Marked ${unreadMessages.docs.length} messages as read');
+      _logger.d('Marked ${unreadMessages.length} messages as read');
     } on FirebaseException catch (e, stack) {
       _logger.e('Error marking messages as read', error: e, stackTrace: stack);
       throw _mapFirestoreException(e);
@@ -562,26 +640,37 @@ class ChatService {
   }
 
   /// Marks messages as delivered when app opens conversation.
+  /// 
+  /// IMPORTANT: We fetch all recent messages and filter locally because
+  /// Firestore has limitations with isNotEqualTo + isNull compound queries.
   Future<void> markMessagesAsDelivered({
     required String conversationId,
     required String userId,
   }) async {
     try {
-      // Get undelivered messages sent by the other user
-      final undeliveredMessages = await _conversationsRef
+      // CRITICAL FIX: Fetch recent messages and filter locally
+      // Using isNotEqualTo + isNull together is unreliable in Firestore
+      final recentMessages = await _conversationsRef
           .doc(conversationId)
           .collection('messages')
-          .where('senderId', isNotEqualTo: userId)
-          .where('deliveredAt', isNull: true)
+          .orderBy('sentAt', descending: true)
           .limit(100)
           .get();
+      
+      // Filter for undelivered messages from other users
+      final undeliveredMessages = recentMessages.docs.where((doc) {
+        final data = doc.data();
+        final senderId = data['senderId'] as String?;
+        final deliveredAt = data['deliveredAt'];
+        return senderId != userId && deliveredAt == null;
+      }).toList();
 
-      if (undeliveredMessages.docs.isEmpty) return;
+      if (undeliveredMessages.isEmpty) return;
 
       final batch = _firestore.batch();
       final now = Timestamp.now();
 
-      for (final doc in undeliveredMessages.docs) {
+      for (final doc in undeliveredMessages) {
         batch.update(doc.reference, {
           'deliveredAt': now,
           'status': MessageStatus.delivered.name,
@@ -605,7 +694,7 @@ class ChatService {
       await batch.commit();
 
       _logger
-          .d('Marked ${undeliveredMessages.docs.length} messages as delivered');
+          .d('Marked ${undeliveredMessages.length} messages as delivered');
     } on FirebaseException catch (e, stack) {
       _logger.e('Error marking messages as delivered',
           error: e, stackTrace: stack);

@@ -31,6 +31,7 @@ class _GroupDetailPageState extends State<GroupDetailPage>
   late TabController _tabController;
   final _imagePicker = ImagePicker();
   final _cloudinaryService = CloudinaryService();
+  bool _hasShownPendingNotification = false;
 
   @override
   void initState() {
@@ -186,6 +187,15 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
 
+    // Verify user is admin
+    final state = context.read<LocationGroupBloc>().state;
+    if (!state.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only admins can delete groups')),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -205,8 +215,7 @@ class _GroupDetailPageState extends State<GroupDetailPage>
                     groupId: widget.groupId,
                     adminUserId: authState.user.id,
                   ));
-              // Navigate back to my groups page
-              context.go(Routes.myGroups);
+              // Navigation will happen in listener after successful deletion
             },
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
@@ -226,6 +235,14 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
 
+    // Verify user is admin
+    if (!state.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only admins can modify group settings')),
+      );
+      return;
+    }
+
     final nameController = TextEditingController(text: group.name);
     final descriptionController = TextEditingController(text: group.description);
     GroupVisibility selectedVisibility = group.visibility;
@@ -242,7 +259,7 @@ class _GroupDetailPageState extends State<GroupDetailPage>
 
       if (pickedFile == null) return;
 
-      // Check if widget is still mounted before calling setState
+      // Check mounted BEFORE setState
       if (!mounted) return;
       setState(() => isUploading = true);
 
@@ -253,21 +270,23 @@ class _GroupDetailPageState extends State<GroupDetailPage>
           tags: {'group_avatar': 'true'},
         );
 
-        // Check if widget is still mounted before calling setState
+        // Check mounted BEFORE setState
         if (!mounted) return;
         setState(() {
           avatarUrl = url;
           isUploading = false;
         });
       } catch (e) {
-        // Check if widget is still mounted before calling setState
+        // Check mounted BEFORE setState and showing snackbar
         if (!mounted) return;
         setState(() => isUploading = false);
         
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload image: $e')),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload image: $e')),
+          );
+        }
       }
     }
 
@@ -396,6 +415,24 @@ class _GroupDetailPageState extends State<GroupDetailPage>
 
     return BlocConsumer<LocationGroupBloc, LocationGroupState>(
       listener: (context, state) {
+        // Handle successful group deletion
+        if (state.groupDeleted) {
+          // Clear the flag first
+          context.read<LocationGroupBloc>().add(const ClearGroupDeletionFlag());
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Group deleted successfully'),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+          );
+          
+          // Navigate to my groups page
+          context.go(Routes.myGroups);
+          return;
+        }
+        
         if (state.hasError && state.errorMessage != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -407,13 +444,30 @@ class _GroupDetailPageState extends State<GroupDetailPage>
         }
 
         // Show success message when join request is sent
-        if (state.hasPendingRequest) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Join request sent!'),
-              backgroundColor: theme.colorScheme.primary,
-            ),
-          );
+        // Note: We check status to show this only once when request is sent
+        if (state.status == GroupBlocStatus.loaded && 
+            state.hasPendingRequest && 
+            !state.isMember &&
+            !_hasShownPendingNotification) {
+          _hasShownPendingNotification = true;
+          
+          // Delay to ensure it shows after navigation/UI updates
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Join request sent! You\'ll be notified when approved.'),
+                  backgroundColor: theme.colorScheme.primary,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          });
+        }
+        
+        // Reset flag if no longer pending (approved or rejected)
+        if (!state.hasPendingRequest) {
+          _hasShownPendingNotification = false;
         }
       },
       builder: (context, state) {
@@ -789,6 +843,15 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
 
+    // Verify user is admin
+    final state = context.read<LocationGroupBloc>().state;
+    if (!state.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only admins can view join requests')),
+      );
+      return;
+    }
+
     // Capture bloc reference before showing modal
     final locationGroupBloc = context.read<LocationGroupBloc>();
 
@@ -913,6 +976,38 @@ class _GroupDetailPageState extends State<GroupDetailPage>
     LocationGroup group,
     LocationGroupState state,
   ) {
+    // ========================================================================
+    // SECURITY: Show loading indicator during any membership state transition
+    // This prevents showing wrong buttons during membership check/join/leave
+    // ========================================================================
+    if (state.status == GroupBlocStatus.loading || 
+        state.status == GroupBlocStatus.joining ||
+        state.status == GroupBlocStatus.leaving) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton.tonal(
+            onPressed: null,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Text('Loading...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (state.isMember) {
       return SafeArea(
         child: Padding(

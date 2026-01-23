@@ -109,9 +109,13 @@ class ConversationTile extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                      maxWidth: 50,
+                    ),
                     child: Center(
                       child: Text(
                         unreadCount > 99 ? '99+' : unreadCount.toString(),
@@ -120,6 +124,7 @@ class ConversationTile extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),

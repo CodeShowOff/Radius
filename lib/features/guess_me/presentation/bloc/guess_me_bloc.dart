@@ -42,6 +42,8 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     on<GuessmeJoinQueue>(_onJoinQueue);
     on<GuessmeLeaveQueue>(_onLeaveQueue);
     on<GuessmeSendMessage>(_onSendMessage);
+    on<GuessmeRetryMessage>(_onRetryMessage);
+    on<GuessmeRemoveFailedMessage>(_onRemoveFailedMessage);
     on<GuessmeInitiateGuessCheck>(_onInitiateGuessCheck);
     on<GuessmeRespondToGuessCheck>(_onRespondToGuessCheck);
     on<GuessmeRespondToConnectionPrompt>(_onRespondToConnectionPrompt);
@@ -50,6 +52,9 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     on<_GuessmeMessagesUpdated>(_onMessagesUpdated);
     on<_GuessmeStatsUpdated>(_onStatsUpdated);
     on<_GuessmeSessionExpired>(_onSessionExpired);
+    on<GuessmeMarkSearching>(_onMarkSearching);
+    on<GuessmeClearSearching>(_onClearSearching);
+    on<GuessmeEnsureSessionSubscription>(_onEnsureSessionSubscription);
   }
 
   Future<void> _onInitialize(
@@ -132,6 +137,10 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     emit(state.copyWith(status: GuessmeStatus.inQueue));
 
+    // Start monitoring for session creation BEFORE attempting to match
+    // This ensures that if another user creates a session with us, we detect it
+    _startQueueMonitoring();
+
     try {
       final sessionId = await _service.joinQueue(
         userId: _currentUserId!,
@@ -139,19 +148,19 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       );
 
       if (sessionId != null) {
-        // Matched immediately!
+        // Matched immediately! (We created the session)
         _subscribeToSession(sessionId);
         final session = await _service.getSession(sessionId);
         emit(state.copyWith(
           status: GuessmeStatus.inGame,
           session: session,
         ));
-      } else {
-        // No match found, monitoring for match
-        _startQueueMonitoring();
       }
+      // If sessionId is null, we're still monitoring via _queueMonitorSubscription
+      // and will be notified when someone else creates a session with us
     } catch (e, stack) {
       _logger.e('Error joining queue', error: e, stackTrace: stack);
+      _stopQueueMonitoring();
       emit(state.copyWith(
         status: GuessmeStatus.error,
         errorMessage: 'Failed to join game: ${e.toString()}',
@@ -181,22 +190,30 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
 
     // Don't send messages if game has ended
     if (state.status == GuessmeStatus.gameEnded) {
+      _logger.w('Cannot send message: game has ended');
       return;
     }
 
-    _logger.d('Sending message: ${event.text.substring(0, event.text.length.clamp(0, 20))}...');
+    final messageText = event.text.trim();
+    if (messageText.isEmpty) return;
+
+    _logger.d('Sending message: ${messageText.substring(0, messageText.length.clamp(0, 20))}... (sessionId: $_currentSessionId, senderId: $_currentUserId)');
 
     // ========================================================================
-    // OPTIMISTIC UI: Show message immediately while waiting for Firestore
+    // OPTIMISTIC UI: Show message with 'sending' status while waiting for Firestore
     // ========================================================================
+    final localId = 'pending_${DateTime.now().millisecondsSinceEpoch}_${messageText.hashCode}';
     final optimisticMessage = GuessmeMessage(
-      id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
+      id: localId,
       sessionId: _currentSessionId!,
       senderId: _currentUserId!,
-      text: event.text,
+      text: messageText,
       sentAt: DateTime.now(),
+      status: GuessmeMessageStatus.sending,
+      localId: localId,
     );
 
+    // Add optimistic message to state
     emit(state.copyWith(
       messages: [...state.messages, optimisticMessage],
     ));
@@ -205,17 +222,79 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       await _service.sendMessage(
         sessionId: _currentSessionId!,
         senderId: _currentUserId!,
-        text: event.text,
+        text: messageText,
       );
-      // Message will be updated by the stream with the real ID
+      _logger.d('Message written to Firestore successfully');
+      // The stream will deliver the confirmed message with the real ID.
+      // The _onMessagesUpdated handler will merge and replace the optimistic message.
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
-      // Remove the optimistic message on error
+      
+      // Mark the optimistic message as failed instead of removing it
+      final updatedMessages = state.messages.map((m) {
+        if (m.id == localId) {
+          return m.copyWith(status: GuessmeMessageStatus.failed);
+        }
+        return m;
+      }).toList();
+      
       emit(state.copyWith(
-        messages: state.messages.where((m) => m.id != optimisticMessage.id).toList(),
+        messages: updatedMessages,
         errorMessage: 'Failed to send message',
       ));
     }
+  }
+
+  /// Retries sending a failed message.
+  Future<void> _onRetryMessage(
+    GuessmeRetryMessage event,
+    Emitter<GuessmeState> emit,
+  ) async {
+    if (_currentUserId == null || _currentSessionId == null) return;
+
+    // Update the failed message to 'sending' status
+    final updatedMessages = state.messages.map((m) {
+      if (m.id == event.localMessageId) {
+        return m.copyWith(status: GuessmeMessageStatus.sending);
+      }
+      return m;
+    }).toList();
+    
+    emit(state.copyWith(messages: updatedMessages));
+
+    try {
+      await _service.sendMessage(
+        sessionId: _currentSessionId!,
+        senderId: _currentUserId!,
+        text: event.text,
+      );
+      _logger.d('Retry message sent successfully');
+      // Stream will deliver the confirmed message
+    } catch (e, stack) {
+      _logger.e('Retry failed', error: e, stackTrace: stack);
+      
+      // Mark as failed again
+      final failedMessages = state.messages.map((m) {
+        if (m.id == event.localMessageId) {
+          return m.copyWith(status: GuessmeMessageStatus.failed);
+        }
+        return m;
+      }).toList();
+      
+      emit(state.copyWith(
+        messages: failedMessages,
+        errorMessage: 'Failed to send message',
+      ));
+    }
+  }
+
+  /// Removes a failed message from the UI.
+  void _onRemoveFailedMessage(
+    GuessmeRemoveFailedMessage event,
+    Emitter<GuessmeState> emit,
+  ) {
+    final updatedMessages = state.messages.where((m) => m.id != event.localMessageId).toList();
+    emit(state.copyWith(messages: updatedMessages));
   }
 
   Future<void> _onInitiateGuessCheck(
@@ -371,9 +450,14 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       return;
     }
 
+    // Log guess check state for debugging
+    if (session.guessCheckPending) {
+      _logger.i('Session updated with guessCheckPending=true, initiator=${session.guessCheckInitiator}, currentUser=$_currentUserId');
+    }
+
     // Determine status from session
     final newStatus = _getStatusFromSession(session);
-    _logger.d('Session updated - guessCheckPending: ${session.guessCheckPending}, initiator: ${session.guessCheckInitiator}, newStatus: $newStatus');
+    _logger.d('Session updated - guessCheckPending: ${session.guessCheckPending}, initiator: ${session.guessCheckInitiator}, newStatus: $newStatus, previousStatus: ${state.status}');
 
     // Start expiry timer if not already running and game is active
     if (newStatus == GuessmeStatus.inGame && 
@@ -392,13 +476,49 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _GuessmeMessagesUpdated event,
     Emitter<GuessmeState> emit,
   ) {
-    _logger.d('Emitting ${event.messages.length} messages to state');
+    _logger.d('Stream delivered ${event.messages.length} messages');
     
-    // Remove any pending (optimistic) messages since the stream has the real data
-    // Pending messages have IDs starting with 'pending_'
     final streamMessages = event.messages;
+    final currentMessages = state.messages;
     
-    emit(state.copyWith(messages: streamMessages));
+    // ========================================================================
+    // MERGE STRATEGY: Combine stream messages with pending/failed optimistic messages
+    // ========================================================================
+    
+    // 1. Get all pending or failed optimistic messages from current state
+    final pendingMessages = currentMessages.where((m) => 
+      m.isPending && (m.status == GuessmeMessageStatus.sending || m.status == GuessmeMessageStatus.failed)
+    ).toList();
+    
+    // 2. For each pending message, check if it has been confirmed by the stream
+    //    A message is considered confirmed if a stream message has the same
+    //    senderId, text, and sentAt is within 30 seconds
+    final confirmedLocalIds = <String>{};
+    
+    for (final pending in pendingMessages) {
+      final isConfirmed = streamMessages.any((streamMsg) =>
+        streamMsg.senderId == pending.senderId &&
+        streamMsg.text == pending.text &&
+        streamMsg.sentAt.difference(pending.sentAt).abs() < const Duration(seconds: 30)
+      );
+      
+      if (isConfirmed) {
+        confirmedLocalIds.add(pending.id);
+        _logger.d('Optimistic message ${pending.id} confirmed by stream');
+      }
+    }
+    
+    // 3. Keep only failed messages that haven't been confirmed
+    //    (sending messages are replaced by stream, failed ones are kept for retry UI)
+    final failedMessagesToKeep = pendingMessages.where((m) =>
+      m.status == GuessmeMessageStatus.failed && !confirmedLocalIds.contains(m.id)
+    ).toList();
+    
+    // 4. Merge: stream messages + any remaining failed messages (sorted by time)
+    final mergedMessages = [...streamMessages, ...failedMessagesToKeep];
+    mergedMessages.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+    
+    emit(state.copyWith(messages: mergedMessages));
   }
 
   void _onStatsUpdated(
@@ -421,6 +541,12 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
   }
 
   void _subscribeToSession(String sessionId) {
+    // Idempotency guard: skip if already subscribed to this session
+    if (_currentSessionId == sessionId && _messagesSubscription != null) {
+      _logger.d('Already subscribed to session $sessionId, skipping re-subscription');
+      return;
+    }
+    
     _currentSessionId = sessionId;
     _stopQueueMonitoring();
     _logger.i('Subscribing to session: $sessionId');
@@ -439,11 +565,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _messagesSubscription = _service.getMessagesStream(sessionId).listen(
           (messages) {
             if (!isClosed) {
-              _logger.d('Received ${messages.length} messages from stream');
+              _logger.d('Received ${messages.length} messages from stream for session $sessionId');
               add(_GuessmeMessagesUpdated(messages));
             }
           },
-          onError: (e) => _logger.e('Messages stream error', error: e),
+          onError: (e, stackTrace) {
+            _logger.e('Messages stream error for session $sessionId', error: e, stackTrace: stackTrace);
+          },
         );
   }
 
@@ -493,12 +621,78 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     });
   }
 
+  Future<void> _onMarkSearching(
+    GuessmeMarkSearching event,
+    Emitter<GuessmeState> emit,
+  ) async {
+    try {
+      await _service.setUserSearching(event.userId);
+      _logger.d('Marked user ${event.userId} as searching');
+    } catch (e) {
+      _logger.w('Error marking user as searching', error: e);
+    }
+  }
+
+  Future<void> _onClearSearching(
+    GuessmeClearSearching event,
+    Emitter<GuessmeState> emit,
+  ) async {
+    try {
+      await _service.clearUserSearching(event.userId);
+      _logger.d('Cleared searching status for user ${event.userId}');
+    } catch (e) {
+      _logger.w('Error clearing searching status', error: e);
+    }
+  }
+
+  /// Ensures the BLoC is subscribed to the given session.
+  /// Called by the game page to guarantee message streaming even if
+  /// the page was opened via deep link or navigation without going through lobby.
+  Future<void> _onEnsureSessionSubscription(
+    GuessmeEnsureSessionSubscription event,
+    Emitter<GuessmeState> emit,
+  ) async {
+    final sessionId = event.sessionId;
+    
+    // If already subscribed to this session, the idempotency guard in 
+    // _subscribeToSession will prevent duplicate subscriptions
+    if (_currentSessionId == sessionId && _messagesSubscription != null) {
+      _logger.d('Already subscribed to session $sessionId');
+      return;
+    }
+    
+    _logger.i('Ensuring subscription to session $sessionId');
+    
+    // Fetch session to get its data
+    final session = await _service.getSession(sessionId);
+    if (session == null) {
+      _logger.w('Session $sessionId not found');
+      emit(state.copyWith(
+        status: GuessmeStatus.error,
+        errorMessage: 'Session not found',
+      ));
+      return;
+    }
+    
+    // Subscribe to the session
+    _subscribeToSession(sessionId);
+    
+    // Update state with session
+    final status = _getStatusFromSession(session);
+    emit(state.copyWith(
+      status: status,
+      session: session,
+    ));
+  }
+
   @override
   Future<void> close() async {
     // Cleanup: if user is in a game when bloc closes, clean up their status
     if (_currentUserId != null) {
       try {
         await _service.clearUserGameStatus(_currentUserId!);
+        // Also clear searching status
+        await _service.clearUserSearching(_currentUserId!);
         if (_currentSessionId != null) {
           await _service.cancelSession(_currentSessionId!, _currentUserId!).catchError((e) {
             _logger.w('Error cancelling session on bloc close', error: e);

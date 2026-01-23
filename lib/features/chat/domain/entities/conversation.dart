@@ -40,6 +40,11 @@ class Conversation extends Equatable {
   /// Whether either user has archived this conversation.
   final Map<String, bool> archivedBy;
 
+  /// When each user last read the conversation.
+  /// Map\<userId, lastReadAt\>
+  /// Used to calculate unread counts and show "Unread messages" divider.
+  final Map<String, DateTime> lastReadAt;
+
   const Conversation({
     required this.id,
     required this.participantIds,
@@ -52,6 +57,7 @@ class Conversation extends Equatable {
     this.mutedBy = const {},
     this.participantInfo = const {},
     this.archivedBy = const {},
+    this.lastReadAt = const {},
   });
 
   /// Creates a canonical conversation ID from two user IDs.
@@ -70,6 +76,9 @@ class Conversation extends Equatable {
 
   /// Gets unread count for a user.
   int getUnreadCount(String userId) => unreadCounts[userId] ?? 0;
+
+  /// Gets when the user last read the conversation.
+  DateTime? getLastReadAt(String userId) => lastReadAt[userId];
 
   /// Checks if muted by a user.
   bool isMutedBy(String userId) => mutedBy[userId] ?? false;
@@ -98,6 +107,7 @@ class Conversation extends Equatable {
     Map<String, bool>? mutedBy,
     Map<String, ParticipantInfo>? participantInfo,
     Map<String, bool>? archivedBy,
+    Map<String, DateTime>? lastReadAt,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -119,6 +129,7 @@ class Conversation extends Equatable {
       mutedBy: mutedBy ?? this.mutedBy,
       participantInfo: participantInfo ?? this.participantInfo,
       archivedBy: archivedBy ?? this.archivedBy,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
 
@@ -135,6 +146,7 @@ class Conversation extends Equatable {
         mutedBy,
         participantInfo,
         archivedBy,
+        lastReadAt,
       ];
 }
 

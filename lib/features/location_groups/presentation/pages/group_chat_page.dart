@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/notifications/notification_service.dart';
+import '../../../../core/widgets/unread_messages_divider.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/group_message.dart';
 import '../bloc/group_chat_bloc.dart';
 import '../bloc/location_group_bloc.dart';
 
 /// Page for group chat with real-time messaging.
+///
+/// CRITICAL: Implements [WidgetsBindingObserver] for app lifecycle handling.
+/// This ensures messages sync correctly when:
+/// - App returns from background
+/// - App resumes from pause
+/// - Device wakes from sleep
 class GroupChatPage extends StatefulWidget {
   final String groupId;
 
@@ -21,7 +30,8 @@ class GroupChatPage extends StatefulWidget {
   State<GroupChatPage> createState() => _GroupChatPageState();
 }
 
-class _GroupChatPageState extends State<GroupChatPage> {
+class _GroupChatPageState extends State<GroupChatPage>
+    with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
@@ -31,6 +41,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
   @override
   void initState() {
     super.initState();
+    // CRITICAL: Register for app lifecycle events
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _openChat();
   }
@@ -42,9 +54,36 @@ class _GroupChatPageState extends State<GroupChatPage> {
     _chatBloc ??= context.read<GroupChatBloc>();
   }
 
+  /// CRITICAL: Handle app lifecycle changes for reliable message delivery.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came back to foreground - resync to get any missed messages
+        _chatBloc?.add(const ResyncGroupChat());
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App going to background - subscriptions may become stale
+        // We'll resync when resumed
+        break;
+    }
+  }
+
   void _openChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // Notify notification service that user is viewing this group
+      try {
+        getIt<NotificationService>().setCurrentGroup(widget.groupId);
+      } catch (_) {
+        // Ignore if service not available
+      }
+
       context.read<GroupChatBloc>().add(OpenGroupChat(
             groupId: widget.groupId,
             currentUserId: authState.user.id,
@@ -56,10 +95,20 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   @override
   void dispose() {
+    // CRITICAL: Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _focusNode.dispose();
+
+    // Notify notification service that user left this group
+    try {
+      getIt<NotificationService>().clearCurrentGroup();
+    } catch (_) {
+      // Ignore if service not available
+    }
+
     // Use cached reference to avoid context access after disposal
     _chatBloc?.add(const CloseGroupChat());
     super.dispose();
@@ -190,7 +239,25 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 _isLoadingMore = false;
               }
 
-              // Show error
+              // Handle access denial - navigate away with error
+              if (state.hasError && !state.membershipVerified) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.errorMessage ?? 'Access denied'),
+                    backgroundColor: theme.colorScheme.error,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                // Navigate back - user should not be on this page
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(Routes.myGroups);
+                }
+                return;
+              }
+
+              // Show other errors
               if (state.hasError && state.errorMessage != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -201,7 +268,72 @@ class _GroupChatPageState extends State<GroupChatPage> {
               }
             },
             builder: (context, state) {
-              // Only show loading spinner during initial load (no cached messages)
+              // ================================================================
+              // SECURITY: Show loading while verifying membership
+              // Do NOT show any content until membership is confirmed
+              // ================================================================
+              if (state.isVerifyingMembership) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Verifying access...',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // SECURITY: Show access denied state for non-members
+              if (state.hasError && !state.membershipVerified) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 64,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Access Denied',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        state.errorMessage ?? 'You must be a member to access this chat.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(Routes.myGroups);
+                          }
+                        },
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Go Back'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // Only show loading spinner during initial load
               if (state.status == GroupChatStatus.loading && state.messages.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -220,8 +352,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         : _buildMessagesList(state),
                   ),
 
-                  // Input area
-                  _buildInputArea(theme, state),
+                  // Input area (only show if membership verified)
+                  if (state.membershipVerified) _buildInputArea(theme, state),
                 ],
               );
             },
@@ -281,13 +413,28 @@ class _GroupChatPageState extends State<GroupChatPage> {
         final isMe = message.senderId == state.currentUserId;
         final showSenderInfo = !isMe && _shouldShowSenderInfo(state, index);
 
-        return _MessageBubble(
-          message: message,
-          isMe: isMe,
-          showSenderInfo: showSenderInfo,
-          onDelete: isMe
-              ? () => _confirmDelete(message)
-              : null,
+        // Check if this is the first unread message
+        final showUnreadDivider = state.firstUnreadMessageId != null &&
+            message.id == state.firstUnreadMessageId;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MessageBubble(
+              message: message,
+              isMe: isMe,
+              showSenderInfo: showSenderInfo,
+              onDelete: isMe
+                  ? () => _confirmDelete(message)
+                  : null,
+            ),
+            // Show divider AFTER the message (which appears ABOVE in reversed list)
+            if (showUnreadDivider)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: UnreadMessagesDividerCompact(),
+              ),
+          ],
         );
       },
     );
@@ -518,18 +665,34 @@ class _MessageBubble extends StatelessWidget {
                         const SizedBox(width: 6),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 1),
-                          child: Text(
-                            _formatTime(message.sentAt),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: isMe
-                                  ? theme.colorScheme
-                                      .onPrimaryContainer
-                                      .withValues(alpha: 0.5)
-                                  : theme.colorScheme
-                                      .onSurface
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _formatTime(message.sentAt),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: isMe
+                                      ? theme.colorScheme
+                                          .onPrimaryContainer
+                                          .withValues(alpha: 0.5)
+                                      : theme.colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.5),
+                                  fontSize: 11,
+                                ),
+                              ),
+                              // Show sending indicator for optimistic messages
+                              if (isMe &&
+                                  message.status == GroupMessageStatus.sending) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.access_time,
+                                  size: 12,
+                                  color: theme.colorScheme.onPrimaryContainer
                                       .withValues(alpha: 0.5),
-                              fontSize: 11,
-                            ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],

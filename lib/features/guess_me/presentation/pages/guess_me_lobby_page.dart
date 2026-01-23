@@ -135,6 +135,9 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
       _isSearching = true;
     });
 
+    // Mark user as searching in Firestore so other users can find them
+    context.read<GuessmeBloc>().add(GuessmeMarkSearching(authState.user.id));
+
     final nearbyBloc = context.read<NearbyUsersBloc>();
     
     // Initialize advertising if not already
@@ -146,10 +149,14 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     // Clear previous results
     nearbyBloc.add(const NearbyUsersClearResults());
 
-    // Start scanning
+    // Start scanning with 7-second duration
     Future.delayed(const Duration(milliseconds: 300), () {
       if (!mounted || !_isSearching) return;
-      nearbyBloc.add(const NearbyUsersStartScan());
+      
+      // Start 7-second scan for GuessMe
+      nearbyBloc.add(const NearbyUsersStartScan(
+        duration: Duration(seconds: 7),
+      ));
       
       // Listen for nearby users - connect to first one found
       _nearbyUsersSubscription?.cancel();
@@ -168,9 +175,8 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
           }
         }
         
-        // Handle scan completion with no results
-        if (state.status == NearbyUsersStatus.empty || 
-            (state.status == NearbyUsersStatus.idle && state.users.isEmpty && _isSearching)) {
+        // Handle scan completion with no results (7 seconds elapsed, no users found)
+        if (state.status == NearbyUsersStatus.empty && _isSearching) {
           _handleNoUsersFound();
         }
         
@@ -191,6 +197,12 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     
     final nearbyBloc = context.read<NearbyUsersBloc>();
     nearbyBloc.add(const NearbyUsersStopScan());
+    
+    // Clear searching status in Firestore
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      context.read<GuessmeBloc>().add(GuessmeClearSearching(authState.user.id));
+    }
     
     if (mounted) {
       setState(() {

@@ -51,6 +51,9 @@ class GroupChatService {
   }
 
   /// Sends a text message to a group.
+  /// 
+  /// SECURITY: Verifies sender is an active member before sending.
+  /// This is a defense-in-depth check - Firestore rules also enforce this.
   Future<GroupMessage> sendMessage({
     required String groupId,
     required String senderId,
@@ -59,6 +62,24 @@ class GroupChatService {
     required String text,
   }) async {
     _logger.d('Sending message to group: $groupId');
+
+    // SECURITY: Verify sender is an active member before attempting to send
+    final isMember = await isActiveMember(groupId: groupId, userId: senderId);
+    if (!isMember) {
+      _logger.w('Message send blocked: User $senderId is not a member of group $groupId');
+      throw Exception('You are not a member of this group');
+    }
+
+    // Sanitize and validate message
+    final sanitizedText = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    
+    if (sanitizedText.isEmpty) {
+      throw ArgumentError('Message text cannot be empty');
+    }
+    
+    if (sanitizedText.length > 5000) {
+      throw ArgumentError('Message must be 5000 characters or less');
+    }
 
     final batch = _firestore.batch();
 
@@ -69,14 +90,16 @@ class GroupChatService {
       senderId: senderId,
       senderName: senderName,
       senderPhotoUrl: senderPhotoUrl,
-      text: text,
+      text: sanitizedText,
     );
     batch.set(messageRef, messageData);
 
     // Update group's lastActivityAt and preview
     batch.update(_groupRef(groupId), {
       'lastActivityAt': FieldValue.serverTimestamp(),
-      'lastMessagePreview': text,
+      'lastMessagePreview': sanitizedText.length > 100 
+          ? '${sanitizedText.substring(0, 100)}...' 
+          : sanitizedText,
     });
 
     // Increment unread counts for all active members except sender
@@ -115,7 +138,7 @@ class GroupChatService {
       senderId: senderId,
       senderName: senderName,
       senderPhotoUrl: senderPhotoUrl,
-      text: text,
+      text: sanitizedText,
       type: GroupMessageType.text,
       sentAt: DateTime.now(),
       status: GroupMessageStatus.sent,
@@ -129,9 +152,16 @@ class GroupChatService {
   }) async {
     _logger.d('Sending system message to group: $groupId');
 
+    // Validate system message
+    final sanitizedText = text.trim();
+    if (sanitizedText.isEmpty) {
+      _logger.w('Attempted to send empty system message');
+      return;
+    }
+
     final messageData = GroupMessageModel.toSystemMessageData(
       groupId: groupId,
-      text: text,
+      text: sanitizedText,
     );
 
     final batch = _firestore.batch();
@@ -139,9 +169,66 @@ class GroupChatService {
     batch.set(messageRef, messageData);
     batch.update(_groupRef(groupId), {
       'lastActivityAt': FieldValue.serverTimestamp(),
-      'lastMessagePreview': text,
+      'lastMessagePreview': sanitizedText.length > 100
+          ? '${sanitizedText.substring(0, 100)}...'
+          : sanitizedText,
     });
     await batch.commit();
+  }
+
+  /// Streams messages from a group with optional pagination.
+  ///
+  /// [limit] - Number of messages to load (default 50)
+  /// [beforeTimestamp] - Load messages before this timestamp (for pagination)
+  Stream<List<GroupMessage>> streamMessages({
+    required String groupId,
+    int limit = 50,
+    DateTime? beforeTimestamp,
+  }) {
+    Query<Map<String, dynamic>> query = _messagesRef(groupId)
+        .where('isDeleted', isEqualTo: false)
+        .orderBy('sentAt', descending: true)
+        .limit(limit);
+
+    // For pagination: load older messages
+    if (beforeTimestamp != null) {
+      query = query.startAfter([Timestamp.fromDate(beforeTimestamp)]);
+    }
+
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => GroupMessageModel.fromFirestore(doc))
+          .toList();
+    }).handleError((error, stackTrace) {
+      _logger.e('Error streaming messages', error: error);
+      throw error;
+    });
+  }
+
+  /// Gets a batch of messages for initial load or pagination.
+  Future<List<GroupMessage>> getMessages({
+    required String groupId,
+    int limit = 50,
+    DateTime? beforeTimestamp,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
+          .orderBy('sentAt', descending: true)
+          .limit(limit);
+
+      if (beforeTimestamp != null) {
+        query = query.startAfter([Timestamp.fromDate(beforeTimestamp)]);
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs
+          .map((doc) => GroupMessageModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      _logger.e('Error getting messages', error: e);
+      return [];
+    }
   }
 
   /// Marks a group as read for a user (resets unread count).
@@ -181,30 +268,6 @@ class GroupChatService {
           .map((doc) => GroupMessageModel.fromFirestore(doc))
           .toList();
     });
-  }
-
-  /// Gets paginated messages for a group.
-  Future<List<GroupMessage>> getMessages(
-    String groupId, {
-    int limit = 50,
-    DateTime? before,
-  }) async {
-    _logger.d('Getting messages for group: $groupId, before: $before');
-
-    Query<Map<String, dynamic>> query = _messagesRef(groupId)
-        .where('isDeleted', isEqualTo: false)
-        .orderBy('sentAt', descending: true)
-        .limit(limit);
-
-    if (before != null) {
-      query = query.where('sentAt', isLessThan: Timestamp.fromDate(before));
-    }
-
-    final snapshot = await query.get();
-
-    return snapshot.docs
-        .map((doc) => GroupMessageModel.fromFirestore(doc))
-        .toList();
   }
 
   /// Loads older messages for pagination.
@@ -250,5 +313,69 @@ class GroupChatService {
         .count()
         .get();
     return snapshot.count ?? 0;
+  }
+
+  /// Gets the ID of the first unread message for a user based on lastReadAt.
+  ///
+  /// Returns null if:
+  /// - No unread messages exist
+  /// - User is not a member
+  /// - lastReadAt is not set (return oldest message as first unread)
+  /// - An error occurs (fails silently to avoid blocking chat load)
+  ///
+  /// This is used to:
+  /// 1. Scroll to the first unread message when opening group chat
+  /// 2. Show "Unread messages" divider above this message
+  Future<String?> getFirstUnreadMessageId({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      // Get user's membership to find lastReadAt
+      final memberDoc = await _groupRef(groupId)
+          .collection('members')
+          .doc(userId)
+          .get();
+
+      if (!memberDoc.exists) return null;
+
+      final data = memberDoc.data();
+      final lastReadAt = data?['lastReadAt'];
+
+      if (lastReadAt == null) {
+        // User never read this group - return earliest message
+        final firstMessageSnapshot = await _messagesRef(groupId)
+            .where('isDeleted', isEqualTo: false)
+            .orderBy('sentAt', descending: false)
+            .limit(1)
+            .get();
+
+        if (firstMessageSnapshot.docs.isEmpty) return null;
+        return firstMessageSnapshot.docs.first.id;
+      }
+
+      final lastReadTimestamp = lastReadAt as Timestamp;
+
+      // Find the first message AFTER lastReadAt that was NOT sent by this user
+      final unreadSnapshot = await _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
+          .where('sentAt', isGreaterThan: lastReadTimestamp)
+          .orderBy('sentAt', descending: false)
+          .limit(50) // Reasonable limit
+          .get();
+
+      // Filter out messages sent by the current user (and system messages)
+      final unreadFromOthers = unreadSnapshot.docs.where((doc) {
+        final senderId = doc.data()['senderId'] as String?;
+        final isSystem = doc.data()['isSystemMessage'] as bool? ?? false;
+        return senderId != userId && !isSystem;
+      }).toList();
+
+      if (unreadFromOthers.isEmpty) return null;
+      return unreadFromOthers.first.id;
+    } catch (e, stack) {
+      _logger.w('Error getting first unread message ID', error: e, stackTrace: stack);
+      return null; // Fail silently
+    }
   }
 }

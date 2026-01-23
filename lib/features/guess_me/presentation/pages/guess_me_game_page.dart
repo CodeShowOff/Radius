@@ -48,6 +48,18 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Ensure the BLoC is subscribed to this session's messages
+    // This is critical for cases where the page opens without going through lobby
+    // or when there's a race condition during session creation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<GuessmeBloc>().add(
+          GuessmeEnsureSessionSubscription(widget.sessionId),
+        );
+      }
+    });
+    
     _startCountdown();
   }
 
@@ -62,10 +74,16 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // App went to background - the BLoC will handle cleanup if needed
+      // App went to background - Firestore streams will pause automatically
     } else if (state == AppLifecycleState.resumed) {
       // Refresh timer
       _refreshTimer();
+      
+      // Re-ensure subscription is active after app resume
+      // This handles cases where the stream may have been interrupted
+      context.read<GuessmeBloc>().add(
+        GuessmeEnsureSessionSubscription(widget.sessionId),
+      );
     }
   }
 
@@ -494,10 +512,26 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<GuessmeBloc, GuessmeState>(
-      listenWhen: (previous, current) =>
-          previous.status != current.status ||
-          previous.session?.expiresAt != current.session?.expiresAt ||
-          previous.session?.awaitingConnectionConfirmations != current.session?.awaitingConnectionConfirmations,
+      listenWhen: (previous, current) {
+        // Log state changes for debugging
+        if (previous.status != current.status) {
+          debugPrint('GuessMe: Status changed from ${previous.status} to ${current.status}');
+        }
+        if (previous.session?.guessCheckPending != current.session?.guessCheckPending) {
+          debugPrint('GuessMe: guessCheckPending changed from ${previous.session?.guessCheckPending} to ${current.session?.guessCheckPending}');
+          debugPrint('GuessMe: guessCheckInitiator: ${current.session?.guessCheckInitiator}');
+        }
+        
+        // Trigger listener when:
+        // 1. Status changes (including to receivedGuessCheck)
+        // 2. Expiry time changes
+        // 3. Connection confirmations status changes
+        // 4. Guess check pending changes (CRITICAL for receiving guess check)
+        return previous.status != current.status ||
+            previous.session?.expiresAt != current.session?.expiresAt ||
+            previous.session?.awaitingConnectionConfirmations != current.session?.awaitingConnectionConfirmations ||
+            previous.session?.guessCheckPending != current.session?.guessCheckPending;
+      },
       listener: (context, state) {
         // Update countdown timer if expiry time changed
         if (state.session?.expiresAt != null) {
@@ -506,7 +540,9 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
 
         // Show guess check dialog when received
         if (state.status == GuessmeStatus.receivedGuessCheck) {
-          debugPrint('GuessMe: Received guess check, showing dialog. Already shown: $_guessCheckDialogShown');
+          debugPrint('GuessMe: Status is receivedGuessCheck - Dialog shown flag: $_guessCheckDialogShown');
+          debugPrint('GuessMe: Session guessCheckPending: ${state.session?.guessCheckPending}');
+          debugPrint('GuessMe: Session guessCheckInitiator: ${state.session?.guessCheckInitiator}');
           _showGuessCheckReceivedDialog();
         }
 
@@ -541,12 +577,6 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
                 Expanded(
                   child: _buildMessagesList(context, state),
                 ),
-
-                // Guess check button (if not used and not in connection phase)
-                if (state.isInGame && 
-                    !state.hasUsedGuess && 
-                    state.status != GuessmeStatus.awaitingConnectionConfirmation)
-                  _buildGuessCheckBar(context, state),
 
                 // Input
                 _buildMessageInput(context, state),
@@ -617,6 +647,35 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
       ),
       centerTitle: true,
       actions: [
+        // Guess Check button - shows when available
+        if (state.isInGame && 
+            !state.hasUsedGuess && 
+            state.status != GuessmeStatus.awaitingConnectionConfirmation)
+          if (state.status == GuessmeStatus.awaitingGuessResponse)
+            // Waiting for response state
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.orange,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            // Available to use
+            IconButton(
+              icon: const Icon(Icons.psychology),
+              color: Colors.orange,
+              tooltip: 'Guess Check',
+              onPressed: _initiateGuessCheck,
+            ),
         PopupMenuButton<String>(
           onSelected: (value) {
             if (value == 'leave') {
@@ -655,59 +714,16 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
       config: config,
       scrollController: _scrollController,
       isLoading: false,
-    );
-  }
-
-  Widget _buildGuessCheckBar(BuildContext context, GuessmeState state) {
-    final theme = Theme.of(context);
-
-    if (state.status == GuessmeStatus.awaitingGuessResponse) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        color: Colors.orange.withValues(alpha: 0.1),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text('Waiting for response...'),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Think you know who this is?',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          TextButton.icon(
-            onPressed: _initiateGuessCheck,
-            icon: const Icon(Icons.psychology, size: 18),
-            label: const Text('Guess Check'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.orange,
-            ),
-          ),
-        ],
-      ),
+      onRetryMessage: (message) {
+        context.read<GuessmeBloc>().add(
+          GuessmeRetryMessage(localMessageId: message.id, text: message.text),
+        );
+      },
+      onRemoveFailedMessage: (message) {
+        context.read<GuessmeBloc>().add(
+          GuessmeRemoveFailedMessage(message.id),
+        );
+      },
     );
   }
 

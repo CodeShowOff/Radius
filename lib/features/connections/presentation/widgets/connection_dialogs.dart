@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../data/connection_service.dart';
 import '../bloc/connection_bloc.dart';
 
 /// Dialog for sending a connection request with optional message.
@@ -102,6 +103,16 @@ class _SendConnectionRequestDialogState
   }
 
   void _sendRequest() {
+    // Check if request already sent
+    final connectionState = context.read<ConnectionBloc>().state;
+    if (connectionState.getSentRequestTo(widget.receiverId) != null ||
+        connectionState.getStateForUser(widget.receiverId) == UserConnectionState.requestSent ||
+        (connectionState.isActionLoading && connectionState.processingId == widget.receiverId)) {
+      // Request already sent, just close the dialog
+      Navigator.pop(context, false);
+      return;
+    }
+
     setState(() => _isSending = true);
 
     context.read<ConnectionBloc>().add(ConnectionSendRequest(

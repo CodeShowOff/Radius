@@ -75,3 +75,27 @@ class DeleteGroupMessage extends GroupChatEvent {
   @override
   List<Object?> get props => [messageId];
 }
+
+/// Resyncs the group chat stream (for app resume/network reconnect).
+/// This resubscribes to the Firestore stream without resetting state,
+/// ensuring messages received while backgrounded are fetched.
+class ResyncGroupChat extends GroupChatEvent {
+  const ResyncGroupChat();
+}
+
+/// Internal event: First unread message ID found.
+/// Used to show "Unread messages" divider in chat.
+class _GroupFirstUnreadMessageFound extends GroupChatEvent {
+  final String messageId;
+
+  const _GroupFirstUnreadMessageFound(this.messageId);
+
+  @override
+  List<Object?> get props => [messageId];
+}
+
+/// Clears the first unread message marker.
+/// Called after user has seen the unread messages.
+class GroupClearFirstUnread extends GroupChatEvent {
+  const GroupClearFirstUnread();
+}

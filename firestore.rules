@@ -72,6 +72,25 @@ service cloud.firestore {
       match /settings/{document=**} {
         allow read, write: if isOwner(userId);
       }
+      
+      // Group memberships inverse index - for fast user groups query
+      match /group_memberships/{groupId} {
+        // RULE: Owner can read their own group memberships
+        allow read: if isOwner(userId);
+        
+        // RULE: System can write group memberships (join/leave operations)
+        // User must match the userId in the document
+        allow create: if isAuthenticated()
+          && request.resource.data.userId == userId
+          && request.resource.data.groupId == groupId;
+        
+        // RULE: Allow updates for role changes
+        allow update: if isAuthenticated()
+          && request.resource.data.userId == userId;
+        
+        // RULE: Allow deletion when leaving groups
+        allow delete: if isAuthenticated();
+      }
     }
     
     // Public profiles (denormalized for faster reads)
@@ -80,14 +99,20 @@ service cloud.firestore {
       allow read: if isAuthenticated() 
         && !hasBlockRelationship(request.auth.uid, userId);
       
-      // Only owner can write their profile
-      allow write: if isOwner(userId);
-
-      // Allow system/service to update game status fields
+      // RULE: Allow authenticated users to create their own profile
+      // This is critical for first-time sign-up/sign-in flows
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId;
+      
+      // RULE: Only owner can update their profile
       allow update: if isOwner(userId)
         || (isAuthenticated() 
             && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['isInGuessMeGame', 'guessMeSessionId', 'guessMeJoinedAt']));
+                .hasOnly(['isInGuessMeGame', 'guessMeSessionId', 'guessMeJoinedAt', 'isSearchingGuessMeGame', 'guessMeSearchStartedAt']));
+      
+      // RULE: Only owner can delete their profile
+      allow delete: if isOwner(userId);
 
       // Proximity (private) - only the owner can read/write.
       match /proximity/{document=**} {
@@ -407,53 +432,39 @@ service cloud.firestore {
       // RULE: No deletes - sessions expire naturally or are cleaned up by admin
       allow delete: if false;
       
-      // GuessMe messages within a session
+      // GuessMe messages within a session (subcollection)
       match /messages/{messageId} {
+        /// Check if user is participant in the parent session
+        function isSessionParticipant() {
+          let session = get(/databases/$(database)/documents/guess_me_sessions/$(sessionId));
+          return request.auth.uid == session.data.player1Id 
+            || request.auth.uid == session.data.player2Id;
+        }
+        
         // RULE: Only session participants can read messages
-        allow read: if isAuthenticated() 
-          && isGuessmeParticipant(get(/databases/$(database)/documents/guess_me_sessions/$(sessionId)).data);
+        allow read: if isAuthenticated() && isSessionParticipant();
         
         // RULE: Only session participants can send messages
+        // System messages (senderId == 'system') can be sent by any participant
         allow create: if isAuthenticated()
-          && isGuessmeParticipant(get(/databases/$(database)/documents/guess_me_sessions/$(sessionId)).data)
-          && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp', 'type']);
+          && isSessionParticipant()
+          && (request.resource.data.senderId == request.auth.uid 
+              || request.resource.data.senderId == 'system')
+          && request.resource.data.keys().hasAll(['id', 'sessionId', 'senderId', 'text', 'sentAt', 'type'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000;
         
         // RULE: No updates or deletes - messages are immutable
         allow update, delete: if false;
       }
     }
     
-    // GuessMe messages - top-level collection for game chat
-    // Messages are stored separately from sessions for better query performance
+    // GuessMe messages are now stored as subcollections under guess_me_sessions/{sessionId}/messages
+    // This provides better permission handling and matches the pattern used by conversations
+    // Legacy top-level collection (deprecated - messages now in subcollection)
     match /guess_me_messages/{messageId} {
-      /// Check if user is participant in the message's session
-      function isSessionParticipant() {
-        let session = get(/databases/$(database)/documents/guess_me_sessions/$(resource.data.sessionId));
-        return request.auth.uid == session.data.player1Id 
-          || request.auth.uid == session.data.player2Id;
-      }
-      
-      /// Check if user will be participant (for creates)
-      function willBeSessionParticipant() {
-        let session = get(/databases/$(database)/documents/guess_me_sessions/$(request.resource.data.sessionId));
-        return request.auth.uid == session.data.player1Id 
-          || request.auth.uid == session.data.player2Id;
-      }
-      
-      // RULE: Only session participants can read messages
-      allow read: if isAuthenticated() && isSessionParticipant();
-      
-      // RULE: Only session participants can send messages
-      allow create: if isAuthenticated()
-        && willBeSessionParticipant()
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.keys().hasAll(['sessionId', 'senderId', 'text', 'sentAt', 'type'])
-        && request.resource.data.text is string
-        && request.resource.data.text.size() <= 5000;
-      
-      // RULE: Messages are immutable - no updates or deletes
-      allow update, delete: if false;
+      // Deny all access - messages should be in subcollection
+      allow read, write: if false;
     }
     
     // GuessMe user stats - stored under profiles/{userId}/stats/guessme for privacy
@@ -527,25 +538,33 @@ service cloud.firestore {
         && request.resource.data.createdByUserId == request.auth.uid
         && request.resource.data.status == 'active'
         && request.resource.data.memberCount == 1
-        && request.resource.data.keys().hasAll(['name', 'countryCode', 'stateCode', 'visibility', 'status', 'createdByUserId', 'createdAt']);
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.countryCode is string
+        && request.resource.data.stateCode is string
+        && request.resource.data.visibility in ['public', 'requestToJoin'];
       
       // RULE: Only admins can update group settings
-      // NOTE: Allow safe memberCount adjustments for join/leave by any authenticated user
+      // NOTE: Allow memberCount and updatedAt adjustments for join/leave operations
       allow update: if isAuthenticated()
         && (
           (
-            // Admin path: settings updates (no immutable field changes)
+            // Admin path: full settings updates (no immutable field changes)
             isGroupAdmin()
             && !request.resource.data.diff(resource.data).affectedKeys()
                 .hasAny(['createdByUserId', 'createdAt', 'countryCode', 'stateCode'])
           )
           || (
-            // Non-admin path: only adjust memberCount by +1 or -1
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+            // Member join/leave path: only memberCount ±1 and updatedAt
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'updatedAt'])
             && (
               request.resource.data.memberCount == resource.data.memberCount + 1
               || request.resource.data.memberCount == resource.data.memberCount - 1
             )
+          )
+          || (
+            // Message activity path: lastActivityAt and lastMessagePreview updates
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActivityAt', 'lastMessagePreview'])
           )
         );
       
@@ -568,17 +587,27 @@ service cloud.firestore {
         // 1. Creating group (as admin with active status)
         // 2. Joining public group (as member with active status)  
         // 3. Requesting to join private group (as member with pending status)
+        // 4. Admin approving a join request (creating member for another user)
         allow create: if isAuthenticated()
-          && memberId == request.auth.uid
-          && request.resource.data.userId == request.auth.uid
           && (
-            // Case 1: Group creator adding themselves as admin (group may not exist yet in batch)
-            (request.resource.data.role == 'admin' 
-             && request.resource.data.status == 'active')
-            // Case 2 & 3: Regular member joining or requesting
-            || (!exists(/databases/$(database)/documents/location_groups/$(groupId))
-                || get(/databases/$(database)/documents/location_groups/$(groupId)).data.visibility == 'public'
-                || request.resource.data.status == 'pending')
+            // Cases 1-3: User creating their own membership
+            (memberId == request.auth.uid
+             && request.resource.data.userId == request.auth.uid
+             && (
+               // Case 1: Group creator adding themselves as admin (group may not exist yet in batch)
+               (request.resource.data.role == 'admin' 
+                && request.resource.data.status == 'active')
+               // Case 2 & 3: Regular member joining or requesting
+               || (!exists(/databases/$(database)/documents/location_groups/$(groupId))
+                   || get(/databases/$(database)/documents/location_groups/$(groupId)).data.visibility == 'public'
+                   || request.resource.data.status == 'pending')
+             ))
+            // Case 4: Admin approving a join request
+            || (isGroupAdmin()
+                && request.resource.data.userId == memberId
+                && request.resource.data.status == 'active'
+                && request.resource.data.role == 'member'
+                && exists(/databases/$(database)/documents/location_groups/$(groupId)/join_requests/$(memberId)))
           );
         
         // RULE: Admins can update any member (for promotion, ban)
@@ -617,12 +646,23 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isGroupMember();
         
         // RULE: Only members can send messages
+        // Allow both user messages (senderId = auth.uid) and system messages (senderId = 'system')
         allow create: if isAuthenticated()
           && isGroupMember()
-          && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.keys().hasAll(['groupId', 'senderId', 'text', 'sentAt', 'type'])
+          && (
+            // User messages: sender must be authenticated user
+            (request.resource.data.senderId == request.auth.uid
+             && request.resource.data.type != 'system')
+            // System messages: sent by members for join/leave notifications
+            || (request.resource.data.senderId == 'system'
+                && request.resource.data.type == 'system')
+          )
+          && request.resource.data.groupId == groupId
           && request.resource.data.text is string
-          && request.resource.data.text.size() <= 5000;
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 5000
+          && request.resource.data.status is string
+          && request.resource.data.isDeleted == false;
         
         // RULE: Senders can delete (soft delete) their own messages, admins can delete any
         allow update: if isAuthenticated()

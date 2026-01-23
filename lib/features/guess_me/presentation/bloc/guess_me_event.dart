@@ -43,6 +43,27 @@ class GuessmeSendMessage extends GuessmeEvent {
   List<Object?> get props => [text];
 }
 
+/// Retry sending a failed message.
+class GuessmeRetryMessage extends GuessmeEvent {
+  final String localMessageId;
+  final String text;
+
+  const GuessmeRetryMessage({required this.localMessageId, required this.text});
+
+  @override
+  List<Object?> get props => [localMessageId, text];
+}
+
+/// Remove a failed message from the UI.
+class GuessmeRemoveFailedMessage extends GuessmeEvent {
+  final String localMessageId;
+
+  const GuessmeRemoveFailedMessage(this.localMessageId);
+
+  @override
+  List<Object?> get props => [localMessageId];
+}
+
 /// Initiate a guess check (I think I know who you are).
 class GuessmeInitiateGuessCheck extends GuessmeEvent {
   const GuessmeInitiateGuessCheck();
@@ -104,4 +125,35 @@ class _GuessmeStatsUpdated extends GuessmeEvent {
 
 class _GuessmeSessionExpired extends GuessmeEvent {
   const _GuessmeSessionExpired();
+}
+
+/// Mark user as actively searching for a GuessMe match.
+class GuessmeMarkSearching extends GuessmeEvent {
+  final String userId;
+
+  const GuessmeMarkSearching(this.userId);
+
+  @override
+  List<Object?> get props => [userId];
+}
+
+/// Clear user's searching status.
+class GuessmeClearSearching extends GuessmeEvent {
+  final String userId;
+
+  const GuessmeClearSearching(this.userId);
+
+  @override
+  List<Object?> get props => [userId];
+}
+
+/// Ensure the BLoC is subscribed to the specified session.
+/// Used when game page opens to guarantee messages are streaming.
+class GuessmeEnsureSessionSubscription extends GuessmeEvent {
+  final String sessionId;
+
+  const GuessmeEnsureSessionSubscription(this.sessionId);
+
+  @override
+  List<Object?> get props => [sessionId];
 }

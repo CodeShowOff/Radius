@@ -124,27 +124,55 @@ class _ConnectButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    void sendRequest() {
-      context.read<ConnectionBloc>().add(ConnectionSendRequest(
-            receiverId: userId,
-            source: source,
-            receiverDisplayName: displayName,
-            receiverPhotoUrl: photoUrl,
-          ));
-    }
+    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+      builder: (context, state) {
+        // Prevent duplicate requests by checking current state
+        final isProcessing = state.isActionLoading && state.processingId == userId;
+        final alreadySent = state.getSentRequestTo(userId) != null ||
+                           state.getStateForUser(userId) == UserConnectionState.requestSent;
+        
+        void sendRequest() {
+          // Double-check before sending
+          final currentState = context.read<ConnectionBloc>().state;
+          if (currentState.getSentRequestTo(userId) != null ||
+              currentState.getStateForUser(userId) == UserConnectionState.requestSent) {
+            return; // Request already sent, do nothing
+          }
+          
+          context.read<ConnectionBloc>().add(ConnectionSendRequest(
+                receiverId: userId,
+                source: source,
+                receiverDisplayName: displayName,
+                receiverPhotoUrl: photoUrl,
+              ));
+        }
 
-    if (compact) {
-      return IconButton.filled(
-        onPressed: sendRequest,
-        icon: const Icon(Icons.person_add),
-        tooltip: 'Connect',
-      );
-    }
+        if (compact) {
+          return IconButton.filled(
+            onPressed: (isProcessing || alreadySent) ? null : sendRequest,
+            icon: isProcessing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_add),
+            tooltip: alreadySent ? 'Request Sent' : 'Connect',
+          );
+        }
 
-    return FilledButton.icon(
-      onPressed: sendRequest,
-      icon: const Icon(Icons.person_add, size: 18),
-      label: const Text('Connect'),
+        return FilledButton.icon(
+          onPressed: (isProcessing || alreadySent) ? null : sendRequest,
+          icon: isProcessing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.person_add, size: 18),
+          label: Text(alreadySent ? 'Request Sent' : 'Connect'),
+        );
+      },
     );
   }
 }

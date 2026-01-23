@@ -47,6 +47,14 @@ class ChatState extends Equatable {
   /// Pending (optimistic) messages waiting for confirmation.
   final Map<String, Message> pendingMessages;
 
+  /// ID of the first unread message for showing the "Unread messages" divider.
+  /// This is set when opening a chat and cleared after marking messages as read.
+  final String? firstUnreadMessageId;
+
+  /// The timestamp when user last read this conversation.
+  /// Used to determine which messages are unread.
+  final DateTime? lastReadAt;
+
   const ChatState({
     this.status = ChatStatus.initial,
     this.conversationId,
@@ -60,7 +68,12 @@ class ChatState extends Equatable {
     this.hasMore = true,
     this.errorMessage,
     this.pendingMessages = const {},
+    this.firstUnreadMessageId,
+    this.lastReadAt,
   });
+
+  /// Whether there are unread messages to show a divider for.
+  bool get hasUnreadMessages => firstUnreadMessageId != null;
 
   /// Gets all messages including pending ones, merged and deduplicated.
   List<Message> get allMessages {
@@ -116,6 +129,9 @@ class ChatState extends Equatable {
     bool? hasMore,
     String? errorMessage,
     Map<String, Message>? pendingMessages,
+    String? firstUnreadMessageId,
+    bool clearFirstUnreadMessageId = false,
+    DateTime? lastReadAt,
   }) {
     return ChatState(
       status: status ?? this.status,
@@ -130,6 +146,10 @@ class ChatState extends Equatable {
       hasMore: hasMore ?? this.hasMore,
       errorMessage: errorMessage,
       pendingMessages: pendingMessages ?? this.pendingMessages,
+      firstUnreadMessageId: clearFirstUnreadMessageId
+          ? null
+          : (firstUnreadMessageId ?? this.firstUnreadMessageId),
+      lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
 
@@ -147,5 +167,7 @@ class ChatState extends Equatable {
         hasMore,
         errorMessage,
         pendingMessages,
+        firstUnreadMessageId,
+        lastReadAt,
       ];
 }

@@ -15,6 +15,7 @@ import '../../domain/entities/message.dart';
 ///   - lastMessageSenderId: string?
 ///   - lastMessageStatus: string?
 ///   - unreadCounts: { [userId]: number }
+///   - lastReadAt: { [userId]: timestamp }  // When user last read messages
 ///   - mutedBy: { [userId]: boolean }
 ///   - archivedBy: { [userId]: boolean }
 ///   - participantInfo: {
@@ -34,6 +35,7 @@ class ConversationModel extends Conversation {
     super.mutedBy,
     super.participantInfo,
     super.archivedBy,
+    super.lastReadAt,
   });
 
   /// Creates model from Firestore document.
@@ -77,6 +79,12 @@ class ConversationModel extends Conversation {
       (key, value) => MapEntry(key, value as bool),
     );
 
+    // Parse lastReadAt timestamps
+    final lastReadAtData = data['lastReadAt'] as Map<String, dynamic>? ?? {};
+    final lastReadAt = lastReadAtData.map(
+      (key, value) => MapEntry(key, (value as Timestamp).toDate()),
+    );
+
     return ConversationModel(
       id: doc.id,
       participantIds: List<String>.from(data['participantIds'] as List),
@@ -93,6 +101,7 @@ class ConversationModel extends Conversation {
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
+      lastReadAt: lastReadAt,
     );
   }
 
@@ -110,6 +119,7 @@ class ConversationModel extends Conversation {
       mutedBy: conversation.mutedBy,
       participantInfo: conversation.participantInfo,
       archivedBy: conversation.archivedBy,
+      lastReadAt: conversation.lastReadAt,
     );
   }
 
@@ -125,11 +135,13 @@ class ConversationModel extends Conversation {
     final conversationId =
         Conversation.createConversationId(currentUserId, otherUserId);
     final participants = [currentUserId, otherUserId]..sort();
+    final now = DateTime.now();
 
     return ConversationModel(
       id: conversationId,
       participantIds: participants,
-      createdAt: DateTime.now(),
+      createdAt: now,
+      lastMessageAt: now, // Required by Firestore security rules
       unreadCounts: {currentUserId: 0, otherUserId: 0},
       mutedBy: const {},
       participantInfo: {
@@ -143,6 +155,7 @@ class ConversationModel extends Conversation {
         ),
       },
       archivedBy: const {},
+      lastReadAt: {currentUserId: now, otherUserId: now}, // Initialize lastReadAt
     );
   }
 
@@ -150,17 +163,30 @@ class ConversationModel extends Conversation {
   /// When [useServerTimestamp] is true, createdAt will use FieldValue.serverTimestamp()
   /// which is required by Firestore security rules for document creation.
   Map<String, dynamic> toFirestore({bool useServerTimestamp = false}) {
+    // Extract participant names from participantInfo for security rules
+    final participantNames = participantInfo.map(
+      (key, value) => MapEntry(key, value.displayName),
+    );
+
     return {
+      'id': id, // Required by Firestore security rules
       'participantIds': participantIds,
+      'participantNames': participantNames, // Required by Firestore security rules
       'createdAt': useServerTimestamp
           ? FieldValue.serverTimestamp()
           : Timestamp.fromDate(createdAt),
-      'lastMessageAt':
-          lastMessageAt != null ? Timestamp.fromDate(lastMessageAt!) : null,
+      // Defensive: lastMessageAt must NEVER be null to satisfy Firestore rules
+      // If lastMessageAt is somehow null, fall back to createdAt
+      'lastMessageAt': lastMessageAt != null 
+          ? Timestamp.fromDate(lastMessageAt!)
+          : Timestamp.fromDate(createdAt),
       'lastMessageText': lastMessageText,
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageStatus': lastMessageStatus?.name,
       'unreadCounts': unreadCounts,
+      'lastReadAt': lastReadAt.map(
+        (key, value) => MapEntry(key, Timestamp.fromDate(value)),
+      ),
       'mutedBy': mutedBy,
       'archivedBy': archivedBy,
       'participantInfo': participantInfo.map(
@@ -190,6 +216,7 @@ class ConversationModel extends Conversation {
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
+      lastReadAt: lastReadAt,
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../data/group_chat_cache_service.dart';
 import '../../data/group_chat_service.dart';
@@ -12,7 +13,38 @@ import '../../domain/entities/group_message.dart';
 part 'group_chat_event.dart';
 part 'group_chat_state.dart';
 
-/// BLoC for managing group chat messages.
+const _uuid = Uuid();
+
+/// BLoC for managing group chat messages with strict membership access control.
+///
+/// ## Security Model
+///
+/// This BLoC enforces a **membership-gated access control** model:
+///
+/// 1. **Membership verification is MANDATORY** before any content is shown.
+///    The `membershipVerified` flag in [GroupChatState] gates ALL access.
+///
+/// 2. **No cached content before verification**: Unlike typical instant-load
+///    patterns, we DO NOT show cached messages until membership is confirmed.
+///    This prevents privacy leaks from stale cache or URL manipulation.
+///
+/// 3. **Defense in depth**: This client-side check complements Firestore
+///    security rules that also enforce `isGroupMember()` for read/write.
+///
+/// ## Access Flow
+///
+/// 1. [OpenGroupChat] → Start loading, `membershipVerified = false`
+/// 2. Check `isActiveMember()` → If false, show error and block access
+/// 3. If member, set `membershipVerified = true` → NOW show cached/streamed messages
+/// 4. [SendGroupMessage] → Blocked if `membershipVerified == false`
+///
+/// ## Edge Cases Handled
+///
+/// - User opens chat before data loads → Shows "Verifying access..." spinner
+/// - Stale cached membership → Server check overrides cache
+/// - User leaves group while chat is open → Stream error revokes access
+/// - Direct URL navigation by non-member → Verified check blocks access
+/// - Network loss during verification → Error state, access blocked
 class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
   final GroupChatService _chatService;
   final GroupChatCacheService _cacheService;
@@ -32,9 +64,12 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<CloseGroupChat>(_onCloseGroupChat);
     on<SendGroupMessage>(_onSendGroupMessage);
     on<LoadMoreGroupMessages>(_onLoadMoreGroupMessages);
+    on<ResyncGroupChat>(_onResyncGroupChat);
     on<_GroupMessagesReceived>(_onGroupMessagesReceived);
     on<_GroupChatStreamError>(_onGroupChatStreamError);
     on<DeleteGroupMessage>(_onDeleteGroupMessage);
+    on<_GroupFirstUnreadMessageFound>(_onFirstUnreadMessageFound);
+    on<GroupClearFirstUnread>(_onClearFirstUnread);
   }
 
   Future<void> _onOpenGroupChat(
@@ -47,55 +82,74 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     await _messagesSubscription?.cancel();
 
     // ========================================================================
-    // CRITICAL: Load cached messages IMMEDIATELY for instant display
-    // This is the key to WhatsApp/Telegram-level performance
+    // CRITICAL SECURITY FIX: Verify membership BEFORE showing ANY content
+    // Do NOT show cached messages until membership is confirmed.
+    // This prevents privacy leaks from stale cache or URL manipulation.
     // ========================================================================
-    final cachedMessages = _cacheService.getMessages(event.groupId);
-    final hasCache = cachedMessages.isNotEmpty;
-    final cachedEntry = _cacheService.getCache(event.groupId);
-
-    if (hasCache) {
-      // INSTANT DISPLAY: Show cached messages immediately, no loading spinner
-      _logger.i('Cache hit for group ${event.groupId}: ${cachedMessages.length} messages');
-      emit(state.copyWith(
-        status: GroupChatStatus.loaded, // Already loaded from cache!
-        groupId: event.groupId,
-        currentUserId: event.currentUserId,
-        currentUserName: event.currentUserName,
-        currentUserPhotoUrl: event.currentUserPhotoUrl,
-        messages: cachedMessages,
-        hasMore: cachedEntry?.hasMore ?? true,
-        errorMessage: null,
-      ));
-    } else {
-      // No cache - show loading (first time opening this group)
-      _logger.i('Cache miss for group ${event.groupId}, showing loading');
-      emit(state.copyWith(
-        status: GroupChatStatus.loading,
-        groupId: event.groupId,
-        currentUserId: event.currentUserId,
-        currentUserName: event.currentUserName,
-        currentUserPhotoUrl: event.currentUserPhotoUrl,
-        messages: [],
-        hasMore: true,
-        errorMessage: null,
-      ));
-    }
+    
+    // Always start with loading state and unverified membership
+    emit(state.copyWith(
+      status: GroupChatStatus.loading,
+      groupId: event.groupId,
+      currentUserId: event.currentUserId,
+      currentUserName: event.currentUserName,
+      currentUserPhotoUrl: event.currentUserPhotoUrl,
+      messages: const [], // SECURITY: Don't show cached messages until verified
+      hasMore: true,
+      errorMessage: null,
+      membershipVerified: false, // CRITICAL: Block access until verified
+    ));
 
     try {
+      // ======================================================================
+      // STEP 1: Verify membership FIRST (security gate)
+      // ======================================================================
       final canRead = await _chatService.isActiveMember(
         groupId: event.groupId,
         userId: event.currentUserId,
       );
+      
       if (!canRead) {
+        _logger.w('Access denied: User ${event.currentUserId} is not a member of group ${event.groupId}');
+        // Clear any cached messages for this group to prevent stale data display
+        _cacheService.clearGroup(event.groupId);
         emit(state.copyWith(
           status: GroupChatStatus.error,
           errorMessage: 'You are not a member of this group.',
+          membershipVerified: false,
+          messages: const [],
         ));
         return;
       }
 
-      // Start listening to messages
+      // ======================================================================
+      // STEP 2: Membership verified - NOW we can show cached messages
+      // ======================================================================
+      _logger.i('Membership verified for user ${event.currentUserId} in group ${event.groupId}');
+      
+      final cachedMessages = _cacheService.getMessages(event.groupId);
+      final hasCache = cachedMessages.isNotEmpty;
+      final cachedEntry = _cacheService.getCache(event.groupId);
+
+      if (hasCache) {
+        // Show cached messages now that membership is confirmed
+        _logger.i('Cache hit for group ${event.groupId}: ${cachedMessages.length} messages');
+        emit(state.copyWith(
+          status: GroupChatStatus.loaded,
+          messages: cachedMessages,
+          hasMore: cachedEntry?.hasMore ?? true,
+          membershipVerified: true, // CRITICAL: Enable access
+        ));
+      } else {
+        // No cache - mark as verified but keep loading for stream
+        emit(state.copyWith(
+          membershipVerified: true,
+        ));
+      }
+
+      // ======================================================================
+      // STEP 3: Start listening to messages (membership already verified)
+      // ======================================================================
       _messagesSubscription = _chatService
           .watchMessages(event.groupId, limit: 50)
           .listen(
@@ -117,16 +171,38 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
             },
           );
 
-      // Reset unread count when opening the chat
-      unawaited(_chatService.markGroupAsRead(
-        groupId: event.groupId,
-        userId: event.currentUserId,
-      ));
+      // IMPORTANT: Fetch first unread message ID BEFORE marking as read
+      // This allows us to show the "Unread messages" divider correctly
+      try {
+        final firstUnreadId = await _chatService.getFirstUnreadMessageId(
+          groupId: event.groupId,
+          userId: event.currentUserId,
+        );
+        
+        if (firstUnreadId != null && !isClosed) {
+          _logger.i('First unread message ID: $firstUnreadId');
+          add(_GroupFirstUnreadMessageFound(firstUnreadId));
+        }
+      } catch (e) {
+        _logger.w('Failed to get first unread message ID: $e');
+        // Continue without unread divider - not critical
+      }
+
+      // Delay marking as read slightly to allow unread divider to be shown
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!isClosed) {
+          _chatService.markGroupAsRead(
+            groupId: event.groupId,
+            userId: event.currentUserId,
+          );
+        }
+      });
     } catch (e, stack) {
       _logger.e('Error opening group chat', error: e, stackTrace: stack);
       emit(state.copyWith(
         status: GroupChatStatus.error,
         errorMessage: 'Failed to load messages',
+        membershipVerified: false,
       ));
     }
   }
@@ -138,11 +214,14 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     await _messagesSubscription?.cancel();
     _messagesSubscription = null;
 
+    // SECURITY: On access error, revoke membership verification
+    // This handles the case where user was removed while viewing chat
     emit(state.copyWith(
       status: GroupChatStatus.error,
       errorMessage: event.message,
       messages: const [],
       hasMore: false,
+      membershipVerified: false, // Revoke access on error
     ));
   }
 
@@ -168,12 +247,45 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       return;
     }
 
+    // SECURITY: Verify membership is confirmed before allowing send
+    if (!state.membershipVerified) {
+      _logger.w('Cannot send message: membership not verified');
+      emit(state.copyWith(
+        status: GroupChatStatus.error,
+        errorMessage: 'You must be a member to send messages.',
+      ));
+      return;
+    }
+
     final text = event.text.trim();
     if (text.isEmpty) return;
 
     _logger.d('Sending message: ${text.substring(0, text.length.clamp(0, 20))}...');
 
-    emit(state.copyWith(status: GroupChatStatus.sending));
+    // ========================================================================
+    // OPTIMISTIC UPDATE: Show message immediately in UI for instant feedback
+    // This creates a WhatsApp-like experience where your message appears
+    // instantly, then gets confirmed when the server responds.
+    // ========================================================================
+    final localId = _uuid.v4();
+    final optimisticMessage = GroupMessage(
+      id: localId, // Temporary ID until server assigns real one
+      groupId: state.groupId!,
+      senderId: state.currentUserId!,
+      senderName: state.currentUserName,
+      senderPhotoUrl: state.currentUserPhotoUrl,
+      text: text,
+      sentAt: DateTime.now(),
+      status: GroupMessageStatus.sending,
+      localId: localId,
+    );
+
+    // Add optimistic message to the front of the list
+    final updatedMessages = [optimisticMessage, ...state.messages];
+    emit(state.copyWith(
+      status: GroupChatStatus.sending,
+      messages: updatedMessages,
+    ));
 
     try {
       await _chatService.sendMessage(
@@ -184,13 +296,34 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         text: text,
       );
 
+      // Success: The Firestore stream will automatically update with the real
+      // message (with server-assigned ID). The optimistic message will be
+      // replaced when _onGroupMessagesReceived merges the new data.
       emit(state.copyWith(status: GroupChatStatus.loaded));
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
-      emit(state.copyWith(
-        status: GroupChatStatus.error,
-        errorMessage: 'Failed to send message',
-      ));
+
+      // Remove the failed optimistic message and show error
+      final messagesWithoutFailed = state.messages
+          .where((m) => m.localId != localId)
+          .toList();
+
+      // Check if it's an access error
+      final errorMessage = e.toString().toLowerCase();
+      if (errorMessage.contains('permission') || errorMessage.contains('not a member')) {
+        emit(state.copyWith(
+          status: GroupChatStatus.error,
+          errorMessage: 'You no longer have access to send messages in this group.',
+          membershipVerified: false,
+          messages: messagesWithoutFailed,
+        ));
+      } else {
+        emit(state.copyWith(
+          status: GroupChatStatus.error,
+          errorMessage: 'Failed to send message',
+          messages: messagesWithoutFailed,
+        ));
+      }
     }
   }
 
@@ -216,7 +349,14 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       );
 
       final hasMore = olderMessages.length >= 30;
-      final allMessages = [...state.messages, ...olderMessages];
+      
+      // Deduplicate: ensure no overlap with existing messages
+      final existingIds = state.messages.map((m) => m.id).toSet();
+      final uniqueOlderMessages = olderMessages
+          .where((m) => !existingIds.contains(m.id))
+          .toList();
+      
+      final allMessages = [...state.messages, ...uniqueOlderMessages];
 
       // Update the cache with paginated messages
       _cacheService.addPaginatedMessages(
@@ -244,8 +384,25 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
 
     const pageSize = 50;
 
+    // CRITICAL FIX: Deduplicate messages by ID to prevent double display
+    // Create a Set of IDs from newly received messages for O(1) lookup
+    final newMessageIds = event.messages.map((m) => m.id).toSet();
+    
     // Merge with any older messages we've loaded via pagination
+    // Filter out:
+    // 1. Duplicates (same ID as incoming messages)
+    // 2. Optimistic messages (have localId) - they'll be replaced by real ones
+    // 3. Messages newer than the stream batch (unless they're pending optimistic)
     final currentOldMessages = state.messages.where((m) {
+      // Skip if message is already in the new batch (prevents duplicates)
+      if (newMessageIds.contains(m.id)) return false;
+      
+      // Remove optimistic messages - they should be replaced by the real
+      // server-confirmed messages from the stream
+      if (m.localId != null && m.status == GroupMessageStatus.sending) {
+        return false;
+      }
+      
       // Keep messages that are older than the oldest message in the new list
       if (event.messages.isEmpty) return true;
       return m.sentAt.isBefore(event.messages.last.sentAt);
@@ -297,6 +454,74 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         errorMessage: 'Failed to delete message',
       ));
     }
+  }
+
+  /// Handle resync request (app resume, network reconnect).
+  ///
+  /// This resubscribes to the Firestore stream without resetting state,
+  /// ensuring any messages received while the app was backgrounded are fetched.
+  /// This is critical for WhatsApp-like real-time messaging behavior.
+  Future<void> _onResyncGroupChat(
+    ResyncGroupChat event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    if (state.groupId == null || state.currentUserId == null) {
+      _logger.d('Resync skipped: no active group chat');
+      return;
+    }
+
+    if (!state.membershipVerified) {
+      _logger.d('Resync skipped: membership not verified');
+      return;
+    }
+
+    _logger.i('Resync requested for group ${state.groupId}');
+
+    // Cancel existing subscription and resubscribe
+    await _messagesSubscription?.cancel();
+
+    _messagesSubscription = _chatService
+        .watchMessages(state.groupId!, limit: 50)
+        .listen(
+          (messages) {
+            if (!isClosed) {
+              add(_GroupMessagesReceived(messages));
+            }
+          },
+          onError: (error) {
+            _logger.e('Error watching messages on resync: $error');
+            if (isClosed) return;
+
+            if (error is FirebaseException && error.code == 'permission-denied') {
+              add(const _GroupChatStreamError('You no longer have access to this group chat.'));
+              return;
+            }
+
+            add(const _GroupChatStreamError('Failed to load messages.'));
+          },
+        );
+  }
+
+  /// Handler for when the first unread message is found.
+  /// Updates state to show "Unread messages" divider at this position.
+  void _onFirstUnreadMessageFound(
+    _GroupFirstUnreadMessageFound event,
+    Emitter<GroupChatState> emit,
+  ) {
+    emit(state.copyWith(
+      firstUnreadMessageId: event.messageId,
+    ));
+  }
+
+  /// Handler to clear the first unread message marker.
+  /// Called after user has scrolled past unread messages.
+  void _onClearFirstUnread(
+    GroupClearFirstUnread event,
+    Emitter<GroupChatState> emit,
+  ) {
+    emit(state.copyWith(
+      clearFirstUnreadMessageId: true,
+    ));
   }
 
   @override

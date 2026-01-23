@@ -102,7 +102,8 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     ));
   }
 
-  /// Start a 10-second scan.
+  /// Start a scan for nearby users.
+  /// [duration] can be specified for custom scan lengths (e.g., 7 seconds for GuessMe).
   Future<void> _onStartScan(
     NearbyUsersStartScan event,
     Emitter<NearbyUsersState> emit,
@@ -124,7 +125,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
       clearErrorMessage: true,
     ));
 
-    final started = await _proximityService.startScan();
+    final started = await _proximityService.startScan(duration: event.duration);
     if (!started) {
       emit(state.copyWith(
         status: NearbyUsersStatus.error,

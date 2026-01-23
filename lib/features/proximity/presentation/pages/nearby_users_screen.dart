@@ -1301,6 +1301,22 @@ class _NearbyUsersListState extends State<_NearbyUsersList> {
       return;
     }
 
+    // Check if request already sent or processing
+    final connectionState = context.read<ConnectionBloc>().state;
+    if (connectionState.getSentRequestTo(receiverId) != null ||
+        connectionState.getStateForUser(receiverId) == UserConnectionState.requestSent ||
+        (connectionState.isActionLoading && connectionState.processingId == receiverId)) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Request already sent'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // Get sender's profile info
     final profileState = context.read<ProfileBloc>().state;
     String? senderDisplayName;
@@ -1676,35 +1692,95 @@ class _UserDetailsSheet extends StatelessWidget {
                     );
                   } else if (requestReceived) {
                     // Show accept button
-                    return FilledButton.icon(
-                      onPressed: () {
-                        final request = connectionState
-                            .getReceivedRequestFrom(user.userId ?? '');
-                        if (request != null) {
-                          context.read<ConnectionBloc>().add(
-                                ConnectionAcceptRequest(request.id),
-                              );
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).clearSnackBars();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Accepted connection from ${user.displayName ?? 'user'}'),
-                              duration: const Duration(seconds: 3),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.check),
-                      label: const Text('Accept Request'),
-                    );
-                  } else {
-                    // Show connect button
                     return Builder(
                       builder: (builderContext) {
                         return FilledButton.icon(
                           onPressed: () {
+                            final request = connectionState
+                                .getReceivedRequestFrom(user.userId ?? '');
+                            if (request != null) {
+                              // Get current user ID from AuthBloc
+                              final authState = builderContext.read<AuthBloc>().state;
+                              final currentUserId = authState is AuthAuthenticated
+                                  ? authState.user.id
+                                  : '';
+                              final otherUserId = user.userId;
+
+                              if (otherUserId == null) {
+                                Navigator.pop(context);
+                                return;
+                              }
+
+                              // Accept the connection
+                              context.read<ConnectionBloc>().add(
+                                    ConnectionAcceptRequest(request.id),
+                                  );
+
+                              // Prepare navigation data
+                              final conversationId =
+                                  Conversation.createConversationId(
+                                currentUserId,
+                                otherUserId,
+                              );
+                              final routeExtra = {
+                                'currentUserId': currentUserId,
+                                'otherUserId': otherUserId,
+                                'otherUserName': user.displayName ?? 'Unknown',
+                                'otherUserPhotoUrl': user.photoUrl,
+                              };
+                              final route = Routes.chatWith(conversationId);
+
+                              // Pop the bottom sheet first
+                              Navigator.of(builderContext).pop();
+
+                              // Use a post-frame callback to ensure navigation happens
+                              // after the bottom sheet is fully dismissed
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                // Show success snackbar on the main screen
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).clearSnackBars();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Connected with ${user.displayName ?? 'user'}'),
+                                      duration: const Duration(seconds: 2),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+
+                                  // Navigate to chat after a brief delay (let the connection be saved)
+                                  Future.delayed(const Duration(milliseconds: 500), () {
+                                    if (context.mounted) {
+                                      context.push(route, extra: routeExtra);
+                                    }
+                                  });
+                                }
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.check),
+                          label: const Text('Accept Request'),
+                        );
+                      },
+                    );
+                  } else {
+                    // Show connect button
+                    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                      builder: (builderContext, connectionState) {
+                        // Get receiver's user ID
+                        final receiverId = user.userId;
+                        
+                        // Check if request is already being processed or sent
+                        final isProcessing = receiverId != null &&
+                            (connectionState.isActionLoading && 
+                             connectionState.processingId == receiverId);
+                        
+                        final alreadySent = receiverId != null &&
+                            (connectionState.getSentRequestTo(receiverId) != null ||
+                             connectionState.getStateForUser(receiverId) == UserConnectionState.requestSent);
+                        
+                        return FilledButton.icon(
+                          onPressed: (isProcessing || alreadySent) ? null : () {
                             // Get current user info
                             final authState =
                                 builderContext.read<AuthBloc>().state;
@@ -1722,8 +1798,6 @@ class _UserDetailsSheet extends StatelessWidget {
                               return;
                             }
 
-                            // Get receiver's user ID
-                            final receiverId = user.userId;
                             if (receiverId == null) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).clearSnackBars();
@@ -1732,6 +1806,21 @@ class _UserDetailsSheet extends StatelessWidget {
                                   content: Text(
                                       'Cannot connect: User ID not available'),
                                   duration: Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+
+                            // Double-check before sending
+                            final currentConnectionState = builderContext.read<ConnectionBloc>().state;
+                            if (currentConnectionState.getSentRequestTo(receiverId) != null ||
+                                currentConnectionState.getStateForUser(receiverId) == UserConnectionState.requestSent) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Request already sent'),
+                                  duration: Duration(seconds: 2),
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );
@@ -1767,19 +1856,25 @@ class _UserDetailsSheet extends StatelessWidget {
                                   receiverPhotoUrl: user.photoUrl,
                                 ));
 
-                            Navigator.pop(context);
+                            // Show success message (don't close sheet - button will update to "Request Sent")
                             ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    'Connection request sent to ${user.displayName ?? 'user'}'),
-                                duration: const Duration(seconds: 3),
+                                    'Request sent to ${user.displayName ?? 'user'}'),
+                                duration: const Duration(seconds: 2),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
                           },
-                          icon: const Icon(Icons.person_add),
-                          label: const Text('Connect'),
+                          icon: isProcessing 
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.person_add),
+                          label: Text(alreadySent ? 'Request Sent' : 'Connect'),
                         );
                       },
                     );

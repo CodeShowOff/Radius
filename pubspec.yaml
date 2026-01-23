@@ -10,9 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Cupertino Icons for iOS-style icons
-  cupertino_icons: ^1.0.6
-
   # State Management
   flutter_bloc: ^9.1.1
   equatable: ^2.0.5

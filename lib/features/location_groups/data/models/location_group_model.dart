@@ -60,10 +60,8 @@ class LocationGroupModel extends LocationGroup {
       visibility: _parseVisibility(data['visibility'] as String?),
       status: _parseStatus(data['status'] as String?),
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 0,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      lastActivityAt: data['lastActivityAt'] != null
-          ? (data['lastActivityAt'] as Timestamp).toDate()
-          : null,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      lastActivityAt: (data['lastActivityAt'] as Timestamp?)?.toDate(),
       lastMessagePreview: data['lastMessagePreview'] as String?,
       avatarUrl: data['avatarUrl'] as String?,
     );

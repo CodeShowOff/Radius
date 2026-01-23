@@ -8,9 +8,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/widgets/cached_avatar.dart';
+import '../../../../core/widgets/unread_messages_divider.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/services/presence/presence_service.dart';
+import '../../../../core/services/realtime/realtime_connection_service.dart';
 import '../../../../core/services/realtime/realtime_data_manager.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
@@ -43,7 +45,12 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+/// CRITICAL: Implements WidgetsBindingObserver for app lifecycle handling.
+/// This ensures messages sync correctly when:
+/// - App returns from background
+/// - App resumes from pause
+/// - Device wakes from sleep
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   Connection? _connection;
@@ -54,13 +61,21 @@ class _ChatScreenState extends State<ChatScreen> {
   // Presence tracking
   PresenceState? _otherUserPresence;
   StreamSubscription<Map<String, PresenceState>>? _presenceSubscription;
+  
+  // Reconnection subscription for network restore
+  StreamSubscription<void>? _reconnectionSubscription;
 
   @override
   void initState() {
     super.initState();
+    
+    // CRITICAL: Register for app lifecycle events
+    WidgetsBinding.instance.addObserver(this);
+    
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
     _initPresenceTracking();
+    _initReconnectionHandling();
 
     // Cache current user's profile info (used when creating a new conversation).
     try {
@@ -142,6 +157,30 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Initialize handling for network reconnection events.
+  /// When network is restored, we resync to ensure messages are received.
+  void _initReconnectionHandling() {
+    try {
+      final connectionService = getIt<RealTimeDataManager>();
+      _reconnectionSubscription = connectionService
+          .connectionStatusStream
+          .where((status) => status == RealtimeConnectionStatus.connected)
+          .listen((_) {
+        // Network reconnected - trigger resync
+        // Use context.read to get the bloc since _chatBloc might not be set yet
+        if (mounted) {
+          try {
+            context.read<ChatBloc>().add(const ChatResync());
+          } catch (_) {
+            // BLoC not available
+          }
+        }
+      });
+    } catch (_) {
+      // Service not available
+    }
+  }
+
   ChatBloc? _chatBloc;
 
   @override
@@ -152,10 +191,38 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatBloc ??= context.read<ChatBloc>();
   }
 
+  /// CRITICAL: Handle app lifecycle changes for reliable message delivery.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came back to foreground - resync to get any missed messages
+        _chatBloc?.add(const ChatResync());
+        // Also re-mark as read in case new messages arrived
+        _chatBloc?.add(const ChatMarkAsRead());
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App going to background - subscriptions may become stale
+        // We'll resync when resumed
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    // CRITICAL: Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+    
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    
+    // Cancel reconnection subscription
+    _reconnectionSubscription?.cancel();
     
     // Stop watching presence
     _presenceSubscription?.cancel();
@@ -421,6 +488,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     scrollController: _scrollController,
                     // Pass loading state so list can show subtle indicator
                     isLoading: state.status == ChatStatus.loading,
+                    // Pass first unread message ID to show divider
+                    firstUnreadMessageId: state.firstUnreadMessageId,
                   );
                 },
               ),
@@ -893,6 +962,7 @@ class _MessagesList extends StatelessWidget {
   final bool hasMore;
   final ScrollController scrollController;
   final bool isLoading;
+  final String? firstUnreadMessageId;
 
   const _MessagesList({
     required this.messages,
@@ -901,6 +971,7 @@ class _MessagesList extends StatelessWidget {
     required this.hasMore,
     required this.scrollController,
     this.isLoading = false,
+    this.firstUnreadMessageId,
   });
 
   @override
@@ -975,14 +1046,24 @@ class _MessagesList extends StatelessWidget {
         // Check if we should show date separator
         final showDate = _shouldShowDate(adjustedIndex);
 
+        // Check if this is the first unread message (show divider ABOVE it)
+        // Since the list is reversed, the divider appears after the message
+        final showUnreadDivider = firstUnreadMessageId != null &&
+            message.id == firstUnreadMessageId;
+
         return Column(
           children: [
             if (showDate) DateSeparator(date: message.sentAt),
+            // Show unread divider above the first unread message
+            // In a reversed list, this shows after the message widget
             MessageBubble(
               message: message,
               isMe: isMe,
               showTail: showTail,
             ),
+            // Unread divider appears after the bubble in reversed list
+            // This places it visually above the unread messages
+            if (showUnreadDivider) const UnreadMessagesDivider(),
           ],
         );
       },

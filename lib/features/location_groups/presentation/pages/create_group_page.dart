@@ -27,6 +27,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   Country? _selectedCountry;
   StateRegion? _selectedState;
   GroupVisibility _visibility = GroupVisibility.public;
+  DateTime? _lastCreateAttempt;
 
   @override
   void dispose() {
@@ -65,6 +66,20 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   void _createGroup() {
     if (!_canCreate) return;
 
+    // Rate limiting: prevent rapid group creation (minimum 2 seconds between attempts)
+    if (_lastCreateAttempt != null) {
+      final timeSinceLastAttempt = DateTime.now().difference(_lastCreateAttempt!);
+      if (timeSinceLastAttempt.inSeconds < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait a moment before creating another group'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,6 +87,8 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
       );
       return;
     }
+
+    _lastCreateAttempt = DateTime.now();
 
     context.read<LocationGroupBloc>().add(CreateGroup(
           name: _nameController.text.trim(),

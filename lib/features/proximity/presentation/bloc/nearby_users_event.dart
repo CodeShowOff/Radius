@@ -22,9 +22,15 @@ class NearbyUsersInitialize extends NearbyUsersEvent {
   List<Object?> get props => [userId, username];
 }
 
-/// Event to start a 15-second scan.
+/// Event to start a scan for nearby users.
+/// [duration] - Optional custom scan duration. Defaults to 10 seconds if not specified.
 class NearbyUsersStartScan extends NearbyUsersEvent {
-  const NearbyUsersStartScan();
+  final Duration? duration;
+
+  const NearbyUsersStartScan({this.duration});
+
+  @override
+  List<Object?> get props => [duration];
 }
 
 /// Event to stop scanning manually.

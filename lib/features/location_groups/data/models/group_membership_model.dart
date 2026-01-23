@@ -51,14 +51,10 @@ class GroupMembershipModel extends GroupMembership {
       userPhotoUrl: data['userPhotoUrl'] as String?,
       role: _parseRole(data['role'] as String?),
       status: _parseStatus(data['status'] as String?),
-      joinedAt: (data['joinedAt'] as Timestamp).toDate(),
-      updatedAt: data['updatedAt'] != null
-          ? (data['updatedAt'] as Timestamp).toDate()
-          : null,
+      joinedAt: (data['joinedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
       unreadCount: (data['unreadCount'] as int?) ?? 0,
-      lastReadAt: data['lastReadAt'] != null
-          ? (data['lastReadAt'] as Timestamp).toDate()
-          : null,
+      lastReadAt: (data['lastReadAt'] as Timestamp?)?.toDate(),
       approvedByUserId: data['approvedByUserId'] as String?,
       note: data['note'] as String?,
     );
@@ -167,7 +163,7 @@ class GroupJoinRequestModel extends GroupJoinRequest {
       userName: data['userName'] as String?,
       userPhotoUrl: data['userPhotoUrl'] as String?,
       message: data['message'] as String?,
-      requestedAt: (data['requestedAt'] as Timestamp).toDate(),
+      requestedAt: (data['requestedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 

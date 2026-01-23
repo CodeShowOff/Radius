@@ -264,6 +264,11 @@ class ClearGroupError extends LocationGroupEvent {
   const ClearGroupError();
 }
 
+/// Clear the group deletion flag after navigation.
+class ClearGroupDeletionFlag extends LocationGroupEvent {
+  const ClearGroupDeletionFlag();
+}
+
 /// Reset the bloc state.
 class ResetGroupState extends LocationGroupEvent {
   const ResetGroupState();

@@ -242,11 +242,12 @@ class ProximityService {
 
   // ============== Scanning ==============
 
-  /// Starts a 10-second scan for nearby users.
+  /// Starts a scan for nearby users.
   ///
+  /// [duration] - Optional custom scan duration. If not provided, uses default 10 seconds.
   /// Users appear in real-time as they're discovered (don't wait for scan to complete).
-  /// After 10 seconds, scanning stops automatically and results remain available.
-  Future<bool> startScan() async {
+  /// After duration expires, scanning stops automatically and results remain available.
+  Future<bool> startScan({Duration? duration}) async {
     _log('[ProximityService] startScan() called, current state: $_state');
 
     if (_state == ProximityServiceState.scanning) {
@@ -259,6 +260,8 @@ class ProximityService {
       _log('[ProximityService] Error: Username not set');
       return false;
     }
+
+    final scanTime = duration ?? scanDuration;
 
     // Clear previous results
     _nearbyUsers.clear();
@@ -274,12 +277,12 @@ class ProximityService {
     }
 
     _setState(ProximityServiceState.scanning);
-    _log('[ProximityService] ✓ Scan started! Will run for 10 seconds.');
+    _log('[ProximityService] ✓ Scan started! Will run for ${scanTime.inSeconds} seconds.');
 
-    // Auto-stop after 10 seconds
+    // Auto-stop after specified duration
     _scanTimer?.cancel();
-    _scanTimer = Timer(scanDuration, () {
-      _log('[ProximityService] 10-second timer expired, stopping scan');
+    _scanTimer = Timer(scanTime, () {
+      _log('[ProximityService] ${scanTime.inSeconds}-second timer expired, stopping scan');
       stopScan();
     });
 

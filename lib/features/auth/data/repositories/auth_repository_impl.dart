@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dartz/dartz.dart';
 import 'package:injectable/injectable.dart';
 
@@ -53,6 +54,10 @@ class AuthRepositoryImpl implements IAuthRepository {
         );
 
         if (doc == null) return null;
+
+        // Migration: Ensure profile exists in profiles collection for backward compatibility
+        // This handles existing users who were created before the profiles collection sync was implemented
+        _ensureProfileExists(firebaseUser.uid, doc);
 
         return UserModel.fromFirestore(doc).toEntity();
       } on ArgumentError {
@@ -122,6 +127,9 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       if (doc == null) {
         // User exists in Auth but not in Firestore - create profile
+        // Add a small delay to ensure auth token is fully propagated
+        await Future.delayed(const Duration(milliseconds: 100));
+        
         return _createUserProfile(
             firebaseUser.uid, email, firebaseUser.displayName);
       }
@@ -156,6 +164,9 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       if (doc == null) {
         // First time Google sign-in - create profile
+        // Add a small delay to ensure auth token is fully propagated
+        await Future.delayed(const Duration(milliseconds: 100));
+        
         return _createUserProfile(
           firebaseUser.uid,
           firebaseUser.email ?? '',
@@ -206,6 +217,9 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       // Send verification email
       await _authService.sendEmailVerification();
+
+      // Add a small delay to ensure auth token is fully propagated
+      await Future.delayed(const Duration(milliseconds: 100));
 
       // Create user profile in Firestore
       return _createUserProfile(
@@ -339,7 +353,7 @@ class AuthRepositoryImpl implements IAuthRepository {
     String uid,
     String email,
     String? displayName, {
-    String? photoUrl, // Changed from avatarUrl to photoUrl for consistency
+    String? photoUrl, 
   }) async {
     try {
       // Generate unique username using Firestore transaction
@@ -349,7 +363,7 @@ class AuthRepositoryImpl implements IAuthRepository {
         id: uid,
         email: email,
         displayName: displayName,
-        avatarUrl: photoUrl, // Store as avatarUrl in UserModel (will be saved as photoUrl to DB)
+        avatarUrl: photoUrl, 
         username: username,
         createdAt: null, // Will be set by server timestamp
         isDiscoverable: true,
@@ -365,7 +379,7 @@ class AuthRepositoryImpl implements IAuthRepository {
       // Store username-to-userId index for BLE discovery lookups
       await _usernameService.storeUsernameForUser(uid, username);
 
-      // Create profile entry in profiles collection
+      // Create profile entry in profiles collection with synced displayName and photoUrl
       final now = DateTime.now();
       final profileModel = ProfileModel(
         id: uid,
@@ -381,13 +395,8 @@ class AuthRepositoryImpl implements IAuthRepository {
         updatedAt: now,
       );
 
-      try {
-        await _profileService.createProfile(profileModel);
-      } catch (e) {
-        // Log but don't fail - profile can be created later
-        // ignore: avoid_print
-        print('Warning: Failed to create profile entry: $e');
-      }
+      // Create profile in profiles collection - this is critical for app functionality
+      await _profileService.createProfile(profileModel);
 
       // Read back the document to get the server-set timestamp
       final doc = await _firestoreService.getDocument(
@@ -430,6 +439,62 @@ class AuthRepositoryImpl implements IAuthRepository {
         // Log error but don't fail the authentication
         // ignore: avoid_print
         print('Warning: Failed to record device session: $e');
+      }
+    });
+  }
+
+  /// Ensures that a profile document exists in the profiles collection.
+  /// This is a migration helper for existing users created before profiles collection sync.
+  /// Runs asynchronously without blocking the authentication flow.
+  void _ensureProfileExists(String userId, Map<String, dynamic> userDoc) {
+    Future(() async {
+      try {
+        // Check if profile already exists in profiles collection
+        final profileDoc = await _firestoreService.getDocument(
+          '${FirestoreCollections.profiles}/$userId',
+        );
+
+        if (profileDoc != null) {
+          // Profile already exists, no need to create
+          return;
+        }
+
+        // Profile doesn't exist, create it from users collection data
+        final displayName = userDoc['displayName'] as String?;
+        final photoUrl = userDoc['photoUrl'] as String?;
+        final bio = userDoc['bio'] as String?;
+        final vibe = userDoc['vibe'] as String?;
+        final mood = userDoc['mood'] as String?;
+        final gender = userDoc['gender'] as String?;
+        final isVisible = userDoc['isVisible'] as bool? ?? true;
+        final createdAt = (userDoc['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+        // Create full profile model
+        final profileModel = ProfileModel(
+          id: userId,
+          userId: userId,
+          name: displayName ?? '',
+          bio: bio ?? '',
+          photoUrl: photoUrl,
+          isVisible: isVisible,
+          showOnlineStatus: true,
+          allowConnectionRequests: true,
+          showLastSeen: true,
+          vibe: vibe,
+          mood: mood,
+          gender: gender,
+          createdAt: createdAt,
+          updatedAt: DateTime.now(),
+        );
+
+        await _profileService.createProfile(profileModel);
+
+        // ignore: avoid_print
+        print('Migration: Created profile document for user $userId');
+      } catch (e) {
+        // Log error but don't fail - profile will be created on next update
+        // ignore: avoid_print
+        print('Warning: Failed to ensure profile exists for $userId: $e');
       }
     });
   }

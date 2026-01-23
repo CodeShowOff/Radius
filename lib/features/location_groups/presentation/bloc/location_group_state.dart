@@ -55,6 +55,13 @@ class LocationGroupState extends Equatable {
   /// Whether the user has a pending request for the current group.
   final bool hasPendingRequest;
 
+  /// Flag to indicate a group was successfully deleted (for navigation).
+  final bool groupDeleted;
+
+  /// The current user's ID for the group detail view.
+  /// Used to reactively update currentMembership when groupMembers changes.
+  final String? currentGroupUserId;
+
   const LocationGroupState({
     this.status = GroupBlocStatus.initial,
     this.selectedCountryCode,
@@ -71,6 +78,8 @@ class LocationGroupState extends Equatable {
     this.errorMessage,
     this.createdGroup,
     this.hasPendingRequest = false,
+    this.groupDeleted = false,
+    this.currentGroupUserId,
   });
 
   bool get isLoading =>
@@ -95,12 +104,16 @@ class LocationGroupState extends Equatable {
     Map<String, int>? userGroupUnreadCounts,
     LocationGroup? currentGroup,
     GroupMembership? currentMembership,
+    bool clearCurrentMembership = false,
     List<GroupMembership>? groupMembers,
     List<GroupJoinRequest>? joinRequests,
     GroupSortOption? sortBy,
     String? errorMessage,
     LocationGroup? createdGroup,
     bool? hasPendingRequest,
+    bool? groupDeleted,
+    String? currentGroupUserId,
+    bool clearCurrentGroupUserId = false,
   }) {
     return LocationGroupState(
       status: status ?? this.status,
@@ -112,13 +125,15 @@ class LocationGroupState extends Equatable {
       userGroupUnreadCounts:
           userGroupUnreadCounts ?? this.userGroupUnreadCounts,
       currentGroup: currentGroup ?? this.currentGroup,
-      currentMembership: currentMembership ?? this.currentMembership,
+      currentMembership: clearCurrentMembership ? null : (currentMembership ?? this.currentMembership),
       groupMembers: groupMembers ?? this.groupMembers,
       joinRequests: joinRequests ?? this.joinRequests,
       sortBy: sortBy ?? this.sortBy,
       errorMessage: errorMessage,
       createdGroup: createdGroup,
       hasPendingRequest: hasPendingRequest ?? this.hasPendingRequest,
+      groupDeleted: groupDeleted ?? this.groupDeleted,
+      currentGroupUserId: clearCurrentGroupUserId ? null : (currentGroupUserId ?? this.currentGroupUserId),
     );
   }
 
@@ -139,5 +154,7 @@ class LocationGroupState extends Equatable {
         errorMessage,
         createdGroup,
         hasPendingRequest,
+        groupDeleted,
+        currentGroupUserId,
       ];
 }

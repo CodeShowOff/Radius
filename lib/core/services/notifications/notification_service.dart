@@ -26,6 +26,9 @@ class NotificationService {
   /// Track which conversation the user is currently viewing
   String? _currentConversationId;
 
+  /// Track which group chat the user is currently viewing
+  String? _currentGroupId;
+
   /// Callback for showing in-app notifications (e.g., SnackBar)
   void Function(String title, String body, Map<String, dynamic> data)?
       onInAppNotification;
@@ -183,6 +186,7 @@ class NotificationService {
 
     final notification = message.notification;
     final messageConversationId = message.data['conversationId'] as String?;
+    final messageGroupId = message.data['groupId'] as String?;
     final messageType = message.data['type'] as String?;
 
     // Check if user is viewing the conversation that received a message
@@ -190,10 +194,22 @@ class NotificationService {
         messageConversationId != null &&
         messageConversationId == _currentConversationId;
 
+    // Check if user is viewing the group chat that received a message
+    final isViewingGroupChat = messageType == 'group_message' &&
+        messageGroupId != null &&
+        messageGroupId == _currentGroupId;
+
     if (isViewingConversation) {
       // User is viewing this chat - don't show any notification
       _logger.d(
           'User is viewing conversation $messageConversationId - suppressing notification');
+      return;
+    }
+
+    if (isViewingGroupChat) {
+      // User is viewing this group chat - don't show any notification
+      _logger.d(
+          'User is viewing group $messageGroupId - suppressing notification');
       return;
     }
 
@@ -232,9 +248,33 @@ class NotificationService {
             presentSound: true,
           ),
         ),
-        payload: message.data['conversationId'] ?? message.data['requestId'],
+        // Include type in payload for proper navigation on tap
+        payload: _encodePayload(
+          type: messageType,
+          conversationId: messageConversationId,
+          groupId: messageGroupId,
+          requestId: message.data['requestId'] as String?,
+        ),
       );
     }
+  }
+
+  /// Encode notification payload for tap handling.
+  String _encodePayload({
+    String? type,
+    String? conversationId,
+    String? groupId,
+    String? requestId,
+  }) {
+    // Format: type|id
+    if (type == 'group_message' && groupId != null) {
+      return 'group_message|$groupId';
+    } else if (type == 'message' && conversationId != null) {
+      return 'message|$conversationId';
+    } else if (type == 'connection_request' && requestId != null) {
+      return 'connection_request|$requestId';
+    }
+    return conversationId ?? requestId ?? '';
   }
 
   /// Handle notification tap.
@@ -277,6 +317,19 @@ class NotificationService {
   void clearCurrentConversation() {
     _currentConversationId = null;
     _logger.d('Current conversation cleared');
+  }
+
+  /// Set the current group the user is viewing.
+  /// This prevents showing notifications for messages in this group.
+  void setCurrentGroup(String? groupId) {
+    _currentGroupId = groupId;
+    _logger.d('Current group set to: $groupId');
+  }
+
+  /// Clear the current group (user left the group chat screen).
+  void clearCurrentGroup() {
+    _currentGroupId = null;
+    _logger.d('Current group cleared');
   }
 
   /// Remove FCM token on sign out.

@@ -25,6 +25,9 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   String? _currentUserId;
   String? _currentUserDisplayName;
   String? _currentUserPhotoUrl;
+  
+  // Track ongoing request operations to prevent duplicates
+  final Set<String> _processingRequests = {};
 
   ConnectionBloc({
     required ConnectionService connectionService,
@@ -178,31 +181,56 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   ) async {
     if (_currentUserId == null) return;
 
-    emit(state.copyWith(
-      isActionLoading: true,
-      processingId: event.receiverId,
-    ));
+    // CRITICAL: Prevent duplicate requests by checking if already processing this user
+    if (_processingRequests.contains(event.receiverId)) {
+      _logger.w('Duplicate request attempt blocked: already processing ${event.receiverId}');
+      return; // Ignore duplicate tap
+    }
 
-    final result = await _connectionService.sendRequest(
-      senderId: _currentUserId!,
-      receiverId: event.receiverId,
-      message: event.message,
-      source: event.source,
-      senderDisplayName: _currentUserDisplayName,
-      senderPhotoUrl: _currentUserPhotoUrl,
-      receiverDisplayName: event.receiverDisplayName,
-      receiverPhotoUrl: event.receiverPhotoUrl,
-    );
+    // Mark as processing to block duplicates
+    _processingRequests.add(event.receiverId);
 
-    switch (result) {
-      case ConnectionSuccess<ConnectionRequest>():
-        // Update connection state for this user
-        final updatedStates =
-            Map<String, UserConnectionState>.from(state.userConnectionStates);
-        updatedStates[event.receiverId] = UserConnectionState.requestSent;
+    try {
+      // Check current state for existing request/connection
+      final existingRequest = state.getSentRequestTo(event.receiverId);
+      if (existingRequest != null) {
+        _logger.w('Request already exists for ${event.receiverId}');
+        return;
+      }
 
-        emit(state.copyWith(
-          isActionLoading: false,
+      // Check connection state
+      final connectionState = state.getStateForUser(event.receiverId);
+      if (connectionState == UserConnectionState.requestSent ||
+          connectionState == UserConnectionState.connected) {
+        _logger.w('Connection state is $connectionState for ${event.receiverId}');
+        return;
+      }
+
+      emit(state.copyWith(
+        isActionLoading: true,
+        processingId: event.receiverId,
+      ));
+
+      final result = await _connectionService.sendRequest(
+        senderId: _currentUserId!,
+        receiverId: event.receiverId,
+        message: event.message,
+        source: event.source,
+        senderDisplayName: _currentUserDisplayName,
+        senderPhotoUrl: _currentUserPhotoUrl,
+        receiverDisplayName: event.receiverDisplayName,
+        receiverPhotoUrl: event.receiverPhotoUrl,
+      );
+
+      switch (result) {
+        case ConnectionSuccess<ConnectionRequest>():
+          // Update connection state for this user
+          final updatedStates =
+              Map<String, UserConnectionState>.from(state.userConnectionStates);
+          updatedStates[event.receiverId] = UserConnectionState.requestSent;
+
+          emit(state.copyWith(
+            isActionLoading: false,
           processingId: null,
           userConnectionStates: updatedStates,
         ));
@@ -213,6 +241,10 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
           processingId: null,
           errorMessage: result.message,
         ));
+    }
+    } finally {
+      // Always remove from processing set when done (success or failure)
+      _processingRequests.remove(event.receiverId);
     }
   }
 

@@ -146,7 +146,7 @@ class UsernameService {
 
   /// Looks up user profile by username.
   /// Returns null if user not found.
-  /// Now uses 'users' collection only (not 'profiles')
+  /// Reads from 'profiles' collection (publicly readable for authenticated users)
   Future<Map<String, dynamic>?> lookupUserByUsername(String username) async {
     try {
       // First get the userId from the index
@@ -156,31 +156,31 @@ class UsernameService {
         return null;
       }
 
-      // Fetch from users collection (single source of truth)
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) {
-        _logger.d('User document does not exist for userId: $userId');
+      // Fetch from profiles collection (publicly readable)
+      final profileDoc =
+          await _firestore.collection('profiles').doc(userId).get();
+      if (!profileDoc.exists) {
+        _logger.d('Profile document does not exist for userId: $userId');
         return null;
       }
 
-      final user = userDoc.data();
-      if (user == null) {
-        _logger.d('User data is null for userId: $userId');
+      final profile = profileDoc.data();
+      if (profile == null) {
+        _logger.d('Profile data is null for userId: $userId');
         return null;
       }
 
       final result = {
         'userId': userId,
         'username': username,
-        'displayName': (user['displayName'] as String?)?.trim().isNotEmpty == true
-            ? (user['displayName'] as String)
+        'displayName': (profile['displayName'] as String?)?.trim().isNotEmpty == true
+            ? (profile['displayName'] as String)
             : 'User $username',
-        'photoUrl': user['photoUrl'],
-        'bio': user['bio'],
-        'vibe': user['vibe'],
-        'mood': user['mood'],
-        'gender': user['gender'],
+        'photoUrl': profile['photoUrl'],
+        'bio': profile['bio'],
+        'vibe': profile['vibe'],
+        'mood': profile['mood'],
+        'gender': profile['gender'],
       };
 
       _logger.d(

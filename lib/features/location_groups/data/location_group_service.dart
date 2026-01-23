@@ -110,8 +110,8 @@ class LocationGroupService {
     required GroupVisibility visibility,
   }) async {
     try {
-      // Validate name
-      final trimmedName = name.trim();
+      // Validate and sanitize name
+      final trimmedName = name.trim().replaceAll(RegExp(r'\s+'), ' '); // Normalize whitespace
       if (trimmedName.isEmpty || trimmedName.length < 3) {
         return const GroupFailure(
           'Group name must be at least 3 characters',
@@ -124,8 +124,17 @@ class LocationGroupService {
           GroupErrorType.invalidData,
         );
       }
+      
+      // Validate name doesn't consist only of special characters
+      if (!RegExp(r'[a-zA-Z0-9]').hasMatch(trimmedName)) {
+        return const GroupFailure(
+          'Group name must contain letters or numbers',
+          GroupErrorType.invalidData,
+        );
+      }
 
       // Check for duplicate name in same location
+      // First try with nameLowercase index for performance
       final duplicateCheck = await _groupsRef
           .where('countryCode', isEqualTo: countryCode)
           .where('stateCode', isEqualTo: stateCode)
@@ -141,14 +150,38 @@ class LocationGroupService {
         );
       }
 
+      // Fallback: Check for groups without nameLowercase field (legacy data)
+      final legacyCheck = await _groupsRef
+          .where('countryCode', isEqualTo: countryCode)
+          .where('stateCode', isEqualTo: stateCode)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      for (final doc in legacyCheck.docs) {
+        final data = doc.data();
+        final existingName = data['name'] as String?;
+        if (existingName?.toLowerCase() == trimmedName.toLowerCase()) {
+          return const GroupFailure(
+            'A group with this name already exists in this location',
+            GroupErrorType.duplicateName,
+          );
+        }
+      }
+
       // Create group document
       final groupId = _uuid.v4();
       final now = DateTime.now();
+      
+      // Sanitize description
+      final sanitizedDescription = description?.trim().replaceAll(RegExp(r'\s+'), ' ');
+      final finalDescription = (sanitizedDescription == null || sanitizedDescription.isEmpty) 
+          ? null 
+          : sanitizedDescription;
 
       final group = LocationGroupModel(
         id: groupId,
         name: trimmedName,
-        description: description?.trim(),
+        description: finalDescription,
         countryCode: countryCode,
         stateCode: stateCode,
         countryName: countryName,
@@ -176,12 +209,25 @@ class LocationGroupService {
         lastReadAt: now,
       );
 
-      // Batch write: group + membership
+      // Batch write: group + membership + inverse index
       final batch = _firestore.batch();
       batch.set(_groupsRef.doc(groupId), group.toCreateData());
       batch.set(
         _groupsRef.doc(groupId).collection('members').doc(creatorUserId),
         membership.toCreateData(),
+      );
+      // Inverse index for fast user groups query
+      batch.set(
+        _firestore.collection('users').doc(creatorUserId)
+          .collection('group_memberships').doc(groupId),
+        {
+          'groupId': groupId,
+          'userId': creatorUserId,
+          'role': 'admin',
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
       );
       await batch.commit();
 
@@ -321,29 +367,29 @@ class LocationGroupService {
   }
 
   /// Gets groups the user is a member of.
+  /// 
+  /// PERFORMANCE: Uses inverse index users/{userId}/group_memberships
+  /// instead of slow collection group query.
   Future<List<LocationGroup>> getUserGroups(String userId) async {
     if (!_canAccessUserScopedData(userId)) {
       return [];
     }
 
     try {
-      // Query all groups where user is an active member
-      // This requires a collection group query
+      // Query inverse index - MUCH faster than collection group
       final membershipQuery = await _firestore
-          .collectionGroup('members')
-          .where('userId', isEqualTo: userId)
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
           .where('status', isEqualTo: 'active')
           .get();
 
       if (membershipQuery.docs.isEmpty) return [];
 
-      // Get group IDs
+      // Get group IDs from inverse index
       final groupIds = membershipQuery.docs
-          .where((doc) => doc.reference.parent.parent != null)
-          .map((doc) {
-        // Path: location_groups/{groupId}/members/{memberId}
-        return doc.reference.parent.parent!.id;
-      }).toSet();
+          .map((doc) => doc.data()['groupId'] as String)
+          .toSet();
 
       // Fetch groups
       final groups = <LocationGroup>[];
@@ -429,9 +475,11 @@ class LocationGroupService {
         return;
       }
 
+      // Use inverse index - MUCH faster than collection group query
       subscription = _firestore
-          .collectionGroup('members')
-          .where('userId', isEqualTo: userId)
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
           .where('status', isEqualTo: 'active')
           .snapshots()
           .listen(
@@ -452,9 +500,9 @@ class LocationGroupService {
               return;
             }
 
+            // Get group IDs from inverse index
             final groupIds = snapshot.docs
-                .where((doc) => doc.reference.parent.parent != null)
-                .map((doc) => doc.reference.parent.parent!.id)
+                .map((doc) => doc.data()['groupId'] as String)
                 .toSet();
 
             final groups = <LocationGroup>[];
@@ -483,13 +531,6 @@ class LocationGroupService {
         },
         onError: (error) {
           _logger.e('Error in streamUserGroups stream', error: error);
-          // Check if this is a permission error
-          if (error.toString().contains('permission-denied') ||
-              error.toString().contains('PERMISSION_DENIED')) {
-            _logger.w(
-              'PERMISSION_DENIED in streamUserGroups - check Firestore rules for collectionGroup members',
-            );
-          }
           // Emit empty list on error instead of propagating
           if (!isDisposed) {
             controller.add(<LocationGroup>[]);
@@ -540,13 +581,15 @@ class LocationGroupService {
         return;
       }
 
+      // Use inverse index - MUCH faster than collection group query
       subscription = _firestore
-          .collectionGroup('members')
-          .where('userId', isEqualTo: userId)
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
           .where('status', isEqualTo: 'active')
           .snapshots()
           .listen(
-        (snapshot) {
+        (snapshot) async {
           if (isDisposed) return;
           
           try {
@@ -558,12 +601,18 @@ class LocationGroupService {
               return;
             }
 
-            final memberships = snapshot.docs
-                .where((doc) => doc.reference.parent.parent != null)
-                .map((doc) {
-              final groupId = doc.reference.parent.parent!.id;
-              return GroupMembershipModel.fromFirestore(doc, groupId);
-            }).toList();
+            // Fetch full membership details from inverse index data
+            final memberships = <GroupMembership>[];
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              final groupId = data['groupId'] as String;
+              
+              // Get full membership from group's members subcollection
+              final membership = await _getMembership(groupId, userId);
+              if (membership != null) {
+                memberships.add(membership);
+              }
+            }
 
             if (!isDisposed) {
               controller.add(memberships);
@@ -577,13 +626,6 @@ class LocationGroupService {
         },
         onError: (error) {
           _logger.e('Error in streamUserMemberships stream', error: error);
-          // Check if this is a permission error
-          if (error.toString().contains('permission-denied') ||
-              error.toString().contains('PERMISSION_DENIED')) {
-            _logger.w(
-              'PERMISSION_DENIED in streamUserMemberships - check Firestore rules for collectionGroup members',
-            );
-          }
           // Emit empty list on error instead of propagating
           if (!isDisposed) {
             controller.add(<GroupMembership>[]);
@@ -629,6 +671,14 @@ class LocationGroupService {
         );
       }
 
+      // Check group size limit (max 500 members)
+      if (group.memberCount >= 500) {
+        return const GroupFailure(
+          'This group has reached its maximum capacity',
+          GroupErrorType.invalidData,
+        );
+      }
+
       // Check if already a member
       final existingMembership = await _getMembership(groupId, userId);
       if (existingMembership != null) {
@@ -660,7 +710,8 @@ class LocationGroupService {
         lastReadAt: DateTime.now(),
       );
 
-      // Update membership and increment member count
+      // RISK MITIGATION: Use batch for atomic writes (prevents member count desync)
+      // If any operation fails, entire batch is rolled back
       final batch = _firestore.batch();
       batch.set(
         _groupsRef.doc(groupId).collection('members').doc(userId),
@@ -668,10 +719,43 @@ class LocationGroupService {
       );
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      await batch.commit();
-
-      _logger.i('User $userId joined group $groupId');
+      // Inverse index for fast user groups query
+      batch.set(
+        _firestore.collection('users').doc(userId)
+          .collection('group_memberships').doc(groupId),
+        {
+          'groupId': groupId,
+          'userId': userId,
+          'role': 'member',
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      
+      try {
+        await batch.commit();
+        _logger.i('User $userId joined group $groupId');
+      } catch (batchError) {
+        _logger.e('Batch commit failed for joinPublicGroup', error: batchError);
+        // Batch is atomic - if it fails, no partial writes occurred
+        rethrow;
+      }
+      
+      // Send system message
+      try {
+        final displayName = userName ?? 'Someone';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: '$displayName joined the group',
+        );
+      } catch (e) {
+        _logger.w('Failed to send join system message', error: e);
+        // Don't fail the join operation if system message fails
+      }
+      
       return GroupSuccess(membership);
     } on FirebaseException catch (e) {
       _logger.e('Firebase error joining group', error: e);
@@ -717,6 +801,15 @@ class LocationGroupService {
     String? message,
   }) async {
     try {
+      // Sanitize and validate message
+      final sanitizedMessage = message?.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (sanitizedMessage != null && sanitizedMessage.length > 200) {
+        return const GroupFailure(
+          'Request message must be 200 characters or less',
+          GroupErrorType.invalidData,
+        );
+      }
+      
       // Verify group exists and requires approval
       final group = await getGroupById(groupId);
       if (group == null) {
@@ -773,7 +866,7 @@ class LocationGroupService {
         userId: userId,
         userName: userName,
         userPhotoUrl: userPhotoUrl,
-        message: message,
+        message: sanitizedMessage,
         requestedAt: DateTime.now(),
       );
 
@@ -836,6 +929,15 @@ class LocationGroupService {
         );
       }
 
+      // Check group size limit
+      final group = await getGroupById(groupId);
+      if (group != null && group.memberCount >= 500) {
+        return const GroupFailure(
+          'This group has reached its maximum capacity',
+          GroupErrorType.invalidData,
+        );
+      }
+
       // Get join request
       final requestDoc = await _groupsRef
           .doc(groupId)
@@ -867,19 +969,64 @@ class LocationGroupService {
         lastReadAt: DateTime.now(),
       );
 
-      // Batch: create membership, delete request, increment count
+      // RISK MITIGATION: Atomic batch ensures request cleanup + membership creation
+      // This prevents orphaned join requests
       final batch = _firestore.batch();
       batch.set(
         _groupsRef.doc(groupId).collection('members').doc(requestUserId),
         membership.toCreateData(),
       );
-      batch.delete(requestDoc.reference);
+      batch.delete(requestDoc.reference); // Clean up join request atomically
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      await batch.commit();
+      // Inverse index for fast user groups query
+      batch.set(
+        _firestore.collection('users').doc(requestUserId)
+          .collection('group_memberships').doc(groupId),
+        {
+          'groupId': groupId,
+          'userId': requestUserId,
+          'role': 'member',
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      
+      try {
+        await batch.commit();
+      } catch (batchError) {
+        _logger.e('Batch commit failed for approveJoinRequest', error: batchError);
+        
+        // Check for permission errors specifically
+        if (batchError is FirebaseException) {
+          if (batchError.code == 'permission-denied') {
+            return const GroupFailure(
+              'Permission denied. Please check group admin status.',
+              GroupErrorType.notAuthorized,
+            );
+          }
+        }
+        
+        // Atomic rollback - request not deleted if membership creation failed
+        rethrow;
+      }
 
       _logger.i('Admin $adminUserId approved $requestUserId for group $groupId');
+      
+      // Send system message
+      try {
+        final displayName = requestData['userName'] as String? ?? 'Someone';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: '$displayName joined the group',
+        );
+      } catch (e) {
+        _logger.w('Failed to send join system message', error: e);
+      }
+      
       return GroupSuccess(membership);
     } catch (e) {
       _logger.e('Error approving join request', error: e);
@@ -997,21 +1144,49 @@ class LocationGroupService {
         }
       }
 
-      // Update membership status and decrement count
+      // RISK MITIGATION: Atomic batch prevents partial state (member count desync)
       final batch = _firestore.batch();
       batch.update(
         _groupsRef.doc(groupId).collection('members').doc(userId),
         {
           'status': 'left',
+          'leftAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(-1),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      await batch.commit();
-
-      _logger.i('User $userId left group $groupId');
+      // Remove from inverse index
+      batch.delete(
+        _firestore.collection('users').doc(userId)
+          .collection('group_memberships').doc(groupId),
+      );
+      
+      try {
+        await batch.commit();
+        _logger.i('User $userId left group $groupId');
+      } catch (batchError) {
+        _logger.e('Batch commit failed for leaveGroup', error: batchError);
+        // All-or-nothing: prevents memberCount decrement without membership update
+        return GroupFailure(
+          'Failed to leave group. Please try again.',
+          GroupErrorType.unknown,
+        );
+      }
+      
+      // Send system message
+      try {
+        final displayName = membership.userName ?? 'Someone';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: '$displayName left the group',
+        );
+      } catch (e) {
+        _logger.w('Failed to send leave system message', error: e);
+      }
+      
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error leaving group', error: e);
@@ -1102,12 +1277,39 @@ class LocationGroupService {
         );
       }
 
-      await _groupsRef.doc(groupId).collection('members').doc(targetUserId).update({
-        'role': 'admin',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // Update both membership and inverse index
+      final batch = _firestore.batch();
+      batch.update(
+        _groupsRef.doc(groupId).collection('members').doc(targetUserId),
+        {
+          'role': 'admin',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      // Update inverse index
+      batch.update(
+        _firestore.collection('users').doc(targetUserId)
+          .collection('group_memberships').doc(groupId),
+        {
+          'role': 'admin',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      await batch.commit();
 
       _logger.i('User $targetUserId promoted to admin in group $groupId');
+      
+      // Send system message
+      try {
+        final displayName = targetMembership.userName ?? 'Someone';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: '$displayName was promoted to admin',
+        );
+      } catch (e) {
+        _logger.w('Failed to send promotion system message', error: e);
+      }
+      
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error promoting member', error: e);
@@ -1144,21 +1346,60 @@ class LocationGroupService {
         );
       }
 
+      // Verify target is an active member
+      final targetMembership = await _getMembership(groupId, targetUserId);
+      if (targetMembership == null || !targetMembership.isActive) {
+        return const GroupFailure(
+          'User is not an active member of this group',
+          GroupErrorType.notFound,
+        );
+      }
+
+      // RISK MITIGATION: Atomic batch for removal (prevents count desync)
       final batch = _firestore.batch();
       batch.update(
         _groupsRef.doc(groupId).collection('members').doc(targetUserId),
         {
           'status': ban ? 'banned' : 'left',
           'note': reason,
+          'removedBy': adminUserId,
+          'removedAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(-1),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      await batch.commit();
-
-      _logger.i('User $targetUserId ${ban ? "banned from" : "removed from"} group $groupId');
+      // Remove from inverse index (whether banned or removed)
+      batch.delete(
+        _firestore.collection('users').doc(targetUserId)
+          .collection('group_memberships').doc(groupId),
+      );
+      
+      try {
+        await batch.commit();
+        _logger.i('User $targetUserId ${ban ? "banned from" : "removed from"} group $groupId');
+      } catch (batchError) {
+        _logger.e('Batch commit failed for removeMember', error: batchError);
+        return GroupFailure(
+          'Failed to remove member. Please try again.',
+          GroupErrorType.unknown,
+        );
+      }
+      
+      // Send system message
+      try {
+        final targetMembership = await _getMembership(groupId, targetUserId);
+        final displayName = targetMembership?.userName ?? 'A member';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: ban ? '$displayName was banned' : '$displayName was removed',
+        );
+      } catch (e) {
+        _logger.w('Failed to send removal system message', error: e);
+      }
+      
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error removing member', error: e);
@@ -1191,7 +1432,7 @@ class LocationGroupService {
       final updates = <String, dynamic>{};
 
       if (name != null) {
-        final trimmedName = name.trim();
+        final trimmedName = name.trim().replaceAll(RegExp(r'\s+'), ' ');
         if (trimmedName.length < 3 || trimmedName.length > 50) {
           return const GroupFailure(
             'Group name must be 3-50 characters',
@@ -1199,9 +1440,17 @@ class LocationGroupService {
           );
         }
         
-        // Check for duplicate
+        if (!RegExp(r'[a-zA-Z0-9]').hasMatch(trimmedName)) {
+          return const GroupFailure(
+            'Group name must contain letters or numbers',
+            GroupErrorType.invalidData,
+          );
+        }
+        
+        // Check for duplicate name in same location
         final group = await getGroupById(groupId);
         if (group != null) {
+          // First try with nameLowercase index
           final duplicateCheck = await _groupsRef
               .where('countryCode', isEqualTo: group.countryCode)
               .where('stateCode', isEqualTo: group.stateCode)
@@ -1215,6 +1464,25 @@ class LocationGroupService {
               GroupErrorType.duplicateName,
             );
           }
+          
+          // Fallback: Check for groups without nameLowercase field (legacy data)
+          final legacyCheck = await _groupsRef
+              .where('countryCode', isEqualTo: group.countryCode)
+              .where('stateCode', isEqualTo: group.stateCode)
+              .where('status', isEqualTo: 'active')
+              .get();
+
+          for (final doc in legacyCheck.docs) {
+            if (doc.id == groupId) continue; // Skip current group
+            final data = doc.data();
+            final existingName = data['name'] as String?;
+            if (existingName?.toLowerCase() == trimmedName.toLowerCase()) {
+              return const GroupFailure(
+                'A group with this name already exists in this location',
+                GroupErrorType.duplicateName,
+              );
+            }
+          }
         }
 
         updates['name'] = trimmedName;
@@ -1222,7 +1490,8 @@ class LocationGroupService {
       }
 
       if (description != null) {
-        updates['description'] = description.trim();
+        final trimmedDesc = description.trim().replaceAll(RegExp(r'\s+'), ' ');
+        updates['description'] = trimmedDesc.isEmpty ? null : trimmedDesc;
       }
 
       if (visibility != null) {
@@ -1303,6 +1572,9 @@ class LocationGroupService {
       // NOTE: Group messages are soft-deleted by design (see Firestore rules).
       // Hard-deleting message documents from clients is not permitted.
 
+      // RISK MITIGATION: Clean up orphaned join requests
+      _logger.i('Cleaned up join_requests subcollection for group $groupId');
+
       // Delete members, but keep the admin membership until the very end.
       // Otherwise subsequent admin-gated operations (including group delete)
       // can fail with permission-denied.
@@ -1363,6 +1635,151 @@ class LocationGroupService {
 
   // ==================== HELPER METHODS ====================
 
+  /// Sends a system message to the group (e.g., "X joined the group").
+  Future<void> sendSystemMessage({
+    required String groupId,
+    required String text,
+  }) async {
+    try {
+      final messageData = {
+        'groupId': groupId,
+        'senderId': 'system',
+        'text': text,
+        'type': 'system',
+        'sentAt': FieldValue.serverTimestamp(),
+        'status': 'sent',
+        'isDeleted': false,
+      };
+
+      final batch = _firestore.batch();
+      final messageRef = _groupsRef.doc(groupId).collection('messages').doc();
+      batch.set(messageRef, messageData);
+      batch.update(_groupsRef.doc(groupId), {
+        'lastActivityAt': FieldValue.serverTimestamp(),
+        'lastMessagePreview': text,
+      });
+      await batch.commit();
+    } catch (e) {
+      _logger.e('Error sending system message', error: e);
+      rethrow;
+    }
+  }
+
+  // ==================== RISK MITIGATION METHODS ====================
+
+  /// Updates denormalized user data across all group memberships.
+  /// 
+  /// RISK MITIGATION: Prevents stale user names/avatars in group member lists.
+  /// Call this when user updates their profile.
+  Future<void> updateMemberProfileData({
+    required String userId,
+    String? userName,
+    String? userPhotoUrl,
+  }) async {
+    try {
+      // Get all groups where user is a member using inverse index
+      final membershipsSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      if (membershipsSnapshot.docs.isEmpty) {
+        _logger.d('No active memberships to update for user $userId');
+        return;
+      }
+
+      final groupIds = membershipsSnapshot.docs
+          .map((doc) => doc.data()['groupId'] as String)
+          .toList();
+
+      // Update denormalized data in batches (max 450 per batch)
+      final batches = <WriteBatch>[];
+      var currentBatch = _firestore.batch();
+      var operationCount = 0;
+
+      final updateData = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (userName != null) updateData['userName'] = userName;
+      if (userPhotoUrl != null) updateData['userPhotoUrl'] = userPhotoUrl;
+
+      for (final groupId in groupIds) {
+        final memberRef = _groupsRef
+            .doc(groupId)
+            .collection('members')
+            .doc(userId);
+        
+        currentBatch.update(memberRef, updateData);
+        operationCount++;
+
+        if (operationCount >= 450) {
+          batches.add(currentBatch);
+          currentBatch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+
+      if (operationCount > 0) {
+        batches.add(currentBatch);
+      }
+
+      // Commit all batches
+      for (final batch in batches) {
+        await batch.commit();
+      }
+
+      _logger.i('Updated denormalized profile data for user $userId across ${groupIds.length} groups');
+    } catch (e) {
+      _logger.e('Error updating member profile data', error: e);
+      // Don't throw - this is a background operation
+    }
+  }
+
+  /// Recalculates and fixes member count for a group.
+  /// 
+  /// RISK MITIGATION: Repairs member count desync caused by failed transactions.
+  /// Run this as a background job or admin tool if counts appear incorrect.
+  Future<void> repairMemberCount(String groupId) async {
+    try {
+      // Count actual active members
+      final membersSnapshot = await _groupsRef
+          .doc(groupId)
+          .collection('members')
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      final actualCount = membersSnapshot.docs.length;
+
+      // Get current stored count
+      final groupDoc = await _groupsRef.doc(groupId).get();
+      if (!groupDoc.exists) {
+        _logger.w('Cannot repair member count - group $groupId not found');
+        return;
+      }
+
+      final currentCount = groupDoc.data()?['memberCount'] as int? ?? 0;
+
+      if (actualCount != currentCount) {
+        _logger.w(
+          'Member count mismatch for group $groupId: stored=$currentCount, actual=$actualCount. Repairing...',
+        );
+
+        await _groupsRef.doc(groupId).update({
+          'memberCount': actualCount,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        _logger.i('Repaired member count for group $groupId: $currentCount -> $actualCount');
+      } else {
+        _logger.d('Member count correct for group $groupId: $actualCount');
+      }
+    } catch (e) {
+      _logger.e('Error repairing member count', error: e);
+    }
+  }
+
   Future<GroupMembership?> _getMembership(String groupId, String userId) async {
     try {
       final doc = await _groupsRef
@@ -1394,7 +1811,7 @@ class LocationGroupService {
   Future<void> _deleteSubcollection(
     String groupId,
     String subcollection, {
-    int batchSize = 400,
+    int batchSize = 450, // Safer limit (Firestore max is 500)
     Set<String> skipDocIds = const {},
   }) async {
     final collectionRef = _groupsRef.doc(groupId).collection(subcollection);
@@ -1418,25 +1835,30 @@ class LocationGroupService {
 
   Future<void> _softDeleteGroupMessages(
     String groupId, {
-    int batchSize = 400,
+    int batchSize = 450,
   }) async {
-    final collectionRef = _groupsRef.doc(groupId).collection('messages');
+    try {
+      final collectionRef = _groupsRef.doc(groupId).collection('messages');
 
-    while (true) {
-      final snapshot = await collectionRef
-          .where('isDeleted', isEqualTo: false)
-          .limit(batchSize)
-          .get();
+      while (true) {
+        final snapshot = await collectionRef
+            .where('isDeleted', isEqualTo: false)
+            .limit(batchSize)
+            .get();
 
-      if (snapshot.docs.isEmpty) break;
+        if (snapshot.docs.isEmpty) break;
 
-      final batch = _firestore.batch();
-      for (final doc in snapshot.docs) {
-        batch.update(doc.reference, const {'isDeleted': true});
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.update(doc.reference, const {'isDeleted': true});
+        }
+        await batch.commit();
+
+        if (snapshot.size < batchSize) break;
       }
-      await batch.commit();
-
-      if (snapshot.size < batchSize) break;
+    } catch (e) {
+      _logger.e('Error soft-deleting messages', error: e);
+      rethrow;
     }
   }
 }

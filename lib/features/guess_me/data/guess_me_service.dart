@@ -38,21 +38,51 @@ class GuessmeService {
   CollectionReference<Map<String, dynamic>> get _queueRef =>
       _firestore.collection('guess_me_queue');
 
-  CollectionReference<Map<String, dynamic>> get _messagesRef =>
-      _firestore.collection('guess_me_messages');
+  // Messages are now stored as subcollection under each session
+  // This matches the pattern used by connections chat and simplifies permissions
+  CollectionReference<Map<String, dynamic>> _messagesRef(String sessionId) =>
+      _sessionsRef.doc(sessionId).collection('messages');
 
   GuessmeService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   // ==================== GAME STATUS MANAGEMENT ====================
 
+  /// Marks user as actively searching for a GuessMe match.
+  Future<void> setUserSearching(String userId) async {
+    try {
+      await _firestore.collection('profiles').doc(userId).update({
+        'isSearchingGuessMeGame': true,
+        'guessMeSearchStartedAt': FieldValue.serverTimestamp(),
+      });
+      _logger.d('Set user $userId as searching for GuessMe');
+    } catch (e) {
+      _logger.w('Error setting user searching status', error: e);
+    }
+  }
+
+  /// Clears user's searching status.
+  Future<void> clearUserSearching(String userId) async {
+    try {
+      await _firestore.collection('profiles').doc(userId).update({
+        'isSearchingGuessMeGame': false,
+        'guessMeSearchStartedAt': FieldValue.delete(),
+      });
+      _logger.d('Cleared user $userId searching status');
+    } catch (e) {
+      _logger.w('Error clearing user searching status', error: e);
+    }
+  }
+
   /// Sets user's game status to indicate they're in a GuessMe game.
   Future<void> _setUserInGame(String userId, String sessionId) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('profiles').doc(userId).update({
         'isInGuessMeGame': true,
         'guessMeSessionId': sessionId,
         'guessMeJoinedAt': FieldValue.serverTimestamp(),
+        'isSearchingGuessMeGame': false,
+        'guessMeSearchStartedAt': FieldValue.delete(),
       });
       _logger.d('Set user $userId in game status');
     } catch (e) {
@@ -63,10 +93,12 @@ class GuessmeService {
   /// Clears user's game status.
   Future<void> _clearUserGameStatus(String userId) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('profiles').doc(userId).update({
         'isInGuessMeGame': false,
         'guessMeSessionId': FieldValue.delete(),
         'guessMeJoinedAt': FieldValue.delete(),
+        'isSearchingGuessMeGame': false,
+        'guessMeSearchStartedAt': FieldValue.delete(),
       });
       _logger.d('Cleared user $userId game status');
     } catch (e) {
@@ -94,11 +126,16 @@ class GuessmeService {
       }
 
       // Check profile status
-      final profileDoc = await _firestore.collection('users').doc(userId).get();
+      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
       if (profileDoc.exists) {
         final data = profileDoc.data();
         final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
         if (isInGame) {
+          return false;
+        }
+        // User must be actively searching to be available
+        final isSearching = data?['isSearchingGuessMeGame'] as bool? ?? false;
+        if (!isSearching) {
           return false;
         }
       }
@@ -304,8 +341,13 @@ class GuessmeService {
   /// Stream of session updates.
   Stream<GuessmeSession?> getSessionStream(String sessionId) {
     return _sessionsRef.doc(sessionId).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return GuessmeSessionModel.fromFirestore(doc).toEntity();
+      if (!doc.exists) {
+        _logger.d('Session $sessionId no longer exists');
+        return null;
+      }
+      final session = GuessmeSessionModel.fromFirestore(doc).toEntity();
+      _logger.d('Session stream update - $sessionId: status=${session.status}, guessCheckPending=${session.guessCheckPending}, initiator=${session.guessCheckInitiator}');
+      return session;
     });
   }
 
@@ -609,7 +651,8 @@ class GuessmeService {
     required String text,
   }) async {
     try {
-      final messageId = _messagesRef.doc().id;
+      final messagesCollection = _messagesRef(sessionId);
+      final messageId = messagesCollection.doc().id;
 
       final message = GuessmeMessageModel(
         id: messageId,
@@ -619,7 +662,8 @@ class GuessmeService {
         sentAt: DateTime.now(),
       );
 
-      await _messagesRef.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
+      await messagesCollection.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
+      _logger.d('Message sent successfully: $messageId');
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
       rethrow;
@@ -632,7 +676,8 @@ class GuessmeService {
     required String text,
   }) async {
     try {
-      final messageId = _messagesRef.doc().id;
+      final messagesCollection = _messagesRef(sessionId);
+      final messageId = messagesCollection.doc().id;
 
       final message = GuessmeMessageModel(
         id: messageId,
@@ -643,7 +688,8 @@ class GuessmeService {
         type: GuessmeMessageType.system,
       );
 
-      await _messagesRef.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
+      await messagesCollection.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
+      _logger.d('System message sent successfully: $messageId');
     } catch (e, stack) {
       _logger.e('Error sending system message', error: e, stackTrace: stack);
     }
@@ -651,13 +697,15 @@ class GuessmeService {
 
   /// Stream of messages for a session.
   Stream<List<GuessmeMessage>> getMessagesStream(String sessionId) {
-    return _messagesRef
-        .where('sessionId', isEqualTo: sessionId)
+    return _messagesRef(sessionId)
         .orderBy('sentAt', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => GuessmeMessageModel.fromFirestore(doc).toEntity())
-            .toList());
+        .map((snapshot) {
+          _logger.d('Received ${snapshot.docs.length} messages for session $sessionId');
+          return snapshot.docs
+              .map((doc) => GuessmeMessageModel.fromFirestore(doc).toEntity())
+              .toList();
+        });
   }
 
   // ==================== STATS ====================

@@ -36,6 +36,7 @@ abstract class HiveBoxes {
 /// Firestore collection names
 abstract class FirestoreCollections {
   static const String users = 'users';
+  static const String profiles = 'profiles';
   static const String connections = 'connections';
   static const String proximityLogs = 'proximity_logs';
 }

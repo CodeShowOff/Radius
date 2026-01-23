@@ -19,10 +19,15 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
   @override
   void initState() {
     super.initState();
+    // Clear any stale errors from previous operations (e.g., failed deletions from detail page)
+    final groupState = context.read<LocationGroupBloc>().state;
+    if (groupState.hasError) {
+      context.read<LocationGroupBloc>().add(const ClearGroupError());
+    }
+    
     // Only load if not already loaded for this user
     // The BLoC will handle checking if data is already available
     // and will skip redundant loads while keeping real-time streams active
-    final groupState = context.read<LocationGroupBloc>().state;
     final authState = context.read<AuthBloc>().state;
     
     if (authState is AuthAuthenticated) {

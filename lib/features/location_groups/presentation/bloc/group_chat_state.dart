@@ -44,6 +44,19 @@ class GroupChatState extends Equatable {
   /// Error message if any.
   final String? errorMessage;
 
+  /// Whether membership has been verified for this session.
+  /// CRITICAL: Chat access is BLOCKED until this is true.
+  /// This prevents showing cached messages before membership is confirmed.
+  final bool membershipVerified;
+
+  /// ID of the first unread message for showing the "Unread messages" divider.
+  /// This is set when opening a chat and cleared after marking messages as read.
+  final String? firstUnreadMessageId;
+
+  /// The timestamp when user last read this group.
+  /// Used to determine which messages are unread.
+  final DateTime? lastReadAt;
+
   const GroupChatState({
     this.status = GroupChatStatus.initial,
     this.groupId,
@@ -53,6 +66,9 @@ class GroupChatState extends Equatable {
     this.messages = const [],
     this.hasMore = true,
     this.errorMessage,
+    this.membershipVerified = false,
+    this.firstUnreadMessageId,
+    this.lastReadAt,
   });
 
   /// Whether the chat is currently loading.
@@ -65,8 +81,17 @@ class GroupChatState extends Equatable {
   bool get hasError => status == GroupChatStatus.error;
 
   /// Whether the chat is open and ready.
+  /// CRITICAL: Requires membershipVerified to be true for access control.
   bool get isReady =>
-      status == GroupChatStatus.loaded || status == GroupChatStatus.sending;
+      membershipVerified &&
+      (status == GroupChatStatus.loaded || status == GroupChatStatus.sending);
+
+  /// Whether membership check is still pending.
+  bool get isVerifyingMembership =>
+      !membershipVerified && status == GroupChatStatus.loading;
+
+  /// Whether there are unread messages to show a divider for.
+  bool get hasUnreadMessages => firstUnreadMessageId != null;
 
   GroupChatState copyWith({
     GroupChatStatus? status,
@@ -77,6 +102,10 @@ class GroupChatState extends Equatable {
     List<GroupMessage>? messages,
     bool? hasMore,
     String? errorMessage,
+    bool? membershipVerified,
+    String? firstUnreadMessageId,
+    bool clearFirstUnreadMessageId = false,
+    DateTime? lastReadAt,
   }) {
     return GroupChatState(
       status: status ?? this.status,
@@ -87,6 +116,11 @@ class GroupChatState extends Equatable {
       messages: messages ?? this.messages,
       hasMore: hasMore ?? this.hasMore,
       errorMessage: errorMessage,
+      membershipVerified: membershipVerified ?? this.membershipVerified,
+      firstUnreadMessageId: clearFirstUnreadMessageId
+          ? null
+          : (firstUnreadMessageId ?? this.firstUnreadMessageId),
+      lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
 
@@ -100,5 +134,8 @@ class GroupChatState extends Equatable {
         messages,
         hasMore,
         errorMessage,
+        membershipVerified,
+        firstUnreadMessageId,
+        lastReadAt,
       ];
 }
