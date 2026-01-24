@@ -13,34 +13,34 @@ final class ConversationsState extends Equatable {
   final ConversationsStatus status;
   final String? currentUserId;
   final List<Conversation> conversations;
-  final int totalUnreadCount;
   final bool showArchived;
   final String? errorMessage;
+  final int totalUnreadCount;
 
   const ConversationsState({
     this.status = ConversationsStatus.initial,
     this.currentUserId,
     this.conversations = const [],
-    this.totalUnreadCount = 0,
     this.showArchived = false,
     this.errorMessage,
+    this.totalUnreadCount = 0,
   });
 
   ConversationsState copyWith({
     ConversationsStatus? status,
     String? currentUserId,
     List<Conversation>? conversations,
-    int? totalUnreadCount,
     bool? showArchived,
     String? errorMessage,
+    int? totalUnreadCount,
   }) {
     return ConversationsState(
       status: status ?? this.status,
       currentUserId: currentUserId ?? this.currentUserId,
       conversations: conversations ?? this.conversations,
-      totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
       showArchived: showArchived ?? this.showArchived,
       errorMessage: errorMessage ?? this.errorMessage,
+      totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
     );
   }
 
@@ -49,8 +49,8 @@ final class ConversationsState extends Equatable {
         status,
         currentUserId,
         conversations,
-        totalUnreadCount,
         showArchived,
         errorMessage,
+        totalUnreadCount,
       ];
 }

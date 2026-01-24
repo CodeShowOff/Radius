@@ -18,7 +18,6 @@ class GroupMessageModel {
       type: _parseMessageType(data['type'] as String?),
       mediaUrl: data['mediaUrl'] as String?,
       sentAt: _parseTimestamp(data['sentAt']),
-      status: _parseMessageStatus(data['status'] as String?),
       isDeleted: data['isDeleted'] as bool? ?? false,
     );
   }
@@ -34,7 +33,6 @@ class GroupMessageModel {
       'type': message.type.name,
       'mediaUrl': message.mediaUrl,
       'sentAt': message.sentAt,
-      'status': message.status.name,
       'isDeleted': message.isDeleted,
     };
   }
@@ -58,7 +56,6 @@ class GroupMessageModel {
       'type': type.name,
       'mediaUrl': mediaUrl,
       'sentAt': FieldValue.serverTimestamp(),
-      'status': GroupMessageStatus.sent.name,
       'isDeleted': false,
     };
   }
@@ -77,7 +74,6 @@ class GroupMessageModel {
       'type': GroupMessageType.system.name,
       'mediaUrl': null,
       'sentAt': FieldValue.serverTimestamp(),
-      'status': GroupMessageStatus.sent.name,
       'isDeleted': false,
     };
   }
@@ -87,14 +83,6 @@ class GroupMessageModel {
     return GroupMessageType.values.firstWhere(
       (t) => t.name == type,
       orElse: () => GroupMessageType.text,
-    );
-  }
-
-  static GroupMessageStatus _parseMessageStatus(String? status) {
-    if (status == null) return GroupMessageStatus.sent;
-    return GroupMessageStatus.values.firstWhere(
-      (s) => s.name == status,
-      orElse: () => GroupMessageStatus.sent,
     );
   }
 

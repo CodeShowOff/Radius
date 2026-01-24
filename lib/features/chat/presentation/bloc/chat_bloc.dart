@@ -60,7 +60,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSendSticker>(_onSendSticker);
     on<ChatLoadMore>(_onLoadMore);
     on<ChatPreload>(_onPreload);
-    on<ChatMarkAsRead>(_onMarkAsRead);
     on<ChatSetTyping>(_onSetTyping);
     on<ChatDeleteMessage>(_onDeleteMessage);
     on<ChatClear>(_onClear);
@@ -68,8 +67,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatConversationUpdated>(_onConversationUpdated);
     on<_ChatTypingUpdated>(_onTypingUpdated);
     on<_ChatErrorOccurred>(_onErrorOccurred);
-    on<_ChatFirstUnreadMessageFound>(_onFirstUnreadMessageFound);
-    on<ChatClearFirstUnread>(_onClearFirstUnread);
   }
 
   /// Whether the bloc has active Firestore subscriptions.
@@ -102,13 +99,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ));
       }
       
-      // Re-mark messages as read (in case new ones arrived while away)
-      _chatService.markMessagesAsRead(
-        conversationId: event.conversationId,
-        userId: event.currentUserId,
-      ).catchError((e) {
-        _logger.d('Failed to mark messages as read: $e');
-      });
       return;
     }
     
@@ -328,7 +318,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       senderId: state.currentUserId!,
       text: event.text.trim(),
       sentAt: DateTime.now(),
-      status: MessageStatus.sending, // Show as "sending" initially
       localId: localId,
     );
 
@@ -341,7 +330,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // SEND TO SERVER: Now actually send the message
     // ========================================================================
     try {
-      final sentMessage = await _chatService.sendMessage(
+      await _chatService.sendMessage(
         conversationId: state.conversationId!,
         senderId: state.currentUserId!,
         text: event.text,
@@ -349,32 +338,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         localId: localId, // Pass localId so Firestore message matches pending
       );
 
-      if (sentMessage.status == MessageStatus.failed) {
-        // Update pending message to show failed status
-        final updatedPending = Map<String, Message>.from(state.pendingMessages);
-        updatedPending[localId] = optimisticMessage.copyWith(
-          status: MessageStatus.failed,
-        );
-        emit(state.copyWith(pendingMessages: updatedPending));
-      } else {
-        // Success! Update to 'sent' status while waiting for stream confirmation
-        final updatedPending = Map<String, Message>.from(state.pendingMessages);
-        updatedPending[localId] = optimisticMessage.copyWith(
-          id: sentMessage.id, // Use real server ID
-          status: MessageStatus.sent,
-        );
-        emit(state.copyWith(pendingMessages: updatedPending));
-        // The Firestore stream will remove this from pending when it arrives
-      }
+      // Message sent successfully
+      // The Firestore stream will update the UI when the message arrives
     } catch (e) {
       _logger.e('Error sending message', error: e);
-      // Update pending message to show failed status
-      final updatedPending = Map<String, Message>.from(state.pendingMessages);
-      updatedPending[localId] = optimisticMessage.copyWith(
-        status: MessageStatus.failed,
-      );
+      // Keep the pending message as is - user can retry
       emit(state.copyWith(
-        pendingMessages: updatedPending,
         errorMessage: 'Failed to send message',
       ));
     }
@@ -397,7 +366,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     try {
       // Retry sending based on message type
-      late Message sentMessage;
 
       if (failedMessage.isMediaMessage) {
         // For media messages, we can't retry from the failed message alone
@@ -408,7 +376,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       } else {
         // Retry text message
-        sentMessage = await _chatService.sendMessage(
+        await _chatService.sendMessage(
           conversationId: state.conversationId!,
           senderId: state.currentUserId!,
           text: failedMessage.text,
@@ -416,12 +384,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       }
 
-      // If it failed again, add back to pending
-      if (sentMessage.status == MessageStatus.failed) {
-        final updatedPending = Map<String, Message>.from(state.pendingMessages);
-        updatedPending[sentMessage.localId ?? sentMessage.id] = sentMessage;
-        emit(state.copyWith(pendingMessages: updatedPending));
-      }
+      // Message sent successfully - will be updated by stream
     } catch (e) {
       _logger.e('Error retrying message', error: e);
       // Add back to pending on error
@@ -700,31 +663,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _onMarkAsRead(
-    ChatMarkAsRead event,
-    Emitter<ChatState> emit,
-  ) async {
-    if (state.conversationId == null || state.currentUserId == null) {
-      return;
-    }
-
-    try {
-      // CRITICAL: Mark as delivered first, then as read
-      // This ensures proper status progression: sent → delivered → read
-      await _chatService.markMessagesAsDelivered(
-        conversationId: state.conversationId!,
-        userId: state.currentUserId!,
-      );
-      
-      await _chatService.markMessagesAsRead(
-        conversationId: state.conversationId!,
-        userId: state.currentUserId!,
-      );
-    } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
-    }
-  }
-
   Future<void> _onSetTyping(
     ChatSetTyping event,
     Emitter<ChatState> emit,
@@ -830,50 +768,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // ========================================================================
-    // CRITICAL: Mark messages as DELIVERED when stream fires
-    // This is the WhatsApp pattern: sent → delivered (double check) → read (blue)
-    // Delivered = recipient's app received the message (listener fired)
-    // 
-    // FIX: Check deliveredAt == null, don't require specific status
-    // Messages may have status other than 'sent' but still need delivery update
-    // ========================================================================
-    if (state.conversationId != null && state.currentUserId != null) {
-      // Check if there are any undelivered messages from the other user
-      // CRITICAL FIX: Only check deliveredAt, not status
-      final hasUndeliveredMessages = event.messages.any((m) =>
-          m.senderId != state.currentUserId &&
-          m.deliveredAt == null);
-
-      if (hasUndeliveredMessages) {
-        // Mark messages as delivered in the background (non-blocking)
-        _chatService.markMessagesAsDelivered(
-          conversationId: state.conversationId!,
-          userId: state.currentUserId!,
-        ).catchError((e) {
-          _logger.d('Failed to mark messages as delivered: $e');
-        });
-      }
-      
-      // ========================================================================
-      // CRITICAL: Also mark messages as READ since chat is open and visible
-      // This ensures WhatsApp-style behavior: opening chat = seeing messages = read
-      // ========================================================================
-      final hasUnreadMessages = event.messages.any((m) =>
-          m.senderId != state.currentUserId &&
-          m.readAt == null);
-      
-      if (hasUnreadMessages) {
-        // Mark messages as read in the background (non-blocking)
-        _chatService.markMessagesAsRead(
-          conversationId: state.conversationId!,
-          userId: state.currentUserId!,
-        ).catchError((e) {
-          _logger.d('Failed to mark messages as read: $e');
-        });
-      }
-    }
-
-    // ========================================================================
     // CRITICAL: Update the global cache with new messages
     // This enables instant display when returning to this chat later
     // ========================================================================
@@ -957,28 +851,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
   }
 
-  /// Handler for when the first unread message is found.
-  /// Updates state to show "Unread messages" divider at this position.
-  void _onFirstUnreadMessageFound(
-    _ChatFirstUnreadMessageFound event,
-    Emitter<ChatState> emit,
-  ) {
-    emit(state.copyWith(
-      firstUnreadMessageId: event.messageId,
-    ));
-  }
-
-  /// Handler to clear the first unread message marker.
-  /// Called after user has scrolled past unread messages.
-  void _onClearFirstUnread(
-    ChatClearFirstUnread event,
-    Emitter<ChatState> emit,
-  ) {
-    emit(state.copyWith(
-      clearFirstUnreadMessageId: true,
-    ));
-  }
-
   /// Cancels all Firestore stream subscriptions.
   /// CRITICAL: Also sets _hasActiveSubscriptions = false to track state properly.
   Future<void> _cancelSubscriptions() async {
@@ -1057,43 +929,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _hasActiveSubscriptions = true;
     _logger.i('Subscriptions created, _hasActiveSubscriptions = true');
 
-    // IMPORTANT: Fetch first unread message ID BEFORE marking as read
-    // This allows us to show the "Unread messages" divider correctly
-    try {
-      final firstUnreadId = await _chatService.getFirstUnreadMessageId(
-        conversationId: event.conversationId,
-        userId: event.currentUserId,
-      );
-      
-      if (firstUnreadId != null && !isClosed) {
-        _logger.i('First unread message ID: $firstUnreadId');
-        // Update state with first unread ID - this will trigger UI to show divider
-        // We'll clear this after a delay to give user time to see it
-        add(_ChatFirstUnreadMessageFound(firstUnreadId));
-      }
-    } catch (e) {
-      _logger.w('Failed to get first unread message ID: $e');
-      // Continue without unread divider - not critical
-    }
-
-    // CRITICAL: Mark messages as delivered AND read when subscribing
-    // This ensures proper status updates even if stream hasn't fired yet
-    _chatService.markMessagesAsDelivered(
-      conversationId: event.conversationId,
-      userId: event.currentUserId,
-    ).catchError((e) {
-      _logger.d('Failed to mark messages as delivered: $e');
-    });
-    
-    // Delay marking as read slightly to allow unread divider to be shown
+    // Mark conversation as read after a brief delay to ensure messages are loaded
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (!isClosed && _hasActiveSubscriptions) {
-        _chatService.markMessagesAsRead(
+      if (!isClosed && state.conversationId == event.conversationId) {
+        _chatService.markConversationAsRead(
           conversationId: event.conversationId,
           userId: event.currentUserId,
-        ).catchError((e) {
-          _logger.d('Failed to mark messages as read: $e');
-        });
+        );
+        _logger.d('Marked conversation as read: ${event.conversationId}');
       }
     });
   }

@@ -356,12 +356,6 @@ service cloud.firestore {
     // GUESS ME - Anonymous Game-Based Chat
     // ============================================================
     
-    /// Check if user is a participant in a GuessMe session
-    function isGuessmeParticipant(sessionData) {
-      return request.auth.uid == sessionData.player1Id 
-        || request.auth.uid == sessionData.player2Id;
-    }
-    
     // GuessMe matchmaking queue
     match /guess_me_queue/{queueId} {
       // RULE: Users can read to find matches
@@ -408,25 +402,43 @@ service cloud.firestore {
     
     // GuessMe game sessions
     match /guess_me_sessions/{sessionId} {
-      // RULE: Participants can read individual documents
-      allow get: if isAuthenticated() 
-        && isGuessmeParticipant(resource.data);
+      /// Helper function to check if authenticated user is a participant
+      function isSessionParticipant() {
+        return request.auth.uid == resource.data.player1Id 
+          || request.auth.uid == resource.data.player2Id;
+      }
       
-      // RULE: Users can list/query their own sessions
-      allow list: if isAuthenticated();
+      /// Helper function to check if authenticated user will be a participant (for creates)
+      function willBeSessionParticipant() {
+        return request.auth.uid == request.resource.data.player1Id 
+          || request.auth.uid == request.resource.data.player2Id;
+      }
+      
+      // RULE: Participants can read individual session documents
+      allow get: if isAuthenticated() && isSessionParticipant();
+      
+      // RULE: Users can list/query ONLY their own sessions using where('players', 'array-contains', uid)
+      // The query filter ensures users only see sessions they're part of
+      allow list: if isAuthenticated()
+        && request.query.limit <= 100; // Prevent excessive reads
       
       // RULE: Authenticated users can create sessions (matchmaking service)
+      // Both players must exist and be different
       allow create: if isAuthenticated()
-        && request.resource.data.keys().hasAll(['player1Id', 'player2Id', 'status', 'createdAt', 'expiresAt'])
-        && (request.resource.data.player1Id == request.auth.uid 
-            || request.resource.data.player2Id == request.auth.uid);
+        && request.resource.data.keys().hasAll(['id', 'players', 'player1Id', 'player2Id', 'status', 'createdAt', 'expiresAt'])
+        && willBeSessionParticipant()
+        && request.resource.data.player1Id != request.resource.data.player2Id
+        && request.resource.data.players.size() == 2
+        && request.resource.data.players.hasAll([request.resource.data.player1Id, request.resource.data.player2Id])
+        && request.resource.data.status in ['active', 'waiting'];
       
-      // RULE: Only participants can update session (guess checks, status)
+      // RULE: Only participants can update session (guess checks, status changes)
+      // Cannot change immutable fields (player IDs, creation time)
       allow update: if isAuthenticated() 
-        && isGuessmeParticipant(resource.data)
-        // Cannot change core fields
+        && isSessionParticipant()
         && request.resource.data.player1Id == resource.data.player1Id
         && request.resource.data.player2Id == resource.data.player2Id
+        && request.resource.data.players == resource.data.players
         && request.resource.data.createdAt == resource.data.createdAt;
       
       // RULE: No deletes - sessions expire naturally or are cleaned up by admin
@@ -435,23 +447,30 @@ service cloud.firestore {
       // GuessMe messages within a session (subcollection)
       match /messages/{messageId} {
         /// Check if user is participant in the parent session
+        /// CRITICAL: Uses exists() check first to handle non-existent sessions gracefully
         function isSessionParticipant() {
-          let session = get(/databases/$(database)/documents/guess_me_sessions/$(sessionId));
-          return request.auth.uid == session.data.player1Id 
-            || request.auth.uid == session.data.player2Id;
+          let sessionPath = /databases/$(database)/documents/guess_me_sessions/$(sessionId);
+          return exists(sessionPath) 
+            && (
+              request.auth.uid == get(sessionPath).data.player1Id 
+              || request.auth.uid == get(sessionPath).data.player2Id
+            );
         }
         
         // RULE: Only session participants can read messages
+        // This allows reading ALL messages in the session, including system messages
         allow read: if isAuthenticated() && isSessionParticipant();
         
         // RULE: Only session participants can send messages
         // System messages (senderId == 'system') can be sent by any participant
+        // User messages must have senderId matching the authenticated user
         allow create: if isAuthenticated()
           && isSessionParticipant()
           && (request.resource.data.senderId == request.auth.uid 
               || request.resource.data.senderId == 'system')
           && request.resource.data.keys().hasAll(['id', 'sessionId', 'senderId', 'text', 'sentAt', 'type'])
           && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 5000;
         
         // RULE: No updates or deletes - messages are immutable
@@ -573,11 +592,14 @@ service cloud.firestore {
       
       // Members subcollection
       match /members/{memberId} {
-        // RULE: Users can read their own membership doc (for helper functions)
-        // OR read any member doc if they're an active member of the group (for member lists)
-        // OR list members in collectionGroup queries (for finding user's groups)
+        // RULE: Users can ALWAYS read their own membership doc
+        // This must not call isGroupMember() to avoid circular dependency
+        // Other members can be read if the requesting user is an active member
         allow get: if isAuthenticated() 
-          && (memberId == request.auth.uid || isGroupMember());
+          && (
+            memberId == request.auth.uid  // User reading their own doc
+            || isGroupMember()  // Active member reading other members
+          );
         
         // RULE: Allow listing members - either for collectionGroup queries
         // (filtered by userId on client) or for viewing group member lists
@@ -661,7 +683,6 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 5000
-          && request.resource.data.status is string
           && request.resource.data.isDeleted == false;
         
         // RULE: Senders can delete (soft delete) their own messages, admins can delete any

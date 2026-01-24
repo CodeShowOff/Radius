@@ -19,7 +19,6 @@ void main() {
       expect(message.senderId, 'user-123');
       expect(message.text, 'Hello World');
       expect(message.type, MessageType.text);
-      expect(message.status, MessageStatus.sent);
     });
 
     test('should support value equality', () {
@@ -79,51 +78,6 @@ void main() {
       expect(audioMessage.duration, 30);
     });
 
-    test('should handle different message statuses', () {
-      final sendingMessage = Message(
-        id: 'msg-1',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.sending,
-        sentAt: testDate,
-      );
-
-      final sentMessage = Message(
-        id: 'msg-2',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.sent,
-        sentAt: testDate,
-      );
-
-      final deliveredMessage = Message(
-        id: 'msg-3',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.delivered,
-        deliveredAt: testDate.add(const Duration(seconds: 1)),
-        sentAt: testDate,
-      );
-
-      final readMessage = Message(
-        id: 'msg-4',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.read,
-        readAt: testDate.add(const Duration(seconds: 2)),
-        sentAt: testDate,
-      );
-
-      expect(sendingMessage.status, MessageStatus.sending);
-      expect(sentMessage.status, MessageStatus.sent);
-      expect(deliveredMessage.status, MessageStatus.delivered);
-      expect(readMessage.status, MessageStatus.read);
-    });
-
     test('isSentBy should correctly identify sender', () {
       final message = Message(
         id: 'msg-123',
@@ -135,53 +89,6 @@ void main() {
 
       expect(message.isSentBy('user-123'), true);
       expect(message.isSentBy('user-456'), false);
-    });
-
-    test('isRead should return correct value', () {
-      final unreadMessage = Message(
-        id: 'msg-1',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        sentAt: testDate,
-      );
-
-      final readMessage = Message(
-        id: 'msg-2',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.read,
-        readAt: testDate,
-        sentAt: testDate,
-      );
-
-      expect(unreadMessage.isRead, false);
-      expect(readMessage.isRead, true);
-    });
-
-    test('isDelivered should return correct value', () {
-      final sentMessage = Message(
-        id: 'msg-1',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.sent,
-        sentAt: testDate,
-      );
-
-      final deliveredMessage = Message(
-        id: 'msg-2',
-        conversationId: 'conv-123',
-        senderId: 'user-123',
-        text: 'Hello',
-        status: MessageStatus.delivered,
-        deliveredAt: testDate,
-        sentAt: testDate,
-      );
-
-      expect(sentMessage.isDelivered, false);
-      expect(deliveredMessage.isDelivered, true);
     });
 
     test('isMediaMessage should correctly identify media messages', () {
@@ -271,18 +178,15 @@ void main() {
         conversationId: 'conv-123',
         senderId: 'user-123',
         text: 'Hello',
-        status: MessageStatus.sent,
         sentAt: testDate,
       );
 
       final updatedMessage = message.copyWith(
-        status: MessageStatus.delivered,
-        deliveredAt: testDate.add(const Duration(seconds: 1)),
+        text: 'Updated text',
       );
 
-      expect(updatedMessage.status, MessageStatus.delivered);
-      expect(updatedMessage.deliveredAt, testDate.add(const Duration(seconds: 1)));
-      expect(updatedMessage.text, 'Hello'); // unchanged
+      expect(updatedMessage.text, 'Updated text');
+      expect(updatedMessage.id, 'msg-123'); // unchanged
     });
   });
 }

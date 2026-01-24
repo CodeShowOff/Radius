@@ -1,23 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-/// Status of a message in the chat.
-enum MessageStatus {
-  /// Message is being sent.
-  sending,
-
-  /// Message was sent to server.
-  sent,
-
-  /// Message was delivered to recipient's device.
-  delivered,
-
-  /// Message was read by recipient.
-  read,
-
-  /// Message failed to send.
-  failed,
-}
-
 /// Type of message content.
 enum MessageType {
   /// Text message.
@@ -74,15 +56,6 @@ class Message extends Equatable {
   /// When the message was sent.
   final DateTime sentAt;
 
-  /// When the message was delivered (null if not yet delivered).
-  final DateTime? deliveredAt;
-
-  /// When the message was read (null if not yet read).
-  final DateTime? readAt;
-
-  /// Current status of the message.
-  final MessageStatus status;
-
   /// Whether this message has been deleted (soft delete).
   final bool isDeleted;
 
@@ -104,9 +77,6 @@ class Message extends Equatable {
     this.duration,
     this.thumbnailUrl,
     required this.sentAt,
-    this.deliveredAt,
-    this.readAt,
-    this.status = MessageStatus.sent,
     this.isDeleted = false,
     this.localId,
     this.uploadProgress,
@@ -114,15 +84,6 @@ class Message extends Equatable {
 
   /// Whether this message was sent by the given user.
   bool isSentBy(String userId) => senderId == userId;
-
-  /// Whether this message has been read.
-  bool get isRead => readAt != null || status == MessageStatus.read;
-
-  /// Whether this message has been delivered.
-  bool get isDelivered =>
-      deliveredAt != null ||
-      status == MessageStatus.delivered ||
-      status == MessageStatus.read;
 
   /// Whether this is a media message.
   bool get isMediaMessage => type != MessageType.text;
@@ -146,9 +107,6 @@ class Message extends Equatable {
     Object? duration = _sentinel,
     Object? thumbnailUrl = _sentinel,
     DateTime? sentAt,
-    Object? deliveredAt = _sentinel,
-    Object? readAt = _sentinel,
-    MessageStatus? status,
     bool? isDeleted,
     Object? localId = _sentinel,
     Object? uploadProgress = _sentinel,
@@ -171,11 +129,6 @@ class Message extends Equatable {
           ? this.thumbnailUrl
           : thumbnailUrl as String?,
       sentAt: sentAt ?? this.sentAt,
-      deliveredAt: deliveredAt == _sentinel
-          ? this.deliveredAt
-          : deliveredAt as DateTime?,
-      readAt: readAt == _sentinel ? this.readAt : readAt as DateTime?,
-      status: status ?? this.status,
       isDeleted: isDeleted ?? this.isDeleted,
       localId: localId == _sentinel ? this.localId : localId as String?,
       uploadProgress: uploadProgress == _sentinel
@@ -197,9 +150,6 @@ class Message extends Equatable {
         duration,
         thumbnailUrl,
         sentAt,
-        deliveredAt,
-        readAt,
-        status,
         isDeleted,
         localId,
         uploadProgress,

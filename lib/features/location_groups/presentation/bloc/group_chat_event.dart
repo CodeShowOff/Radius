@@ -82,20 +82,3 @@ class DeleteGroupMessage extends GroupChatEvent {
 class ResyncGroupChat extends GroupChatEvent {
   const ResyncGroupChat();
 }
-
-/// Internal event: First unread message ID found.
-/// Used to show "Unread messages" divider in chat.
-class _GroupFirstUnreadMessageFound extends GroupChatEvent {
-  final String messageId;
-
-  const _GroupFirstUnreadMessageFound(this.messageId);
-
-  @override
-  List<Object?> get props => [messageId];
-}
-
-/// Clears the first unread message marker.
-/// Called after user has seen the unread messages.
-class GroupClearFirstUnread extends GroupChatEvent {
-  const GroupClearFirstUnread();
-}

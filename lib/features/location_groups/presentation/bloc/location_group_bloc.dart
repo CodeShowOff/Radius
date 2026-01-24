@@ -90,11 +90,12 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     });
 
     on<_UserGroupMembershipsUpdated>((event, emit) {
+      // Build map of groupId -> unreadCount from memberships
       final unreadMap = <String, int>{
         for (final membership in event.memberships)
           membership.groupId: membership.unreadCount,
       };
-
+      
       emit(state.copyWith(userGroupUnreadCounts: unreadMap));
     });
 
@@ -237,7 +238,6 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         status: GroupBlocStatus.loading,
         userGroupsUserId: event.userId,
         userGroups: const [], // Clear old user's data
-        userGroupUnreadCounts: const {},
       ));
     } else if (state.userGroups.isEmpty) {
       // Only show loading state if we have no cached data

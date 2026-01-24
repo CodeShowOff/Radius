@@ -52,11 +52,15 @@ class ConnectionRequestModel extends ConnectionRequest {
       senderId: data['senderId'] as String,
       receiverId: data['receiverId'] as String,
       status: _parseStatus(data['status'] as String),
-      sentAt: (data['sentAt'] as Timestamp).toDate(),
+      sentAt: data['sentAt'] != null
+          ? (data['sentAt'] as Timestamp).toDate()
+          : DateTime.now(), // Fallback for null sentAt
       respondedAt: data['respondedAt'] != null
           ? (data['respondedAt'] as Timestamp).toDate()
           : null,
-      expiresAt: (data['expiresAt'] as Timestamp).toDate(),
+      expiresAt: data['expiresAt'] != null
+          ? (data['expiresAt'] as Timestamp).toDate()
+          : DateTime.now().add(const Duration(days: 7)), // Fallback expiration
       message: data['message'] as String?,
       source: data['source'] as String?,
       senderDisplayName: data['senderDisplayName'] as String?,

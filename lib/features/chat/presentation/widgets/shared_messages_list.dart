@@ -354,7 +354,6 @@ class SharedMessagesList extends StatelessWidget {
     bool showTail,
   ) {
     final theme = Theme.of(context);
-    final isFailed = message.status == MessageStatus.failed;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
@@ -388,9 +387,7 @@ class SharedMessagesList extends StatelessWidget {
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isFailed
-                        ? theme.colorScheme.errorContainer
-                        : isMe
+                    color: isMe
                             ? theme.colorScheme.primary
                             : theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.only(
@@ -407,9 +404,7 @@ class SharedMessagesList extends StatelessWidget {
                       Text(
                         message.text,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: isFailed
-                              ? theme.colorScheme.onErrorContainer
-                              : isMe
+                          color: isMe
                                   ? theme.colorScheme.onPrimary
                                   : theme.colorScheme.onSurface,
                           height: 1.3,
@@ -425,19 +420,12 @@ class SharedMessagesList extends StatelessWidget {
                             Text(
                               '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: isFailed
-                                    ? theme.colorScheme.onErrorContainer.withValues(alpha: 0.7)
-                                    : isMe
+                                color: isMe
                                         ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
                                         : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                                 fontSize: 11,
                               ),
                             ),
-                            // Status indicator for outgoing messages
-                            if (isMe) ...[
-                              const SizedBox(width: 4),
-                              _buildStatusIcon(message.status, theme, isFailed),
-                            ],
                           ],
                         ),
                       ),
@@ -447,90 +435,9 @@ class SharedMessagesList extends StatelessWidget {
               ),
             ],
           ),
-          // Retry/Remove UI for failed messages
-          if (isMe && isFailed && (onRetryMessage != null || onRemoveFailedMessage != null))
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (onRetryMessage != null)
-                    InkWell(
-                      onTap: () => onRetryMessage!(message),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.refresh,
-                              size: 14,
-                              color: theme.colorScheme.onErrorContainer,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Retry',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onErrorContainer,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (onRetryMessage != null && onRemoveFailedMessage != null)
-                    const SizedBox(width: 8),
-                  if (onRemoveFailedMessage != null)
-                    InkWell(
-                      onTap: () => onRemoveFailedMessage!(message),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        child: Icon(
-                          Icons.close,
-                          size: 16,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
         ],
       ),
     );
-  }
-
-  /// Builds the status icon for message delivery state.
-  Widget _buildStatusIcon(MessageStatus status, ThemeData theme, bool isFailed) {
-    final color = isFailed
-        ? theme.colorScheme.onErrorContainer.withValues(alpha: 0.7)
-        : theme.colorScheme.onPrimary.withValues(alpha: 0.7);
-    
-    switch (status) {
-      case MessageStatus.sending:
-        return SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.5,
-            color: color,
-          ),
-        );
-      case MessageStatus.sent:
-        return Icon(Icons.check, size: 14, color: color);
-      case MessageStatus.delivered:
-        return Icon(Icons.done_all, size: 14, color: color);
-      case MessageStatus.read:
-        return Icon(Icons.done_all, size: 14, color: Colors.blue.shade300);
-      case MessageStatus.failed:
-        return Icon(Icons.error_outline, size: 14, color: theme.colorScheme.error);
-    }
   }
 
   bool _shouldShowTail(int index) {

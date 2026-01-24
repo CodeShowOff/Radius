@@ -85,16 +85,17 @@ class _ConnectionsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConversationsBloc, ConversationsState>(
+      buildWhen: (previous, current) => previous.totalUnreadCount != current.totalUnreadCount,
       builder: (context, state) {
         final unreadCount = state.totalUnreadCount;
-        final icon = Icon(selected ? Icons.people : Icons.people_outlined);
-
-        if (unreadCount <= 0) return icon;
-
+        
+        if (unreadCount == 0) {
+          return Icon(selected ? Icons.people : Icons.people_outlined);
+        }
+        
         return Badge(
-          isLabelVisible: true,
           label: Text(unreadCount > 99 ? '99+' : unreadCount.toString()),
-          child: icon,
+          child: Icon(selected ? Icons.people : Icons.people_outlined),
         );
       },
     );
@@ -108,20 +109,6 @@ class _GroupsIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LocationGroupBloc, LocationGroupState>(
-      builder: (context, state) {
-        final unreadCount = state.userGroupUnreadCounts.values
-            .fold<int>(0, (sum, count) => sum + count);
-        final icon = Icon(selected ? Icons.groups : Icons.groups_outlined);
-
-        if (unreadCount <= 0) return icon;
-
-        return Badge(
-          isLabelVisible: true,
-          label: Text(unreadCount > 99 ? '99+' : unreadCount.toString()),
-          child: icon,
-        );
-      },
-    );
+    return Icon(selected ? Icons.groups : Icons.groups_outlined);
   }
 }

@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/conversation.dart';
-import '../../domain/entities/message.dart';
 
 /// Firestore model for Conversation entity.
 ///
@@ -13,11 +12,10 @@ import '../../domain/entities/message.dart';
 ///   - lastMessageAt: timestamp?
 ///   - lastMessageText: string?
 ///   - lastMessageSenderId: string?
-///   - lastMessageStatus: string?
-///   - unreadCounts: { [userId]: number }
-///   - lastReadAt: { [userId]: timestamp }  // When user last read messages
 ///   - mutedBy: { [userId]: boolean }
 ///   - archivedBy: { [userId]: boolean }
+///   - unreadCounts: { [userId]: number }
+///   - lastReadAt: { [userId]: timestamp }
 ///   - participantInfo: {
 ///       [userId]: { displayName: string, photoUrl: string? }
 ///     }
@@ -30,11 +28,10 @@ class ConversationModel extends Conversation {
     super.lastMessageAt,
     super.lastMessageText,
     super.lastMessageSenderId,
-    super.lastMessageStatus,
-    super.unreadCounts,
     super.mutedBy,
     super.participantInfo,
     super.archivedBy,
+    super.unreadCounts,
     super.lastReadAt,
   });
 
@@ -61,13 +58,6 @@ class ConversationModel extends Conversation {
       ),
     );
 
-    // Parse unread counts
-    final unreadCountsData =
-        data['unreadCounts'] as Map<String, dynamic>? ?? {};
-    final unreadCounts = unreadCountsData.map(
-      (key, value) => MapEntry(key, (value as num).toInt()),
-    );
-
     // Parse muted/archived
     final mutedByData = data['mutedBy'] as Map<String, dynamic>? ?? {};
     final mutedBy = mutedByData.map(
@@ -79,28 +69,36 @@ class ConversationModel extends Conversation {
       (key, value) => MapEntry(key, value as bool),
     );
 
-    // Parse lastReadAt timestamps
-    final lastReadAtData = data['lastReadAt'] as Map<String, dynamic>? ?? {};
-    final lastReadAt = lastReadAtData.map(
-      (key, value) => MapEntry(key, (value as Timestamp).toDate()),
+    // Parse unread counts
+    final unreadCountsData = data['unreadCounts'] as Map<String, dynamic>? ?? {};
+    final unreadCounts = unreadCountsData.map(
+      (key, value) => MapEntry(key, value as int),
     );
+
+    // Parse last read timestamps
+    final lastReadAtData = data['lastReadAt'] as Map<String, dynamic>? ?? {};
+    final lastReadAt = <String, DateTime>{};
+    for (final entry in lastReadAtData.entries) {
+      if (entry.value != null && entry.value is Timestamp) {
+        lastReadAt[entry.key] = (entry.value as Timestamp).toDate();
+      }
+    }
 
     return ConversationModel(
       id: doc.id,
       participantIds: List<String>.from(data['participantIds'] as List),
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(), // Fallback to current time if null
       lastMessageAt: data['lastMessageAt'] != null
           ? (data['lastMessageAt'] as Timestamp).toDate()
           : null,
       lastMessageText: data['lastMessageText'] as String?,
       lastMessageSenderId: data['lastMessageSenderId'] as String?,
-      lastMessageStatus: data['lastMessageStatus'] != null
-          ? _parseStatus(data['lastMessageStatus'] as String)
-          : null,
-      unreadCounts: unreadCounts,
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
+      unreadCounts: unreadCounts,
       lastReadAt: lastReadAt,
     );
   }
@@ -114,11 +112,10 @@ class ConversationModel extends Conversation {
       lastMessageAt: conversation.lastMessageAt,
       lastMessageText: conversation.lastMessageText,
       lastMessageSenderId: conversation.lastMessageSenderId,
-      lastMessageStatus: conversation.lastMessageStatus,
-      unreadCounts: conversation.unreadCounts,
       mutedBy: conversation.mutedBy,
       participantInfo: conversation.participantInfo,
       archivedBy: conversation.archivedBy,
+      unreadCounts: conversation.unreadCounts,
       lastReadAt: conversation.lastReadAt,
     );
   }
@@ -142,7 +139,6 @@ class ConversationModel extends Conversation {
       participantIds: participants,
       createdAt: now,
       lastMessageAt: now, // Required by Firestore security rules
-      unreadCounts: {currentUserId: 0, otherUserId: 0},
       mutedBy: const {},
       participantInfo: {
         currentUserId: ParticipantInfo(
@@ -155,7 +151,8 @@ class ConversationModel extends Conversation {
         ),
       },
       archivedBy: const {},
-      lastReadAt: {currentUserId: now, otherUserId: now}, // Initialize lastReadAt
+      unreadCounts: const {},
+      lastReadAt: const {},
     );
   }
 
@@ -182,13 +179,12 @@ class ConversationModel extends Conversation {
           : Timestamp.fromDate(createdAt),
       'lastMessageText': lastMessageText,
       'lastMessageSenderId': lastMessageSenderId,
-      'lastMessageStatus': lastMessageStatus?.name,
+      'mutedBy': mutedBy,
+      'archivedBy': archivedBy,
       'unreadCounts': unreadCounts,
       'lastReadAt': lastReadAt.map(
         (key, value) => MapEntry(key, Timestamp.fromDate(value)),
       ),
-      'mutedBy': mutedBy,
-      'archivedBy': archivedBy,
       'participantInfo': participantInfo.map(
         (key, value) => MapEntry(key, {
           'displayName': value.displayName,
@@ -211,19 +207,9 @@ class ConversationModel extends Conversation {
       lastMessageAt: lastMessageAt,
       lastMessageText: lastMessageText,
       lastMessageSenderId: lastMessageSenderId,
-      lastMessageStatus: lastMessageStatus,
-      unreadCounts: unreadCounts,
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
-      lastReadAt: lastReadAt,
-    );
-  }
-
-  static MessageStatus _parseStatus(String status) {
-    return MessageStatus.values.firstWhere(
-      (e) => e.name == status,
-      orElse: () => MessageStatus.sent,
     );
   }
 }

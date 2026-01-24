@@ -10,13 +10,12 @@ import 'chat_service.dart';
 /// Service responsible for preloading chat messages on app startup.
 ///
 /// This implements WhatsApp-level instant chat loading by:
-/// 1. Selecting the most important chats to preload (recent + unread)
+/// 1. Selecting the most important chats to preload (recent conversations)
 /// 2. Fetching messages in parallel without blocking UI
 /// 3. Warming the in-memory cache before user navigates to any chat
 ///
 /// Preloading rules:
 /// - Top 3-5 most recent conversations (by lastMessageAt)
-/// - Any conversations with unread messages
 /// - Capped at 5 total to limit memory and network usage
 /// - One-time fetch (no subscriptions)
 /// - Does NOT mark messages as read
@@ -172,49 +171,19 @@ class ChatPreloadService {
   /// Select which conversations to preload based on priority.
   ///
   /// Priority order:
-  /// 1. Conversations with unread messages (sorted by lastMessageAt)
-  /// 2. Most recent conversations (sorted by lastMessageAt)
-  /// 3. Deduplicated and capped at [maxPreloadCount]
+  /// 1. Most recent conversations (sorted by lastMessageAt)
+  /// 2. Capped at [maxPreloadCount]
   List<Conversation> _selectConversationsToPreload(
     List<Conversation> conversations,
     String userId,
   ) {
-    // Separate into unread and recent
-    final unreadChats = conversations
-        .where((c) => c.getUnreadCount(userId) > 0)
-        .toList()
+    // Sort by most recent activity
+    final sorted = conversations.toList()
       ..sort((a, b) => (b.lastMessageAt ?? DateTime(0))
           .compareTo(a.lastMessageAt ?? DateTime(0)));
 
-    final recentChats = conversations
-        .where((c) => c.getUnreadCount(userId) == 0)
-        .toList()
-      ..sort((a, b) => (b.lastMessageAt ?? DateTime(0))
-          .compareTo(a.lastMessageAt ?? DateTime(0)));
-
-    // Combine: unread first, then fill with recent
-    final selected = <Conversation>[];
-    final seenIds = <String>{};
-
-    // Add unread chats (prioritized)
-    for (final chat in unreadChats) {
-      if (selected.length >= maxPreloadCount) break;
-      if (!seenIds.contains(chat.id)) {
-        selected.add(chat);
-        seenIds.add(chat.id);
-      }
-    }
-
-    // Fill remaining slots with recent chats
-    for (final chat in recentChats) {
-      if (selected.length >= maxPreloadCount) break;
-      if (!seenIds.contains(chat.id)) {
-        selected.add(chat);
-        seenIds.add(chat.id);
-      }
-    }
-
-    return selected;
+    // Return top N conversations
+    return sorted.take(maxPreloadCount).toList();
   }
 
   /// Preload messages for selected conversations.

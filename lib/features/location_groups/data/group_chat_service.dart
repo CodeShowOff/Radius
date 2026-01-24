@@ -52,8 +52,8 @@ class GroupChatService {
 
   /// Sends a text message to a group.
   /// 
-  /// SECURITY: Verifies sender is an active member before sending.
-  /// This is a defense-in-depth check - Firestore rules also enforce this.
+  /// SECURITY: Firestore rules enforce membership - no need for client check.
+  /// The BLoC already verified membership when opening the chat.
   Future<GroupMessage> sendMessage({
     required String groupId,
     required String senderId,
@@ -62,13 +62,6 @@ class GroupChatService {
     required String text,
   }) async {
     _logger.d('Sending message to group: $groupId');
-
-    // SECURITY: Verify sender is an active member before attempting to send
-    final isMember = await isActiveMember(groupId: groupId, userId: senderId);
-    if (!isMember) {
-      _logger.w('Message send blocked: User $senderId is not a member of group $groupId');
-      throw Exception('You are not a member of this group');
-    }
 
     // Sanitize and validate message
     final sanitizedText = text.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -102,24 +95,26 @@ class GroupChatService {
           : sanitizedText,
     });
 
-    // Increment unread counts for all active members except sender
+    // Update unread counts for all members
+    // Reset sender's unread count and increment for all other active members
     final membersSnapshot = await _groupRef(groupId)
         .collection('members')
         .where('status', isEqualTo: 'active')
         .get();
 
     for (final doc in membersSnapshot.docs) {
-      final data = doc.data();
-      final memberUserId = data['userId'] as String?;
+      final memberUserId = doc.data()['userId'] as String?;
       if (memberUserId == null) continue;
 
       if (memberUserId == senderId) {
+        // Sender: reset unread count and update lastReadAt
         batch.update(doc.reference, {
           'unreadCount': 0,
           'lastReadAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
+        // Other members: increment unread count
         batch.update(doc.reference, {
           'unreadCount': FieldValue.increment(1),
           'updatedAt': FieldValue.serverTimestamp(),
@@ -141,16 +136,26 @@ class GroupChatService {
       text: sanitizedText,
       type: GroupMessageType.text,
       sentAt: DateTime.now(),
-      status: GroupMessageStatus.sent,
     );
   }
 
   /// Sends a system message (e.g., "X joined the group").
+  /// 
+  /// IMPORTANT: Includes retry logic and delay to handle Firestore replication
+  /// when called immediately after membership changes.
   Future<void> sendSystemMessage({
     required String groupId,
     required String text,
+    int retryCount = 0,
+    bool delayBeforeSend = false,
   }) async {
-    _logger.d('Sending system message to group: $groupId');
+    _logger.d('Sending system message to group: $groupId (attempt ${retryCount + 1})');
+
+    // CRITICAL: Add delay if requested (e.g., after join to allow replication)
+    if (delayBeforeSend && retryCount == 0) {
+      _logger.d('Waiting 1s for Firestore replication before sending system message');
+      await Future.delayed(const Duration(milliseconds: 1000));
+    }
 
     // Validate system message
     final sanitizedText = text.trim();
@@ -159,21 +164,46 @@ class GroupChatService {
       return;
     }
 
-    final messageData = GroupMessageModel.toSystemMessageData(
-      groupId: groupId,
-      text: sanitizedText,
-    );
+    try {
+      final messageData = GroupMessageModel.toSystemMessageData(
+        groupId: groupId,
+        text: sanitizedText,
+      );
 
-    final batch = _firestore.batch();
-    final messageRef = _messagesRef(groupId).doc();
-    batch.set(messageRef, messageData);
-    batch.update(_groupRef(groupId), {
-      'lastActivityAt': FieldValue.serverTimestamp(),
-      'lastMessagePreview': sanitizedText.length > 100
-          ? '${sanitizedText.substring(0, 100)}...'
-          : sanitizedText,
-    });
-    await batch.commit();
+      final batch = _firestore.batch();
+      final messageRef = _messagesRef(groupId).doc();
+      batch.set(messageRef, messageData);
+      batch.update(_groupRef(groupId), {
+        'lastActivityAt': FieldValue.serverTimestamp(),
+        'lastMessagePreview': sanitizedText.length > 100
+            ? '${sanitizedText.substring(0, 100)}...'
+            : sanitizedText,
+      });
+      await batch.commit();
+      
+      _logger.d('System message sent successfully');
+    } on FirebaseException catch (e) {
+      // Handle permission-denied errors with retry
+      if (e.code == 'permission-denied' && retryCount < 3) {
+        final delayMs = 500 * (retryCount + 1);
+        _logger.w(
+          'Permission denied sending system message (replication delay). '
+          'Retrying in ${delayMs}ms... (attempt ${retryCount + 1}/3)',
+        );
+        
+        await Future.delayed(Duration(milliseconds: delayMs));
+        
+        return sendSystemMessage(
+          groupId: groupId,
+          text: text,
+          retryCount: retryCount + 1,
+          delayBeforeSend: false, // Don't delay again on retry
+        );
+      }
+      
+      _logger.e('Failed to send system message after ${retryCount + 1} attempts', error: e);
+      // Don't rethrow - system messages are non-critical
+    }
   }
 
   /// Streams messages from a group with optional pagination.
@@ -228,26 +258,6 @@ class GroupChatService {
     } catch (e) {
       _logger.e('Error getting messages', error: e);
       return [];
-    }
-  }
-
-  /// Marks a group as read for a user (resets unread count).
-  Future<void> markGroupAsRead({
-    required String groupId,
-    required String userId,
-  }) async {
-    try {
-      final memberRef = _groupRef(groupId).collection('members').doc(userId);
-      final memberDoc = await memberRef.get();
-      if (!memberDoc.exists) return;
-
-      await memberRef.update({
-        'unreadCount': 0,
-        'lastReadAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      _logger.w('Failed to mark group as read', error: e);
     }
   }
 
@@ -313,6 +323,30 @@ class GroupChatService {
         .count()
         .get();
     return snapshot.count ?? 0;
+  }
+
+  /// Marks a group as read for a user (resets unread count).
+  Future<void> markGroupAsRead({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberRef = _groupRef(groupId).collection('members').doc(userId);
+      final memberDoc = await memberRef.get();
+      if (!memberDoc.exists) return;
+
+      // Use set with merge to handle missing fields
+      await memberRef.set(
+        {
+          'unreadCount': 0,
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      _logger.w('Failed to mark group as read', error: e);
+    }
   }
 
   /// Gets the ID of the first unread message for a user based on lastReadAt.

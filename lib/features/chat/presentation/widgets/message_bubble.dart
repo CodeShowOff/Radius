@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/message.dart';
-import '../bloc/chat_bloc.dart';
 import 'media_message_content.dart';
 
 /// Message bubble widget for chat.
@@ -120,45 +118,6 @@ class MessageBubble extends StatelessWidget {
                       ),
                 ),
               ),
-              // Retry button for failed messages
-              if (isMe && message.status == MessageStatus.failed)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: InkWell(
-                    onTap: () {
-                      context.read<ChatBloc>().add(ChatRetryMessage(message));
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.errorContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.refresh,
-                            size: 14,
-                            color: theme.colorScheme.onErrorContainer,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Tap to retry',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -278,23 +237,14 @@ class _MessageMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          _formatTime(message.sentAt),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: isMe
-                ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
-                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-            fontSize: 11,
-          ),
-        ),
-        if (isMe) ...[
-          const SizedBox(width: 4),
-          _StatusIcon(status: message.status, theme: theme, isMe: isMe),
-        ],
-      ],
+    return Text(
+      _formatTime(message.sentAt),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: isMe
+            ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
+            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        fontSize: 11,
+      ),
     );
   }
 
@@ -302,62 +252,6 @@ class _MessageMeta extends StatelessWidget {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
-  }
-}
-
-class _StatusIcon extends StatelessWidget {
-  final MessageStatus status;
-  final ThemeData theme;
-  final bool isMe;
-
-  const _StatusIcon({
-    required this.status,
-    required this.theme,
-    required this.isMe,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final iconColor = isMe
-        ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-        : theme.colorScheme.onSurfaceVariant;
-
-    return switch (status) {
-      // Show a small clock icon for sending (like WhatsApp does)
-      MessageStatus.sending => Icon(
-          Icons.access_time,
-          size: 14,
-          color: iconColor.withValues(alpha: 0.5),
-        ),
-      
-      // Single gray check mark for sent (message reached server)
-      MessageStatus.sent => Icon(
-          Icons.check,
-          size: 16,
-          color: iconColor,
-        ),
-      
-      // Double gray check marks for delivered (message delivered to recipient's device)
-      MessageStatus.delivered => Icon(
-          Icons.done_all,
-          size: 16,
-          color: iconColor,
-        ),
-      
-      // Double blue check marks for read (message opened/read by recipient)
-      MessageStatus.read => const Icon(
-          Icons.done_all,
-          size: 16,
-          color: Colors.blue,
-        ),
-      
-      // Error icon for failed
-      MessageStatus.failed => Icon(
-          Icons.error_outline,
-          size: 16,
-          color: theme.colorScheme.error,
-        ),
-    };
   }
 }
 

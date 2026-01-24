@@ -154,8 +154,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
               itemCount: state.userGroups.length,
               itemBuilder: (context, index) {
                 final group = state.userGroups[index];
-                final unreadCount =
-                    state.userGroupUnreadCounts[group.id] ?? 0;
+                final unreadCount = state.userGroupUnreadCounts[group.id] ?? 0;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GroupCard(

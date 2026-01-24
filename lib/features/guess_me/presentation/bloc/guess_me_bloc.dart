@@ -209,7 +209,6 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       senderId: _currentUserId!,
       text: messageText,
       sentAt: DateTime.now(),
-      status: GuessmeMessageStatus.sending,
       localId: localId,
     );
 
@@ -230,13 +229,8 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
       
-      // Mark the optimistic message as failed instead of removing it
-      final updatedMessages = state.messages.map((m) {
-        if (m.id == localId) {
-          return m.copyWith(status: GuessmeMessageStatus.failed);
-        }
-        return m;
-      }).toList();
+      // Remove the optimistic message on failure
+      final updatedMessages = state.messages.where((m) => m.id != localId).toList();
       
       emit(state.copyWith(
         messages: updatedMessages,
@@ -250,42 +244,7 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     GuessmeRetryMessage event,
     Emitter<GuessmeState> emit,
   ) async {
-    if (_currentUserId == null || _currentSessionId == null) return;
-
-    // Update the failed message to 'sending' status
-    final updatedMessages = state.messages.map((m) {
-      if (m.id == event.localMessageId) {
-        return m.copyWith(status: GuessmeMessageStatus.sending);
-      }
-      return m;
-    }).toList();
-    
-    emit(state.copyWith(messages: updatedMessages));
-
-    try {
-      await _service.sendMessage(
-        sessionId: _currentSessionId!,
-        senderId: _currentUserId!,
-        text: event.text,
-      );
-      _logger.d('Retry message sent successfully');
-      // Stream will deliver the confirmed message
-    } catch (e, stack) {
-      _logger.e('Retry failed', error: e, stackTrace: stack);
-      
-      // Mark as failed again
-      final failedMessages = state.messages.map((m) {
-        if (m.id == event.localMessageId) {
-          return m.copyWith(status: GuessmeMessageStatus.failed);
-        }
-        return m;
-      }).toList();
-      
-      emit(state.copyWith(
-        messages: failedMessages,
-        errorMessage: 'Failed to send message',
-      ));
-    }
+    // No longer needed without status tracking
   }
 
   /// Removes a failed message from the UI.
@@ -482,13 +441,11 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     final currentMessages = state.messages;
     
     // ========================================================================
-    // MERGE STRATEGY: Combine stream messages with pending/failed optimistic messages
+    // MERGE STRATEGY: Combine stream messages with pending optimistic messages
     // ========================================================================
     
-    // 1. Get all pending or failed optimistic messages from current state
-    final pendingMessages = currentMessages.where((m) => 
-      m.isPending && (m.status == GuessmeMessageStatus.sending || m.status == GuessmeMessageStatus.failed)
-    ).toList();
+    // 1. Get all pending optimistic messages from current state
+    final pendingMessages = currentMessages.where((m) => m.isPending).toList();
     
     // 2. For each pending message, check if it has been confirmed by the stream
     //    A message is considered confirmed if a stream message has the same
@@ -508,14 +465,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
       }
     }
     
-    // 3. Keep only failed messages that haven't been confirmed
-    //    (sending messages are replaced by stream, failed ones are kept for retry UI)
-    final failedMessagesToKeep = pendingMessages.where((m) =>
-      m.status == GuessmeMessageStatus.failed && !confirmedLocalIds.contains(m.id)
+    // 3. Keep only pending messages that haven't been confirmed
+    final pendingMessagesToKeep = pendingMessages.where((m) =>
+      !confirmedLocalIds.contains(m.id)
     ).toList();
     
-    // 4. Merge: stream messages + any remaining failed messages (sorted by time)
-    final mergedMessages = [...streamMessages, ...failedMessagesToKeep];
+    // 4. Merge: stream messages + any remaining pending messages (sorted by time)
+    final mergedMessages = [...streamMessages, ...pendingMessagesToKeep];
     mergedMessages.sort((a, b) => a.sentAt.compareTo(b.sentAt));
     
     emit(state.copyWith(messages: mergedMessages));
@@ -550,27 +506,55 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
     _currentSessionId = sessionId;
     _stopQueueMonitoring();
     _logger.i('Subscribing to session: $sessionId');
+    _logger.i('Will listen to session updates at: guess_me_sessions/$sessionId');
+    _logger.i('Will listen to messages at: guess_me_sessions/$sessionId/messages');
 
     _sessionSubscription?.cancel();
     _sessionSubscription = _service.getSessionStream(sessionId).listen(
           (session) {
             if (!isClosed) {
+              _logger.d('Session stream emitted update for $sessionId');
               add(_GuessmeSessionUpdated(session));
             }
           },
-          onError: (e) => _logger.e('Session stream error', error: e),
+          onError: (e, stackTrace) {
+            _logger.e('Session stream error for $sessionId', error: e, stackTrace: stackTrace);
+          },
+          onDone: () {
+            _logger.w('Session stream closed for $sessionId');
+          },
         );
 
     _messagesSubscription?.cancel();
     _messagesSubscription = _service.getMessagesStream(sessionId).listen(
           (messages) {
             if (!isClosed) {
-              _logger.d('Received ${messages.length} messages from stream for session $sessionId');
+              _logger.i('Messages stream emitted ${messages.length} messages for session $sessionId');
+              if (messages.isNotEmpty) {
+                _logger.d('Latest message: ${messages.last.text.substring(0, messages.last.text.length.clamp(0, 30))}... (from: ${messages.last.senderId})');
+              }
               add(_GuessmeMessagesUpdated(messages));
             }
           },
           onError: (e, stackTrace) {
             _logger.e('Messages stream error for session $sessionId', error: e, stackTrace: stackTrace);
+            // Attempt to resubscribe on error
+            Future.delayed(const Duration(seconds: 2), () {
+              if (!isClosed && _currentSessionId == sessionId) {
+                _logger.w('Attempting to resubscribe to messages stream after error');
+                _messagesSubscription?.cancel();
+                _messagesSubscription = _service.getMessagesStream(sessionId).listen(
+                  (messages) {
+                    if (!isClosed) {
+                      add(_GuessmeMessagesUpdated(messages));
+                    }
+                  },
+                );
+              }
+            });
+          },
+          onDone: () {
+            _logger.w('Messages stream closed for $sessionId');
           },
         );
   }

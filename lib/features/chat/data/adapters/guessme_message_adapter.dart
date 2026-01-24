@@ -26,23 +26,7 @@ class GuessmeMessageAdapter {
       text: guessmeMessage.text,
       sentAt: guessmeMessage.sentAt,
       type: MessageType.text,
-      status: _mapStatus(guessmeMessage.status),
-      // GuessMe messages don't have delivery/read tracking
-      deliveredAt: null,
-      readAt: null,
     );
-  }
-
-  /// Maps GuessMe message status to unified Message status.
-  static MessageStatus _mapStatus(GuessmeMessageStatus status) {
-    switch (status) {
-      case GuessmeMessageStatus.sending:
-        return MessageStatus.sending;
-      case GuessmeMessageStatus.sent:
-        return MessageStatus.sent;
-      case GuessmeMessageStatus.failed:
-        return MessageStatus.failed;
-    }
   }
 
   /// Determines the sender ID for proper message display.

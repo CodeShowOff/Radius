@@ -205,8 +205,6 @@ class LocationGroupService {
         role: GroupRole.admin,
         status: MembershipStatus.active,
         joinedAt: now,
-        unreadCount: 0,
-        lastReadAt: now,
       );
 
       // Batch write: group + membership + inverse index
@@ -548,7 +546,7 @@ class LocationGroupService {
     return controller.stream;
   }
 
-  /// Streams the user's memberships (for unread counts).
+  /// Streams the user's memberships across all groups.
   ///
   /// IMPORTANT: This uses a collection group query which requires:
   /// 1. A Firestore security rule at /{path=**}/members/{memberId}
@@ -671,14 +669,6 @@ class LocationGroupService {
         );
       }
 
-      // Check group size limit (max 500 members)
-      if (group.memberCount >= 500) {
-        return const GroupFailure(
-          'This group has reached its maximum capacity',
-          GroupErrorType.invalidData,
-        );
-      }
-
       // Check if already a member
       final existingMembership = await _getMembership(groupId, userId);
       if (existingMembership != null) {
@@ -706,8 +696,6 @@ class LocationGroupService {
         role: GroupRole.member,
         status: MembershipStatus.active,
         joinedAt: DateTime.now(),
-        unreadCount: 0,
-        lastReadAt: DateTime.now(),
       );
 
       // RISK MITIGATION: Use batch for atomic writes (prevents member count desync)
@@ -744,12 +732,14 @@ class LocationGroupService {
         rethrow;
       }
       
-      // Send system message
+      // CRITICAL FIX: Send system message with delay to allow Firestore replication
+      // This prevents permission-denied errors when user tries to send first message
       try {
         final displayName = userName ?? 'Someone';
         await sendSystemMessage(
           groupId: groupId,
           text: '$displayName joined the group',
+          delayBeforeSend: true, // Wait for replication
         );
       } catch (e) {
         _logger.w('Failed to send join system message', error: e);
@@ -929,15 +919,6 @@ class LocationGroupService {
         );
       }
 
-      // Check group size limit
-      final group = await getGroupById(groupId);
-      if (group != null && group.memberCount >= 500) {
-        return const GroupFailure(
-          'This group has reached its maximum capacity',
-          GroupErrorType.invalidData,
-        );
-      }
-
       // Get join request
       final requestDoc = await _groupsRef
           .doc(groupId)
@@ -965,8 +946,6 @@ class LocationGroupService {
         status: MembershipStatus.active,
         joinedAt: DateTime.now(),
         approvedByUserId: adminUserId,
-        unreadCount: 0,
-        lastReadAt: DateTime.now(),
       );
 
       // RISK MITIGATION: Atomic batch ensures request cleanup + membership creation
@@ -1016,12 +995,13 @@ class LocationGroupService {
 
       _logger.i('Admin $adminUserId approved $requestUserId for group $groupId');
       
-      // Send system message
+      // Send system message with delay for replication
       try {
         final displayName = requestData['userName'] as String? ?? 'Someone';
         await sendSystemMessage(
           groupId: groupId,
           text: '$displayName joined the group',
+          delayBeforeSend: true,
         );
       } catch (e) {
         _logger.w('Failed to send join system message', error: e);
@@ -1636,11 +1616,21 @@ class LocationGroupService {
   // ==================== HELPER METHODS ====================
 
   /// Sends a system message to the group (e.g., "X joined the group").
+  /// 
+  /// IMPORTANT: Use delayBeforeSend=true when calling immediately after
+  /// membership changes to allow Firestore replication.
   Future<void> sendSystemMessage({
     required String groupId,
     required String text,
+    bool delayBeforeSend = false,
   }) async {
     try {
+      // CRITICAL: Add delay if requested (e.g., after join to allow replication)
+      if (delayBeforeSend) {
+        _logger.d('Waiting 1s for Firestore replication before sending system message');
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
+
       final messageData = {
         'groupId': groupId,
         'senderId': 'system',
@@ -1661,7 +1651,7 @@ class LocationGroupService {
       await batch.commit();
     } catch (e) {
       _logger.e('Error sending system message', error: e);
-      rethrow;
+      // Don't rethrow - system messages are non-critical
     }
   }
 

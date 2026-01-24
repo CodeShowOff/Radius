@@ -49,13 +49,8 @@ class GroupChatState extends Equatable {
   /// This prevents showing cached messages before membership is confirmed.
   final bool membershipVerified;
 
-  /// ID of the first unread message for showing the "Unread messages" divider.
-  /// This is set when opening a chat and cleared after marking messages as read.
+  /// ID of the first unread message (for showing unread divider).
   final String? firstUnreadMessageId;
-
-  /// The timestamp when user last read this group.
-  /// Used to determine which messages are unread.
-  final DateTime? lastReadAt;
 
   const GroupChatState({
     this.status = GroupChatStatus.initial,
@@ -68,7 +63,6 @@ class GroupChatState extends Equatable {
     this.errorMessage,
     this.membershipVerified = false,
     this.firstUnreadMessageId,
-    this.lastReadAt,
   });
 
   /// Whether the chat is currently loading.
@@ -90,9 +84,6 @@ class GroupChatState extends Equatable {
   bool get isVerifyingMembership =>
       !membershipVerified && status == GroupChatStatus.loading;
 
-  /// Whether there are unread messages to show a divider for.
-  bool get hasUnreadMessages => firstUnreadMessageId != null;
-
   GroupChatState copyWith({
     GroupChatStatus? status,
     String? groupId,
@@ -105,7 +96,6 @@ class GroupChatState extends Equatable {
     bool? membershipVerified,
     String? firstUnreadMessageId,
     bool clearFirstUnreadMessageId = false,
-    DateTime? lastReadAt,
   }) {
     return GroupChatState(
       status: status ?? this.status,
@@ -120,7 +110,6 @@ class GroupChatState extends Equatable {
       firstUnreadMessageId: clearFirstUnreadMessageId
           ? null
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
-      lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
 
@@ -136,6 +125,5 @@ class GroupChatState extends Equatable {
         errorMessage,
         membershipVerified,
         firstUnreadMessageId,
-        lastReadAt,
       ];
 }

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
-import '../../../../core/widgets/unread_messages_divider.dart';
+import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/group_message.dart';
 import '../bloc/group_chat_bloc.dart';
@@ -44,7 +44,18 @@ class _GroupChatPageState extends State<GroupChatPage>
     // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    _loadGroupDetails();
     _openChat();
+  }
+
+  void _loadGroupDetails() {
+    final authState = context.read<AuthBloc>().state;
+    final userId = authState is AuthAuthenticated ? authState.user.id : null;
+
+    context.read<LocationGroupBloc>().add(LoadGroupDetails(
+          groupId: widget.groupId,
+          currentUserId: userId,
+        ));
   }
 
   @override
@@ -194,17 +205,20 @@ class _GroupChatPageState extends State<GroupChatPage>
                 Routes.locationGroupDetailWith(widget.groupId),
               ),
               borderRadius: BorderRadius.circular(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(groupName),
-                  if (group != null)
-                    Text(
-                      '${group.memberCount} members',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
+                  CachedAvatar(
+                    imageUrl: group?.avatarUrl,
+                    name: groupName,
+                    radius: 18,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      groupName,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                  ),
                 ],
               ),
             ),
@@ -413,28 +427,13 @@ class _GroupChatPageState extends State<GroupChatPage>
         final isMe = message.senderId == state.currentUserId;
         final showSenderInfo = !isMe && _shouldShowSenderInfo(state, index);
 
-        // Check if this is the first unread message
-        final showUnreadDivider = state.firstUnreadMessageId != null &&
-            message.id == state.firstUnreadMessageId;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _MessageBubble(
-              message: message,
-              isMe: isMe,
-              showSenderInfo: showSenderInfo,
-              onDelete: isMe
-                  ? () => _confirmDelete(message)
-                  : null,
-            ),
-            // Show divider AFTER the message (which appears ABOVE in reversed list)
-            if (showUnreadDivider)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: UnreadMessagesDividerCompact(),
-              ),
-          ],
+        return _MessageBubble(
+          message: message,
+          isMe: isMe,
+          showSenderInfo: showSenderInfo,
+          onDelete: isMe
+              ? () => _confirmDelete(message)
+              : null,
         );
       },
     );
@@ -681,17 +680,6 @@ class _MessageBubble extends StatelessWidget {
                                   fontSize: 11,
                                 ),
                               ),
-                              // Show sending indicator for optimistic messages
-                              if (isMe &&
-                                  message.status == GroupMessageStatus.sending) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.access_time,
-                                  size: 12,
-                                  color: theme.colorScheme.onPrimaryContainer
-                                      .withValues(alpha: 0.5),
-                                ),
-                              ],
                             ],
                           ),
                         ),

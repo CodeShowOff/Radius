@@ -226,18 +226,6 @@ enum GuessmeMessageType {
   guessCheck,
 }
 
-/// Status of a GuessMe message for delivery tracking.
-enum GuessmeMessageStatus {
-  /// Message is being sent to the server.
-  sending,
-
-  /// Message was successfully written to Firestore.
-  sent,
-
-  /// Message failed to send.
-  failed,
-}
-
 /// Message in a GuessMe chat.
 class GuessmeMessage extends Equatable {
   final String id;
@@ -246,7 +234,6 @@ class GuessmeMessage extends Equatable {
   final String text;
   final DateTime sentAt;
   final GuessmeMessageType type;
-  final GuessmeMessageStatus status;
   
   /// For optimistic messages, tracks the local ID before server confirmation.
   final String? localId;
@@ -258,7 +245,6 @@ class GuessmeMessage extends Equatable {
     required this.text,
     required this.sentAt,
     this.type = GuessmeMessageType.chat,
-    this.status = GuessmeMessageStatus.sent,
     this.localId,
   });
 
@@ -270,7 +256,6 @@ class GuessmeMessage extends Equatable {
     String? text,
     DateTime? sentAt,
     GuessmeMessageType? type,
-    GuessmeMessageStatus? status,
     String? localId,
   }) {
     return GuessmeMessage(
@@ -280,7 +265,6 @@ class GuessmeMessage extends Equatable {
       text: text ?? this.text,
       sentAt: sentAt ?? this.sentAt,
       type: type ?? this.type,
-      status: status ?? this.status,
       localId: localId ?? this.localId,
     );
   }
@@ -292,5 +276,5 @@ class GuessmeMessage extends Equatable {
   bool get isSystemMessage => type == GuessmeMessageType.system;
 
   @override
-  List<Object?> get props => [id, sessionId, senderId, text, sentAt, type, status, localId];
+  List<Object?> get props => [id, sessionId, senderId, text, sentAt, type, localId];
 }

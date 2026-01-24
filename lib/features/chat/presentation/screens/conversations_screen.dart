@@ -244,8 +244,6 @@ class _ConversationTileState extends State<_ConversationTile> {
     final theme = Theme.of(context);
     final otherParticipant =
         widget.conversation.getOtherParticipantInfo(widget.currentUserId);
-    final unreadCount =
-        widget.conversation.getUnreadCount(widget.currentUserId);
     final isMuted = widget.conversation.isMutedBy(widget.currentUserId);
     final isDisconnected = _connection?.status == ConnectionStatus.disconnected;
     final isBlocked = _connection?.status == ConnectionStatus.blocked;
@@ -300,10 +298,7 @@ class _ConversationTileState extends State<_ConversationTile> {
               Expanded(
                 child: Text(
                   otherParticipant?.displayName ?? 'Unknown',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight:
-                        unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                  ),
+                  style: theme.textTheme.titleMedium,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -381,11 +376,7 @@ class _ConversationTileState extends State<_ConversationTile> {
                 child: Text(
                   widget.conversation.lastMessageText ?? 'No messages yet',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: unreadCount > 0
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.outline,
-                    fontWeight:
-                        unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                    color: theme.colorScheme.outline,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -393,41 +384,11 @@ class _ConversationTileState extends State<_ConversationTile> {
               ),
             ],
           ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _formatTime(widget.conversation.lastMessageAt),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: unreadCount > 0
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outline,
-                  fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              if (unreadCount > 0) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                  child: Center(
-                    child: Text(
-                      unreadCount > 99 ? '99+' : unreadCount.toString(),
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          trailing: Text(
+            _formatTime(widget.conversation.lastMessageAt),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
           onTap: widget.onTap,
         ),

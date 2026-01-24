@@ -28,7 +28,7 @@ class LocationGroupState extends Equatable {
   /// The user ID whose groups are currently loaded (for avoiding redundant reloads).
   final String? userGroupsUserId;
 
-  /// Unread counts per group for the current user.
+  /// Unread counts per group for the current user (groupId -> count).
   final Map<String, int> userGroupUnreadCounts;
 
   /// Currently viewed group details.
@@ -122,8 +122,7 @@ class LocationGroupState extends Equatable {
       locationGroups: locationGroups ?? this.locationGroups,
       userGroups: userGroups ?? this.userGroups,
       userGroupsUserId: userGroupsUserId ?? this.userGroupsUserId,
-      userGroupUnreadCounts:
-          userGroupUnreadCounts ?? this.userGroupUnreadCounts,
+      userGroupUnreadCounts: userGroupUnreadCounts ?? this.userGroupUnreadCounts,
       currentGroup: currentGroup ?? this.currentGroup,
       currentMembership: clearCurrentMembership ? null : (currentMembership ?? this.currentMembership),
       groupMembers: groupMembers ?? this.groupMembers,
@@ -145,7 +144,7 @@ class LocationGroupState extends Equatable {
         locationGroups,
         userGroups,
         userGroupsUserId,
-      userGroupUnreadCounts,
+        userGroupUnreadCounts,
         currentGroup,
         currentMembership,
         groupMembers,

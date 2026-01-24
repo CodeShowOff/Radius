@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
@@ -38,6 +39,7 @@ class GuessMeGamePage extends StatefulWidget {
 class _GuessMeGamePageState extends State<GuessMeGamePage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
+  final Logger _logger = Logger();
 
   Timer? _countdownTimer;
   Duration _timeRemaining = const Duration(hours: 1);
@@ -49,11 +51,15 @@ class _GuessMeGamePageState extends State<GuessMeGamePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
-    // Ensure the BLoC is subscribed to this session's messages
-    // This is critical for cases where the page opens without going through lobby
-    // or when there's a race condition during session creation
+    // CRITICAL: Ensure the BLoC is subscribed to this session's messages
+    // This MUST happen immediately to guarantee message streaming works
+    // Three scenarios where this is needed:
+    // 1. User opens game page via deep link (no lobby navigation)
+    // 2. User refreshes the page while in a game
+    // 3. Race condition where session created but stream not yet established
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _logger.i('Game page loaded - ensuring session subscription for: ${widget.sessionId}');
         context.read<GuessmeBloc>().add(
           GuessmeEnsureSessionSubscription(widget.sessionId),
         );

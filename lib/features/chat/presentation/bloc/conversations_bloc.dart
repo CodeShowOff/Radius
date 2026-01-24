@@ -65,7 +65,6 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
         status: ConversationsStatus.loading,
         currentUserId: event.userId,
         conversations: const [], // Clear old user's data
-        totalUnreadCount: 0,
       ));
     } else if (state.conversations.isEmpty) {
       // Only show loading state if we have no cached data
@@ -138,11 +137,12 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
             )
             .toList();
 
-    // Calculate total unread
-    int totalUnread = 0;
-    for (final conv in filtered) {
-      totalUnread += conv.getUnreadCount(state.currentUserId ?? '');
-    }
+    // Calculate total unread count across all conversations
+    final userId = state.currentUserId ?? '';
+    final totalUnread = filtered.fold<int>(
+      0,
+      (sum, conversation) => sum + conversation.getUnreadCount(userId),
+    );
 
     emit(state.copyWith(
       status: ConversationsStatus.success,
@@ -155,18 +155,8 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsMarkAsRead event,
     Emitter<ConversationsState> emit,
   ) async {
-    if (state.currentUserId == null) return;
-
-    try {
-      await _chatService.markConversationAsRead(
-        event.conversationId,
-        state.currentUserId!,
-      );
-    } catch (e) {
-      emit(state.copyWith(
-        errorMessage: e.toString(),
-      ));
-    }
+    // Mark as read functionality has been removed
+    // Messages are no longer tracked for read/delivered status
   }
 
   Future<void> _onArchive(

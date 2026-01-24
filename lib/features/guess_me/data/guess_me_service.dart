@@ -157,6 +157,23 @@ class GuessmeService {
     required List<String> nearbyUserIds,
   }) async {
     try {
+      _logger.i('User $userId joining queue with ${nearbyUserIds.length} nearby users');
+      
+      // Validate inputs
+      if (nearbyUserIds.isEmpty) {
+        _logger.w('Cannot join queue: no nearby users provided');
+        return null;
+      }
+      
+      // Remove self from nearby users list
+      final validNearbyUsers = nearbyUserIds.where((id) => id != userId).toList();
+      if (validNearbyUsers.isEmpty) {
+        _logger.w('Cannot join queue: no valid nearby users (all were self)');
+        return null;
+      }
+      
+      _logger.d('Valid nearby users after filtering: ${validNearbyUsers.length}');
+      
       // First, check if user already has an active session
       final existingSession = await getActiveSession(userId);
       if (existingSession != null) {
@@ -164,13 +181,10 @@ class GuessmeService {
         return existingSession.id;
       }
 
-      _logger.i('Attempting to match user $userId with ${nearbyUserIds.length} nearby users');
-
       // Try to find ONE available nearby user to match with IMMEDIATELY
-      for (final nearbyUserId in nearbyUserIds) {
-        // Skip self
-        if (nearbyUserId == userId) continue;
-
+      for (final nearbyUserId in validNearbyUsers) {
+        _logger.d('Checking availability of user: $nearbyUserId');
+        
         // Check if this user is available
         final isAvailable = await _isUserAvailable(nearbyUserId);
         if (!isAvailable) {
@@ -180,30 +194,42 @@ class GuessmeService {
 
         // Found an available user! Create session immediately
         _logger.i('Found available user $nearbyUserId, creating session');
-        final sessionId = await _createSession(userId, nearbyUserId);
+        
+        try {
+          final sessionId = await _createSession(userId, nearbyUserId);
 
-        // Remove both users from queue if they were there
-        await Future.wait([
-          _queueRef.doc(userId).delete().catchError((e) {}),
-          _queueRef.doc(nearbyUserId).delete().catchError((e) {}),
-        ]);
+          // Remove both users from queue if they were there
+          await Future.wait([
+            _queueRef.doc(userId).delete().catchError((e) {
+              _logger.w('Error removing user from queue', error: e);
+            }),
+            _queueRef.doc(nearbyUserId).delete().catchError((e) {
+              _logger.w('Error removing nearby user from queue', error: e);
+            }),
+          ]);
 
-        // Set both users' game status
-        await Future.wait([
-          _setUserInGame(userId, sessionId),
-          _setUserInGame(nearbyUserId, sessionId),
-        ]);
+          // Set both users' game status
+          await Future.wait([
+            _setUserInGame(userId, sessionId),
+            _setUserInGame(nearbyUserId, sessionId),
+          ]);
 
-        return sessionId;
+          _logger.i('Successfully matched $userId with $nearbyUserId - session: $sessionId');
+          return sessionId;
+        } catch (e) {
+          _logger.w('Failed to create session with $nearbyUserId, trying next user', error: e);
+          // Continue to next nearby user if session creation failed
+          continue;
+        }
       }
 
       // No available users found - add to queue briefly
       // But mainly, return null to indicate no match
-      _logger.i('No available users found for $userId');
+      _logger.i('No available users found for $userId - adding to queue');
       
       final queueEntry = {
         'userId': userId,
-        'nearbyUserIds': nearbyUserIds,
+        'nearbyUserIds': validNearbyUsers,
         'joinedAt': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(DateTime.now().add(queueTimeout)),
       };
@@ -211,7 +237,7 @@ class GuessmeService {
       
       return null;
     } catch (e, stack) {
-      _logger.e('Error joining queue', error: e, stackTrace: stack);
+      _logger.e('Error joining queue for user $userId', error: e, stackTrace: stack);
       rethrow;
     }
   }
@@ -246,58 +272,82 @@ class GuessmeService {
 
   // ==================== SESSION MANAGEMENT ====================
 
-  /// Fetches a user's display name from their profile.
-  Future<String?> _getUserDisplayName(String userId) async {
-    try {
-      final profileDoc = await _firestore.collection('users').doc(userId).get();
-      if (profileDoc.exists) {
-        final data = profileDoc.data();
-        return data?['displayName'] as String?;
-      }
-      return null;
-    } catch (e) {
-      _logger.w('Error fetching display name for $userId', error: e);
-      return null;
-    }
-  }
-
   /// Creates a new game session between two players.
+  /// Uses a Firestore transaction to ensure atomic creation and prevent duplicates.
   Future<String> _createSession(String player1Id, String player2Id) async {
-    final now = DateTime.now();
-    final sessionId = _sessionsRef.doc().id;
+    _logger.i('Creating session between $player1Id and $player2Id');
+    
+    // Use transaction to prevent race conditions and duplicate sessions
+    return await _firestore.runTransaction<String>((transaction) async {
+      final now = DateTime.now();
+      
+      // Sort player IDs to create deterministic session ID
+      final playerIds = [player1Id, player2Id]..sort();
+      final deterministicSessionId = 'session_${playerIds[0]}_${playerIds[1]}_${now.millisecondsSinceEpoch}';
+      
+      // Check if either player already has an active session
+      final player1SessionQuery = await _sessionsRef
+          .where('players', arrayContains: player1Id)
+          .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+          .limit(1)
+          .get();
+      
+      if (player1SessionQuery.docs.isNotEmpty) {
+        final existingSessionId = player1SessionQuery.docs.first.id;
+        _logger.w('Player $player1Id already has active session: $existingSessionId');
+        throw Exception('Player already in active session: $existingSessionId');
+      }
+      
+      final player2SessionQuery = await _sessionsRef
+          .where('players', arrayContains: player2Id)
+          .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+          .limit(1)
+          .get();
+      
+      if (player2SessionQuery.docs.isNotEmpty) {
+        final existingSessionId = player2SessionQuery.docs.first.id;
+        _logger.w('Player $player2Id already has active session: $existingSessionId');
+        throw Exception('Player already in active session: $existingSessionId');
+      }
 
-    // Fetch player names
-    final player1Name = await _getUserDisplayName(player1Id);
-    final player2Name = await _getUserDisplayName(player2Id);
+      // Fetch player names
+      final player1Doc = await transaction.get(_firestore.collection('users').doc(player1Id));
+      final player2Doc = await transaction.get(_firestore.collection('users').doc(player2Id));
+      
+      final player1Name = player1Doc.exists ? (player1Doc.data()?['displayName'] as String?) : null;
+      final player2Name = player2Doc.exists ? (player2Doc.data()?['displayName'] as String?) : null;
 
-    final session = GuessmeSessionModel(
-      id: sessionId,
-      players: [player1Id, player2Id],
-      player1Id: player1Id,
-      player1Name: player1Name ?? 'Mystery User A',
-      player2Id: player2Id,
-      player2Name: player2Name ?? 'Mystery User B',
-      status: GuessmeSessionStatus.active.name,
-      createdAt: now,
-      expiresAt: now.add(sessionDuration),
-      player1Guessed: false,
-      player2Guessed: false,
-      guessCheckPending: false,
-      guessCheckInitiator: null,
-      awaitingConnectionConfirmations: false,
-      connectionRequestId: null,
-    );
+      final session = GuessmeSessionModel(
+        id: deterministicSessionId,
+        players: [player1Id, player2Id],
+        player1Id: player1Id,
+        player1Name: player1Name ?? 'Mystery User A',
+        player2Id: player2Id,
+        player2Name: player2Name ?? 'Mystery User B',
+        status: GuessmeSessionStatus.active.name,
+        createdAt: now,
+        expiresAt: now.add(sessionDuration),
+        player1Guessed: false,
+        player2Guessed: false,
+        guessCheckPending: false,
+        guessCheckInitiator: null,
+        awaitingConnectionConfirmations: false,
+        connectionRequestId: null,
+      );
 
-    await _sessionsRef.doc(sessionId).set(session.toFirestore());
+      // Create session document within transaction
+      transaction.set(_sessionsRef.doc(deterministicSessionId), session.toFirestore());
 
-    // Send initial system message
-    await sendSystemMessage(
-      sessionId: sessionId,
-      text: '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
-    );
-
-    _logger.i('Created session $sessionId between $player1Id and $player2Id');
-    return sessionId;
+      _logger.i('Created session $deterministicSessionId between $player1Id and $player2Id');
+      return deterministicSessionId;
+    }).then((sessionId) async {
+      // Send initial system message AFTER transaction completes
+      await sendSystemMessage(
+        sessionId: sessionId,
+        text: '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
+      );
+      return sessionId;
+    });
   }
 
   /// Gets a session by ID.
@@ -315,39 +365,58 @@ class GuessmeService {
   /// Gets user's active session (if any).
   Future<GuessmeSession?> getActiveSession(String userId) async {
     try {
+      _logger.d('Checking for active session for user: $userId');
+      
       final query = await _sessionsRef
           .where('players', arrayContains: userId)
           .where('status', isEqualTo: GuessmeSessionStatus.active.name)
           .limit(1)
           .get();
 
-      if (query.docs.isEmpty) return null;
+      if (query.docs.isEmpty) {
+        _logger.d('No active session found for user: $userId');
+        return null;
+      }
 
-      final session = GuessmeSessionModel.fromFirestore(query.docs.first).toEntity();
+      final sessionDoc = query.docs.first;
+      _logger.i('Found active session for user $userId: ${sessionDoc.id}');
+      
+      final session = GuessmeSessionModel.fromFirestore(sessionDoc).toEntity();
 
       // Check if session has expired
       if (session.expiresAt != null && DateTime.now().isAfter(session.expiresAt!)) {
+        _logger.w('Session ${session.id} has expired - expiring now');
         await expireSession(session.id);
         return null;
       }
 
       return session;
     } catch (e, stack) {
-      _logger.e('Error getting active session', error: e, stackTrace: stack);
+      _logger.e('Error getting active session for user $userId', error: e, stackTrace: stack);
       return null;
     }
   }
 
   /// Stream of session updates.
   Stream<GuessmeSession?> getSessionStream(String sessionId) {
+    _logger.d('Setting up session stream for: $sessionId');
+    
     return _sessionsRef.doc(sessionId).snapshots().map((doc) {
       if (!doc.exists) {
-        _logger.d('Session $sessionId no longer exists');
+        _logger.w('Session $sessionId no longer exists in Firestore');
         return null;
       }
+      
       final session = GuessmeSessionModel.fromFirestore(doc).toEntity();
-      _logger.d('Session stream update - $sessionId: status=${session.status}, guessCheckPending=${session.guessCheckPending}, initiator=${session.guessCheckInitiator}');
+      _logger.d('Session stream update - $sessionId: status=${session.status}, '
+          'guessCheckPending=${session.guessCheckPending}, '
+          'initiator=${session.guessCheckInitiator}, '
+          'awaitingConnection=${session.awaitingConnectionConfirmations}');
+      
       return session;
+    }).handleError((error, stackTrace) {
+      _logger.e('Error in session stream for $sessionId', error: error, stackTrace: stackTrace);
+      return null;
     });
   }
 
@@ -651,6 +720,29 @@ class GuessmeService {
     required String text,
   }) async {
     try {
+      _logger.d('Attempting to send message - sessionId: $sessionId, senderId: $senderId, textLength: ${text.length}');
+      
+      // Validate session exists and is active
+      final sessionDoc = await _sessionsRef.doc(sessionId).get();
+      if (!sessionDoc.exists) {
+        _logger.e('Cannot send message: session $sessionId does not exist');
+        throw Exception('Session not found');
+      }
+      
+      final sessionData = sessionDoc.data();
+      final sessionStatus = sessionData?['status'] as String?;
+      if (sessionStatus != GuessmeSessionStatus.active.name) {
+        _logger.w('Cannot send message: session $sessionId is not active (status: $sessionStatus)');
+        throw Exception('Session is not active');
+      }
+      
+      // Validate sender is a participant
+      final players = List<String>.from(sessionData?['players'] ?? []);
+      if (!players.contains(senderId)) {
+        _logger.e('Cannot send message: $senderId is not a participant in session $sessionId');
+        throw Exception('Sender is not a participant in this session');
+      }
+      
       final messagesCollection = _messagesRef(sessionId);
       final messageId = messagesCollection.doc().id;
 
@@ -662,10 +754,11 @@ class GuessmeService {
         sentAt: DateTime.now(),
       );
 
+      _logger.d('Writing message to Firestore: messages/$messageId');
       await messagesCollection.doc(messageId).set(message.toFirestore(useServerTimestamp: true));
-      _logger.d('Message sent successfully: $messageId');
+      _logger.i('Message sent successfully - sessionId: $sessionId, messageId: $messageId, sender: $senderId');
     } catch (e, stack) {
-      _logger.e('Error sending message', error: e, stackTrace: stack);
+      _logger.e('Error sending message - sessionId: $sessionId, senderId: $senderId', error: e, stackTrace: stack);
       rethrow;
     }
   }
@@ -697,14 +790,40 @@ class GuessmeService {
 
   /// Stream of messages for a session.
   Stream<List<GuessmeMessage>> getMessagesStream(String sessionId) {
+    _logger.d('Setting up messages stream for session: $sessionId');
+    _logger.d('Messages collection path: guess_me_sessions/$sessionId/messages');
+    
     return _messagesRef(sessionId)
         .orderBy('sentAt', descending: false)
         .snapshots()
         .map((snapshot) {
-          _logger.d('Received ${snapshot.docs.length} messages for session $sessionId');
-          return snapshot.docs
-              .map((doc) => GuessmeMessageModel.fromFirestore(doc).toEntity())
+          _logger.d('Messages stream update for session $sessionId - received ${snapshot.docs.length} documents');
+          
+          if (snapshot.docs.isEmpty) {
+            _logger.w('No messages found for session $sessionId - this might indicate a permission issue or no messages sent yet');
+          } else {
+            _logger.d('First message ID: ${snapshot.docs.first.id}, Last message ID: ${snapshot.docs.last.id}');
+          }
+          
+          final messages = snapshot.docs
+              .map((doc) {
+                try {
+                  return GuessmeMessageModel.fromFirestore(doc).toEntity();
+                } catch (e) {
+                  _logger.e('Error parsing message ${doc.id}', error: e);
+                  return null;
+                }
+              })
+              .whereType<GuessmeMessage>()
               .toList();
+          
+          _logger.i('Parsed ${messages.length} messages for session $sessionId');
+          return messages;
+        })
+        .handleError((error, stackTrace) {
+          _logger.e('Error in messages stream for session $sessionId', error: error, stackTrace: stackTrace);
+          // Return empty list on error to prevent stream from breaking
+          return <GuessmeMessage>[];
         });
   }
 
@@ -968,10 +1087,6 @@ class GuessmeService {
       'lastMessageText': 'Connected from GuessMe game!',
       'lastMessageSenderId': null,
       'lastMessageStatus': 'sent',
-      'unreadCounts': {
-        player1Id: 0,
-        player2Id: 0,
-      },
       'source': 'guessme',
     });
 

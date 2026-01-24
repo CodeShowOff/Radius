@@ -30,10 +30,10 @@ class GroupMembershipModel extends GroupMembership {
     required super.status,
     required super.joinedAt,
     super.updatedAt,
-    super.unreadCount,
-    super.lastReadAt,
     super.approvedByUserId,
     super.note,
+    super.unreadCount = 0,
+    super.lastReadAt,
   });
 
   /// Creates model from Firestore document.
@@ -53,10 +53,10 @@ class GroupMembershipModel extends GroupMembership {
       status: _parseStatus(data['status'] as String?),
       joinedAt: (data['joinedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
-      unreadCount: (data['unreadCount'] as int?) ?? 0,
-      lastReadAt: (data['lastReadAt'] as Timestamp?)?.toDate(),
       approvedByUserId: data['approvedByUserId'] as String?,
       note: data['note'] as String?,
+      unreadCount: data['unreadCount'] as int? ?? 0,
+      lastReadAt: (data['lastReadAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -72,10 +72,10 @@ class GroupMembershipModel extends GroupMembership {
       status: membership.status,
       joinedAt: membership.joinedAt,
       updatedAt: membership.updatedAt,
-      unreadCount: membership.unreadCount,
-      lastReadAt: membership.lastReadAt,
       approvedByUserId: membership.approvedByUserId,
       note: membership.note,
+      unreadCount: membership.unreadCount,
+      lastReadAt: membership.lastReadAt,
     );
   }
 
@@ -89,10 +89,10 @@ class GroupMembershipModel extends GroupMembership {
       'status': status.name,
       'joinedAt': Timestamp.fromDate(joinedAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
-      'unreadCount': unreadCount,
-      'lastReadAt': lastReadAt != null ? Timestamp.fromDate(lastReadAt!) : null,
       'approvedByUserId': approvedByUserId,
       'note': note,
+      'unreadCount': unreadCount,
+      'lastReadAt': lastReadAt != null ? Timestamp.fromDate(lastReadAt!) : null,
     };
   }
 
@@ -106,10 +106,10 @@ class GroupMembershipModel extends GroupMembership {
       'status': status.name,
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': null,
-      'unreadCount': unreadCount,
-      'lastReadAt': FieldValue.serverTimestamp(),
       'approvedByUserId': approvedByUserId,
       'note': note,
+      'unreadCount': 0,
+      'lastReadAt': FieldValue.serverTimestamp(),
     };
   }
 

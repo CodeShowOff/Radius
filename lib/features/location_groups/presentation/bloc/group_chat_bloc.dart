@@ -68,8 +68,6 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<_GroupMessagesReceived>(_onGroupMessagesReceived);
     on<_GroupChatStreamError>(_onGroupChatStreamError);
     on<DeleteGroupMessage>(_onDeleteGroupMessage);
-    on<_GroupFirstUnreadMessageFound>(_onFirstUnreadMessageFound);
-    on<GroupClearFirstUnread>(_onClearFirstUnread);
   }
 
   Future<void> _onOpenGroupChat(
@@ -171,8 +169,7 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
             },
           );
 
-      // IMPORTANT: Fetch first unread message ID BEFORE marking as read
-      // This allows us to show the "Unread messages" divider correctly
+      // Fetch and set the first unread message ID for showing divider
       try {
         final firstUnreadId = await _chatService.getFirstUnreadMessageId(
           groupId: event.groupId,
@@ -181,20 +178,21 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         
         if (firstUnreadId != null && !isClosed) {
           _logger.i('First unread message ID: $firstUnreadId');
-          add(_GroupFirstUnreadMessageFound(firstUnreadId));
+          emit(state.copyWith(firstUnreadMessageId: firstUnreadId));
         }
       } catch (e) {
         _logger.w('Failed to get first unread message ID: $e');
         // Continue without unread divider - not critical
       }
 
-      // Delay marking as read slightly to allow unread divider to be shown
+      // Mark group as read after a brief delay to ensure messages are loaded
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (!isClosed) {
+        if (!isClosed && state.groupId == event.groupId) {
           _chatService.markGroupAsRead(
             groupId: event.groupId,
             userId: event.currentUserId,
           );
+          _logger.d('Marked group as read: ${event.groupId}');
         }
       });
     } catch (e, stack) {
@@ -276,7 +274,6 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       senderPhotoUrl: state.currentUserPhotoUrl,
       text: text,
       sentAt: DateTime.now(),
-      status: GroupMessageStatus.sending,
       localId: localId,
     );
 
@@ -308,22 +305,24 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
           .where((m) => m.localId != localId)
           .toList();
 
-      // Check if it's an access error
-      final errorMessage = e.toString().toLowerCase();
-      if (errorMessage.contains('permission') || errorMessage.contains('not a member')) {
-        emit(state.copyWith(
-          status: GroupChatStatus.error,
-          errorMessage: 'You no longer have access to send messages in this group.',
-          membershipVerified: false,
-          messages: messagesWithoutFailed,
-        ));
-      } else {
-        emit(state.copyWith(
-          status: GroupChatStatus.error,
-          errorMessage: 'Failed to send message',
-          messages: messagesWithoutFailed,
-        ));
+      // Provide helpful error messages based on error type
+      String errorMessage = 'Failed to send message. Please try again.';
+      if (e is FirebaseException) {
+        if (e.code == 'permission-denied') {
+          errorMessage = 'Unable to send message. This may happen if you just joined. Please wait a moment and try again.';
+        } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
       }
+
+      // Don't revoke membership verification for send errors - membership
+      // was already verified when chat opened. A send error is just a
+      // temporary issue (network, permissions, etc.) and shouldn't kick user out.
+      emit(state.copyWith(
+        status: GroupChatStatus.error,
+        errorMessage: errorMessage,
+        messages: messagesWithoutFailed,
+      ));
     }
   }
 
@@ -399,7 +398,7 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       
       // Remove optimistic messages - they should be replaced by the real
       // server-confirmed messages from the stream
-      if (m.localId != null && m.status == GroupMessageStatus.sending) {
+      if (m.localId != null) {
         return false;
       }
       
@@ -500,28 +499,6 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
             add(const _GroupChatStreamError('Failed to load messages.'));
           },
         );
-  }
-
-  /// Handler for when the first unread message is found.
-  /// Updates state to show "Unread messages" divider at this position.
-  void _onFirstUnreadMessageFound(
-    _GroupFirstUnreadMessageFound event,
-    Emitter<GroupChatState> emit,
-  ) {
-    emit(state.copyWith(
-      firstUnreadMessageId: event.messageId,
-    ));
-  }
-
-  /// Handler to clear the first unread message marker.
-  /// Called after user has scrolled past unread messages.
-  void _onClearFirstUnread(
-    GroupClearFirstUnread event,
-    Emitter<GroupChatState> emit,
-  ) {
-    emit(state.copyWith(
-      clearFirstUnreadMessageId: true,
-    ));
   }
 
   @override

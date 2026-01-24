@@ -1,17 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-/// Status of a message in the group chat.
-enum GroupMessageStatus {
-  /// Message is being sent.
-  sending,
-
-  /// Message was sent to server.
-  sent,
-
-  /// Message failed to send.
-  failed,
-}
-
 /// Type of group message content.
 enum GroupMessageType {
   /// Text message.
@@ -53,9 +41,6 @@ class GroupMessage extends Equatable {
   /// When the message was sent.
   final DateTime sentAt;
 
-  /// Current status of the message.
-  final GroupMessageStatus status;
-
   /// Whether this message has been deleted (soft delete).
   final bool isDeleted;
 
@@ -72,7 +57,6 @@ class GroupMessage extends Equatable {
     this.type = GroupMessageType.text,
     this.mediaUrl,
     required this.sentAt,
-    this.status = GroupMessageStatus.sent,
     this.isDeleted = false,
     this.localId,
   });
@@ -96,7 +80,6 @@ class GroupMessage extends Equatable {
     GroupMessageType? type,
     String? mediaUrl,
     DateTime? sentAt,
-    GroupMessageStatus? status,
     bool? isDeleted,
     String? localId,
   }) {
@@ -110,7 +93,6 @@ class GroupMessage extends Equatable {
       type: type ?? this.type,
       mediaUrl: mediaUrl ?? this.mediaUrl,
       sentAt: sentAt ?? this.sentAt,
-      status: status ?? this.status,
       isDeleted: isDeleted ?? this.isDeleted,
       localId: localId ?? this.localId,
     );
@@ -127,7 +109,6 @@ class GroupMessage extends Equatable {
         type,
         mediaUrl,
         sentAt,
-        status,
         isDeleted,
         localId,
       ];

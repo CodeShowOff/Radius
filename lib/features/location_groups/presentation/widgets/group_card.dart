@@ -139,8 +139,9 @@ class GroupCard extends StatelessWidget {
                           color: unreadCount > 0
                               ? theme.colorScheme.onSurface
                               : theme.colorScheme.onSurfaceVariant,
-                          fontWeight:
-                              unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                          fontWeight: unreadCount > 0 
+                              ? FontWeight.w500 
+                              : FontWeight.normal,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -158,34 +159,36 @@ class GroupCard extends StatelessWidget {
                                   ? theme.colorScheme.primary
                                   : theme.colorScheme.outline,
                               fontWeight: unreadCount > 0
-                                  ? FontWeight.bold
+                                  ? FontWeight.w600
                                   : FontWeight.normal,
                             ),
                           ),
                         if (unreadCount > 0) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.all(6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            constraints:
-                                const BoxConstraints(minWidth: 22, minHeight: 22),
-                            child: Center(
-                              child: Text(
-                                unreadCount > 99 ? '99+' : unreadCount.toString(),
-                                style: TextStyle(
-                                  color: theme.colorScheme.onPrimary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            constraints: const BoxConstraints(minWidth: 20),
+                            child: Text(
+                              unreadCount > 99 ? '99+' : unreadCount.toString(),
+                              style: TextStyle(
+                                color: theme.colorScheme.onPrimary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
                       ],
                     ),
+                  ],
+                ),
+                        ),
+                      ),
                   ],
                 ),
               ] else if (group.description != null &&

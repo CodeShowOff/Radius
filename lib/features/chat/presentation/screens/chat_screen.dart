@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/widgets/cached_avatar.dart';
-import '../../../../core/widgets/unread_messages_divider.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/services/presence/presence_service.dart';
@@ -200,8 +199,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         // App came back to foreground - resync to get any missed messages
         _chatBloc?.add(const ChatResync());
-        // Also re-mark as read in case new messages arrived
-        _chatBloc?.add(const ChatMarkAsRead());
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -488,8 +485,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     scrollController: _scrollController,
                     // Pass loading state so list can show subtle indicator
                     isLoading: state.status == ChatStatus.loading,
-                    // Pass first unread message ID to show divider
-                    firstUnreadMessageId: state.firstUnreadMessageId,
                   );
                 },
               ),
@@ -962,7 +957,6 @@ class _MessagesList extends StatelessWidget {
   final bool hasMore;
   final ScrollController scrollController;
   final bool isLoading;
-  final String? firstUnreadMessageId;
 
   const _MessagesList({
     required this.messages,
@@ -971,7 +965,6 @@ class _MessagesList extends StatelessWidget {
     required this.hasMore,
     required this.scrollController,
     this.isLoading = false,
-    this.firstUnreadMessageId,
   });
 
   @override
@@ -1046,24 +1039,14 @@ class _MessagesList extends StatelessWidget {
         // Check if we should show date separator
         final showDate = _shouldShowDate(adjustedIndex);
 
-        // Check if this is the first unread message (show divider ABOVE it)
-        // Since the list is reversed, the divider appears after the message
-        final showUnreadDivider = firstUnreadMessageId != null &&
-            message.id == firstUnreadMessageId;
-
         return Column(
           children: [
             if (showDate) DateSeparator(date: message.sentAt),
-            // Show unread divider above the first unread message
-            // In a reversed list, this shows after the message widget
             MessageBubble(
               message: message,
               isMe: isMe,
               showTail: showTail,
             ),
-            // Unread divider appears after the bubble in reversed list
-            // This places it visually above the unread messages
-            if (showUnreadDivider) const UnreadMessagesDivider(),
           ],
         );
       },

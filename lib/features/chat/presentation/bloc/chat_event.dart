@@ -135,11 +135,6 @@ class ChatPreload extends ChatEvent {
   List<Object?> get props => [conversationId];
 }
 
-/// Mark messages as read.
-class ChatMarkAsRead extends ChatEvent {
-  const ChatMarkAsRead();
-}
-
 /// Update typing status.
 class ChatSetTyping extends ChatEvent {
   final bool isTyping;
@@ -203,21 +198,4 @@ class _ChatErrorOccurred extends ChatEvent {
 
   @override
   List<Object?> get props => [message];
-}
-
-/// Internal: First unread message ID found.
-/// This is used to show the "Unread messages" divider in the chat.
-class _ChatFirstUnreadMessageFound extends ChatEvent {
-  final String messageId;
-
-  const _ChatFirstUnreadMessageFound(this.messageId);
-
-  @override
-  List<Object?> get props => [messageId];
-}
-
-/// Clear the first unread message marker.
-/// Called after user has seen the unread messages.
-class ChatClearFirstUnread extends ChatEvent {
-  const ChatClearFirstUnread();
 }

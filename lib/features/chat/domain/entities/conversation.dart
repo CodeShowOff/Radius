@@ -1,7 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-import 'message.dart';
-
 /// Entity representing a conversation between two users.
 class Conversation extends Equatable {
   /// Unique conversation ID (canonical format: smaller_larger user IDs).
@@ -22,13 +20,6 @@ class Conversation extends Equatable {
   /// Sender ID of the last message.
   final String? lastMessageSenderId;
 
-  /// Status of the last message (sent, delivered, read).
-  final MessageStatus? lastMessageStatus;
-
-  /// Count of unread messages for each participant.
-  /// Map\<userId, unreadCount\>
-  final Map<String, int> unreadCounts;
-
   /// Whether the conversation is muted for each participant.
   /// Map\<userId, isMuted\>
   final Map<String, bool> mutedBy;
@@ -40,9 +31,10 @@ class Conversation extends Equatable {
   /// Whether either user has archived this conversation.
   final Map<String, bool> archivedBy;
 
-  /// When each user last read the conversation.
-  /// Map\<userId, lastReadAt\>
-  /// Used to calculate unread counts and show "Unread messages" divider.
+  /// Unread message counts per user (userId -> count).
+  final Map<String, int> unreadCounts;
+
+  /// Last read timestamps per user (userId -> timestamp).
   final Map<String, DateTime> lastReadAt;
 
   const Conversation({
@@ -52,11 +44,10 @@ class Conversation extends Equatable {
     this.lastMessageAt,
     this.lastMessageText,
     this.lastMessageSenderId,
-    this.lastMessageStatus,
-    this.unreadCounts = const {},
     this.mutedBy = const {},
     this.participantInfo = const {},
     this.archivedBy = const {},
+    this.unreadCounts = const {},
     this.lastReadAt = const {},
   });
 
@@ -74,17 +65,17 @@ class Conversation extends Equatable {
     );
   }
 
-  /// Gets unread count for a user.
-  int getUnreadCount(String userId) => unreadCounts[userId] ?? 0;
-
-  /// Gets when the user last read the conversation.
-  DateTime? getLastReadAt(String userId) => lastReadAt[userId];
-
   /// Checks if muted by a user.
   bool isMutedBy(String userId) => mutedBy[userId] ?? false;
 
   /// Checks if archived by a user.
   bool isArchivedBy(String userId) => archivedBy[userId] ?? false;
+
+  /// Gets unread count for a specific user.
+  int getUnreadCount(String userId) => unreadCounts[userId] ?? 0;
+
+  /// Gets last read timestamp for a specific user.
+  DateTime? getLastReadAt(String userId) => lastReadAt[userId];
 
   /// Gets participant info for the other user.
   ParticipantInfo? getOtherParticipantInfo(String currentUserId) {
@@ -102,11 +93,10 @@ class Conversation extends Equatable {
     Object? lastMessageAt = _sentinel,
     Object? lastMessageText = _sentinel,
     Object? lastMessageSenderId = _sentinel,
-    Object? lastMessageStatus = _sentinel,
-    Map<String, int>? unreadCounts,
     Map<String, bool>? mutedBy,
     Map<String, ParticipantInfo>? participantInfo,
     Map<String, bool>? archivedBy,
+    Map<String, int>? unreadCounts,
     Map<String, DateTime>? lastReadAt,
   }) {
     return Conversation(
@@ -122,13 +112,10 @@ class Conversation extends Equatable {
       lastMessageSenderId: lastMessageSenderId == _sentinel
           ? this.lastMessageSenderId
           : lastMessageSenderId as String?,
-      lastMessageStatus: lastMessageStatus == _sentinel
-          ? this.lastMessageStatus
-          : lastMessageStatus as MessageStatus?,
-      unreadCounts: unreadCounts ?? this.unreadCounts,
       mutedBy: mutedBy ?? this.mutedBy,
       participantInfo: participantInfo ?? this.participantInfo,
       archivedBy: archivedBy ?? this.archivedBy,
+      unreadCounts: unreadCounts ?? this.unreadCounts,
       lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
@@ -141,11 +128,10 @@ class Conversation extends Equatable {
         lastMessageAt,
         lastMessageText,
         lastMessageSenderId,
-        lastMessageStatus,
-        unreadCounts,
         mutedBy,
         participantInfo,
         archivedBy,
+        unreadCounts,
         lastReadAt,
       ];
 }

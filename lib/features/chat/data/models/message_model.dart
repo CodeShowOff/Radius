@@ -16,9 +16,6 @@ import '../../domain/entities/message.dart';
 ///   - duration: number? (seconds)
 ///   - thumbnailUrl: string?
 ///   - sentAt: timestamp
-///   - deliveredAt: timestamp?
-///   - readAt: timestamp?
-///   - status: string ('sending', 'sent', 'delivered', 'read', 'failed')
 ///   - isDeleted: boolean
 ///   - localId: string? (client-side optimistic ID for deduplication)
 /// ```
@@ -35,9 +32,6 @@ class MessageModel extends Message {
     super.duration,
     super.thumbnailUrl,
     required super.sentAt,
-    super.deliveredAt,
-    super.readAt,
-    super.status,
     super.isDeleted,
     super.localId,
     super.uploadProgress,
@@ -64,13 +58,6 @@ class MessageModel extends Message {
       sentAt: data['sentAt'] != null
           ? (data['sentAt'] as Timestamp).toDate()
           : DateTime.now(), // Handle null during optimistic send
-      deliveredAt: data['deliveredAt'] != null
-          ? (data['deliveredAt'] as Timestamp).toDate()
-          : null,
-      readAt: data['readAt'] != null
-          ? (data['readAt'] as Timestamp).toDate()
-          : null,
-      status: _parseStatus(data['status'] as String? ?? 'sent'),
       isDeleted: data['isDeleted'] as bool? ?? false,
       localId: data['localId'] as String?, // Read localId for matching
     );
@@ -90,9 +77,6 @@ class MessageModel extends Message {
       duration: message.duration,
       thumbnailUrl: message.thumbnailUrl,
       sentAt: message.sentAt,
-      deliveredAt: message.deliveredAt,
-      readAt: message.readAt,
-      status: message.status,
       isDeleted: message.isDeleted,
       localId: message.localId,
       uploadProgress: message.uploadProgress,
@@ -125,7 +109,6 @@ class MessageModel extends Message {
       duration: duration,
       thumbnailUrl: thumbnailUrl,
       sentAt: DateTime.now(),
-      status: MessageStatus.sending,
       localId: localId,
       uploadProgress: uploadProgress,
     );
@@ -143,10 +126,6 @@ class MessageModel extends Message {
       if (duration != null) 'duration': duration,
       if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
       'sentAt': FieldValue.serverTimestamp(),
-      'deliveredAt':
-          deliveredAt != null ? Timestamp.fromDate(deliveredAt!) : null,
-      'readAt': readAt != null ? Timestamp.fromDate(readAt!) : null,
-      'status': status.name,
       'isDeleted': isDeleted,
       if (localId != null) 'localId': localId, // Store for optimistic matching
     };
@@ -166,9 +145,6 @@ class MessageModel extends Message {
       duration: duration,
       thumbnailUrl: thumbnailUrl,
       sentAt: sentAt,
-      deliveredAt: deliveredAt,
-      readAt: readAt,
-      status: status,
       isDeleted: isDeleted,
       localId: localId,
       uploadProgress: uploadProgress,
@@ -192,12 +168,5 @@ class MessageModel extends Message {
       default:
         return MessageType.text;
     }
-  }
-
-  static MessageStatus _parseStatus(String status) {
-    return MessageStatus.values.firstWhere(
-      (e) => e.name == status,
-      orElse: () => MessageStatus.sent,
-    );
   }
 }

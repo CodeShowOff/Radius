@@ -414,3 +414,76 @@ export const onConnectionRequestReceived = onDocumentCreated(
     }
   }
 );
+
+/**
+ * Update unread counts for group members when a new group message is sent.
+ * This runs server-side to bypass client permission restrictions.
+ */
+export const onGroupMessageSent = onDocumentCreated(
+  "location_groups/{groupId}/messages/{messageId}",
+  async (event) => {
+    const message = event.data?.data();
+    if (!message) return;
+
+    const groupId = event.params.groupId;
+    const senderId = message.senderId;
+    const isSystemMessage = message.senderId === "system";
+
+    // Skip unread count updates for system messages
+    if (isSystemMessage) {
+      logger.log("Skipping unread count update for system message");
+      return null;
+    }
+
+    try {
+      // Get all active members except the sender
+      const membersSnapshot = await admin
+        .firestore()
+        .collection("location_groups")
+        .doc(groupId)
+        .collection("members")
+        .where("status", "==", "active")
+        .get();
+
+      if (membersSnapshot.empty) {
+        logger.log("No active members found");
+        return null;
+      }
+
+      // Update unread counts in batch
+      const batch = admin.firestore().batch();
+      let updateCount = 0;
+
+      membersSnapshot.forEach((memberDoc) => {
+        const memberData = memberDoc.data();
+        const memberUserId = memberData.userId;
+
+        // Skip the sender - their count is already reset by client
+        if (memberUserId === senderId) {
+          return;
+        }
+
+        // Increment unread count for other members
+        batch.set(
+          memberDoc.ref,
+          {
+            unreadCount: admin.firestore.FieldValue.increment(1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true}
+        );
+        updateCount++;
+      });
+
+      if (updateCount > 0) {
+        await batch.commit();
+        logger.log(Updated unread counts for  members in group );
+      }
+
+      return null;
+    } catch (error) {
+      logger.error("Error updating group unread counts:", error);
+      return null;
+    }
+  }
+);
