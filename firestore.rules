@@ -633,9 +633,23 @@ service cloud.firestore {
           );
         
         // RULE: Admins can update any member (for promotion, ban)
-        // Users can update their own membership (for leaving)
+        // Users can update their own membership (for leaving, marking read)
+        // CRITICAL: Active group members can update message-related fields 
+        // (unreadCount, lastReadAt, updatedAt) on ANY member document.
+        // This is required for message sending to work correctly - when a user
+        // sends a message, they need to increment unreadCount for all other members.
         allow update: if isAuthenticated()
-          && (isGroupAdmin() || memberId == request.auth.uid);
+          && (
+            // Admin full update: can change any fields
+            isGroupAdmin() 
+            // Self update: member can update their own document
+            || memberId == request.auth.uid
+            // Message-related updates: any group member can update message tracking fields
+            // This allows sendMessage to update unreadCount for all members
+            || (isGroupMember() 
+                && request.resource.data.diff(resource.data).affectedKeys()
+                    .hasOnly(['unreadCount', 'lastReadAt', 'updatedAt']))
+          );
         
         // RULE: Admins can remove members, users can remove themselves
         allow delete: if isAuthenticated()

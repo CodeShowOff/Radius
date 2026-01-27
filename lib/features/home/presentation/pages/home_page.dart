@@ -218,19 +218,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
 
-                // Location Based Groups section - 25% shorter than square cards
+                // Location Based Groups section - same height as square cards
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    // Calculate height: 75% of square card height (25% reduction)
+                    // Calculate height to match square cards
                     // Width of each square card = (total width - gap) / 2
                     final squareCardWidth = (constraints.maxWidth - 12) / 2;
                     return SizedBox(
-                      height: squareCardWidth * 0.75,
+                      height: squareCardWidth,
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.locationGroups),
                         label: 'Location Based Groups',
-                        color: Theme.of(context).colorScheme.tertiary,
-                        backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                        color: Theme.of(context).colorScheme.primary,
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                         isSquare: false,
                         useVerticalLayout: true,
                         animationType: _CardAnimationType.talking,

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../core/router/routes.dart';
 import 'chat/presentation/bloc/conversations_bloc.dart';
-import 'location_groups/presentation/bloc/location_group_bloc.dart';
 
 /// Main scaffold with bottom navigation for the app.
 class MainScaffold extends StatefulWidget {

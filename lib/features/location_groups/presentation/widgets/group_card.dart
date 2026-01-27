@@ -6,6 +6,7 @@ import '../../domain/entities/location_group.dart';
 class GroupCard extends StatelessWidget {
   final LocationGroup group;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final bool showLocation;
   final bool showChatPreview;
   final int unreadCount;
@@ -14,6 +15,7 @@ class GroupCard extends StatelessWidget {
     super.key,
     required this.group,
     this.onTap,
+    this.onLongPress,
     this.showLocation = false,
     this.showChatPreview = false,
     this.unreadCount = 0,
@@ -27,6 +29,7 @@ class GroupCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -34,7 +37,7 @@ class GroupCard extends StatelessWidget {
             children: [
               // Header row
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Group avatar
                   CircleAvatar(
@@ -60,63 +63,38 @@ class GroupCard extends StatelessWidget {
 
                   // Name and badges
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                group.name,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        Flexible(
+                          child: Text(
+                            group.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (group.isNew) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.tertiaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'New',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (group.isNew) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.tertiaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'New',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.onTertiaryContainer,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-
-                        // Location (optional)
-                        if (showLocation)
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on_outlined,
-                                size: 14,
-                                color: theme.colorScheme.outline,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                group.locationString,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                            ],
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -125,6 +103,27 @@ class GroupCard extends StatelessWidget {
                   _VisibilityBadge(visibility: group.visibility),
                 ],
               ),
+
+              // Location (only shown when not in chat preview mode)
+              if (showLocation && !showChatPreview) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: theme.colorScheme.outline,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      group.locationString,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
               // Description or chat preview
               if (showChatPreview) ...[
@@ -187,10 +186,6 @@ class GroupCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                        ),
-                      ),
-                  ],
-                ),
               ] else if (group.description != null &&
                   group.description!.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -204,42 +199,43 @@ class GroupCard extends StatelessWidget {
                 ),
               ],
 
-              const SizedBox(height: 12),
-
-              // Footer with stats
-              Row(
-                children: [
-                  Icon(
-                    Icons.people_outline,
-                    size: 16,
-                    color: theme.colorScheme.outline,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${group.memberCount} ${group.memberCount == 1 ? 'member' : 'members'}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-
-                  const SizedBox(width: 16),
-
-                  if (group.lastActivityAt != null) ...[
+              // Footer with stats (only when not showing chat preview to avoid duplication)
+              if (!showChatPreview) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
                     Icon(
-                      Icons.access_time,
+                      Icons.people_outline,
                       size: 16,
                       color: theme.colorScheme.outline,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      _formatLastActivity(group.lastActivityAt!),
+                      '${group.memberCount} ${group.memberCount == 1 ? 'member' : 'members'}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
                     ),
+
+                    const SizedBox(width: 16),
+
+                    if (group.lastActivityAt != null) ...[
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatLastActivity(group.lastActivityAt!),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         ),

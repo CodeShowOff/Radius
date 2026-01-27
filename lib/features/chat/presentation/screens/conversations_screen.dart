@@ -376,7 +376,12 @@ class _ConversationTileState extends State<_ConversationTile> {
                 child: Text(
                   widget.conversation.lastMessageText ?? 'No messages yet',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: widget.conversation.getUnreadCount(widget.currentUserId) > 0
+                        ? theme.colorScheme.onSurface
+                        : theme.colorScheme.outline,
+                    fontWeight: widget.conversation.getUnreadCount(widget.currentUserId) > 0
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -384,11 +389,37 @@ class _ConversationTileState extends State<_ConversationTile> {
               ),
             ],
           ),
-          trailing: Text(
-            _formatTime(widget.conversation.lastMessageAt),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatTime(widget.conversation.lastMessageAt),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              if (widget.conversation.getUnreadCount(widget.currentUserId) > 0) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    widget.conversation.getUnreadCount(widget.currentUserId) > 99
+                        ? '99+'
+                        : widget.conversation.getUnreadCount(widget.currentUserId).toString(),
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           onTap: widget.onTap,
         ),

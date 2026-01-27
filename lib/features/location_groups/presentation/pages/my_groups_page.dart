@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../bloc/group_chat_bloc.dart';
 import '../bloc/location_group_bloc.dart';
 import '../widgets/group_card.dart';
 
@@ -155,6 +157,9 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
               itemBuilder: (context, index) {
                 final group = state.userGroups[index];
                 final unreadCount = state.userGroupUnreadCounts[group.id] ?? 0;
+                final authState = context.read<AuthBloc>().state;
+                final userId = authState is AuthAuthenticated ? authState.user.id : null;
+                
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GroupCard(
@@ -164,6 +169,16 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                     onTap: () {
                       context.push(Routes.locationGroupChatWith(group.id));
                     },
+                    onLongPress: userId != null ? () {
+                      // Preload group chat messages into cache on long-press
+                      // This makes navigation instant even on cache miss
+                      getIt<GroupChatBloc>().add(
+                        PreloadGroupChat(
+                          groupId: group.id,
+                          userId: userId,
+                        ),
+                      );
+                    } : null,
                   ),
                 );
               },

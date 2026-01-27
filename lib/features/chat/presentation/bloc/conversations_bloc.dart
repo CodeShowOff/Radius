@@ -155,8 +155,42 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsMarkAsRead event,
     Emitter<ConversationsState> emit,
   ) async {
-    // Mark as read functionality has been removed
-    // Messages are no longer tracked for read/delivered status
+    if (state.currentUserId == null) return;
+
+    // Optimistic update: Reset unread count locally for immediate UI response
+    final updatedConversations = state.conversations.map((conversation) {
+      if (conversation.id == event.conversationId) {
+        // Create updated unread counts with current user's count set to 0
+        final updatedUnreadCounts = Map<String, int>.from(conversation.unreadCounts);
+        updatedUnreadCounts[state.currentUserId!] = 0;
+        return conversation.copyWith(unreadCounts: updatedUnreadCounts);
+      }
+      return conversation;
+    }).toList();
+
+    // Recalculate total unread count
+    final totalUnread = updatedConversations.fold<int>(
+      0,
+      (sum, conversation) => sum + conversation.getUnreadCount(state.currentUserId!),
+    );
+
+    // Emit optimistic update immediately
+    emit(state.copyWith(
+      conversations: updatedConversations,
+      totalUnreadCount: totalUnread,
+    ));
+
+    // Then persist to Firestore (stream will confirm the update)
+    try {
+      await _chatService.markConversationAsRead(
+        conversationId: event.conversationId,
+        userId: state.currentUserId!,
+      );
+      _logger.d('Marked conversation ${event.conversationId} as read');
+    } catch (e) {
+      _logger.w('Failed to mark conversation as read: $e');
+      // Non-critical error - the stream may still update from server
+    }
   }
 
   Future<void> _onArchive(

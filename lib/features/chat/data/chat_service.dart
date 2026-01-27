@@ -812,3 +812,4 @@ class ChatService {
       return null;
     }
   }
+}

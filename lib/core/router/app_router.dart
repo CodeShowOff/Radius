@@ -7,6 +7,7 @@ import '../../features/auth/presentation/pages/email_verification_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/bloc/chat_bloc.dart';
+import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
@@ -250,6 +251,11 @@ GoRouter get appRouter {
                   conversation.getOtherParticipantId(currentUserId);
               final otherInfo =
                   conversation.getOtherParticipantInfo(currentUserId);
+
+              // Mark conversation as read immediately (optimistic update)
+              context.read<ConversationsBloc>().add(
+                ConversationsMarkAsRead(conversationId: conversation.id),
+              );
 
               context.push(
                 Routes.chatWith(conversation.id),

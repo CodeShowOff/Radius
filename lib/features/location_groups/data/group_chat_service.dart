@@ -120,6 +120,18 @@ class GroupChatService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
+      
+      // Update the inverse index to trigger stream refresh for all members
+      final inverseIndexRef = _firestore
+          .collection('users')
+          .doc(memberUserId)
+          .collection('group_memberships')
+          .doc(groupId);
+      batch.set(
+        inverseIndexRef,
+        {'updatedAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
     }
 
     await batch.commit();
@@ -335,8 +347,13 @@ class GroupChatService {
       final memberDoc = await memberRef.get();
       if (!memberDoc.exists) return;
 
-      // Use set with merge to handle missing fields
-      await memberRef.set(
+      // Use a batch to update both the membership and inverse index
+      // The inverse index update triggers the streamUserMemberships to refetch
+      final batch = _firestore.batch();
+      
+      // Update the membership document
+      batch.set(
+        memberRef,
         {
           'unreadCount': 0,
           'lastReadAt': FieldValue.serverTimestamp(),
@@ -344,6 +361,25 @@ class GroupChatService {
         },
         SetOptions(merge: true),
       );
+      
+      // Update the inverse index to trigger stream refresh
+      // This ensures the membership stream picks up the unread count change
+      final inverseIndexRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
+          .doc(groupId);
+      
+      batch.set(
+        inverseIndexRef,
+        {
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      
+      await batch.commit();
+      _logger.d('Marked group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);
     }
