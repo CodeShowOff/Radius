@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../features/chat/data/chat_cache_service.dart';
+import '../../../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
@@ -168,6 +171,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
+      // Clear all cached data before signing out
+      if (getIt.isRegistered<ChatCacheService>()) {
+        getIt<ChatCacheService>().clearAll();
+      }
+      if (getIt.isRegistered<GroupChatCacheService>()) {
+        getIt<GroupChatCacheService>().clearAll();
+      }
+
       final result = await _authRepository.signOut();
 
       result.fold(

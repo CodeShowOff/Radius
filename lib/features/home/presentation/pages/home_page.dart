@@ -330,12 +330,11 @@ class _AnimatedSquareCard extends StatelessWidget {
   }
 
   Widget _buildVerticalContent(ThemeData theme) {
-    final bool compact = !isSquare;
-    final EdgeInsets outerPadding =
-        compact ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12) : const EdgeInsets.all(18);
-    final double iconPad = compact ? 12 : 14;
-    final double iconSize = compact ? 28 : 34;
-    final double gap = compact ? 8 : 12;
+    // Use same size for all cards
+    final EdgeInsets outerPadding = const EdgeInsets.all(18);
+    final double iconPad = 14;
+    final double iconSize = 34;
+    final double gap = 12;
 
     final content = Padding(
       padding: outerPadding,
@@ -358,10 +357,7 @@ class _AnimatedSquareCard extends StatelessWidget {
           SizedBox(height: gap),
           Text(
             label,
-            style: (compact
-                    ? theme.textTheme.titleMedium
-                    : theme.textTheme.titleLarge)
-                ?.copyWith(
+            style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w600,
               color: color,
             ),

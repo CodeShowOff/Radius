@@ -113,6 +113,8 @@ class MoodSelector extends StatelessWidget {
     final theme = Theme.of(context);
     // Default to Chill if no mood is set
     final displayMood = currentMood ?? '😊 Chill';
+    // Extract emoji from mood string (first character)
+    final moodEmoji = displayMood.isNotEmpty ? displayMood.split(' ')[0] : '😊';
 
     return Card(
       child: Padding(
@@ -128,9 +130,9 @@ class MoodSelector extends StatelessWidget {
                     color: theme.colorScheme.secondaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    Icons.sentiment_satisfied_alt,
-                    color: theme.colorScheme.secondary,
+                  child: Text(
+                    moodEmoji,
+                    style: const TextStyle(fontSize: 24),
                   ),
                 ),
                 const SizedBox(width: 16),

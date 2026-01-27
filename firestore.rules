@@ -273,7 +273,9 @@ service cloud.firestore {
             .hasAny(['participantIds', 'createdAt']);
       
       // RULE: Participants can delete (or soft delete via update)
-      allow delete: if isChatParticipant();
+      // Allow deletion if document doesn't exist (already deleted) or user is participant
+      allow delete: if isAuthenticated() && 
+        (resource == null || request.auth.uid in resource.data.participantIds);
       
       // Messages subcollection
       match /messages/{messageId} {
