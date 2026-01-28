@@ -23,8 +23,9 @@ class ProfileService {
       _firestore.collection(_profilesCollection);
 
   /// Writes the same data to both users and profiles documents.
-  /// If [isCreate] is true, uses set() without merge for initial creation.
-  /// Otherwise uses merge for updates.
+  /// If [isCreate] is true, creates only the profiles doc (users doc is created by auth flow).
+  /// Otherwise uses merge for updates on both collections.
+  /// Always includes userId in the data to satisfy Firestore create rules for profiles collection.
   Future<void> _writeToUserAndProfile(
     String userId,
     Map<String, dynamic> data, {
@@ -34,15 +35,25 @@ class ProfileService {
     final userDoc = _usersRef.doc(userId);
     final profileDoc = _profilesRef.doc(userId);
 
+    // Always include userId in data - required by profiles collection create rule
+    // This ensures that even merge operations on non-existent profiles docs succeed
+    final dataWithUserId = {
+      ...data,
+      'userId': userId,
+    };
+
     if (isCreate) {
-      // Use set without merge for initial document creation
-      // This ensures the 'create' rule is triggered in Firestore
-      batch.set(userDoc, data);
-      batch.set(profileDoc, data);
+      // For initial profile creation:
+      // - The users doc is already created by auth flow with required fields (email, createdAt)
+      // - Only update users doc with merge to add profile fields without overwriting auth fields
+      // - Create profiles doc fresh (it doesn't exist yet)
+      batch.set(userDoc, dataWithUserId, SetOptions(merge: true));
+      batch.set(profileDoc, dataWithUserId);
     } else {
       // Use merge for updates to preserve existing fields
-      batch.set(userDoc, data, SetOptions(merge: true));
-      batch.set(profileDoc, data, SetOptions(merge: true));
+      // Include userId in case profiles doc doesn't exist yet (migration scenario)
+      batch.set(userDoc, dataWithUserId, SetOptions(merge: true));
+      batch.set(profileDoc, dataWithUserId, SetOptions(merge: true));
     }
 
     await batch.commit();

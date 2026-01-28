@@ -32,9 +32,22 @@ class ProfileRepositoryImpl implements IProfileRepository {
       final exists = await _profileService.profileExists(profile.userId);
 
       if (exists) {
+        // Use toUpdateMap to exclude immutable fields (createdAt)
+        // This prevents Firestore rule violations when updating
         await _profileService.updateProfile(
           profile.userId,
-          profileModel.toFirestore(),
+          ProfileModel.toUpdateMap(
+            name: profile.name,
+            bio: profile.bio,
+            photoUrl: profile.photoUrl,
+            isVisible: profile.isVisible,
+            showOnlineStatus: profile.showOnlineStatus,
+            allowConnectionRequests: profile.allowConnectionRequests,
+            showLastSeen: profile.showLastSeen,
+            vibe: profile.vibe,
+            mood: profile.mood,
+            gender: profile.gender,
+          ),
         );
       } else {
         await _profileService.createProfile(profileModel);

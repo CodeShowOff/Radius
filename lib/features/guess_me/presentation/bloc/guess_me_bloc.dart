@@ -155,9 +155,13 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
           status: GuessmeStatus.inGame,
           session: session,
         ));
+      } else {
+        // No immediate match found - emit inQueueNoMatch so the lobby can retry scanning
+        // We're still monitoring via _queueMonitorSubscription for when another user
+        // creates a session with us
+        _logger.i('No immediate match found, emitting inQueueNoMatch status');
+        emit(state.copyWith(status: GuessmeStatus.inQueueNoMatch));
       }
-      // If sessionId is null, we're still monitoring via _queueMonitorSubscription
-      // and will be notified when someone else creates a session with us
     } catch (e, stack) {
       _logger.e('Error joining queue', error: e, stackTrace: stack);
       _stopQueueMonitoring();

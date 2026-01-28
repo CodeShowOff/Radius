@@ -34,6 +34,8 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
   bool _isSearching = false;
+  int _scanRetryCount = 0;
+  static const int _maxScanRetries = 5; // Maximum scan attempts before giving up
   StreamSubscription<NearbyUsersState>? _nearbyUsersSubscription;
 
   @override
@@ -133,6 +135,7 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
 
     setState(() {
       _isSearching = true;
+      _scanRetryCount = 0; // Reset retry count on new search
     });
 
     // Mark user as searching in Firestore so other users can find them
@@ -268,6 +271,77 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     );
   }
 
+  /// Continue scanning when users were found but not available for matching.
+  /// This restarts the scan to find other nearby users or wait for them to start playing.
+  void _continueScanning() {
+    if (!_isSearching || !mounted) return;
+    
+    _scanRetryCount++;
+    
+    // Check if we've exceeded max retries
+    if (_scanRetryCount >= _maxScanRetries) {
+      _stopSearching();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No available players found. Make sure both devices tap "Play Game".'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Try Again',
+              textColor: Colors.white,
+              onPressed: _playGame,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    
+    final nearbyBloc = context.read<NearbyUsersBloc>();
+    
+    // Clear previous results to find fresh users
+    nearbyBloc.add(const NearbyUsersClearResults());
+    
+    // Restart scan after a brief delay
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted || !_isSearching) return;
+      
+      // Start another 7-second scan
+      nearbyBloc.add(const NearbyUsersStartScan(
+        duration: Duration(seconds: 7),
+      ));
+      
+      // Re-subscribe to nearby users
+      _nearbyUsersSubscription?.cancel();
+      _nearbyUsersSubscription = nearbyBloc.stream.listen((state) {
+        if (!mounted || !_isSearching) return;
+        
+        // If we found any users, immediately try to match
+        if (state.users.isNotEmpty) {
+          final nearbyUserIds = state.users
+              .where((u) => u.userId != null)
+              .map((u) => u.userId!)
+              .toList();
+          
+          if (nearbyUserIds.isNotEmpty) {
+            _connectToMatch(nearbyUserIds);
+          }
+        }
+        
+        // Handle scan completion with no results
+        if (state.status == NearbyUsersStatus.empty && _isSearching) {
+          _handleNoUsersFound();
+        }
+        
+        // Handle errors
+        if (state.status == NearbyUsersStatus.error) {
+          _handleScanError(state.errorMessage);
+        }
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,6 +366,10 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
           // Handle queue status changes
           if (state.status == GuessmeStatus.inQueue) {
             // Still looking for a match
+          } else if (state.status == GuessmeStatus.inQueueNoMatch && _isSearching) {
+            // Users were found via Bluetooth but none are available for matching
+            // Continue scanning to find other users or wait for them to become available
+            _continueScanning();
           } else if (state.status == GuessmeStatus.ready && _isSearching) {
             // Queue left without match - stop searching
             setState(() => _isSearching = false);
@@ -826,8 +904,20 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
 
   Widget _buildPlaySection(BuildContext context, GuessmeState state) {
     final theme = Theme.of(context);
-    final isInQueue = state.status == GuessmeStatus.inQueue;
+    final isInQueue = state.status == GuessmeStatus.inQueue || 
+                      state.status == GuessmeStatus.inQueueNoMatch;
     final isSearchingOrInQueue = _isSearching || isInQueue;
+
+    // Determine the status message based on current state
+    String getStatusMessage(int userCount, GuessmeStatus status) {
+      if (status == GuessmeStatus.inQueueNoMatch) {
+        return 'Waiting for nearby players to start playing...';
+      }
+      if (userCount > 0) {
+        return 'Found $userCount ${userCount == 1 ? 'user' : 'users'} nearby...';
+      }
+      return 'Looking for nearby players';
+    }
 
     return Card(
       elevation: 2,
@@ -853,12 +943,11 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
                   final nearbyState = snapshot.data;
                   final userCount = nearbyState?.users.length ?? 0;
                   return Text(
-                    userCount > 0
-                        ? 'Found $userCount ${userCount == 1 ? 'user' : 'users'} nearby...'
-                        : 'Looking for nearby players',
+                    getStatusMessage(userCount, state.status),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
+                    textAlign: TextAlign.center,
                   );
                 },
               ),

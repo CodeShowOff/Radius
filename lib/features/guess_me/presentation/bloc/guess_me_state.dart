@@ -14,6 +14,10 @@ enum GuessmeStatus {
   /// In the matchmaking queue waiting for a match.
   inQueue,
 
+  /// Users were found nearby but none are available for matching.
+  /// Lobby should continue scanning or retry.
+  inQueueNoMatch,
+
   /// Matched and in an active game.
   inGame,
 
