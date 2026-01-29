@@ -75,8 +75,8 @@ class ProfileService {
   /// This method is resilient to permission-denied errors that can occur when
   /// the auth token hasn't fully propagated to Firestore yet.
   Future<void> createProfile(ProfileModel profile) async {
-    const maxRetries = 5;
-    const initialDelay = Duration(milliseconds: 500);
+    const maxRetries = 4;
+    const initialDelay = Duration(milliseconds: 300);
     
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -88,14 +88,13 @@ class ProfileService {
       } catch (e) {
         final errorString = e.toString().toLowerCase();
         final isPermissionError = errorString.contains('permission-denied') || 
-                                  errorString.contains('permission_denied');
+                                  errorString.contains('permission_denied') ||
+                                  errorString.contains('permission denied');
         final isLastAttempt = attempt == maxRetries - 1;
         
         if (isPermissionError && !isLastAttempt) {
           // Wait before retrying with exponential backoff
           final delay = initialDelay * (attempt + 1);
-          // ignore: avoid_print
-          print('ProfileService.createProfile attempt ${attempt + 1} failed with permission-denied. Retrying in ${delay.inMilliseconds}ms...');
           await Future.delayed(delay);
           continue; // Retry
         }
@@ -103,6 +102,17 @@ class ProfileService {
         // If not a permission error or last attempt failed, throw
         throw ProfileServiceException('Failed to create profile: $e');
       }
+    }
+  }
+
+  /// Creates a new profile without retry logic.
+  /// Use this when the caller already has retry logic to avoid nested retries.
+  Future<void> createProfileDirect(ProfileModel profile) async {
+    try {
+      final profileData = profile.toFirestore();
+      await _writeToUserAndProfile(profile.userId, profileData, isCreate: true);
+    } catch (e) {
+      throw ProfileServiceException('Failed to create profile: $e');
     }
   }
 
