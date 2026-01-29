@@ -72,8 +72,10 @@ class ProfileService {
 
   /// Creates a new profile.
   /// Includes retry logic to handle race conditions during authentication.
+  /// This method is resilient to permission-denied errors that can occur when
+  /// the auth token hasn't fully propagated to Firestore yet.
   Future<void> createProfile(ProfileModel profile) async {
-    const maxRetries = 3;
+    const maxRetries = 5;
     const initialDelay = Duration(milliseconds: 500);
     
     for (int attempt = 0; attempt < maxRetries; attempt++) {
@@ -84,12 +86,16 @@ class ProfileService {
         await _writeToUserAndProfile(profile.userId, profileData, isCreate: true);
         return; // Success - exit the retry loop
       } catch (e) {
-        final isPermissionError = e.toString().contains('permission-denied');
+        final errorString = e.toString().toLowerCase();
+        final isPermissionError = errorString.contains('permission-denied') || 
+                                  errorString.contains('permission_denied');
         final isLastAttempt = attempt == maxRetries - 1;
         
         if (isPermissionError && !isLastAttempt) {
           // Wait before retrying with exponential backoff
           final delay = initialDelay * (attempt + 1);
+          // ignore: avoid_print
+          print('ProfileService.createProfile attempt ${attempt + 1} failed with permission-denied. Retrying in ${delay.inMilliseconds}ms...');
           await Future.delayed(delay);
           continue; // Retry
         }

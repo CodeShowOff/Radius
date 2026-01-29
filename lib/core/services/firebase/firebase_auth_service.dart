@@ -273,6 +273,15 @@ class FirebaseAuthService {
   /// Whether the current user's email is verified.
   bool get isEmailVerified => currentUser?.emailVerified ?? false;
 
+  /// Forces a refresh of the ID token.
+  /// This ensures the auth token is fully propagated to Firebase services like Firestore.
+  /// Call this after sign-in before making Firestore writes to avoid permission-denied errors.
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
+    final user = currentUser;
+    if (user == null) return null;
+    return user.getIdToken(forceRefresh);
+  }
+
   /// Send email verification to the current user.
   ///
   /// Throws [AuthException] on failure.

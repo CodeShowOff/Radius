@@ -127,10 +127,11 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       if (doc == null) {
         // User exists in Auth but not in Firestore - create profile
-        // Add a small delay to ensure auth token is fully propagated
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Force token refresh and wait for propagation
+        await _authService.getIdToken(forceRefresh: true);
+        await Future.delayed(const Duration(milliseconds: 500));
         
-        return _createUserProfile(
+        return _createUserProfileWithRetry(
             firebaseUser.uid, email, firebaseUser.displayName);
       }
 
@@ -157,6 +158,14 @@ class AuthRepositoryImpl implements IAuthRepository {
     try {
       final firebaseUser = await _authService.signInWithGoogle();
 
+      // Force refresh the ID token to ensure it's fully propagated to Firestore
+      // This is critical for first-time sign-ups where the auth state might not be
+      // immediately available to Firestore security rules
+      await _authService.getIdToken(forceRefresh: true);
+      
+      // Add a delay to ensure auth token propagation to Firestore backend
+      await Future.delayed(const Duration(milliseconds: 500));
+
       // Check if user profile exists in Firestore
       final doc = await _firestoreService.getDocument(
         '${FirestoreCollections.users}/${firebaseUser.uid}',
@@ -164,10 +173,7 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       if (doc == null) {
         // First time Google sign-in - create profile
-        // Add a small delay to ensure auth token is fully propagated
-        await Future.delayed(const Duration(milliseconds: 100));
-        
-        return _createUserProfile(
+        return _createUserProfileWithRetry(
           firebaseUser.uid,
           firebaseUser.email ?? '',
           firebaseUser.displayName,
@@ -218,11 +224,12 @@ class AuthRepositoryImpl implements IAuthRepository {
       // Send verification email
       await _authService.sendEmailVerification();
 
-      // Add a small delay to ensure auth token is fully propagated
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Force token refresh and wait for propagation to Firestore
+      await _authService.getIdToken(forceRefresh: true);
+      await Future.delayed(const Duration(milliseconds: 500));
 
-      // Create user profile in Firestore
-      return _createUserProfile(
+      // Create user profile in Firestore with retry logic
+      return _createUserProfileWithRetry(
         firebaseUser.uid,
         email,
         displayName,
@@ -348,80 +355,123 @@ class AuthRepositoryImpl implements IAuthRepository {
     }
   }
 
-  /// Creates a new user profile in Firestore.
-  Future<Either<Failure, User>> _createUserProfile(
+  /// Creates a new user profile with retry logic for handling auth token propagation delays.
+  /// This is critical for first-time Google sign-in where Firestore rules may reject
+  /// writes before the auth token is fully propagated.
+  Future<Either<Failure, User>> _createUserProfileWithRetry(
     String uid,
     String email,
     String? displayName, {
-    String? photoUrl, 
+    String? photoUrl,
   }) async {
-    try {
-      // Generate unique username using Firestore transaction
-      final username = await _usernameService.generateUsername();
+    const maxRetries = 5;
+    const baseDelay = Duration(milliseconds: 500);
+    
+    Exception? lastException;
+    String? username;
+    
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Generate unique username only on first attempt to avoid creating multiple usernames
+        username ??= await _usernameService.generateUsername();
 
-      final userModel = UserModel(
-        id: uid,
-        email: email,
-        displayName: displayName,
-        avatarUrl: photoUrl, 
-        username: username,
-        createdAt: null, // Will be set by server timestamp
-        isDiscoverable: true,
-      );
+        final userModel = UserModel(
+          id: uid,
+          email: email,
+          displayName: displayName,
+          avatarUrl: photoUrl,
+          username: username,
+          createdAt: null, // Will be set by server timestamp
+          isDiscoverable: true,
+        );
 
-      // Use server timestamp for createdAt to satisfy Firestore rules
-      await _firestoreService.setDocument(
-        path: '${FirestoreCollections.users}/$uid',
-        data: userModel.toFirestore(useServerTimestamp: true),
-        merge: false,
-      );
+        // Use server timestamp for createdAt to satisfy Firestore rules
+        await _firestoreService.setDocument(
+          path: '${FirestoreCollections.users}/$uid',
+          data: userModel.toFirestore(useServerTimestamp: true),
+          merge: false,
+        );
 
-      // Store username-to-userId index for BLE discovery lookups
-      await _usernameService.storeUsernameForUser(uid, username);
+        // Store username-to-userId index for BLE discovery lookups
+        await _usernameService.storeUsernameForUser(uid, username);
 
-      // Create profile entry in profiles collection with synced displayName and photoUrl
-      final now = DateTime.now();
-      final profileModel = ProfileModel(
-        id: uid,
-        userId: uid,
-        name: displayName ?? '',
-        bio: '',
-        photoUrl: photoUrl,
-        isVisible: true,
-        showOnlineStatus: true,
-        allowConnectionRequests: true,
-        showLastSeen: true,
-        createdAt: now,
-        updatedAt: now,
-      );
+        // Create profile entry in profiles collection with synced displayName and photoUrl
+        final now = DateTime.now();
+        final profileModel = ProfileModel(
+          id: uid,
+          userId: uid,
+          name: displayName ?? '',
+          bio: '',
+          photoUrl: photoUrl,
+          isVisible: true,
+          showOnlineStatus: true,
+          allowConnectionRequests: true,
+          showLastSeen: true,
+          createdAt: now,
+          updatedAt: now,
+        );
 
-      // Create profile in profiles collection - this is critical for app functionality
-      await _profileService.createProfile(profileModel);
+        // Create profile in profiles collection - this is critical for app functionality
+        await _profileService.createProfile(profileModel);
 
-      // Read back the document to get the server-set timestamp
-      final doc = await _firestoreService.getDocument(
-        '${FirestoreCollections.users}/$uid',
-      );
+        // Read back the document to get the server-set timestamp
+        final doc = await _firestoreService.getDocument(
+          '${FirestoreCollections.users}/$uid',
+        );
 
-      if (doc == null) {
-        return const Left(
-            DatabaseFailure(message: 'Failed to create user profile'));
+        if (doc == null) {
+          return const Left(
+              DatabaseFailure(message: 'Failed to create user profile'));
+        }
+
+        // Record device session for registration
+        _recordDeviceSession(uid, 'register');
+
+        return Right(UserModel.fromFirestore(doc).toEntity());
+      } on ArgumentError catch (e) {
+        return Left(DatabaseFailure(
+          message: 'Invalid user profile data: ${e.message}',
+          code: 'invalid-data',
+        ));
+      } catch (e) {
+        lastException = e is Exception ? e : Exception(e.toString());
+        
+        // Check if it's a permission-denied error (auth token not propagated yet)
+        final errorString = e.toString().toLowerCase();
+        final isPermissionError = errorString.contains('permission-denied') || 
+                                  errorString.contains('permission_denied');
+        final isLastAttempt = attempt == maxRetries - 1;
+        
+        if (isPermissionError && !isLastAttempt) {
+          // Wait with exponential backoff before retrying
+          final delay = baseDelay * (attempt + 1);
+          // ignore: avoid_print
+          print('Profile creation attempt ${attempt + 1} failed with permission-denied. Retrying in ${delay.inMilliseconds}ms...');
+          await Future.delayed(delay);
+          
+          // Force refresh the token again before retry
+          await _authService.getIdToken(forceRefresh: true);
+          continue;
+        }
+        
+        // For non-permission errors or if all retries exhausted, break out
+        break;
       }
-
-      // Record device session for registration
-      _recordDeviceSession(uid, 'register');
-
-      return Right(UserModel.fromFirestore(doc).toEntity());
-    } on ArgumentError catch (e) {
-      return Left(DatabaseFailure(
-        message: 'Invalid user profile data: ${e.message}',
-        code: 'invalid-data',
-      ));
-    } on DatabaseException catch (e) {
-      return Left(DatabaseFailure(message: e.message, code: e.code));
-    } catch (e) {
-      return Left(UnexpectedFailure(message: e.toString()));
     }
+    
+    // All retries failed
+    if (lastException != null) {
+      if (lastException is DatabaseException) {
+        final dbException = lastException;
+        return Left(DatabaseFailure(
+          message: dbException.message,
+          code: dbException.code,
+        ));
+      }
+      return Left(UnexpectedFailure(message: lastException.toString()));
+    }
+    
+    return const Left(UnexpectedFailure(message: 'Profile creation failed after retries'));
   }
 
   /// Record device session for security and debugging purposes.
