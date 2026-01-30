@@ -26,6 +26,9 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
   final GuessmeService _service;
   final Logger _logger = Logger();
 
+  /// Expose service for direct access when needed (e.g., for synchronous Firestore writes)
+  GuessmeService get service => _service;
+
   StreamSubscription<GuessmeSession?>? _sessionSubscription;
   StreamSubscription<List<GuessmeMessage>>? _messagesSubscription;
   StreamSubscription<GuessmeStats>? _statsSubscription;
@@ -135,6 +138,12 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
   ) async {
     if (_currentUserId == null) return;
 
+    // Check if already in a game - prevent re-joining queue
+    if (state.status == GuessmeStatus.inGame && state.session != null) {
+      _logger.i('Already in game, ignoring joinQueue');
+      return;
+    }
+
     emit(state.copyWith(status: GuessmeStatus.inQueue));
 
     // Start monitoring for session creation BEFORE attempting to match
@@ -147,8 +156,15 @@ class GuessmeBloc extends Bloc<GuessmeEvent, GuessmeState> {
         nearbyUserIds: event.nearbyUserIds,
       );
 
+      // CRITICAL: Check if we got matched via queue monitor while joinQueue was executing
+      // This handles the race condition where another user creates a session with us
+      if (state.status == GuessmeStatus.inGame && state.session != null) {
+        _logger.i('Already matched via queue monitor, ignoring joinQueue result');
+        return;
+      }
+
       if (sessionId != null) {
-        // Matched immediately! (We created the session)
+        // Matched immediately! (We created the session or found an existing one)
         _subscribeToSession(sessionId);
         final session = await _service.getSession(sessionId);
         emit(state.copyWith(

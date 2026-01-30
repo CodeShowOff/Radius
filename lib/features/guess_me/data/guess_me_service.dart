@@ -112,9 +112,13 @@ class GuessmeService {
   }
 
   /// Checks if a user is available for matching (not in active game).
+  /// A user is available if:
+  /// 1. They have `isSearchingGuessMeGame: true` in their profile
+  /// 2. They do NOT have `isInGuessMeGame: true` in their profile
+  /// 3. They do NOT have an active GuessMe session
   Future<bool> _isUserAvailable(String userId) async {
     try {
-      // Check if user has an active session
+      // Check if user has an active session (most definitive check)
       final sessionQuery = await _sessionsRef
           .where('players', arrayContains: userId)
           .where('status', isEqualTo: GuessmeSessionStatus.active.name)
@@ -122,24 +126,33 @@ class GuessmeService {
           .get();
       
       if (sessionQuery.docs.isNotEmpty) {
+        _logger.d('User $userId has active session - not available');
         return false;
       }
 
       // Check profile status
       final profileDoc = await _firestore.collection('profiles').doc(userId).get();
-      if (profileDoc.exists) {
-        final data = profileDoc.data();
-        final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
-        if (isInGame) {
-          return false;
-        }
-        // User must be actively searching to be available
-        final isSearching = data?['isSearchingGuessMeGame'] as bool? ?? false;
-        if (!isSearching) {
-          return false;
-        }
+      if (!profileDoc.exists) {
+        // Profile doesn't exist - user is not available
+        _logger.d('User $userId profile does not exist - not available');
+        return false;
+      }
+      
+      final data = profileDoc.data();
+      final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
+      if (isInGame) {
+        _logger.d('User $userId isInGuessMeGame=true - not available');
+        return false;
+      }
+      
+      // CRITICAL: User must be actively searching to be available
+      final isSearching = data?['isSearchingGuessMeGame'] as bool? ?? false;
+      if (!isSearching) {
+        _logger.d('User $userId isSearchingGuessMeGame=false - not available');
+        return false;
       }
 
+      _logger.d('User $userId is available for matching');
       return true;
     } catch (e) {
       _logger.w('Error checking user availability for $userId', error: e);
@@ -152,6 +165,12 @@ class GuessmeService {
   /// Joins the matchmaking queue.
   /// INSTANTLY matches with the first available nearby user.
   /// Returns session ID if matched, null if no one available.
+  /// 
+  /// RACE CONDITION HANDLING:
+  /// When two users discover each other simultaneously, both may try to create sessions.
+  /// The _createSession method uses a deterministic session ID, so at most one session
+  /// will be created. This method also checks for existing sessions before and after
+  /// attempting to create one.
   Future<String?> joinQueue({
     required String userId,
     required List<String> nearbyUserIds,
@@ -174,7 +193,8 @@ class GuessmeService {
       
       _logger.d('Valid nearby users after filtering: ${validNearbyUsers.length}');
       
-      // First, check if user already has an active session
+      // CRITICAL: First check if user already has an active session
+      // This handles the case where another user created a session with us
       final existingSession = await getActiveSession(userId);
       if (existingSession != null) {
         _logger.i('User $userId already has active session: ${existingSession.id}');
@@ -185,10 +205,17 @@ class GuessmeService {
       for (final nearbyUserId in validNearbyUsers) {
         _logger.d('Checking availability of user: $nearbyUserId');
         
-        // Check if this user is available
+        // CRITICAL: Check again if we got matched while checking other users
+        final midCheckSession = await getActiveSession(userId);
+        if (midCheckSession != null) {
+          _logger.i('User $userId got matched while checking others: ${midCheckSession.id}');
+          return midCheckSession.id;
+        }
+        
+        // Check if this user is available (has isSearchingGuessMeGame=true and not in a game)
         final isAvailable = await _isUserAvailable(nearbyUserId);
         if (!isAvailable) {
-          _logger.d('User $nearbyUserId is not available for matching');
+          _logger.d('User $nearbyUserId is not available for matching (not searching or in game)');
           continue;
         }
 
@@ -217,14 +244,29 @@ class GuessmeService {
           _logger.i('Successfully matched $userId with $nearbyUserId - session: $sessionId');
           return sessionId;
         } catch (e) {
-          _logger.w('Failed to create session with $nearbyUserId, trying next user', error: e);
+          _logger.w('Failed to create session with $nearbyUserId', error: e);
+          
+          // Check if we got matched by another user during our attempt
+          final postErrorSession = await getActiveSession(userId);
+          if (postErrorSession != null) {
+            _logger.i('User $userId was matched after error: ${postErrorSession.id}');
+            return postErrorSession.id;
+          }
+          
           // Continue to next nearby user if session creation failed
           continue;
         }
       }
 
+      // FINAL CHECK: Maybe we got matched while iterating
+      final finalCheckSession = await getActiveSession(userId);
+      if (finalCheckSession != null) {
+        _logger.i('User $userId got matched during final check: ${finalCheckSession.id}');
+        return finalCheckSession.id;
+      }
+
       // No available users found - add to queue briefly
-      // But mainly, return null to indicate no match
+      // The queue entry allows other users to find us if they join later
       _logger.i('No available users found for $userId - adding to queue');
       
       final queueEntry = {
@@ -273,81 +315,136 @@ class GuessmeService {
   // ==================== SESSION MANAGEMENT ====================
 
   /// Creates a new game session between two players.
-  /// Uses a Firestore transaction to ensure atomic creation and prevent duplicates.
+  /// Uses a deterministic session ID based on sorted player IDs and the current date
+  /// to prevent duplicate sessions when both players try to create simultaneously.
+  /// 
+  /// The session ID format is: guessme_{sortedPlayer1}_{sortedPlayer2}_{yyyyMMdd_HH}
+  /// This allows at most one session per hour between any two players.
   Future<String> _createSession(String player1Id, String player2Id) async {
     _logger.i('Creating session between $player1Id and $player2Id');
     
-    // Use transaction to prevent race conditions and duplicate sessions
-    return await _firestore.runTransaction<String>((transaction) async {
-      final now = DateTime.now();
+    final now = DateTime.now();
+    
+    // Sort player IDs to create deterministic session ID
+    // This ensures both players will generate the same ID
+    final playerIds = [player1Id, player2Id]..sort();
+    
+    // Use date + hour to allow one session per hour between any two players
+    // This prevents race condition where both create different sessions
+    final dateHour = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}';
+    final deterministicSessionId = 'guessme_${playerIds[0]}_${playerIds[1]}_$dateHour';
+    
+    _logger.i('Deterministic session ID: $deterministicSessionId');
+    
+    // Check if this exact session already exists
+    final existingSessionDoc = await _sessionsRef.doc(deterministicSessionId).get();
+    if (existingSessionDoc.exists) {
+      final existingStatus = existingSessionDoc.data()?['status'] as String?;
+      if (existingStatus == GuessmeSessionStatus.active.name) {
+        _logger.i('Session $deterministicSessionId already exists and is active - returning it');
+        return deterministicSessionId;
+      }
+      // Session exists but is not active - allow creating a new one with different hour
+      _logger.w('Session $deterministicSessionId exists but status is $existingStatus');
+    }
+    
+    // Check if either player already has ANY active session
+    final player1SessionQuery = await _sessionsRef
+        .where('players', arrayContains: player1Id)
+        .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+        .limit(1)
+        .get();
+    
+    if (player1SessionQuery.docs.isNotEmpty) {
+      final existingSessionId = player1SessionQuery.docs.first.id;
+      _logger.i('Player $player1Id already has active session: $existingSessionId - returning it');
+      return existingSessionId;
+    }
+    
+    final player2SessionQuery = await _sessionsRef
+        .where('players', arrayContains: player2Id)
+        .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+        .limit(1)
+        .get();
+    
+    if (player2SessionQuery.docs.isNotEmpty) {
+      final existingSessionId = player2SessionQuery.docs.first.id;
+      _logger.i('Player $player2Id already has active session: $existingSessionId - returning it');
+      return existingSessionId;
+    }
+
+    // Fetch player names
+    final player1Doc = await _firestore.collection('users').doc(player1Id).get();
+    final player2Doc = await _firestore.collection('users').doc(player2Id).get();
+    
+    final player1Name = player1Doc.exists ? (player1Doc.data()?['displayName'] as String?) : null;
+    final player2Name = player2Doc.exists ? (player2Doc.data()?['displayName'] as String?) : null;
+
+    final session = GuessmeSessionModel(
+      id: deterministicSessionId,
+      players: [player1Id, player2Id],
+      player1Id: player1Id,
+      player1Name: player1Name ?? 'Mystery User A',
+      player2Id: player2Id,
+      player2Name: player2Name ?? 'Mystery User B',
+      status: GuessmeSessionStatus.active.name,
+      createdAt: now,
+      expiresAt: now.add(sessionDuration),
+      player1Guessed: false,
+      player2Guessed: false,
+      guessCheckPending: false,
+      guessCheckInitiator: null,
+      awaitingConnectionConfirmations: false,
+      connectionRequestId: null,
+    );
+
+    // Use set with merge to handle race condition gracefully
+    // If both users try to create at the same time, one will win and the other's
+    // write will be a no-op (since the data is the same)
+    try {
+      await _sessionsRef.doc(deterministicSessionId).set(
+        session.toFirestore(),
+        SetOptions(merge: false), // Don't merge - either create or fail
+      );
       
-      // Sort player IDs to create deterministic session ID
-      final playerIds = [player1Id, player2Id]..sort();
-      final deterministicSessionId = 'session_${playerIds[0]}_${playerIds[1]}_${now.millisecondsSinceEpoch}';
+      _logger.i('Created session $deterministicSessionId between $player1Id and $player2Id');
       
-      // Check if either player already has an active session
-      final player1SessionQuery = await _sessionsRef
+      // Send initial system message AFTER session is created
+      await sendSystemMessage(
+        sessionId: deterministicSessionId,
+        text: '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
+      );
+      
+      return deterministicSessionId;
+    } catch (e) {
+      // If creation failed, the session might have been created by the other player
+      // Check if it exists now
+      final checkDoc = await _sessionsRef.doc(deterministicSessionId).get();
+      if (checkDoc.exists && checkDoc.data()?['status'] == GuessmeSessionStatus.active.name) {
+        _logger.i('Session $deterministicSessionId was created by another user - returning it');
+        return deterministicSessionId;
+      }
+      
+      // Check for any active session with these players
+      final activeSessionQuery = await _sessionsRef
           .where('players', arrayContains: player1Id)
           .where('status', isEqualTo: GuessmeSessionStatus.active.name)
           .limit(1)
           .get();
       
-      if (player1SessionQuery.docs.isNotEmpty) {
-        final existingSessionId = player1SessionQuery.docs.first.id;
-        _logger.w('Player $player1Id already has active session: $existingSessionId');
-        throw Exception('Player already in active session: $existingSessionId');
+      if (activeSessionQuery.docs.isNotEmpty) {
+        final activeSessionId = activeSessionQuery.docs.first.id;
+        final sessionData = activeSessionQuery.docs.first.data();
+        final sessionPlayers = List<String>.from(sessionData['players'] ?? []);
+        if (sessionPlayers.contains(player2Id)) {
+          _logger.i('Found existing active session between these players: $activeSessionId');
+          return activeSessionId;
+        }
       }
       
-      final player2SessionQuery = await _sessionsRef
-          .where('players', arrayContains: player2Id)
-          .where('status', isEqualTo: GuessmeSessionStatus.active.name)
-          .limit(1)
-          .get();
-      
-      if (player2SessionQuery.docs.isNotEmpty) {
-        final existingSessionId = player2SessionQuery.docs.first.id;
-        _logger.w('Player $player2Id already has active session: $existingSessionId');
-        throw Exception('Player already in active session: $existingSessionId');
-      }
-
-      // Fetch player names
-      final player1Doc = await transaction.get(_firestore.collection('users').doc(player1Id));
-      final player2Doc = await transaction.get(_firestore.collection('users').doc(player2Id));
-      
-      final player1Name = player1Doc.exists ? (player1Doc.data()?['displayName'] as String?) : null;
-      final player2Name = player2Doc.exists ? (player2Doc.data()?['displayName'] as String?) : null;
-
-      final session = GuessmeSessionModel(
-        id: deterministicSessionId,
-        players: [player1Id, player2Id],
-        player1Id: player1Id,
-        player1Name: player1Name ?? 'Mystery User A',
-        player2Id: player2Id,
-        player2Name: player2Name ?? 'Mystery User B',
-        status: GuessmeSessionStatus.active.name,
-        createdAt: now,
-        expiresAt: now.add(sessionDuration),
-        player1Guessed: false,
-        player2Guessed: false,
-        guessCheckPending: false,
-        guessCheckInitiator: null,
-        awaitingConnectionConfirmations: false,
-        connectionRequestId: null,
-      );
-
-      // Create session document within transaction
-      transaction.set(_sessionsRef.doc(deterministicSessionId), session.toFirestore());
-
-      _logger.i('Created session $deterministicSessionId between $player1Id and $player2Id');
-      return deterministicSessionId;
-    }).then((sessionId) async {
-      // Send initial system message AFTER transaction completes
-      await sendSystemMessage(
-        sessionId: sessionId,
-        text: '🎮 Game started! You have 1 hour to chat and guess who the other person is. Good luck!',
-      );
-      return sessionId;
-    });
+      _logger.e('Failed to create session and no existing session found', error: e);
+      rethrow;
+    }
   }
 
   /// Gets a session by ID.

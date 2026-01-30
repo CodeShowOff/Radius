@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
@@ -31,6 +32,8 @@ class GuessMeLobbyPage extends StatefulWidget {
 
 class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     with WidgetsBindingObserver {
+  final Logger _logger = Logger();
+  
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
   bool _isSearching = false;
@@ -109,7 +112,7 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
 
   /// Start the game - begins searching for a match
   /// This is the ONLY way scanning starts
-  void _playGame() {
+  Future<void> _playGame() async {
     if (_isSearching) return;
     
     if (!_bluetoothEnabled) {
@@ -138,8 +141,18 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
       _scanRetryCount = 0; // Reset retry count on new search
     });
 
-    // Mark user as searching in Firestore so other users can find them
-    context.read<GuessmeBloc>().add(GuessmeMarkSearching(authState.user.id));
+    // CRITICAL: Mark user as searching in Firestore BEFORE starting the scan.
+    // We must await this to ensure the flag is set before other users check our availability.
+    // The service call is made directly here to ensure we wait for it to complete.
+    try {
+      final guessmeService = context.read<GuessmeBloc>().service;
+      await guessmeService.setUserSearching(authState.user.id);
+    } catch (e) {
+      // Continue even if this fails - the scan can still work
+      debugPrint('Warning: Failed to set searching status: $e');
+    }
+
+    if (!mounted || !_isSearching) return;
 
     final nearbyBloc = context.read<NearbyUsersBloc>();
     
@@ -153,46 +166,46 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     nearbyBloc.add(const NearbyUsersClearResults());
 
     // Start scanning with 7-second duration
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // Small delay to allow BLE to initialize
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted || !_isSearching) return;
+    
+    // Start 7-second scan for GuessMe
+    nearbyBloc.add(const NearbyUsersStartScan(
+      duration: Duration(seconds: 7),
+    ));
+    
+    // Listen for nearby users - connect to first one found
+    _nearbyUsersSubscription?.cancel();
+    _nearbyUsersSubscription = nearbyBloc.stream.listen((state) {
       if (!mounted || !_isSearching) return;
       
-      // Start 7-second scan for GuessMe
-      nearbyBloc.add(const NearbyUsersStartScan(
-        duration: Duration(seconds: 7),
-      ));
+      // If we found any users, immediately try to match
+      if (state.users.isNotEmpty) {
+        final nearbyUserIds = state.users
+            .where((u) => u.userId != null)
+            .map((u) => u.userId!)
+            .toList();
+        
+        if (nearbyUserIds.isNotEmpty) {
+          _connectToMatch(nearbyUserIds);
+        }
+      }
       
-      // Listen for nearby users - connect to first one found
-      _nearbyUsersSubscription?.cancel();
-      _nearbyUsersSubscription = nearbyBloc.stream.listen((state) {
-        if (!mounted || !_isSearching) return;
-        
-        // If we found any users, immediately try to match
-        if (state.users.isNotEmpty) {
-          final nearbyUserIds = state.users
-              .where((u) => u.userId != null)
-              .map((u) => u.userId!)
-              .toList();
-          
-          if (nearbyUserIds.isNotEmpty) {
-            _connectToMatch(nearbyUserIds);
-          }
-        }
-        
-        // Handle scan completion with no results (7 seconds elapsed, no users found)
-        if (state.status == NearbyUsersStatus.empty && _isSearching) {
-          _handleNoUsersFound();
-        }
-        
-        // Handle errors
-        if (state.status == NearbyUsersStatus.error) {
-          _handleScanError(state.errorMessage);
-        }
-      });
+      // Handle scan completion with no results (7 seconds elapsed, no users found)
+      if (state.status == NearbyUsersStatus.empty && _isSearching) {
+        _handleNoUsersFound();
+      }
+      
+      // Handle errors
+      if (state.status == NearbyUsersStatus.error) {
+        _handleScanError(state.errorMessage);
+      }
     });
   }
 
   /// Stop searching for a match
-  void _stopSearching() {
+  Future<void> _stopSearching() async {
     if (!_isSearching) return;
     
     _nearbyUsersSubscription?.cancel();
@@ -201,10 +214,15 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     final nearbyBloc = context.read<NearbyUsersBloc>();
     nearbyBloc.add(const NearbyUsersStopScan());
     
-    // Clear searching status in Firestore
+    // Clear searching status in Firestore directly for reliable cleanup
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<GuessmeBloc>().add(GuessmeClearSearching(authState.user.id));
+      try {
+        final guessmeService = context.read<GuessmeBloc>().service;
+        await guessmeService.clearUserSearching(authState.user.id);
+      } catch (e) {
+        debugPrint('Warning: Failed to clear searching status: $e');
+      }
     }
     
     if (mounted) {
@@ -275,6 +293,14 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
   /// This restarts the scan to find other nearby users or wait for them to start playing.
   void _continueScanning() {
     if (!_isSearching || !mounted) return;
+    
+    // CRITICAL: Check if we've been matched while waiting
+    final guessmeState = context.read<GuessmeBloc>().state;
+    if (guessmeState.status == GuessmeStatus.inGame && guessmeState.session != null) {
+      _logger.i('Already matched, skipping continue scan');
+      setState(() => _isSearching = false);
+      return;
+    }
     
     _scanRetryCount++;
     
