@@ -1134,6 +1134,33 @@ class _FAQsPage extends StatelessWidget {
                 'Both users remain anonymous until someone makes a correct guess. '
                 'It\'s a fun way to break the ice with people around you!',
           ),
+          _FAQItem(
+            question: 'What are Random Group Chatrooms?',
+            answer:
+                'Random Group Chatrooms are internet-based groups organized by topics and interests. '
+                'Users can create groups or request to join existing ones. '
+                'Group admins review and approve join requests to maintain quality discussions. '
+                'Perfect for finding like-minded people worldwide! '
+                'You can browse active groups, request to join, and start chatting once approved.',
+          ),
+          _FAQItem(
+            question: 'How do Nearby Groups work?',
+            answer:
+                'Nearby Groups use Bluetooth to create temporary group chats for spontaneous meetups. '
+                'When you create a nearby group, your device automatically detects and adds users around you. '
+                'No approval needed - members join automatically when detected nearby. '
+                'Perfect for events, gatherings, conferences, or any situation where you want to chat with everyone nearby! '
+                'The group remains active as long as the creator keeps scanning.',
+          ),
+          _FAQItem(
+            question: 'What is Nearby Help?',
+            answer:
+                'Nearby Help lets you request or provide assistance to people in your vicinity. '
+                'When you need help, users within your selected radius (up to 5km) receive a push notification. '
+                'Available helpers can accept your request and navigate to your location using in-app directions. '
+                'You can set home and work locations to receive help alerts only when you\'re nearby. '
+                'It\'s about building a caring, helpful community!',
+          ),
         ],
       ),
     );
@@ -1270,6 +1297,42 @@ class _UserGuidePage extends StatelessWidget {
               'Disconnect or block users who are bothering you',
               'Toggle discoverability in Privacy Settings',
               'Request your data or delete your account anytime',
+            ],
+          ),
+          const _GuideSection(
+            title: '6. Random Group Chatrooms',
+            icon: Icons.groups,
+            steps: [
+              'Tap "Groups" tab and select "Random Groups"',
+              'Browse active groups by topic and interest',
+              'Tap "Request to Join" and optionally add a message',
+              'Wait for admin approval (you\'ll get notified)',
+              'Once approved, start chatting with group members',
+              'Create your own group and manage join requests as admin',
+            ],
+          ),
+          const _GuideSection(
+            title: '7. Nearby Groups',
+            icon: Icons.bluetooth_searching,
+            steps: [
+              'Go to "Groups" tab and select "Nearby Groups"',
+              'Tap "Create Group" and give it a name/description',
+              'Your device will scan for nearby Radius users',
+              'Detected users automatically join your group',
+              'Start chatting - no approval needed!',
+              'Close the group when done to stop scanning',
+            ],
+          ),
+          const _GuideSection(
+            title: '8. Nearby Help',
+            icon: Icons.help_outline,
+            steps: [
+              'Tap "Help" tab to access Nearby Help',
+              'Set your home/work locations in settings (optional)',
+              'When you need help: Tap "Request Help", select radius, add topic',
+              'Nearby users receive notifications and can accept',
+              'Chat with your helper and they can navigate to you',
+              'Mark as resolved when help is complete',
             ],
           ),
           const SizedBox(height: 24),
@@ -1416,7 +1479,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
         children: [
           Text(
-            'Last Updated: January 20, 2026',
+            'Last Updated: February 2, 2026',
             style: TextStyle(
               color: theme.colorScheme.outline,
               fontSize: 13,
@@ -1482,10 +1545,60 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• We do not collect or store your GPS location\n'
                 '• Discovery requires Bluetooth permissions but NOT location permissions (Android 12+)\n'
                 '• You can stop being discoverable by closing the app or adjusting privacy settings\n'
-                '• Only users you accept as connections can message you',
+                '• Only users you accept as connections can message you\n\n'
+                'Bluetooth is also used for:\n\n'
+                '• Nearby Groups: Auto-detecting and adding members within Bluetooth range\n'
+                '• GuessMe: Anonymous matching with nearby users for the game',
           ),
           const _PolicySection(
-            title: '5. Data Storage & Security',
+            title: '5. Location-Based Features',
+            content:
+                'Nearby Help is our only feature that uses GPS location data:\n\n'
+                '• Location access is requested ONLY when you use Nearby Help\n'
+                '• Your location is shared ONLY when you request help or accept a help request\n'
+                '• Helpers can navigate to your location only during an active help session\n'
+                '• You can set home and work locations (stored as coordinates) to receive alerts only when nearby\n'
+                '• Your approximate city is derived from IP address for help request radius calculations\n'
+                '• We do NOT track or store your location history\n'
+                '• Location permissions can be revoked anytime in device settings\n\n'
+                'All other features (Nearby users, Nearby Groups, GuessMe, Random Groups) use only Bluetooth and do NOT access GPS.',
+          ),
+          const _PolicySection(
+            title: '6. Group Features & Data',
+            content:
+                'Radius offers multiple group chat features with different privacy models:\n\n'
+                'Random Group Chatrooms:\n'
+                '• Internet-based groups visible to all Radius users\n'
+                '• Group names, topics, descriptions, and member counts are public\n'
+                '• Join requests and chat messages are visible only to approved members\n'
+                '• Admins can view pending join requests and member lists\n'
+                '• Chat history is stored until you leave the group or the group is deleted\n\n'
+                'Nearby Groups:\n'
+                '• Temporary Bluetooth-based groups for local gatherings\n'
+                '• Group information is visible to all users while active\n'
+                '• Members are auto-added based on Bluetooth proximity to creator\n'
+                '• Member presence data (RSSI signal strength, timestamps) is stored temporarily\n'
+                '• Groups and messages are deleted when the creator closes the group or after inactivity\n\n'
+                'Location Groups:\n'
+                '• City/region-based community groups\n'
+                '• Join approval may be required depending on group settings\n'
+                '• Members can see other members\' profiles and chat history',
+          ),
+          const _PolicySection(
+            title: '7. Nearby Help Data',
+            content:
+                'When you use Nearby Help:\n\n'
+                '• Your GPS coordinates are collected when you request help\n'
+                '• Help requests include: your location, selected radius, topic, and contact info\n'
+                '• Nearby users within the radius receive push notifications with your name and topic\n'
+                '• Helpers who accept can see your real-time location for navigation\n'
+                '• Help session data (locations, chat messages, timestamps) is stored for 30 days\n'
+                '• You can mark requests as resolved or cancel them anytime\n'
+                '• Your saved home/work locations are stored as coordinates only\n\n'
+                'Location data is NOT used or accessed by any other app features.',
+          ),
+          const _PolicySection(
+            title: '8. Data Storage & Security',
             content:
                 'We implement industry-standard security measures:\n\n'
                 '• All data is stored in Firebase Cloud Firestore with encryption at rest\n'
@@ -1497,7 +1610,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 'We cannot guarantee absolute security.',
           ),
           const _PolicySection(
-            title: '6. Data Sharing & Disclosure',
+            title: '9. Data Sharing & Disclosure',
             content:
                 'We do NOT sell your personal information to third parties. We may share your information only in the following circumstances:\n\n'
                 '• With Other Users: Your profile information (name, photo, bio) is visible to users you connect with\n'
@@ -1507,7 +1620,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Business Transfers: In the event of a merger, acquisition, or sale of assets (with notice)',
           ),
           const _PolicySection(
-            title: '7. Your Privacy Rights',
+            title: '10. Your Privacy Rights',
             content:
                 'You have the following rights regarding your data:\n\n'
                 '• Access: Request a copy of your personal data\n'
@@ -1519,7 +1632,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 'To exercise these rights, contact us at connectme.shubham@gmail.com. We will respond within 30 days.',
           ),
           const _PolicySection(
-            title: '8. Data Retention',
+            title: '11. Data Retention',
             content:
                 'We retain your information for as long as your account is active or as needed to provide services:\n\n'
                 '• Account Data: Retained until you delete your account\n'
@@ -1529,21 +1642,21 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Legal Requirements: Some data may be retained longer if required by law',
           ),
           const _PolicySection(
-            title: '9. Children\'s Privacy',
+            title: '12. Children\'s Privacy',
             content:
                 'Radius is not intended for users under the age of 13 (or 16 in the European Union). '
                 'We do not knowingly collect personal information from children. If we become aware that a child has provided us with personal information, '
                 'we will take steps to delete such information immediately. If you believe a child has provided information to us, please contact us at connectme.shubham@gmail.com.',
           ),
           const _PolicySection(
-            title: '10. International Data Transfers',
+            title: '13. International Data Transfers',
             content:
                 'Your information may be transferred to and processed in countries other than your own. '
                 'We use Firebase (Google Cloud) services, which may process data in multiple regions. '
                 'We ensure appropriate safeguards are in place to protect your information in compliance with applicable data protection laws.',
           ),
           const _PolicySection(
-            title: '11. Third-Party Services',
+            title: '14. Third-Party Services',
             content:
                 'Radius integrates with the following third-party services:\n\n'
                 '• Firebase Authentication: For secure login (Google Sign-In)\n'
@@ -1553,14 +1666,14 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 'These services have their own privacy policies. We recommend reviewing Google\'s Privacy Policy at https://policies.google.com/privacy',
           ),
           const _PolicySection(
-            title: '12. Changes to This Privacy Policy',
+            title: '15. Changes to This Privacy Policy',
             content:
                 'We may update this Privacy Policy from time to time to reflect changes in our practices or for legal, operational, or regulatory reasons. '
                 'We will notify you of any material changes by posting the updated policy in the app and updating the "Last Updated" date. '
                 'Your continued use of Radius after changes constitutes acceptance of the updated policy.',
           ),
           const _PolicySection(
-            title: '13. Contact Us',
+            title: '16. Contact Us',
             content:
                 'If you have any questions, concerns, or requests regarding this Privacy Policy or your personal information, please contact us:\n\n'
                 'Email: connectme.shubham@gmail.com\n'
@@ -1600,7 +1713,7 @@ class _TermsOfServicePage extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
         children: [
           Text(
-            'Last Updated: January 19, 2026',
+            'Last Updated: February 2, 2026',
             style: TextStyle(
               color: theme.colorScheme.outline,
               fontSize: 13,
@@ -1693,7 +1806,49 @@ class _TermsOfServicePage extends StatelessWidget {
                 'We do not monitor the content of private messages between users. However, we may review reported content to enforce these Terms and take appropriate action against users who violate our policies.',
           ),
           const _PolicySection(
-            title: '9. Intellectual Property Rights',
+            title: '9. Group Features',
+            content:
+                'Radius offers multiple group chat features:\n\n'
+                'Random Group Chatrooms:\n'
+                '• You can create or request to join internet-based groups\n'
+                '• Group admins review and approve/reject join requests\n'
+                '• Admins can remove members and manage group settings\n'
+                '• You agree not to create groups for illegal or harmful purposes\n'
+                '• Inappropriate group names, descriptions, or content may be removed\n\n'
+                'Nearby Groups:\n'
+                '• Create temporary Bluetooth-based groups for local gatherings\n'
+                '• Your device automatically adds nearby users to the group\n'
+                '• Members are auto-removed when out of Bluetooth range\n'
+                '• Only the creator can close the group\n'
+                '• Groups expire after 30 minutes or when creator stops scanning\n\n'
+                'Location Groups:\n'
+                '• Community groups organized by city or region\n'
+                '• May require admin approval to join\n'
+                '• Subject to additional community guidelines set by admins',
+          ),
+          const _PolicySection(
+            title: '10. Nearby Help Feature',
+            content:
+                'Nearby Help allows you to request or provide assistance:\n\n'
+                'When requesting help:\n'
+                '• You must allow location access to use this feature\n'
+                '• Your real-time location is shared with users who accept your request\n'
+                '• You agree to use this feature only for legitimate help requests\n'
+                '• False, frivolous, or inappropriate help requests are prohibited\n'
+                '• You can cancel requests at any time\n\n'
+                'When providing help:\n'
+                '• You choose whether to accept or decline help requests\n'
+                '• You can navigate to the requester\'s location using in-app directions\n'
+                '• You agree to provide help in good faith and with genuine intent\n'
+                '• You can end help sessions at any time if you feel unsafe\n\n'
+                'Important:\n'
+                '• Always prioritize your personal safety\n'
+                '• Meet in public places when possible\n'
+                '• We are not responsible for interactions between users\n'
+                '• Report any misuse or safety concerns immediately',
+          ),
+          const _PolicySection(
+            title: '11. Intellectual Property Rights',
             content:
                 'The App, including its design, features, functionality, graphics, logos, and underlying code, is owned by CodeShowOff and is protected by copyright, trademark, and other intellectual property laws. '
                 'You are granted a limited, non-exclusive, non-transferable, revocable license to use the App for personal, non-commercial purposes.\n\n'
@@ -1703,7 +1858,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 '• Remove or alter any copyright, trademark, or proprietary notices',
           ),
           const _PolicySection(
-            title: '10. Prohibited Activities',
+            title: '12. Prohibited Activities',
             content:
                 'You agree not to engage in any of the following prohibited activities:\n\n'
                 '• Using the App for any illegal or unauthorized purpose\n'
@@ -1716,7 +1871,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 '• Impersonating or falsely representing affiliation with any person or entity',
           ),
           const _PolicySection(
-            title: '11. Account Suspension & Termination',
+            title: '13. Account Suspension & Termination',
             content:
                 'We reserve the right to suspend or terminate your account at any time, without prior notice, for:\n\n'
                 '• Violation of these Terms\n'
@@ -1730,7 +1885,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 'You may also delete your account at any time through the App settings. Account deletion is permanent and cannot be undone.',
           ),
           const _PolicySection(
-            title: '12. Disclaimer of Warranties',
+            title: '14. Disclaimer of Warranties',
             content:
                 'THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.\n\n'
                 'We do not warrant that:\n\n'
@@ -1740,7 +1895,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 'You use the App at your own risk. We are not responsible for any damage to your device, loss of data, or any other harm resulting from your use of the App.',
           ),
           const _PolicySection(
-            title: '13. Limitation of Liability',
+            title: '15. Limitation of Liability',
             content:
                 'TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, CODESHOWOFF SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO:\n\n'
                 '• Loss of profits, data, or goodwill\n'
@@ -1751,7 +1906,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 'OUR TOTAL LIABILITY TO YOU FOR ANY CLAIMS ARISING FROM YOUR USE OF THE APP SHALL NOT EXCEED THE AMOUNT YOU PAID TO US IN THE PAST 12 MONTHS (WHICH IS CURRENTLY \$0).',
           ),
           const _PolicySection(
-            title: '14. Indemnification',
+            title: '16. Indemnification',
             content:
                 'You agree to indemnify, defend, and hold harmless CodeShowOff, its affiliates, officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, costs, or expenses (including reasonable attorneys\' fees) arising out of or in connection with:\n\n'
                 '• Your use of the App\n'
@@ -1760,7 +1915,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 '• Your User Content',
           ),
           const _PolicySection(
-            title: '15. Dispute Resolution',
+            title: '17. Dispute Resolution',
             content:
                 'Any disputes arising out of or relating to these Terms or your use of the App shall be resolved through:\n\n'
                 '1. Informal Negotiation: Contact us at connectme.shubham@gmail.com to attempt to resolve the issue informally\n'
@@ -1769,7 +1924,7 @@ class _TermsOfServicePage extends StatelessWidget {
                 'You agree to waive your right to participate in class action lawsuits or class-wide arbitration.',
           ),
           const _PolicySection(
-            title: '16. Changes to Terms',
+            title: '18. Changes to Terms',
             content:
                 'We reserve the right to modify these Terms at any time. We will notify you of material changes by:\n\n'
                 '• Posting an updated version in the App\n'
@@ -1778,18 +1933,18 @@ class _TermsOfServicePage extends StatelessWidget {
                 'Your continued use of the App after changes constitutes your acceptance of the revised Terms. If you do not agree to the updated Terms, you must stop using the App and delete your account.',
           ),
           const _PolicySection(
-            title: '17. Severability',
+            title: '19. Severability',
             content:
                 'If any provision of these Terms is found to be invalid, illegal, or unenforceable, the remaining provisions shall continue in full force and effect. '
                 'The invalid provision shall be modified to the minimum extent necessary to make it valid and enforceable.',
           ),
           const _PolicySection(
-            title: '18. Entire Agreement',
+            title: '20. Entire Agreement',
             content:
                 'These Terms, together with our Privacy Policy, constitute the entire agreement between you and CodeShowOff regarding your use of Radius and supersede all prior agreements and understandings.',
           ),
           const _PolicySection(
-            title: '19. Contact Information',
+            title: '21. Contact Information',
             content:
                 'If you have any questions, concerns, or feedback regarding these Terms of Service, please contact us:\n\n'
                 'Email: connectme.shubham@gmail.com\n'

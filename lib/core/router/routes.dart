@@ -88,4 +88,19 @@ abstract class Routes {
   /// Helper to build a random group chat route with group ID.
   static String randomGroupChatWith(String groupId) =>
       '/random-groups/$groupId/chat';
+
+  // Nearby Help routes
+  static const String nearbyHelp = '/nearby-help';
+  static const String nearbyHelpSettings = '/nearby-help/settings';
+  static const String nearbyHelpCreateRequest = '/nearby-help/create';
+  static const String nearbyHelpRequestDetail = '/nearby-help/request/:requestId';
+  static const String nearbyHelpHelperNavigation = '/nearby-help/navigate/:requestId';
+
+  /// Helper to build a help request detail route with request ID.
+  static String nearbyHelpRequestDetailWith(String requestId) =>
+      '/nearby-help/request/$requestId';
+
+  /// Helper to build a helper navigation route with request ID.
+  static String nearbyHelpHelperNavigationWith(String requestId) =>
+      '/nearby-help/navigate/$requestId';
 }

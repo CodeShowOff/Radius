@@ -238,6 +238,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     );
                   },
                 ),
+                const SizedBox(height: 16),
+
+                // Nearby Help section - prominent SOS button
+                _AnimatedSquareCard(
+                  onTap: () => context.push(Routes.nearbyHelp),
+                  label: 'Nearby Help',
+                  color: Theme.of(context).colorScheme.error,
+                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                  isSquare: false,
+                  useVerticalLayout: false,
+                  animationType: _CardAnimationType.sos,
+                ),
               ],
             ),
           ),
@@ -275,6 +287,8 @@ class _AnimatedSquareCard extends StatelessWidget {
         return Icons.psychology;
       case _CardAnimationType.talking:
         return Icons.groups;
+      case _CardAnimationType.sos:
+        return Icons.sos;
     }
   }
 
@@ -380,5 +394,5 @@ class _AnimatedSquareCard extends StatelessWidget {
   }
 }
 
-enum _CardAnimationType { wave, personCycle, talking }
+enum _CardAnimationType { wave, personCycle, talking, sos }
 

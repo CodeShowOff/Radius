@@ -26,6 +26,12 @@ import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.da
 import '../../features/nearby_groups/presentation/pages/create_nearby_group_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_group_chat_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_groups_page.dart';
+import '../../features/nearby_help/presentation/bloc/nearby_help_bloc.dart';
+import '../../features/nearby_help/presentation/pages/nearby_help_page.dart';
+import '../../features/nearby_help/presentation/pages/nearby_help_settings_page.dart';
+import '../../features/nearby_help/presentation/pages/create_help_request_page.dart';
+import '../../features/nearby_help/presentation/pages/help_request_preview_page.dart';
+import '../../features/nearby_help/presentation/pages/helper_navigation_page.dart';
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
 import '../../features/random_groups/presentation/pages/create_random_group_page.dart';
@@ -453,6 +459,60 @@ GoRouter get appRouter {
               BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
             ],
             child: RandomGroupChatPage(groupId: groupId),
+          );
+        },
+      ),
+
+      // Nearby Help routes
+      GoRoute(
+        path: Routes.nearbyHelp,
+        name: 'nearbyHelp',
+        builder: (context, state) {
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: const NearbyHelpPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyHelpSettings,
+        name: 'nearbyHelpSettings',
+        builder: (context, state) {
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: const NearbyHelpSettingsPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyHelpCreateRequest,
+        name: 'nearbyHelpCreateRequest',
+        builder: (context, state) {
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: const CreateHelpRequestPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyHelpRequestDetail,
+        name: 'nearbyHelpRequestDetail',
+        builder: (context, state) {
+          final requestId = state.pathParameters['requestId'] ?? '';
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: HelpRequestPreviewPage(requestId: requestId),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyHelpHelperNavigation,
+        name: 'nearbyHelpHelperNavigation',
+        builder: (context, state) {
+          final requestId = state.pathParameters['requestId'] ?? '';
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: HelperNavigationPage(requestId: requestId),
           );
         },
       ),

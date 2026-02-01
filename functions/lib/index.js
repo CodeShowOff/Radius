@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.cleanupExpiredGuessMeSessions = exports.onConnectionRequestAccepted = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
+exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.cleanupExpiredGuessMeSessions = exports.onConnectionRequestAccepted = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = __importStar(require("firebase-admin"));
@@ -806,6 +806,519 @@ exports.cleanupOldGroupJoinRequests = (0, scheduler_1.onSchedule)({
     }
     catch (error) {
         firebase_functions_1.logger.error("Error cleaning up group join requests:", error);
+    }
+});
+// ============================================================================
+// NEARBY HELP FUNCTIONS
+// ============================================================================
+/**
+ * Calculate distance between two points using Haversine formula.
+ * Returns distance in meters.
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+/**
+ * Get approximate distance string for privacy (before helper accepts).
+ */
+function getApproximateDistance(distanceMeters) {
+    if (distanceMeters < 50)
+        return "Very close (~50m)";
+    if (distanceMeters < 100)
+        return "Nearby (~100m)";
+    if (distanceMeters < 250)
+        return "Within 250m";
+    if (distanceMeters < 500)
+        return "Within 500m";
+    if (distanceMeters < 1000)
+        return "Within 1km";
+    return "Over 1km away";
+}
+/**
+ * Send push notification when a new help request is created.
+ * Notifies nearby users who have help alerts enabled.
+ */
+exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests/{requestId}", async (event) => {
+    const helpRequest = event.data?.data();
+    if (!helpRequest)
+        return;
+    const requestId = event.params.requestId;
+    const seekerId = helpRequest.seekerUserId;
+    const radiusMeters = helpRequest.radius || 100;
+    const seekerLat = helpRequest.latitude;
+    const seekerLon = helpRequest.longitude;
+    const topic = helpRequest.topic || "General help";
+    firebase_functions_1.logger.log(`New help request created: ${requestId} with radius ${radiusMeters}m`);
+    try {
+        // Get all users with help alerts enabled
+        const usersSnapshot = await admin
+            .firestore()
+            .collection("users")
+            .get();
+        const tokensToNotify = [];
+        for (const userDoc of usersSnapshot.docs) {
+            const userId = userDoc.id;
+            // Skip the seeker themselves
+            if (userId === seekerId)
+                continue;
+            const userData = userDoc.data();
+            // Check if user has opted in for help alerts
+            const helpSettings = userData?.nearbyHelpSettings;
+            if (helpSettings?.receiveHelpAlerts === false)
+                continue;
+            // Check if user has FCM tokens
+            const fcmTokens = userData?.fcmTokens || {};
+            const tokens = Object.keys(fcmTokens);
+            if (tokens.length === 0)
+                continue;
+            // Get user's locations (home/work)
+            const locationsSnapshot = await admin
+                .firestore()
+                .collection("users")
+                .doc(userId)
+                .collection("locations")
+                .get();
+            // Check each location for proximity
+            for (const locationDoc of locationsSnapshot.docs) {
+                const location = locationDoc.data();
+                // Skip if this location is not active for help alerts
+                if (location.isActive === false)
+                    continue;
+                const userLat = location.latitude;
+                const userLon = location.longitude;
+                if (userLat == null || userLon == null)
+                    continue;
+                const distance = calculateDistance(seekerLat, seekerLon, userLat, userLon);
+                // Check if within radius
+                if (distance <= radiusMeters) {
+                    // Add all tokens for this user
+                    for (const token of tokens) {
+                        tokensToNotify.push({ token, userId, distance });
+                    }
+                    // Only count user once (break after first matching location)
+                    break;
+                }
+            }
+        }
+        if (tokensToNotify.length === 0) {
+            firebase_functions_1.logger.log("No nearby users found for help request");
+            return null;
+        }
+        firebase_functions_1.logger.log(`Found ${tokensToNotify.length} tokens to notify`);
+        // Get seeker's name
+        const seekerDoc = await admin
+            .firestore()
+            .collection("users")
+            .doc(seekerId)
+            .get();
+        const seekerName = seekerDoc.data()?.displayName || "Someone nearby";
+        // Group tokens by user and send with approximate distance
+        const uniqueUsers = [...new Set(tokensToNotify.map(t => t.userId))];
+        for (const userId of uniqueUsers) {
+            const userTokens = tokensToNotify.filter(t => t.userId === userId);
+            const minDistance = Math.min(...userTokens.map(t => t.distance));
+            const approximateDistance = getApproximateDistance(minDistance);
+            const payload = {
+                notification: {
+                    title: "🆘 Nearby Help Request",
+                    body: `${seekerName} needs help with: ${topic}. ${approximateDistance}`,
+                },
+                data: {
+                    type: "nearby_help_request",
+                    requestId: requestId,
+                    seekerId: seekerId,
+                    topic: topic,
+                    approximateDistance: approximateDistance,
+                },
+            };
+            const tokens = userTokens.map(t => t.token);
+            try {
+                const response = await admin.messaging().sendEachForMulticast({
+                    tokens: tokens,
+                    notification: payload.notification,
+                    data: payload.data,
+                    android: {
+                        priority: "high",
+                        notification: {
+                            channelId: "radius_nearby_help",
+                            priority: "high",
+                            sound: "default",
+                            defaultSound: true,
+                            tag: `nearby_help_${requestId}`, // Group notifications
+                        },
+                    },
+                    apns: {
+                        payload: {
+                            aps: {
+                                sound: "default",
+                                badge: 1,
+                                threadId: "nearby_help",
+                            },
+                        },
+                    },
+                });
+                firebase_functions_1.logger.log(`User ${userId}: Sent ${response.successCount}, Failed ${response.failureCount}`);
+                // Remove invalid tokens
+                if (response.failureCount > 0) {
+                    const tokensToRemove = [];
+                    response.responses.forEach((resp, idx) => {
+                        if (!resp.success) {
+                            tokensToRemove.push(tokens[idx]);
+                        }
+                    });
+                    if (tokensToRemove.length > 0) {
+                        const updates = {};
+                        tokensToRemove.forEach((token) => {
+                            updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+                        });
+                        await admin
+                            .firestore()
+                            .collection("users")
+                            .doc(userId)
+                            .update(updates);
+                    }
+                }
+            }
+            catch (error) {
+                firebase_functions_1.logger.error(`Error sending to user ${userId}:`, error);
+            }
+        }
+        // Update the request with notification count
+        await admin
+            .firestore()
+            .collection("help_requests")
+            .doc(requestId)
+            .update({
+            notifiedUsersCount: uniqueUsers.length,
+            notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { notifiedUsers: uniqueUsers.length };
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error in onHelpRequestCreated:", error);
+        return null;
+    }
+});
+/**
+ * Send push notification when a helper is assigned to a request.
+ * Notifies the seeker that help is on the way.
+ */
+exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_requests/{requestId}", async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+    if (!beforeData || !afterData)
+        return;
+    // Check if status changed to IN_PROGRESS (helper assigned)
+    if (beforeData.status !== "IN_PROGRESS" && afterData.status === "IN_PROGRESS") {
+        const requestId = event.params.requestId;
+        const seekerId = afterData.seekerId;
+        const helperId = afterData.helperId;
+        if (!helperId) {
+            firebase_functions_1.logger.log("No helper ID in assigned request");
+            return null;
+        }
+        firebase_functions_1.logger.log(`Help request ${requestId} assigned to helper ${helperId}`);
+        try {
+            // Get helper's name
+            const helperDoc = await admin
+                .firestore()
+                .collection("users")
+                .doc(helperId)
+                .get();
+            const helperName = helperDoc.data()?.displayName || "A helper";
+            // Get seeker's FCM tokens
+            const seekerDoc = await admin
+                .firestore()
+                .collection("users")
+                .doc(seekerId)
+                .get();
+            if (!seekerDoc.exists) {
+                firebase_functions_1.logger.log("Seeker not found");
+                return null;
+            }
+            const seekerData = seekerDoc.data();
+            const fcmTokens = seekerData?.fcmTokens || {};
+            const tokens = Object.keys(fcmTokens);
+            if (tokens.length === 0) {
+                firebase_functions_1.logger.log("No FCM tokens for seeker");
+                return null;
+            }
+            const payload = {
+                notification: {
+                    title: "✅ Help is on the way!",
+                    body: `${helperName} is coming to help you`,
+                },
+                data: {
+                    type: "nearby_help_assigned",
+                    requestId: requestId,
+                    helperId: helperId,
+                    helperName: helperName,
+                },
+            };
+            const response = await admin.messaging().sendEachForMulticast({
+                tokens: tokens,
+                notification: payload.notification,
+                data: payload.data,
+                android: {
+                    priority: "high",
+                    notification: {
+                        channelId: "radius_nearby_help",
+                        priority: "high",
+                        sound: "default",
+                        defaultSound: true,
+                    },
+                },
+                apns: {
+                    payload: {
+                        aps: {
+                            sound: "default",
+                            badge: 1,
+                        },
+                    },
+                },
+            });
+            firebase_functions_1.logger.log(`Seeker notification: Sent ${response.successCount}, Failed ${response.failureCount}`);
+            // Remove invalid tokens
+            if (response.failureCount > 0) {
+                const tokensToRemove = [];
+                response.responses.forEach((resp, idx) => {
+                    if (!resp.success) {
+                        tokensToRemove.push(tokens[idx]);
+                    }
+                });
+                if (tokensToRemove.length > 0) {
+                    const updates = {};
+                    tokensToRemove.forEach((token) => {
+                        updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+                    });
+                    await admin
+                        .firestore()
+                        .collection("users")
+                        .doc(seekerId)
+                        .update(updates);
+                }
+            }
+            return response;
+        }
+        catch (error) {
+            firebase_functions_1.logger.error("Error in onHelpRequestAssigned:", error);
+            return null;
+        }
+    }
+    // Check if status changed to RESOLVED (help completed)
+    if (beforeData.status !== "RESOLVED" && afterData.status === "RESOLVED") {
+        const requestId = event.params.requestId;
+        const seekerId = afterData.seekerId;
+        const helperId = afterData.helperId;
+        const completedBy = afterData.completedBy;
+        firebase_functions_1.logger.log(`Help request ${requestId} completed by ${completedBy}`);
+        try {
+            // Notify the other party
+            const notifyUserId = completedBy === seekerId ? helperId : seekerId;
+            if (!notifyUserId) {
+                firebase_functions_1.logger.log("No user to notify");
+                return null;
+            }
+            const userDoc = await admin
+                .firestore()
+                .collection("users")
+                .doc(notifyUserId)
+                .get();
+            if (!userDoc.exists) {
+                firebase_functions_1.logger.log("User to notify not found");
+                return null;
+            }
+            const userData = userDoc.data();
+            const fcmTokens = userData?.fcmTokens || {};
+            const tokens = Object.keys(fcmTokens);
+            if (tokens.length === 0) {
+                firebase_functions_1.logger.log("No FCM tokens for user to notify");
+                return null;
+            }
+            const isSeeker = notifyUserId === seekerId;
+            const payload = {
+                notification: {
+                    title: "🎉 Help Request Completed",
+                    body: isSeeker
+                        ? "Your helper marked the request as completed"
+                        : "The requester confirmed help was received",
+                },
+                data: {
+                    type: "nearby_help_completed",
+                    requestId: requestId,
+                },
+            };
+            const response = await admin.messaging().sendEachForMulticast({
+                tokens: tokens,
+                notification: payload.notification,
+                data: payload.data,
+                android: {
+                    priority: "high",
+                    notification: {
+                        channelId: "radius_nearby_help",
+                        priority: "default",
+                        sound: "default",
+                    },
+                },
+                apns: {
+                    payload: {
+                        aps: {
+                            sound: "default",
+                        },
+                    },
+                },
+            });
+            firebase_functions_1.logger.log(`Completion notification: Sent ${response.successCount}, Failed ${response.failureCount}`);
+            return response;
+        }
+        catch (error) {
+            firebase_functions_1.logger.error("Error sending completion notification:", error);
+            return null;
+        }
+    }
+    // Check if status changed to CANCELLED
+    if (beforeData.status !== "CANCELLED" && afterData.status === "CANCELLED") {
+        const requestId = event.params.requestId;
+        const helperId = afterData.helperId;
+        const cancelledBy = afterData.cancelledBy;
+        // Only notify helper if request was assigned and cancelled by seeker
+        if (!helperId || cancelledBy === helperId) {
+            return null;
+        }
+        firebase_functions_1.logger.log(`Help request ${requestId} cancelled, notifying helper`);
+        try {
+            const helperDoc = await admin
+                .firestore()
+                .collection("users")
+                .doc(helperId)
+                .get();
+            if (!helperDoc.exists) {
+                return null;
+            }
+            const helperData = helperDoc.data();
+            const fcmTokens = helperData?.fcmTokens || {};
+            const tokens = Object.keys(fcmTokens);
+            if (tokens.length === 0) {
+                return null;
+            }
+            const payload = {
+                notification: {
+                    title: "Help Request Cancelled",
+                    body: "The requester cancelled their help request",
+                },
+                data: {
+                    type: "nearby_help_cancelled",
+                    requestId: requestId,
+                },
+            };
+            const response = await admin.messaging().sendEachForMulticast({
+                tokens: tokens,
+                notification: payload.notification,
+                data: payload.data,
+                android: {
+                    priority: "high",
+                    notification: {
+                        channelId: "radius_nearby_help",
+                        priority: "default",
+                    },
+                },
+                apns: {
+                    payload: {
+                        aps: {
+                            sound: "default",
+                        },
+                    },
+                },
+            });
+            return response;
+        }
+        catch (error) {
+            firebase_functions_1.logger.error("Error sending cancellation notification:", error);
+            return null;
+        }
+    }
+    return null;
+});
+/**
+ * Scheduled function to expire old help requests.
+ * Runs every 15 minutes to check for requests older than 1 hour.
+ */
+exports.expireOldHelpRequests = (0, scheduler_1.onSchedule)("every 15 minutes", async () => {
+    const oneHourAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 60 * 60 * 1000));
+    firebase_functions_1.logger.log("Checking for expired help requests...");
+    try {
+        // Find open requests older than 1 hour
+        const expiredRequests = await admin
+            .firestore()
+            .collection("help_requests")
+            .where("status", "==", "OPEN")
+            .where("createdAt", "<", oneHourAgo)
+            .get();
+        if (expiredRequests.empty) {
+            firebase_functions_1.logger.log("No expired requests found");
+            return;
+        }
+        firebase_functions_1.logger.log(`Found ${expiredRequests.size} expired requests`);
+        // Update each to EXPIRED status
+        const batch = admin.firestore().batch();
+        expiredRequests.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+                status: "EXPIRED",
+                expiredAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        });
+        await batch.commit();
+        // Notify seekers about expiration
+        for (const doc of expiredRequests.docs) {
+            const request = doc.data();
+            const seekerId = request.seekerId;
+            try {
+                const seekerDoc = await admin
+                    .firestore()
+                    .collection("users")
+                    .doc(seekerId)
+                    .get();
+                if (!seekerDoc.exists)
+                    continue;
+                const seekerData = seekerDoc.data();
+                const fcmTokens = seekerData?.fcmTokens || {};
+                const tokens = Object.keys(fcmTokens);
+                if (tokens.length === 0)
+                    continue;
+                await admin.messaging().sendEachForMulticast({
+                    tokens: tokens,
+                    notification: {
+                        title: "Help Request Expired",
+                        body: "Your help request has expired. You can create a new one if needed.",
+                    },
+                    data: {
+                        type: "nearby_help_expired",
+                        requestId: doc.id,
+                    },
+                    android: {
+                        notification: {
+                            channelId: "radius_nearby_help",
+                        },
+                    },
+                });
+            }
+            catch (error) {
+                firebase_functions_1.logger.error(`Error notifying seeker ${seekerId}:`, error);
+            }
+        }
+        firebase_functions_1.logger.log(`Expired ${expiredRequests.size} help requests`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error expiring help requests:", error);
     }
 });
 //# sourceMappingURL=index.js.map
