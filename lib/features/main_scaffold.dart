@@ -27,8 +27,12 @@ class _MainScaffoldState extends State<MainScaffold> {
       return 0;
     } else if (location.startsWith('/connections')) {
       return 1;
-    } else if (location.startsWith('/my-groups')) {
+    } else if (location.startsWith('/nearby-groups')) {
       return 2;
+    } else if (location.startsWith('/random-groups')) {
+      return 3;
+    } else if (location.startsWith('/my-groups')) {
+      return 4;
     }
     return 0;
   }
@@ -42,6 +46,12 @@ class _MainScaffoldState extends State<MainScaffold> {
         context.go(Routes.connections);
         break;
       case 2:
+        context.go(Routes.nearbyGroups);
+        break;
+      case 3:
+        context.go(Routes.randomGroups);
+        break;
+      case 4:
         context.go(Routes.myGroups);
         break;
     }
@@ -64,6 +74,16 @@ class _MainScaffoldState extends State<MainScaffold> {
             icon: _ConnectionsIcon(selected: false),
             selectedIcon: _ConnectionsIcon(selected: true),
             label: 'Connections',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bluetooth_searching_outlined),
+            selectedIcon: Icon(Icons.bluetooth_searching),
+            label: 'Nearby',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.shuffle_outlined),
+            selectedIcon: Icon(Icons.shuffle),
+            label: 'Random',
           ),
           NavigationDestination(
             icon: _GroupsIcon(selected: false),

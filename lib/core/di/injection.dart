@@ -21,6 +21,16 @@ import '../../features/location_groups/data/location_data_service.dart';
 import '../../features/location_groups/data/location_group_service.dart';
 import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
 import '../../features/location_groups/presentation/bloc/location_group_bloc.dart';
+import '../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
+import '../../features/nearby_groups/data/nearby_group_chat_service.dart';
+import '../../features/nearby_groups/data/nearby_group_service.dart';
+import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
+import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.dart';
+import '../../features/random_groups/data/random_group_chat_cache_service.dart';
+import '../../features/random_groups/data/random_group_chat_service.dart';
+import '../../features/random_groups/data/random_group_service.dart';
+import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
+import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/domain/repositories/i_profile_repository.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
@@ -188,6 +198,67 @@ Future<void> configureDependencies() {
       () => GroupChatBloc(
         chatService: getIt<GroupChatService>(),
         cacheService: getIt<GroupChatCacheService>(),
+      ),
+    );
+  }
+
+  // Nearby Groups feature - Bluetooth-based proximity groups
+  if (!getIt.isRegistered<NearbyGroupService>()) {
+    getIt.registerLazySingleton<NearbyGroupService>(() => NearbyGroupService());
+  }
+
+  if (!getIt.isRegistered<NearbyGroupChatService>()) {
+    getIt.registerLazySingleton<NearbyGroupChatService>(() => NearbyGroupChatService());
+  }
+
+  if (!getIt.isRegistered<NearbyGroupChatCacheService>()) {
+    getIt.registerLazySingleton<NearbyGroupChatCacheService>(() => NearbyGroupChatCacheService());
+  }
+
+  if (!getIt.isRegistered<NearbyGroupBloc>()) {
+    getIt.registerLazySingleton<NearbyGroupBloc>(
+      () => NearbyGroupBloc(
+        groupService: getIt<NearbyGroupService>(),
+        proximityService: getIt<ProximityService>(),
+      ),
+    );
+  }
+
+  if (!getIt.isRegistered<NearbyGroupChatBloc>()) {
+    getIt.registerLazySingleton<NearbyGroupChatBloc>(
+      () => NearbyGroupChatBloc(
+        chatService: getIt<NearbyGroupChatService>(),
+        cacheService: getIt<NearbyGroupChatCacheService>(),
+      ),
+    );
+  }
+
+  // Random Groups feature - Admin-approved internet-based groups
+  if (!getIt.isRegistered<RandomGroupService>()) {
+    getIt.registerLazySingleton<RandomGroupService>(() => RandomGroupService());
+  }
+
+  if (!getIt.isRegistered<RandomGroupChatService>()) {
+    getIt.registerLazySingleton<RandomGroupChatService>(() => RandomGroupChatService());
+  }
+
+  if (!getIt.isRegistered<RandomGroupChatCacheService>()) {
+    getIt.registerLazySingleton<RandomGroupChatCacheService>(() => RandomGroupChatCacheService());
+  }
+
+  if (!getIt.isRegistered<RandomGroupBloc>()) {
+    getIt.registerLazySingleton<RandomGroupBloc>(
+      () => RandomGroupBloc(
+        groupService: getIt<RandomGroupService>(),
+      ),
+    );
+  }
+
+  if (!getIt.isRegistered<RandomGroupChatBloc>()) {
+    getIt.registerLazySingleton<RandomGroupChatBloc>(
+      () => RandomGroupChatBloc(
+        chatService: getIt<RandomGroupChatService>(),
+        cacheService: getIt<RandomGroupChatCacheService>(),
       ),
     );
   }

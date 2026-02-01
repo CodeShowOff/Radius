@@ -531,6 +531,83 @@ service cloud.firestore {
     }
     
     // ============================================================
+    // NEARBY GROUPS (Bluetooth-based proximity)
+    // ============================================================
+    
+    match /nearby_groups/{groupId} {
+      /// Check if user is the creator of this group
+      function isNearbyGroupCreator() {
+        return resource.data.creatorId == request.auth.uid;
+      }
+      
+      /// Check if user is a member of this nearby group (detected via Bluetooth)
+      function isNearbyGroupMember() {
+        return exists(/databases/$(database)/documents/nearby_groups/$(groupId)/members/$(request.auth.uid));
+      }
+      
+      // RULE: Any authenticated user can read active nearby groups (for discovery)
+      allow read: if isAuthenticated();
+      
+      // RULE: Users can create ONE nearby group at a time
+      // The app must enforce this client-side by closing existing groups first
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 50;
+      
+      // RULE: Only creator can update group (for status changes, heartbeat)
+      allow update: if isAuthenticated()
+        && isNearbyGroupCreator()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['creatorId', 'createdAt']);
+      
+      // RULE: Only creator can delete their group
+      allow delete: if isAuthenticated() && isNearbyGroupCreator();
+      
+      // Members subcollection (managed by creator via Bluetooth detection)
+      match /members/{memberId} {
+        // RULE: Any authenticated user can read members (for UI display)
+        allow read: if isAuthenticated();
+        
+        // RULE: Only creator can manage members (add/remove based on Bluetooth)
+        allow create, update: if isAuthenticated()
+          && get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid
+          && request.resource.data.userId == memberId;
+        
+        // RULE: Creator can remove members, or members can remove themselves
+        allow delete: if isAuthenticated()
+          && (get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid
+              || memberId == request.auth.uid);
+      }
+      
+      // Messages subcollection (open chatroom model)
+      match /messages/{messageId} {
+        // RULE: Only members can read messages
+        allow read: if isAuthenticated() && isNearbyGroupMember();
+        
+        // RULE: Only members can send messages
+        allow create: if isAuthenticated()
+          && isNearbyGroupMember()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.groupId == groupId
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+        
+        // RULE: Senders can delete their own messages, creator can delete any
+        allow update: if isAuthenticated()
+          && (resource.data.senderId == request.auth.uid 
+              || get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted']);
+        
+        // RULE: No hard deletes
+        allow delete: if false;
+      }
+    }
+    
+    // ============================================================
     // LOCATION GROUPS
     // ============================================================
     

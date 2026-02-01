@@ -21,6 +21,17 @@ import '../../features/location_groups/presentation/pages/find_groups_page.dart'
 import '../../features/location_groups/presentation/pages/group_chat_page.dart';
 import '../../features/location_groups/presentation/pages/group_detail_page.dart';
 import '../../features/location_groups/presentation/pages/my_groups_page.dart';
+import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
+import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.dart';
+import '../../features/nearby_groups/presentation/pages/create_nearby_group_page.dart';
+import '../../features/nearby_groups/presentation/pages/nearby_group_chat_page.dart';
+import '../../features/nearby_groups/presentation/pages/nearby_groups_page.dart';
+import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
+import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
+import '../../features/random_groups/presentation/pages/create_random_group_page.dart';
+import '../../features/random_groups/presentation/pages/random_group_chat_page.dart';
+import '../../features/random_groups/presentation/pages/random_group_detail_page.dart';
+import '../../features/random_groups/presentation/pages/random_groups_page.dart';
 import '../../features/main_scaffold.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
@@ -160,6 +171,32 @@ GoRouter get appRouter {
             name: 'connections',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: ConnectionsPage(),
+            ),
+          ),
+          GoRoute(
+            path: Routes.nearbyGroups,
+            name: 'nearbyGroupsTab',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+                  BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
+                ],
+                child: const NearbyGroupsPage(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: Routes.randomGroups,
+            name: 'randomGroupsTab',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider.value(value: getIt<RandomGroupBloc>()),
+                  BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
+                ],
+                child: const RandomGroupsPage(),
+              ),
             ),
           ),
           GoRoute(
@@ -350,6 +387,72 @@ GoRouter get appRouter {
           return BlocProvider.value(
             value: getIt<GroupChatBloc>(),
             child: GroupChatPage(groupId: groupId),
+          );
+        },
+      ),
+
+      // Nearby Groups routes (Bluetooth-based proximity groups)
+      GoRoute(
+        path: Routes.createNearbyGroup,
+        name: 'createNearbyGroup',
+        builder: (context, state) {
+          return BlocProvider.value(
+            value: getIt<NearbyGroupBloc>(),
+            child: const CreateNearbyGroupPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyGroupChat,
+        name: 'nearbyGroupChat',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+              BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
+            ],
+            child: NearbyGroupChatPage(groupId: groupId),
+          );
+        },
+      ),
+
+      // Random Groups routes (Admin-approved internet-based groups)
+      GoRoute(
+        path: Routes.createRandomGroup,
+        name: 'createRandomGroup',
+        builder: (context, state) {
+          return BlocProvider.value(
+            value: getIt<RandomGroupBloc>(),
+            child: const CreateRandomGroupPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.randomGroupDetail,
+        name: 'randomGroupDetail',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<RandomGroupBloc>()),
+              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
+            ],
+            child: RandomGroupDetailPage(groupId: groupId),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.randomGroupChat,
+        name: 'randomGroupChat',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<RandomGroupBloc>()),
+              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
+            ],
+            child: RandomGroupChatPage(groupId: groupId),
           );
         },
       ),

@@ -65,4 +65,27 @@ abstract class Routes {
   /// Helper to build a group chat route with group ID.
   static String locationGroupChatWith(String groupId) =>
       '/location-groups/$groupId/chat';
+
+  // Nearby Groups routes (Bluetooth-based proximity groups)
+  static const String nearbyGroups = '/nearby-groups';
+  static const String createNearbyGroup = '/nearby-groups/create';
+  static const String nearbyGroupChat = '/nearby-groups/:groupId/chat';
+
+  /// Helper to build a nearby group chat route with group ID.
+  static String nearbyGroupChatWith(String groupId) =>
+      '/nearby-groups/$groupId/chat';
+
+  // Random Groups routes (Admin-approved internet-based groups)
+  static const String randomGroups = '/random-groups';
+  static const String createRandomGroup = '/random-groups/create';
+  static const String randomGroupDetail = '/random-groups/:groupId';
+  static const String randomGroupChat = '/random-groups/:groupId/chat';
+
+  /// Helper to build a random group detail route with group ID.
+  static String randomGroupDetailWith(String groupId) =>
+      '/random-groups/$groupId';
+
+  /// Helper to build a random group chat route with group ID.
+  static String randomGroupChatWith(String groupId) =>
+      '/random-groups/$groupId/chat';
 }
