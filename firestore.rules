@@ -789,6 +789,135 @@ service cloud.firestore {
     }
     
     // ============================================================
+    // RANDOM GROUPS (Admin-approved internet-based groups)
+    // ============================================================
+    
+    match /random_groups/{groupId} {
+      /// Check if user is the creator of this group
+      function isRandomGroupCreator() {
+        return resource.data.creatorId == request.auth.uid;
+      }
+      
+      /// Check if user is an admin of this random group
+      function isRandomGroupAdmin() {
+        return request.auth.uid in resource.data.adminIds;
+      }
+      
+      /// Check if user is a member of this random group
+      function isRandomGroupMember() {
+        return exists(/databases/$(database)/documents/random_groups/$(groupId)/members/$(request.auth.uid));
+      }
+      
+      // RULE: Any authenticated user can read active random groups (for discovery)
+      allow read: if isAuthenticated();
+      
+      // RULE: Users can create random groups
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.memberCount == 1
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 50
+        && request.auth.uid in request.resource.data.adminIds;
+      
+      // RULE: Only admins can update group settings
+      allow update: if isAuthenticated()
+        && isRandomGroupAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['creatorId', 'createdAt']);
+      
+      // RULE: Only creator can delete (soft delete via status change)
+      allow delete: if isAuthenticated() && isRandomGroupCreator();
+      
+      // Members subcollection
+      match /members/{memberId} {
+        // RULE: Any authenticated user can read members
+        allow read: if isAuthenticated();
+        
+        // RULE: Creator auto-adds themselves, or admins add approved members
+        allow create: if isAuthenticated()
+          && request.resource.data.userId == memberId
+          && (
+            // Creator adding themselves during group creation
+            (memberId == request.auth.uid 
+              && get(/databases/$(database)/documents/random_groups/$(groupId)).data.creatorId == request.auth.uid)
+            // Admin adding approved member
+            || request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+          );
+        
+        // RULE: Admins can update member status
+        allow update: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds;
+        
+        // RULE: Admins can remove members (except creator), members can leave
+        allow delete: if isAuthenticated()
+          && (
+            // Member leaving on their own
+            (memberId == request.auth.uid 
+              && get(/databases/$(database)/documents/random_groups/$(groupId)).data.creatorId != request.auth.uid)
+            // Admin removing member (not creator)
+            || (request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+                && get(/databases/$(database)/documents/random_groups/$(groupId)).data.creatorId != memberId)
+          );
+      }
+      
+      // Join requests subcollection
+      match /join_requests/{requestId} {
+        // RULE: Admins can read all requests, users can read their own
+        allow read: if isAuthenticated()
+          && (request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+              || resource.data.requesterId == request.auth.uid);
+        
+        // RULE: Any authenticated user can create a join request
+        allow create: if isAuthenticated()
+          && request.resource.data.requesterId == request.auth.uid
+          && request.resource.data.groupId == groupId
+          && request.resource.data.status == 'pending';
+        
+        // RULE: Only admins can update requests (approve/reject)
+        allow update: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+          && request.resource.data.status in ['approved', 'rejected']
+          && resource.data.status == 'pending';
+        
+        // RULE: No deletes - keep request history
+        allow delete: if false;
+      }
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // RULE: Only members can read messages
+        allow read: if isAuthenticated() && isRandomGroupMember();
+        
+        // RULE: Only members can send messages
+        allow create: if isAuthenticated()
+          && isRandomGroupMember()
+          && (
+            // Regular text messages from members
+            (request.resource.data.senderId == request.auth.uid
+             && request.resource.data.type != 'system')
+            // System messages: sent by service for join/leave notifications
+            || (request.resource.data.senderId == null
+                && request.resource.data.type == 'system'
+                && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds)
+          )
+          && request.resource.data.groupId == groupId
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+        
+        // RULE: Senders can delete their own messages, admins can delete any
+        allow update: if false; // No edits
+        
+        // RULE: Senders can delete their own, admins can delete any
+        allow delete: if isAuthenticated()
+          && (resource.data.senderId == request.auth.uid 
+              || request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds);
+      }
+    }
+    
+    // ============================================================
     // DEVICE SESSIONS (Security & Debugging)
     // ============================================================
     

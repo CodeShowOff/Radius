@@ -198,22 +198,52 @@ class RandomGroupService {
   }
 
   /// Stream of groups the user is a member of.
+  ///
+  /// Uses a collection group query on the 'members' subcollection to efficiently
+  /// find all groups where the user is a member, then fetches the group details.
   Stream<List<RandomGroup>> watchUserMemberships(String userId) {
-    return _groupsRef
-        .where('status', isEqualTo: 'active')
+    // Use collection group query to find all memberships for this user
+    return _firestore
+        .collectionGroup('members')
+        .where('userId', isEqualTo: userId)
         .snapshots()
         .asyncMap((snapshot) async {
+      if (snapshot.docs.isEmpty) return <RandomGroup>[];
+
+      // Extract group IDs from the member documents
+      final groupIds = snapshot.docs
+          .map((doc) {
+            // Path format: random_groups/{groupId}/members/{memberId}
+            final pathSegments = doc.reference.path.split('/');
+            if (pathSegments.length >= 2) {
+              return pathSegments[pathSegments.length - 3]; // Get groupId
+            }
+            return null;
+          })
+          .where((id) => id != null)
+          .cast<String>()
+          .toSet()
+          .toList();
+
+      if (groupIds.isEmpty) return <RandomGroup>[];
+
+      // Fetch group details for each group (in batches of 10 for whereIn limitation)
       final memberGroups = <RandomGroup>[];
-      for (final doc in snapshot.docs) {
-        final memberDoc = await _groupsRef
-            .doc(doc.id)
-            .collection('members')
-            .doc(userId)
+      for (var i = 0; i < groupIds.length; i += 10) {
+        final batchIds = groupIds.sublist(
+          i,
+          (i + 10 > groupIds.length) ? groupIds.length : i + 10,
+        );
+        final groupDocs = await _groupsRef
+            .where(FieldPath.documentId, whereIn: batchIds)
+            .where('status', isEqualTo: 'active')
             .get();
-        if (memberDoc.exists) {
+
+        for (final doc in groupDocs.docs) {
           memberGroups.add(RandomGroupModel.fromFirestore(doc).toEntity());
         }
       }
+
       return memberGroups;
     });
   }

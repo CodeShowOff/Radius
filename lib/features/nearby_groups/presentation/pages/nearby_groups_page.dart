@@ -466,7 +466,7 @@ class _EmptyDiscoverCard extends StatelessWidget {
           Icon(
             Icons.groups_outlined,
             size: 64,
-            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           Text(
@@ -480,7 +480,7 @@ class _EmptyDiscoverCard extends StatelessWidget {
             'Create a group to start chatting with people around you',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
         ],

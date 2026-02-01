@@ -421,6 +421,108 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "random_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActiveAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "random_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "topic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActiveAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "random_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "join_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "join_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "requesterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "join_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "requesterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "handledAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

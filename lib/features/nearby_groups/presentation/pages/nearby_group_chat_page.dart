@@ -237,7 +237,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                           Icons.chat_bubble_outline,
                           size: 64,
                           color: theme.colorScheme.onSurfaceVariant
-                              .withOpacity(0.5),
+                              .withValues(alpha: 0.5),
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -251,7 +251,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                           'Start the conversation!',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant
-                                .withOpacity(0.7),
+                                .withValues(alpha: 0.7),
                           ),
                         ),
                       ],
@@ -389,7 +389,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.2),
+                              color: Colors.green.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -515,7 +515,7 @@ class _MessageBubble extends StatelessWidget {
                     _formatTime(message.sentAt),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: isMe
-                          ? theme.colorScheme.onPrimary.withOpacity(0.7)
+                          ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
                           : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
