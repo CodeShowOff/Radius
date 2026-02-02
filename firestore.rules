@@ -585,7 +585,9 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 50;
+        && request.resource.data.name.size() <= 50
+        && request.resource.data.creatorUsername is string
+        && request.resource.data.memberCount == 1;
       
       // RULE: Only creator can update group (for status changes, heartbeat)
       allow update: if isAuthenticated()

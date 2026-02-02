@@ -176,7 +176,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         body: SafeArea(
           bottom: true,
-          child: Padding(
+          child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
               16,
               16,
@@ -230,62 +230,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
 
-                // Location Based Groups section - 25% smaller height
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Calculate height: 75% of square card size
-                    // Width of each square card = (total width - gap) / 2
-                    final squareCardWidth = (constraints.maxWidth - 12) / 2;
-                    final reducedHeight = squareCardWidth * 0.75;
-                    return SizedBox(
-                      height: reducedHeight,
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.locationGroups),
-                        label: 'Location Based Groups',
-                        color: Theme.of(context).colorScheme.primary,
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        isSquare: false,
-                        useVerticalLayout: true,
-                        animationType: _CardAnimationType.talking,
-                      ),
-                    );
-                  },
+                // Location Based Groups section - Modern gradient design
+                _ModernGroupCard(
+                  onTap: () => context.push(Routes.locationGroups),
+                  title: 'Location Based Groups',
+                  subtitle: 'Connect with people in your area',
+                  icon: Icons.location_on,
+                  gradientColors: [
+                    const Color(0xFF667eea),
+                    const Color(0xFF764ba2),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // Discover Groups row - Random and Nearby (matching Location Based Groups height)
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Calculate height: 75% of square card size to match Location Based Groups
-                    final squareCardWidth = (constraints.maxWidth - 12) / 2;
-                    final reducedHeight = squareCardWidth * 0.75;
-                    return SizedBox(
-                      height: reducedHeight,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _DiscoverCard(
-                              onTap: () => context.push(Routes.discoverRandomGroups),
-                              label: 'Discover\nRandom Groups',
-                              icon: Icons.public,
-                              color: Theme.of(context).colorScheme.tertiary,
-                              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _DiscoverCard(
-                              onTap: () => context.push(Routes.discoverNearbyGroups),
-                              label: 'Discover\nNearby Groups',
-                              icon: Icons.bluetooth_searching,
-                              color: Theme.of(context).colorScheme.secondary,
-                              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                // Discover Groups - Modern gradient design
+                _ModernGroupCard(
+                  onTap: () => context.push(Routes.discoverRandomGroups),
+                  title: 'Discover Random Groups',
+                  subtitle: 'Join global communities worldwide',
+                  icon: Icons.public,
+                  gradientColors: [
+                    const Color(0xFFf093fb),
+                    const Color(0xFFF5576c),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _ModernGroupCard(
+                  onTap: () => context.push(Routes.discoverNearbyGroups),
+                  title: 'Discover Nearby Groups',
+                  subtitle: 'Find local communities around you',
+                  icon: Icons.bluetooth_searching,
+                  gradientColors: [
+                    const Color(0xFF4facfe),
+                    const Color(0xFF00f2fe),
+                  ],
                 ),
               ],
             ),
@@ -433,66 +411,98 @@ class _AnimatedSquareCard extends StatelessWidget {
 
 enum _CardAnimationType { wave, personCycle, talking, sos }
 
-/// Card widget for discover group buttons on home page.
-class _DiscoverCard extends StatelessWidget {
+/// Modern card widget with gradient background for group discovery on home page.
+class _ModernGroupCard extends StatelessWidget {
   final VoidCallback onTap;
-  final String label;
+  final String title;
+  final String subtitle;
   final IconData icon;
-  final Color color;
-  final Color backgroundColor;
+  final List<Color> gradientColors;
 
-  const _DiscoverCard({
+  const _ModernGroupCard({
     required this.onTap,
-    required this.label,
+    required this.title,
+    required this.subtitle,
     required this.icon,
-    required this.color,
-    required this.backgroundColor,
+    required this.gradientColors,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        color: backgroundColor,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors[0].withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: Row(
             children: [
+              // Icon container with white background
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
                   icon,
-                  size: 24,
-                  color: color,
+                  size: 32,
+                  color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
+              // Text content
               Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
+              // Arrow icon
               Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
-                color: color.withValues(alpha: 0.7),
+                size: 18,
+                color: Colors.white.withValues(alpha: 0.9),
               ),
             ],
           ),

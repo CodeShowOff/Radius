@@ -405,12 +405,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
 
   Widget _buildInputArea(ThemeData theme, RandomGroupChatState state) {
     return Container(
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
