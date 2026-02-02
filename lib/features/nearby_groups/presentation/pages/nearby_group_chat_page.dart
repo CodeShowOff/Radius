@@ -47,11 +47,34 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     _scrollController.addListener(_onScroll);
     _loadGroupDetails();
     _openChat();
+    _resumeScanning();
   }
 
   void _loadGroupDetails() {
     context.read<NearbyGroupBloc>().add(LoadNearbyGroupDetails(widget.groupId));
   }
+
+  void _resumeScanning() {
+    // Resume scanning when entering chat (if user is the creator)
+    final groupBloc = context.read<NearbyGroupBloc>();
+    final groupState = groupBloc.state;
+    final authState = context.read<AuthBloc>().state;
+    
+    if (authState is AuthAuthenticated && 
+        groupState.myActiveGroup != null &&
+        groupState.myActiveGroup!.id == widget.groupId &&
+        groupState.myActiveGroup!.creatorId == authState.user.id) {
+      // User is viewing their own group - ensure scanning is active
+      if (!groupState.isScanning) {
+        groupBloc.add(StartGroupScanning(
+          groupId: widget.groupId,
+          creatorId: authState.user.id,
+          creatorUsername: authState.user.username,
+        ));
+      }
+    }
+  }
+
 
   @override
   void didChangeDependencies() {
@@ -116,7 +139,9 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
       // Ignore if service not available
     }
 
-    // Use cached reference to avoid context access after disposal
+    // Note: We DON'T stop scanning here because the group should stay alive
+    // Scanning continues in the background even when user navigates away
+    // Use cached reference to close chat subscription only
     _chatBloc?.add(const CloseNearbyGroupChat());
     super.dispose();
   }

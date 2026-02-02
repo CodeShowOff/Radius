@@ -131,8 +131,8 @@ class _CreateNearbyGroupPageState extends State<CreateNearbyGroupPage>
           if ((state.status == NearbyGroupBlocStatus.created ||
                state.status == NearbyGroupBlocStatus.scanning) &&
               state.myActiveGroup != null) {
-            // Navigate to the new group's chat
-            context.go(Routes.nearbyGroupChatWith(state.myActiveGroup!.id));
+            // Navigate to the new group's chat, replacing this creation page
+            context.pushReplacement(Routes.nearbyGroupChatWith(state.myActiveGroup!.id));
           } else if (state.status == NearbyGroupBlocStatus.error) {
             setState(() => _isCreating = false);
             ScaffoldMessenger.of(context).showSnackBar(

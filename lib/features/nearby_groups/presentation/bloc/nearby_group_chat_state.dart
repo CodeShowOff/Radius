@@ -55,9 +55,10 @@ class NearbyGroupChatState extends Equatable {
   });
 
   /// Whether currently loading
-  bool get isLoading =>
-      status == NearbyGroupChatStatus.loading ||
-      status == NearbyGroupChatStatus.sending;
+  bool get isLoading => status == NearbyGroupChatStatus.loading;
+
+  /// Whether currently sending a message
+  bool get isSending => status == NearbyGroupChatStatus.sending;
 
   /// Whether we're in the process of verifying membership.
   /// SECURITY: UI should show loading spinner during this state.

@@ -186,8 +186,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Mood selector
-                const MoodSelector(showLabel: true, compact: false),
+                // Mood selector with gradient
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF667eea),
+                        const Color(0xFF764ba2),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF667eea).withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const MoodSelector(showLabel: true, compact: false),
+                ),
                 const SizedBox(height: 16),
 
                 // Quick action buttons row - Nearby and Guess Me
@@ -197,8 +217,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.nearby),
                         label: 'Nearby',
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Colors.white,
                         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        gradientColors: [
+                          const Color(0xFF667eea),
+                          const Color(0xFF764ba2),
+                        ],
                         isSquare: true,
                         animationType: _CardAnimationType.wave,
                       ),
@@ -208,8 +232,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.guessme),
                         label: 'Guess Me',
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Colors.white,
                         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        gradientColors: [
+                          const Color(0xFF667eea),
+                          const Color(0xFF764ba2),
+                        ],
                         isSquare: true,
                         animationType: _CardAnimationType.personCycle,
                       ),
@@ -250,8 +278,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   subtitle: 'Join global communities worldwide',
                   icon: Icons.public,
                   gradientColors: [
-                    const Color(0xFFf093fb),
-                    const Color(0xFFF5576c),
+                    const Color(0xFF667eea),
+                    const Color(0xFF764ba2),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -261,8 +289,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   subtitle: 'Find local communities around you',
                   icon: Icons.bluetooth_searching,
                   gradientColors: [
-                    const Color(0xFF4facfe),
-                    const Color(0xFF00f2fe),
+                    const Color(0xFF667eea),
+                    const Color(0xFF764ba2),
                   ],
                 ),
               ],
@@ -280,6 +308,7 @@ class _AnimatedSquareCard extends StatelessWidget {
   final String label;
   final Color color;
   final Color backgroundColor;
+  final List<Color>? gradientColors;
   final bool isSquare;
   final bool useVerticalLayout;
   final _CardAnimationType animationType;
@@ -289,6 +318,7 @@ class _AnimatedSquareCard extends StatelessWidget {
     required this.label,
     required this.color,
     required this.backgroundColor,
+    this.gradientColors,
     this.isSquare = false,
     this.useVerticalLayout = false,
     this.animationType = _CardAnimationType.wave,
@@ -311,6 +341,66 @@ class _AnimatedSquareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    if (gradientColors != null) {
+      // Use gradient style
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors!,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: gradientColors![0].withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: (isSquare || useVerticalLayout)
+              ? _buildVerticalContent(theme)
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _getIcon(),
+                          size: 28,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      );
+    }
+
+    // Use solid color style
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -364,6 +454,11 @@ class _AnimatedSquareCard extends StatelessWidget {
     final double iconPad = 14;
     final double iconSize = 34;
     final double gap = 12;
+    
+    // Use white with transparency for gradient backgrounds
+    final iconBgColor = gradientColors != null 
+        ? Colors.white.withValues(alpha: 0.2)
+        : color.withValues(alpha: 0.2);
 
     final content = Padding(
       padding: outerPadding,
@@ -374,7 +469,7 @@ class _AnimatedSquareCard extends StatelessWidget {
           Container(
             padding: EdgeInsets.all(iconPad),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
+              color: iconBgColor,
               shape: BoxShape.circle,
             ),
             child: Icon(

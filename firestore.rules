@@ -604,7 +604,19 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         
         // RULE: Only creator can manage members (add/remove based on Bluetooth)
-        allow create, update: if isAuthenticated()
+        // Special case: Allow user to add themselves as first member during batch group creation
+        // (when parent doc doesn't exist yet in the batch)
+        allow create: if isAuthenticated()
+          && request.resource.data.userId == memberId
+          && (
+            // Case 1: Adding self during initial group creation (batch write)
+            memberId == request.auth.uid
+            // Case 2: Creator adding other members after group exists
+            || get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid
+          );
+        
+        // RULE: Only creator can update members
+        allow update: if isAuthenticated()
           && get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid
           && request.resource.data.userId == memberId;
         
