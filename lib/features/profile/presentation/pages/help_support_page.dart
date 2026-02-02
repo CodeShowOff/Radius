@@ -16,7 +16,10 @@ class HelpSupportPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Help & Support'),
+        title: const Text(
+          'Help & Support',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
@@ -871,7 +874,10 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bluetooth & Battery settings'),
+        title: const Text(
+          'Bluetooth & Battery settings',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
@@ -1062,7 +1068,10 @@ class _FAQsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Frequently Asked Questions'),
+        title: const Text(
+          'Frequently Asked Questions',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
@@ -1241,7 +1250,10 @@ class _UserGuidePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User Guide'),
+        title: const Text(
+          'User Guide',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
@@ -1473,7 +1485,10 @@ class _PrivacyPolicyPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Privacy Policy'),
+        title: const Text(
+          'Privacy Policy',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),
@@ -1707,7 +1722,10 @@ class _TermsOfServicePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Terms of Service'),
+        title: const Text(
+          'Terms of Service',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),

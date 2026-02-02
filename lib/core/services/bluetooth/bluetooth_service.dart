@@ -126,9 +126,17 @@ class BluetoothService {
         _handleAdapterStateChange,
       );
 
-      // Check current adapter state
-      final adapterState = await FlutterBluePlus.adapterState.first;
-      if (adapterState != BluetoothAdapterState.on) {
+      // Check current adapter state with timeout to prevent hanging
+      try {
+        final adapterState = await FlutterBluePlus.adapterState.first
+            .timeout(const Duration(seconds: 3));
+        if (adapterState != BluetoothAdapterState.on) {
+          _setState(BluetoothServiceState.bluetoothOff);
+          return false;
+        }
+      } catch (e) {
+        // Timeout or error getting adapter state - assume Bluetooth might be off
+        // but don't block initialization
         _setState(BluetoothServiceState.bluetoothOff);
         return false;
       }

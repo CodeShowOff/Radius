@@ -430,30 +430,43 @@ class NearbyGroupService {
 
   /// Stream of groups the user is currently a member of.
   /// 
-  /// Note: This uses a collection group query which matches all 'members' subcollections.
-  /// We filter by path to only include nearby_groups.
+  /// This queries the user's membership documents directly and then
+  /// fetches the group details for each active membership.
   Stream<List<NearbyGroup>> watchUserMemberships(String userId) {
-    return _firestore
-        .collectionGroup('members')
-        .where(FieldPath.documentId, isEqualTo: userId)
+    // Query active groups and check if user is a member of each
+    // This is more efficient than collectionGroup query
+    return _groupsRef
+        .where('status', isEqualTo: 'active')
+        .orderBy('lastActiveAt', descending: true)
         .snapshots()
         .asyncMap((snapshot) async {
       final groups = <NearbyGroup>[];
+      final now = DateTime.now();
+      
       for (final doc in snapshot.docs) {
-        // Extract groupId from path: nearby_groups/{groupId}/members/{userId}
-        final pathSegments = doc.reference.path.split('/');
+        // Skip stale groups
+        final group = NearbyGroupModel.fromFirestore(doc).toEntity();
+        if (now.difference(group.lastActiveAt) > groupInactiveTimeout) {
+          continue;
+        }
         
-        // Verify this is a nearby_groups member (not location_groups, etc.)
-        if (pathSegments.length >= 4 && 
-            pathSegments[0] == 'nearby_groups' &&
-            pathSegments[2] == 'members') {
-          final groupId = pathSegments[1];
-          final group = await getGroup(groupId);
-          if (group != null && group.isActive) {
-            groups.add(group);
-          }
+        // Skip groups where user is the creator (handled separately as myActiveGroup)
+        if (group.creatorId == userId) {
+          continue;
+        }
+        
+        // Check if user is a member
+        final memberDoc = await _groupsRef
+            .doc(doc.id)
+            .collection('members')
+            .doc(userId)
+            .get();
+        
+        if (memberDoc.exists) {
+          groups.add(group);
         }
       }
+      
       return groups;
     });
   }

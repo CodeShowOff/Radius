@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../data/nearby_group_chat_cache_service.dart';
 import '../../data/nearby_group_chat_service.dart';
@@ -14,15 +15,16 @@ part 'nearby_group_chat_state.dart';
 /// BLoC for managing nearby group chat messages.
 ///
 /// Key behaviors:
-/// - Verifies membership before showing messages
-/// - Real-time message streaming
+/// - SECURITY: Verifies membership before showing any messages
+/// - Real-time message streaming with optimistic updates
 /// - Caching for instant load on revisit
-/// - No approval required - auto-joined via Bluetooth
+/// - No approval required - auto-joined via Bluetooth proximity
 class NearbyGroupChatBloc
     extends Bloc<NearbyGroupChatEvent, NearbyGroupChatState> {
   final NearbyGroupChatService _chatService;
   final NearbyGroupChatCacheService _cacheService;
   final Logger _logger;
+  final Uuid _uuid = const Uuid();
 
   StreamSubscription<List<NearbyGroupMessage>>? _messagesSubscription;
   bool _hasActiveSubscriptions = false;
@@ -40,6 +42,7 @@ class NearbyGroupChatBloc
     on<SendNearbyGroupMessage>(_onSendNearbyGroupMessage);
     on<LoadMoreNearbyGroupMessages>(_onLoadMoreNearbyGroupMessages);
     on<ResyncNearbyGroupChat>(_onResyncNearbyGroupChat);
+    on<PreloadNearbyGroupChat>(_onPreloadNearbyGroupChat);
     on<DeleteNearbyGroupMessage>(_onDeleteNearbyGroupMessage);
     on<_NearbyGroupMessagesReceived>(_onNearbyGroupMessagesReceived);
     on<_NearbyGroupChatStreamError>(_onNearbyGroupChatStreamError);
@@ -54,13 +57,13 @@ class NearbyGroupChatBloc
   ) async {
     _logger.d('Opening nearby group chat: ${event.groupId}');
 
-    // Check if already loaded with active subscriptions
+    // Check if already loaded with active subscriptions for the same group
     final isSameGroup = state.groupId == event.groupId &&
         state.currentUserId == event.currentUserId;
     final isAlreadyLoaded = state.status == NearbyGroupChatStatus.loaded ||
         state.status == NearbyGroupChatStatus.sending;
 
-    if (isSameGroup && isAlreadyLoaded && _hasActiveSubscriptions) {
+    if (isSameGroup && isAlreadyLoaded && _hasActiveSubscriptions && state.membershipVerified) {
       _logger.i('Chat already loaded with active streams, skipping reload');
       return;
     }
@@ -68,7 +71,7 @@ class NearbyGroupChatBloc
     // Cancel existing subscriptions
     await _cancelSubscriptions();
 
-    // Start loading
+    // Start loading - DO NOT show any content until membership verified
     emit(state.copyWith(
       status: NearbyGroupChatStatus.loading,
       groupId: event.groupId,
@@ -83,14 +86,16 @@ class NearbyGroupChatBloc
     ));
 
     try {
-      // Verify membership
+      // ================================================================
+      // SECURITY: Verify membership FIRST, before showing any content
+      // ================================================================
       final isMember = await _chatService.isMember(
         groupId: event.groupId,
         userId: event.currentUserId,
       );
 
       if (!isMember) {
-        _logger.w('User ${event.currentUserId} is not a member of group ${event.groupId}');
+        _logger.w('User ${event.currentUserId} is not a member of nearby group ${event.groupId}');
         emit(state.copyWith(
           status: NearbyGroupChatStatus.error,
           errorMessage: 'You are not currently in this group. Move closer to the group creator.',
@@ -99,11 +104,14 @@ class NearbyGroupChatBloc
         return;
       }
 
-      // Membership verified - show cached messages if available
+      // ================================================================
+      // Membership verified - NOW safe to show cached messages
+      // ================================================================
       emit(state.copyWith(membershipVerified: true));
 
       if (_cacheService.hasCache(event.groupId)) {
         final cachedMessages = _cacheService.getMessages(event.groupId);
+        _logger.d('Showing ${cachedMessages.length} cached messages');
         emit(state.copyWith(
           status: NearbyGroupChatStatus.loaded,
           messages: cachedMessages,
@@ -112,6 +120,12 @@ class NearbyGroupChatBloc
 
       // Start listening to real-time messages
       await _subscribeToMessages(event.groupId);
+
+      // Mark group as read
+      await _chatService.markGroupAsRead(
+        groupId: event.groupId,
+        userId: event.currentUserId,
+      );
     } catch (e) {
       _logger.e('Error opening nearby group chat', error: e);
       emit(state.copyWith(
@@ -130,7 +144,7 @@ class NearbyGroupChatBloc
     );
 
     _hasActiveSubscriptions = true;
-    _logger.d('Subscribed to messages for group: $groupId');
+    _logger.d('Subscribed to messages for nearby group: $groupId');
   }
 
   Future<void> _cancelSubscriptions() async {
@@ -169,7 +183,28 @@ class NearbyGroupChatBloc
 
     _logger.d('Sending message to nearby group: ${state.groupId}');
 
-    emit(state.copyWith(status: NearbyGroupChatStatus.sending));
+    // ================================================================
+    // OPTIMISTIC UPDATE: Show message immediately with local ID
+    // ================================================================
+    final localId = 'local_${_uuid.v4()}';
+    final optimisticMessage = NearbyGroupMessage(
+      id: localId,
+      groupId: state.groupId!,
+      senderId: state.currentUserId!,
+      senderUsername: state.currentUsername!,
+      senderName: state.currentUserName,
+      senderPhotoUrl: state.currentUserPhotoUrl,
+      text: event.text.trim(),
+      type: NearbyGroupMessageType.text,
+      sentAt: DateTime.now(),
+    );
+
+    // Add optimistic message to the beginning of the list
+    final optimisticMessages = [optimisticMessage, ...state.messages];
+    emit(state.copyWith(
+      status: NearbyGroupChatStatus.sending,
+      messages: optimisticMessages,
+    ));
 
     try {
       await _chatService.sendMessage(
@@ -181,11 +216,27 @@ class NearbyGroupChatBloc
         text: event.text,
       );
 
-      emit(state.copyWith(status: NearbyGroupChatStatus.loaded));
+      // Message sent - the stream will update with the real message
+      // Remove the optimistic message to avoid duplicates
+      final updatedMessages = state.messages
+          .where((m) => m.id != localId)
+          .toList();
+
+      emit(state.copyWith(
+        status: NearbyGroupChatStatus.loaded,
+        messages: updatedMessages,
+      ));
     } catch (e) {
       _logger.e('Failed to send message', error: e);
+
+      // Remove the optimistic message on failure
+      final updatedMessages = state.messages
+          .where((m) => m.id != localId)
+          .toList();
+
       emit(state.copyWith(
         status: NearbyGroupChatStatus.error,
+        messages: updatedMessages,
         errorMessage: 'Failed to send message: $e',
       ));
     }
@@ -199,7 +250,7 @@ class NearbyGroupChatBloc
       return;
     }
 
-    _logger.d('Loading more messages for group: ${state.groupId}');
+    _logger.d('Loading more messages for nearby group: ${state.groupId}');
 
     try {
       final oldestMessage = state.messages.last;
@@ -259,6 +310,44 @@ class NearbyGroupChatBloc
     }
   }
 
+  Future<void> _onPreloadNearbyGroupChat(
+    PreloadNearbyGroupChat event,
+    Emitter<NearbyGroupChatState> emit,
+  ) async {
+    // Skip if already cached
+    if (_cacheService.hasValidCache(event.groupId)) {
+      _logger.d('Nearby group ${event.groupId} already cached, skipping preload');
+      return;
+    }
+
+    _logger.d('Preloading nearby group chat: ${event.groupId}');
+
+    try {
+      // Verify membership first
+      final isMember = await _chatService.isMember(
+        groupId: event.groupId,
+        userId: event.userId,
+      );
+
+      if (!isMember) {
+        _logger.d('User not a member of nearby group ${event.groupId}, skipping preload');
+        return;
+      }
+
+      // Fetch messages and cache them
+      final messages = await _chatService.getMessages(groupId: event.groupId);
+      _cacheService.updateCache(
+        groupId: event.groupId,
+        messages: messages,
+        hasMore: messages.length >= 50,
+      );
+
+      _logger.d('Preloaded ${messages.length} messages for nearby group ${event.groupId}');
+    } catch (e) {
+      _logger.w('Failed to preload nearby group chat', error: e);
+    }
+  }
+
   Future<void> _onDeleteNearbyGroupMessage(
     DeleteNearbyGroupMessage event,
     Emitter<NearbyGroupChatState> emit,
@@ -278,7 +367,7 @@ class NearbyGroupChatBloc
     _NearbyGroupMessagesReceived event,
     Emitter<NearbyGroupChatState> emit,
   ) {
-    _logger.d('Received ${event.messages.length} messages');
+    _logger.d('Received ${event.messages.length} messages from stream');
 
     // Update cache
     if (state.groupId != null) {
@@ -288,8 +377,9 @@ class NearbyGroupChatBloc
       );
     }
 
-    // Merge with existing paginated messages
+    // Filter out local/optimistic messages when merging
     final existingOlderMessages = state.messages
+        .where((m) => !m.id.startsWith('local_'))
         .where((m) => !event.messages.any((newM) => newM.id == m.id))
         .where((m) =>
             event.messages.isEmpty ||

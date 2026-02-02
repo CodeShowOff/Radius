@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
+import '../../data/random_group_chat_service.dart';
 import '../../data/random_group_service.dart';
 import '../../domain/entities/join_request.dart';
 import '../../domain/entities/random_group.dart';
@@ -22,6 +23,7 @@ part 'random_group_state.dart';
 /// - Admin controls
 class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   final RandomGroupService _groupService;
+  final RandomGroupChatService? _chatService;
   final Logger _logger;
 
   StreamSubscription<List<RandomGroup>>? _activeGroupsSubscription;
@@ -33,8 +35,10 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
   RandomGroupBloc({
     required RandomGroupService groupService,
+    RandomGroupChatService? chatService,
     Logger? logger,
   })  : _groupService = groupService,
+        _chatService = chatService,
         _logger = logger ?? Logger(),
         super(const RandomGroupState()) {
     on<WatchActiveRandomGroups>(_onWatchActiveRandomGroups);
@@ -227,6 +231,14 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Approved request: ${event.requestId}');
+        // Send system message for join notification
+        if (_chatService != null && event.requesterUsername != null) {
+          _chatService.sendSystemMessage(
+            groupId: event.groupId,
+            text: '${event.requesterUsername} joined the group',
+            delayBeforeSend: true,
+          );
+        }
         // State will update via stream
 
       case RandomGroupFailure(message: final msg):
@@ -279,6 +291,13 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Removed member: ${event.memberId}');
+        // Send system message for removal notification
+        if (_chatService != null && event.memberUsername != null) {
+          _chatService.sendSystemMessage(
+            groupId: event.groupId,
+            text: '${event.memberUsername} was removed from the group',
+          );
+        }
         // State will update via stream
 
       case RandomGroupFailure(message: final msg):
@@ -321,6 +340,14 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     Emitter<RandomGroupState> emit,
   ) async {
     _logger.d('Leaving group: ${event.groupId}');
+
+    // Send system message before leaving (while still a member)
+    if (_chatService != null && event.username != null) {
+      await _chatService.sendSystemMessage(
+        groupId: event.groupId,
+        text: '${event.username} left the group',
+      );
+    }
 
     final result = await _groupService.leaveGroup(
       groupId: event.groupId,

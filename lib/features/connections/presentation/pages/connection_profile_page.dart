@@ -234,7 +234,10 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(displayName),
+        title: Text(
+          displayName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),

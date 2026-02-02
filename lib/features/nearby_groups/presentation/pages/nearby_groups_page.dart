@@ -8,12 +8,12 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/nearby_group.dart';
 import '../bloc/nearby_group_bloc.dart';
 
-/// Page displaying nearby groups for discovery and management.
+/// Page displaying user's joined nearby groups.
 ///
 /// Shows:
 /// - User's own active group (if any)
 /// - Groups user is currently a member of (via Bluetooth)
-/// - All active nearby groups for discovery
+/// Discovery has been moved to a separate page.
 class NearbyGroupsPage extends StatefulWidget {
   const NearbyGroupsPage({super.key});
 
@@ -36,9 +36,10 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
   void _loadGroups() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<NearbyGroupBloc>()
-        ..add(const WatchActiveNearbyGroups())
-        ..add(WatchUserNearbyGroups(authState.user.id));
+      final bloc = context.read<NearbyGroupBloc>();
+      bloc
+        ..add(WatchUserNearbyGroups(authState.user.id))
+        ..add(LoadUserActiveGroup(authState.user.id));
     }
   }
 
@@ -48,8 +49,16 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearby Groups'),
+        title: const Text(
+          'My Nearby Groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.explore),
+            onPressed: () => context.push(Routes.discoverNearbyGroups),
+            tooltip: 'Discover Groups',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadGroups,
@@ -60,7 +69,8 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
       body: BlocBuilder<NearbyGroupBloc, NearbyGroupState>(
         builder: (context, state) {
           if (state.status == NearbyGroupBlocStatus.loading &&
-              state.activeGroups.isEmpty) {
+              state.userGroups.isEmpty &&
+              state.myActiveGroup == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -87,6 +97,14 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
                   ),
                 ],
               ),
+            );
+          }
+
+          final hasGroups = state.myActiveGroup != null || state.userGroups.isNotEmpty;
+
+          if (!hasGroups) {
+            return _EmptyGroupsView(
+              onDiscoverTap: () => context.push(Routes.discoverNearbyGroups),
             );
           }
 
@@ -120,47 +138,12 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final group = state.userGroups[index];
-                        return _NearbyGroupCard(
-                          group: group,
-                          isMember: true,
-                        );
+                        return _NearbyGroupCard(group: group);
                       },
                       childCount: state.userGroups.length,
                     ),
                   ),
                 ],
-
-                // Discover Nearby Groups Section
-                SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    title: 'Discover Nearby',
-                    subtitle: 'Active groups around you',
-                    icon: Icons.explore,
-                  ),
-                ),
-
-                if (state.activeGroups.isEmpty)
-                  SliverToBoxAdapter(
-                    child: _EmptyDiscoverCard(),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final group = state.activeGroups[index];
-                        // Skip groups user owns or is already in
-                        if (group.id == state.myActiveGroup?.id) {
-                          return const SizedBox.shrink();
-                        }
-                        final isMember = state.userGroups.any((g) => g.id == group.id);
-                        return _NearbyGroupCard(
-                          group: group,
-                          isMember: isMember,
-                        );
-                      },
-                      childCount: state.activeGroups.length,
-                    ),
-                  ),
 
                 // Bottom padding
                 const SliverToBoxAdapter(
@@ -330,10 +313,13 @@ class _MyActiveGroupCard extends StatelessWidget {
   void _showCloseConfirmation(BuildContext context) {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<NearbyGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Group?'),
         content: const Text(
           'This will permanently delete the group, remove all members, '
@@ -341,16 +327,16 @@ class _MyActiveGroupCard extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             onPressed: () {
-              Navigator.pop(ctx);
-              context.read<NearbyGroupBloc>().add(CloseNearbyGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(CloseNearbyGroup(
                     groupId: group.id,
                     userId: authState.user.id,
                   ));
@@ -365,11 +351,9 @@ class _MyActiveGroupCard extends StatelessWidget {
 
 class _NearbyGroupCard extends StatelessWidget {
   final NearbyGroup group;
-  final bool isMember;
 
   const _NearbyGroupCard({
     required this.group,
-    required this.isMember,
   });
 
   @override
@@ -379,9 +363,7 @@ class _NearbyGroupCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
-        onTap: isMember
-            ? () => context.push(Routes.nearbyGroupChatWith(group.id))
-            : null,
+        onTap: () => context.push(Routes.nearbyGroupChatWith(group.id)),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -429,26 +411,19 @@ class _NearbyGroupCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isMember)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'In Range',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                )
-              else
-                Icon(
-                  Icons.bluetooth_disabled,
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Text(
+                  'In Range',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -457,36 +432,49 @@ class _NearbyGroupCard extends StatelessWidget {
   }
 }
 
-class _EmptyDiscoverCard extends StatelessWidget {
+class _EmptyGroupsView extends StatelessWidget {
+  final VoidCallback onDiscoverTap;
+
+  const _EmptyGroupsView({required this.onDiscoverTap});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          Icon(
-            Icons.groups_outlined,
-            size: 64,
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No active groups nearby',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.groups_outlined,
+              size: 80,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Create a group to start chatting with people around you',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            const SizedBox(height: 24),
+            Text(
+              'No Groups Yet',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              'You haven\'t joined any nearby groups yet.\nDiscover groups around you or create your own.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: onDiscoverTap,
+              icon: const Icon(Icons.explore),
+              label: const Text('Discover Groups'),
+            ),
+          ],
+        ),
       ),
     );
   }

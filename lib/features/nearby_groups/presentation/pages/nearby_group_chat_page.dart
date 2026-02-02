@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/nearby_group_message.dart';
@@ -12,10 +14,11 @@ import '../bloc/nearby_group_chat_bloc.dart';
 /// Chat page for nearby groups.
 ///
 /// Features:
-/// - Real-time messaging
+/// - Real-time messaging with optimistic updates
 /// - Member presence indicator
 /// - Auto-joined via Bluetooth (no explicit join)
-/// - Membership verification on load
+/// - SECURITY: Membership verification before showing content
+/// - Lifecycle handling for app resume resync
 class NearbyGroupChatPage extends StatefulWidget {
   final String groupId;
 
@@ -35,26 +38,15 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
   final FocusNode _focusNode = FocusNode();
   bool _isLoadingMore = false;
   NearbyGroupChatBloc? _chatBloc;
-  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
+    // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _chatBloc ??= context.read<NearbyGroupChatBloc>();
-    
-    // Initialize only once after dependencies are available
-    if (!_initialized) {
-      _initialized = true;
-      _loadGroupDetails();
-      _openChat();
-    }
+    _loadGroupDetails();
+    _openChat();
   }
 
   void _loadGroupDetails() {
@@ -62,16 +54,42 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the BLoC reference for safe disposal
+    _chatBloc ??= context.read<NearbyGroupChatBloc>();
+  }
+
+  /// CRITICAL: Handle app lifecycle changes for reliable message delivery.
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _chatBloc?.add(const ResyncNearbyGroupChat());
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came back to foreground - resync to get any missed messages
+        _chatBloc?.add(const ResyncNearbyGroupChat());
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App going to background - subscriptions may become stale
+        // We'll resync when resumed
+        break;
     }
   }
 
   void _openChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // Notify notification service that user is viewing this group
+      try {
+        getIt<NotificationService>().setCurrentGroup(widget.groupId);
+      } catch (_) {
+        // Ignore if service not available
+      }
+
       context.read<NearbyGroupChatBloc>().add(OpenNearbyGroupChat(
             groupId: widget.groupId,
             currentUserId: authState.user.id,
@@ -84,16 +102,27 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
 
   @override
   void dispose() {
+    // CRITICAL: Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _focusNode.dispose();
+
+    // Notify notification service that user left this group
+    try {
+      getIt<NotificationService>().clearCurrentGroup();
+    } catch (_) {
+      // Ignore if service not available
+    }
+
+    // Use cached reference to avoid context access after disposal
     _chatBloc?.add(const CloseNearbyGroupChat());
     super.dispose();
   }
 
   void _onScroll() {
+    // Load more when near top (inverted list)
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200 &&
         !_isLoadingMore) {
@@ -114,6 +143,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     context.read<NearbyGroupChatBloc>().add(SendNearbyGroupMessage(text));
     _messageController.clear();
 
+    // Scroll to bottom after sending
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -191,182 +221,238 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Membership status banner
-          BlocBuilder<NearbyGroupChatBloc, NearbyGroupChatState>(
-            buildWhen: (prev, curr) =>
-                prev.membershipVerified != curr.membershipVerified ||
-                prev.status != curr.status,
-            builder: (context, state) {
-              if (!state.membershipVerified &&
-                  state.status != NearbyGroupChatStatus.loading) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: theme.colorScheme.errorContainer,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.bluetooth_disabled,
-                        size: 20,
-                        color: theme.colorScheme.error,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Move closer to the group creator to join',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    ],
+      body: BlocConsumer<NearbyGroupChatBloc, NearbyGroupChatState>(
+        listener: (context, state) {
+          // Reset loading more flag
+          if (!state.isLoading) {
+            _isLoadingMore = false;
+          }
+
+          // Handle access denial - navigate away with error
+          if (state.hasError && !state.membershipVerified) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage ?? 'Access denied'),
+                backgroundColor: theme.colorScheme.error,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            // Navigate back - user should not be on this page
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(Routes.nearbyGroups);
+            }
+            return;
+          }
+
+          // Show other errors
+          if (state.hasError && state.errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: theme.colorScheme.error,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          // ================================================================
+          // SECURITY: Show loading while verifying membership
+          // Do NOT show any content until membership is confirmed
+          // ================================================================
+          if (state.isVerifyingMembership) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Verifying proximity...',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
+                ],
+              ),
+            );
+          }
+
+          // SECURITY: Show access denied state for non-members
+          if (state.hasError && !state.membershipVerified) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.bluetooth_disabled,
+                    size: 64,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Not In Range',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    state.errorMessage ?? 'Move closer to the group creator to join.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go(Routes.nearbyGroups);
+                      }
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Go Back'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Only show loading spinner during initial load
+          if (state.status == NearbyGroupChatStatus.loading && state.messages.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Determine if we're truly empty or still loading
+          final isLoading = state.status == NearbyGroupChatStatus.loading;
+
+          return Column(
+            children: [
+              // Messages list
+              Expanded(
+                child: state.messages.isEmpty
+                    ? (isLoading
+                        ? const SizedBox.shrink() // Don't show empty state while loading
+                        : _buildEmptyState(theme))
+                    : _buildMessagesList(state),
+              ),
+
+              // Input area (only show if membership verified)
+              if (state.membershipVerified) _buildInputArea(theme, state),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 64,
+            color: theme.colorScheme.outline,
           ),
-
-          // Messages list
-          Expanded(
-            child: BlocConsumer<NearbyGroupChatBloc, NearbyGroupChatState>(
-              listener: (context, state) {
-                if (state.status == NearbyGroupChatStatus.loaded) {
-                  _isLoadingMore = false;
-                }
-                if (state.errorMessage != null &&
-                    state.status == NearbyGroupChatStatus.error) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.errorMessage!),
-                      backgroundColor: theme.colorScheme.error,
-                    ),
-                  );
-                }
-              },
-              builder: (context, state) {
-                if (state.status == NearbyGroupChatStatus.loading &&
-                    state.messages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (state.messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start the conversation!',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  itemCount: state.messages.length + (state.hasMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == state.messages.length) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-
-                    final message = state.messages[index];
-                    final isMe = message.senderId == state.currentUserId;
-
-                    return _MessageBubble(
-                      message: message,
-                      isMe: isMe,
-                    );
-                  },
-                );
-              },
+          const SizedBox(height: 16),
+          Text(
+            'No messages yet',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.outline,
             ),
           ),
-
-          // Input field
-          BlocBuilder<NearbyGroupChatBloc, NearbyGroupChatState>(
-            buildWhen: (prev, curr) =>
-                prev.membershipVerified != curr.membershipVerified,
-            builder: (context, state) {
-              final canSend = state.membershipVerified;
-
-              return Container(
-                padding: EdgeInsets.only(
-                  left: 8,
-                  right: 8,
-                  top: 8,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        focusNode: _focusNode,
-                        enabled: canSend,
-                        textCapitalization: TextCapitalization.sentences,
-                        decoration: InputDecoration(
-                          hintText: canSend
-                              ? 'Message...'
-                              : 'Move closer to send messages',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                        ),
-                        onSubmitted: canSend ? (_) => _sendMessage() : null,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      onPressed: canSend ? _sendMessage : null,
-                      icon: const Icon(Icons.send),
-                    ),
-                  ],
-                ),
-              );
-            },
+          const SizedBox(height: 8),
+          Text(
+            'Start the conversation!',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessagesList(NearbyGroupChatState state) {
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: state.messages.length + (state.hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == state.messages.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final message = state.messages[index];
+        final isMe = message.senderId == state.currentUserId;
+
+        return _MessageBubble(
+          message: message,
+          isMe: isMe,
+        );
+      },
+    );
+  }
+
+  Widget _buildInputArea(ThemeData theme, NearbyGroupChatState state) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _messageController,
+                focusNode: _focusNode,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: 'Message...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                maxLines: 4,
+                minLines: 1,
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: _sendMessage,
+              icon: const Icon(Icons.send),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -438,10 +524,12 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
 
   void _showDeleteConfirmation(BuildContext context, String groupId, String userId) {
     final theme = Theme.of(context);
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<NearbyGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Group?'),
         content: const Text(
           'This will permanently delete the group, remove all members, '
@@ -449,7 +537,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
@@ -457,8 +545,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
               backgroundColor: theme.colorScheme.error,
             ),
             onPressed: () {
-              Navigator.pop(ctx);
-              context.read<NearbyGroupBloc>().add(CloseNearbyGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(CloseNearbyGroup(
                     groupId: groupId,
                     userId: userId,
                   ));

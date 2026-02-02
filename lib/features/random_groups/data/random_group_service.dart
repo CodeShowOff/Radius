@@ -221,8 +221,10 @@ class RandomGroupService {
           .map((doc) {
             // Path format: random_groups/{groupId}/members/{memberId}
             final pathSegments = doc.reference.path.split('/');
-            if (pathSegments.length >= 2) {
-              return pathSegments[pathSegments.length - 3]; // Get groupId
+            // Validate path structure: must have at least 4 segments
+            // and be from random_groups collection
+            if (pathSegments.length >= 4 && pathSegments[0] == 'random_groups') {
+              return pathSegments[1]; // groupId is at index 1
             }
             return null;
           })
@@ -298,11 +300,13 @@ class RandomGroupService {
   }
 
   /// Stream of members for a group.
+  /// Limited to 200 members for performance.
   Stream<List<RandomGroupMember>> watchMembers(String groupId) {
     return _groupsRef
         .doc(groupId)
         .collection('members')
         .orderBy('joinedAt', descending: false)
+        .limit(200)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => RandomGroupMemberModel.fromFirestore(doc).toEntity())
@@ -365,7 +369,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error removing member', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error removing member', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to remove member: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -411,7 +427,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error promoting member', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error promoting member', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to promote member: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -463,7 +491,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error leaving group', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error leaving group', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to leave group: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -690,7 +730,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error approving request', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error approving request', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to approve request: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -760,7 +812,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error rejecting request', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error rejecting request', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to reject request: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -820,7 +884,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error updating group', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error updating group', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to update group: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 
@@ -856,7 +932,19 @@ class RandomGroupService {
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
       _logger.e('Error deleting group', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error deleting group', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to delete group: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 }

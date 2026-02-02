@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/random_group.dart';
 import '../bloc/random_group_bloc.dart';
+import '../bloc/random_group_chat_bloc.dart';
 
-/// Page displaying random groups for discovery.
+/// Page displaying user's joined random groups.
 ///
-/// Shows:
-/// - Groups the user is a member of
-/// - All active random groups for discovery
-/// - Search/filter options
+/// Shows only groups the user is a member of.
+/// Discovery has been moved to a separate page.
 class RandomGroupsPage extends StatefulWidget {
   const RandomGroupsPage({super.key});
 
@@ -22,7 +22,6 @@ class RandomGroupsPage extends StatefulWidget {
 
 class _RandomGroupsPageState extends State<RandomGroupsPage> {
   bool _initialized = false;
-  String? _selectedTopic;
 
   @override
   void didChangeDependencies() {
@@ -36,20 +35,28 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
   void _loadGroups() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<RandomGroupBloc>()
-        ..add(const WatchActiveRandomGroups())
-        ..add(WatchUserRandomGroups(authState.user.id));
+      context.read<RandomGroupBloc>().add(WatchUserRandomGroups(authState.user.id));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final authState = context.read<AuthBloc>().state;
+    final userId = authState is AuthAuthenticated ? authState.user.id : null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Random Groups'),
+        title: const Text(
+          'My Random Groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.explore),
+            onPressed: () => context.push(Routes.discoverRandomGroups),
+            tooltip: 'Discover Groups',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadGroups,
@@ -60,7 +67,7 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
       body: BlocBuilder<RandomGroupBloc, RandomGroupState>(
         builder: (context, state) {
           if (state.status == RandomGroupBlocStatus.loading &&
-              state.activeGroups.isEmpty) {
+              state.userGroups.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -90,83 +97,36 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
             );
           }
 
+          if (state.userGroups.isEmpty) {
+            return _EmptyGroupsView(
+              onDiscoverTap: () => context.push(Routes.discoverRandomGroups),
+            );
+          }
+
           return RefreshIndicator(
             onRefresh: () async => _loadGroups(),
-            child: CustomScrollView(
-              slivers: [
-                // My Groups Section
-                if (state.userGroups.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: _SectionHeader(
-                      title: 'My Groups',
-                      subtitle: 'Groups you\'re a member of',
-                      icon: Icons.group,
-                    ),
-                  ),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final group = state.userGroups[index];
-                        return _RandomGroupCard(
-                          group: group,
-                          isMember: true,
-                        );
-                      },
-                      childCount: state.userGroups.length,
-                    ),
-                  ),
-                ],
-
-                // Discover Section
-                SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    title: 'Discover Groups',
-                    subtitle: 'Find new communities to join',
-                    icon: Icons.explore,
-                  ),
-                ),
-
-                // Topic Filter
-                SliverToBoxAdapter(
-                  child: _TopicFilter(
-                    selectedTopic: _selectedTopic,
-                    onTopicChanged: (topic) {
-                      setState(() => _selectedTopic = topic);
-                    },
-                  ),
-                ),
-
-                if (state.activeGroups.isEmpty)
-                  SliverToBoxAdapter(
-                    child: _EmptyDiscoverCard(),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final group = state.activeGroups[index];
-                        // Filter by topic if selected
-                        if (_selectedTopic != null &&
-                            group.topic != _selectedTopic) {
-                          return const SizedBox.shrink();
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 8, bottom: 100),
+              itemCount: state.userGroups.length,
+              itemBuilder: (context, index) {
+                final group = state.userGroups[index];
+                return _RandomGroupCard(
+                  group: group,
+                  onTap: () {
+                    context.push(Routes.randomGroupChatWith(group.id));
+                  },
+                  onLongPress: userId != null
+                      ? () {
+                          getIt<RandomGroupChatBloc>().add(
+                            PreloadRandomGroupChat(
+                              groupId: group.id,
+                              userId: userId,
+                            ),
+                          );
                         }
-                        // Skip groups user is already in
-                        final isMember =
-                            state.userGroups.any((g) => g.id == group.id);
-                        return _RandomGroupCard(
-                          group: group,
-                          isMember: isMember,
-                        );
-                      },
-                      childCount: state.activeGroups.length,
-                    ),
-                  ),
-
-                // Bottom padding
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
-                ),
-              ],
+                      : null,
+                );
+              },
             ),
           );
         },
@@ -180,116 +140,15 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-
-  const _SectionHeader({
-    required this.title,
-    this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Row(
-        children: [
-          Icon(icon, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TopicFilter extends StatelessWidget {
-  final String? selectedTopic;
-  final ValueChanged<String?> onTopicChanged;
-
-  const _TopicFilter({
-    required this.selectedTopic,
-    required this.onTopicChanged,
-  });
-
-  static const _topics = [
-    'General',
-    'Gaming',
-    'Music',
-    'Sports',
-    'Tech',
-    'Movies',
-    'Books',
-    'Food',
-    'Travel',
-    'Other',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _topics.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: FilterChip(
-                label: const Text('All'),
-                selected: selectedTopic == null,
-                onSelected: (_) => onTopicChanged(null),
-              ),
-            );
-          }
-          final topic = _topics[index - 1];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: FilterChip(
-              label: Text(topic),
-              selected: selectedTopic == topic,
-              onSelected: (_) => onTopicChanged(topic),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _RandomGroupCard extends StatelessWidget {
   final RandomGroup group;
-  final bool isMember;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   const _RandomGroupCard({
     required this.group,
-    required this.isMember,
+    this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -299,7 +158,8 @@ class _RandomGroupCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
-        onTap: () => context.push(Routes.randomGroupDetailWith(group.id)),
+        onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -322,36 +182,13 @@ class _RandomGroupCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            group.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isMember)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Joined',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                      ],
+                    Text(
+                      group.name,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (group.topic != null) ...[
                       const SizedBox(height: 4),
@@ -408,7 +245,7 @@ class _RandomGroupCard extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_right,
+                Icons.chat,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ],
@@ -419,7 +256,11 @@ class _RandomGroupCard extends StatelessWidget {
   }
 }
 
-class _EmptyDiscoverCard extends StatelessWidget {
+class _EmptyGroupsView extends StatelessWidget {
+  final VoidCallback onDiscoverTap;
+
+  const _EmptyGroupsView({required this.onDiscoverTap});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -431,24 +272,30 @@ class _EmptyDiscoverCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.explore_outlined,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              Icons.groups_outlined,
+              size: 80,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
-              'No groups found',
-              style: theme.textTheme.titleMedium?.copyWith(
+              'No Groups Yet',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'You haven\'t joined any random groups yet.\nDiscover groups to connect with people worldwide.',
+              style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Be the first to create a group!',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: onDiscoverTap,
+              icon: const Icon(Icons.explore),
+              label: const Text('Discover Groups'),
             ),
           ],
         ),

@@ -560,7 +560,10 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearby'),
+        title: const Text(
+          'Nearby',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             tooltip: 'Help',

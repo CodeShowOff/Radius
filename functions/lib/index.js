@@ -859,10 +859,11 @@ exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests
     const topic = helpRequest.topic || "General help";
     firebase_functions_1.logger.log(`New help request created: ${requestId} with radius ${radiusMeters}m`);
     try {
-        // Get all users with help alerts enabled
+        // Get all users with help alerts enabled (optimized query with filter)
         const usersSnapshot = await admin
             .firestore()
             .collection("users")
+            .where("nearbyHelpSettings.receiveHelpAlerts", "!=", false)
             .get();
         const tokensToNotify = [];
         for (const userDoc of usersSnapshot.docs) {
@@ -1020,8 +1021,8 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
     // Check if status changed to IN_PROGRESS (helper assigned)
     if (beforeData.status !== "IN_PROGRESS" && afterData.status === "IN_PROGRESS") {
         const requestId = event.params.requestId;
-        const seekerId = afterData.seekerId;
-        const helperId = afterData.helperId;
+        const seekerId = afterData.seekerUserId;
+        const helperId = afterData.helperUserId;
         if (!helperId) {
             firebase_functions_1.logger.log("No helper ID in assigned request");
             return null;
@@ -1117,8 +1118,8 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
     // Check if status changed to RESOLVED (help completed)
     if (beforeData.status !== "RESOLVED" && afterData.status === "RESOLVED") {
         const requestId = event.params.requestId;
-        const seekerId = afterData.seekerId;
-        const helperId = afterData.helperId;
+        const seekerId = afterData.seekerUserId;
+        const helperId = afterData.helperUserId;
         const completedBy = afterData.completedBy;
         firebase_functions_1.logger.log(`Help request ${requestId} completed by ${completedBy}`);
         try {
@@ -1188,7 +1189,7 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
     // Check if status changed to CANCELLED
     if (beforeData.status !== "CANCELLED" && afterData.status === "CANCELLED") {
         const requestId = event.params.requestId;
-        const helperId = afterData.helperId;
+        const helperId = afterData.helperUserId;
         const cancelledBy = afterData.cancelledBy;
         // Only notify helper if request was assigned and cancelled by seeker
         if (!helperId || cancelledBy === helperId) {
@@ -1250,18 +1251,18 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
 });
 /**
  * Scheduled function to expire old help requests.
- * Runs every 15 minutes to check for requests older than 1 hour.
+ * Runs every 10 minutes to check for requests that have passed their expiresAt time.
  */
-exports.expireOldHelpRequests = (0, scheduler_1.onSchedule)("every 15 minutes", async () => {
-    const oneHourAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 60 * 60 * 1000));
+exports.expireOldHelpRequests = (0, scheduler_1.onSchedule)("every 10 minutes", async () => {
+    const now = admin.firestore.Timestamp.now();
     firebase_functions_1.logger.log("Checking for expired help requests...");
     try {
-        // Find open requests older than 1 hour
+        // Find open requests that have passed their expiration time
         const expiredRequests = await admin
             .firestore()
             .collection("help_requests")
             .where("status", "==", "OPEN")
-            .where("createdAt", "<", oneHourAgo)
+            .where("expiresAt", "<", now)
             .get();
         if (expiredRequests.empty) {
             firebase_functions_1.logger.log("No expired requests found");
@@ -1280,7 +1281,7 @@ exports.expireOldHelpRequests = (0, scheduler_1.onSchedule)("every 15 minutes", 
         // Notify seekers about expiration
         for (const doc of expiredRequests.docs) {
             const request = doc.data();
-            const seekerId = request.seekerId;
+            const seekerId = request.seekerUserId;
             try {
                 const seekerDoc = await admin
                     .firestore()

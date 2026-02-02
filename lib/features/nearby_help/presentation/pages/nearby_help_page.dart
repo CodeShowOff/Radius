@@ -57,7 +57,10 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearby Help'),
+        title: const Text(
+          'Nearby Help',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push(Routes.nearbyHelpSettings),
@@ -67,6 +70,11 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
         ],
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
+        listenWhen: (previous, current) {
+          // Only trigger listener when messages change from null to a value
+          return (previous.errorMessage == null && current.errorMessage != null) ||
+              (previous.successMessage == null && current.successMessage != null);
+        },
         listener: (context, state) {
           if (state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -75,11 +83,15 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );
+            // Clear the error message after showing
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
           if (state.successMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.successMessage!)),
             );
+            // Clear the success message after showing
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
         },
         builder: (context, state) {
@@ -336,9 +348,12 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
   }
 
   void _showCancelConfirmation(BuildContext context, String requestId) {
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<NearbyHelpBloc>();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Cancel Request?'),
         content: const Text(
           'Are you sure you want to cancel your help request? '
@@ -346,18 +361,16 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Keep Request'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              context.read<NearbyHelpBloc>().add(
-                    NearbyHelpCancelRequest(requestId),
-                  );
+              Navigator.of(dialogContext).pop();
+              bloc.add(NearbyHelpCancelRequest(requestId));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Cancel Request'),
           ),

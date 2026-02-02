@@ -21,9 +21,16 @@ class NearbyHelpSettingsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearby Help Settings'),
+        title: const Text(
+          'Nearby Help Settings',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
+        listenWhen: (previous, current) {
+          return (previous.errorMessage == null && current.errorMessage != null) ||
+              (previous.successMessage == null && current.successMessage != null);
+        },
         listener: (context, state) {
           if (state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -32,11 +39,13 @@ class NearbyHelpSettingsPage extends StatelessWidget {
                 backgroundColor: theme.colorScheme.error,
               ),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
           if (state.successMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.successMessage!)),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
         },
         builder: (context, state) {
@@ -313,27 +322,28 @@ class NearbyHelpSettingsPage extends StatelessWidget {
   }
 
   void _confirmRemoveLocation(BuildContext context, LocationType type) {
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<NearbyHelpBloc>();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Remove ${type.displayName} Location?'),
         content: Text(
           'You will no longer receive help alerts when you\'re at your ${type.displayName.toLowerCase()}.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              context.read<NearbyHelpBloc>().add(
-                    NearbyHelpDeleteLocation(type),
-                  );
+              Navigator.of(dialogContext).pop();
+              bloc.add(NearbyHelpDeleteLocation(type));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Remove'),
           ),

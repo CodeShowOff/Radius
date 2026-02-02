@@ -8,9 +8,12 @@ import 'models/nearby_group_message_model.dart';
 
 /// Service for managing nearby group chat messages in Firestore.
 ///
+/// This mirrors the location group chat service for consistent behavior.
+///
 /// Key behaviors:
-/// - No explicit membership check for sending (Firestore rules enforce presence)
+/// - Membership verification before showing messages
 /// - Messages are tied to group lifecycle
+/// - Supports system messages for join/leave notifications
 /// - Auto-cleanup when group becomes inactive
 class NearbyGroupChatService {
   final FirebaseFirestore _firestore;
@@ -36,6 +39,9 @@ class NearbyGroupChatService {
   }
 
   /// Checks if the user is currently a member of the group.
+  ///
+  /// This is used to prevent starting message listeners or writes that would
+  /// predictably fail with permission-denied / not-found.
   Future<bool> isMember({
     required String groupId,
     required String userId,
@@ -54,8 +60,8 @@ class NearbyGroupChatService {
 
   /// Sends a text message to a nearby group.
   ///
-  /// Note: We don't check membership here - Firestore rules enforce that
-  /// only present members can write messages.
+  /// SECURITY: Firestore rules enforce membership - no need for client check.
+  /// The BLoC already verified membership when opening the chat.
   Future<NearbyGroupMessage> sendMessage({
     required String groupId,
     required String senderId,
@@ -73,8 +79,8 @@ class NearbyGroupChatService {
       throw ArgumentError('Message text cannot be empty');
     }
 
-    if (sanitizedText.length > 2000) {
-      throw ArgumentError('Message must be 2000 characters or less');
+    if (sanitizedText.length > 5000) {
+      throw ArgumentError('Message must be 5000 characters or less');
     }
 
     final batch = _firestore.batch();
@@ -119,11 +125,22 @@ class NearbyGroupChatService {
   }
 
   /// Sends a system message (e.g., "X joined", "X left").
+  ///
+  /// IMPORTANT: Includes retry logic and delay to handle Firestore replication
+  /// when called immediately after membership changes.
   Future<void> sendSystemMessage({
     required String groupId,
     required String text,
+    int retryCount = 0,
+    bool delayBeforeSend = false,
   }) async {
-    _logger.d('Sending system message to nearby group: $groupId');
+    _logger.d('Sending system message to nearby group: $groupId (attempt ${retryCount + 1})');
+
+    // CRITICAL: Add delay if requested (e.g., after join to allow replication)
+    if (delayBeforeSend && retryCount == 0) {
+      _logger.d('Waiting 1s for Firestore replication before sending system message');
+      await Future.delayed(const Duration(milliseconds: 1000));
+    }
 
     final sanitizedText = text.trim();
     if (sanitizedText.isEmpty) {
@@ -150,21 +167,65 @@ class NearbyGroupChatService {
 
       _logger.d('System message sent successfully');
     } on FirebaseException catch (e) {
-      _logger.w('Failed to send system message: ${e.code}');
+      // Handle permission-denied errors with retry
+      if (e.code == 'permission-denied' && retryCount < 3) {
+        final delayMs = 500 * (retryCount + 1);
+        _logger.w(
+          'Permission denied sending system message (replication delay). '
+          'Retrying in ${delayMs}ms... (attempt ${retryCount + 1}/3)',
+        );
+
+        await Future.delayed(Duration(milliseconds: delayMs));
+
+        return sendSystemMessage(
+          groupId: groupId,
+          text: text,
+          retryCount: retryCount + 1,
+          delayBeforeSend: false, // Don't delay again on retry
+        );
+      }
+
+      _logger.e('Failed to send system message after ${retryCount + 1} attempts', error: e);
+      // Don't rethrow - system messages are non-critical
     }
   }
 
   /// Stream of messages for a group (newest first, limited for real-time).
-  Stream<List<NearbyGroupMessage>> watchMessages(String groupId) {
+  Stream<List<NearbyGroupMessage>> watchMessages(String groupId, {int limit = 100}) {
     return _messagesRef(groupId)
         .orderBy('sentAt', descending: true)
-        .limit(100)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs
           .map((doc) => NearbyGroupMessageModel.fromFirestore(doc).toEntity())
           .toList();
     });
+  }
+
+  /// Gets a batch of messages for initial load or preload.
+  Future<List<NearbyGroupMessage>> getMessages({
+    required String groupId,
+    int limit = 50,
+    DateTime? beforeTimestamp,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _messagesRef(groupId)
+          .orderBy('sentAt', descending: true)
+          .limit(limit);
+
+      if (beforeTimestamp != null) {
+        query = query.startAfter([Timestamp.fromDate(beforeTimestamp)]);
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs
+          .map((doc) => NearbyGroupMessageModel.fromFirestore(doc).toEntity())
+          .toList();
+    } catch (e) {
+      _logger.e('Error getting messages', error: e);
+      return [];
+    }
   }
 
   /// Loads older messages for pagination.
@@ -176,7 +237,7 @@ class NearbyGroupChatService {
     try {
       final query = await _messagesRef(groupId)
           .orderBy('sentAt', descending: true)
-          .where('sentAt', isLessThan: Timestamp.fromDate(beforeTimestamp))
+          .startAfter([Timestamp.fromDate(beforeTimestamp)])
           .limit(limit)
           .get();
 
@@ -209,6 +270,29 @@ class NearbyGroupChatService {
       _logger.d('Deleted message: $messageId');
     } on FirebaseException catch (e, stack) {
       _logger.e('Error deleting message', error: e, stackTrace: stack);
+    }
+  }
+
+  /// Marks a group as read for a user (updates lastReadAt).
+  Future<void> markGroupAsRead({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberRef = _groupRef(groupId).collection('members').doc(userId);
+      final memberDoc = await memberRef.get();
+      if (!memberDoc.exists) return;
+
+      await memberRef.set(
+        {
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      _logger.d('Marked nearby group $groupId as read for user $userId');
+    } catch (e) {
+      _logger.w('Failed to mark group as read', error: e);
     }
   }
 }

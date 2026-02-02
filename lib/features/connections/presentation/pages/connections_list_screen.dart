@@ -42,7 +42,10 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Connections'),
+        title: const Text(
+          'My Connections',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           BlocBuilder<ConnectionBloc, ConnectionBlocState>(
             builder: (context, state) {

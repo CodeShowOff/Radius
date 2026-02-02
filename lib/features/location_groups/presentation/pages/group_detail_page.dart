@@ -102,10 +102,12 @@ class _GroupDetailPageState extends State<GroupDetailPage>
 
   void _showRequestDialog(AuthAuthenticated authState, String? userName, String? userPhotoUrl) {
     final messageController = TextEditingController();
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Request to Join'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -128,13 +130,13 @@ class _GroupDetailPageState extends State<GroupDetailPage>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<LocationGroupBloc>().add(RequestToJoinGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(RequestToJoinGroup(
                     groupId: widget.groupId,
                     userId: authState.user.id,
                     userName: userName,
@@ -154,27 +156,30 @@ class _GroupDetailPageState extends State<GroupDetailPage>
   void _leaveGroup() {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Leave Group'),
         content: const Text('Are you sure you want to leave this group?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<LocationGroupBloc>().add(LeaveGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(LeaveGroup(
                     groupId: widget.groupId,
                     userId: authState.user.id,
                   ));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Leave'),
           ),
@@ -195,30 +200,33 @@ class _GroupDetailPageState extends State<GroupDetailPage>
       );
       return;
     }
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Group'),
         content: const Text(
           'Are you sure you want to permanently delete this group? This action cannot be undone and will remove all messages and member data.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<LocationGroupBloc>().add(DeleteGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(DeleteGroup(
                     groupId: widget.groupId,
                     adminUserId: authState.user.id,
                   ));
               // Navigation will happen in listener after successful deletion
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Delete'),
           ),
@@ -242,6 +250,9 @@ class _GroupDetailPageState extends State<GroupDetailPage>
       );
       return;
     }
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     final nameController = TextEditingController(text: group.name);
     final descriptionController = TextEditingController(text: group.description);
@@ -392,7 +403,7 @@ class _GroupDetailPageState extends State<GroupDetailPage>
             FilledButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                context.read<LocationGroupBloc>().add(UpdateGroupSettings(
+                bloc.add(UpdateGroupSettings(
                       groupId: widget.groupId,
                       adminUserId: authState.user.id,
                       name: nameController.text.trim(),
@@ -775,23 +786,26 @@ class _GroupDetailPageState extends State<GroupDetailPage>
   void _promoteMember(GroupMembership member) {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Promote to Admin'),
         content: Text(
           'Make ${member.userName ?? 'this user'} an admin? They will be able to manage members and group settings.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<LocationGroupBloc>().add(PromoteToAdmin(
+              Navigator.pop(dialogContext);
+              bloc.add(PromoteToAdmin(
                     groupId: widget.groupId,
                     targetUserId: member.userId,
                     adminUserId: authState.user.id,
@@ -807,30 +821,33 @@ class _GroupDetailPageState extends State<GroupDetailPage>
   void _removeMember(GroupMembership member) {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Remove Member'),
         content: Text(
           'Remove ${member.userName ?? 'this user'} from the group?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<LocationGroupBloc>().add(RemoveMember(
+              Navigator.pop(dialogContext);
+              bloc.add(RemoveMember(
                     groupId: widget.groupId,
                     targetUserId: member.userId,
                     adminUserId: authState.user.id,
                   ));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Remove'),
           ),

@@ -120,11 +120,16 @@ class _CreateNearbyGroupPageState extends State<CreateNearbyGroupPage>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Nearby Group'),
+        title: const Text(
+          'Create Nearby Group',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: BlocListener<NearbyGroupBloc, NearbyGroupState>(
         listener: (context, state) {
-          if (state.status == NearbyGroupBlocStatus.created &&
+          // Navigate when group is created OR when scanning starts (backup)
+          if ((state.status == NearbyGroupBlocStatus.created ||
+               state.status == NearbyGroupBlocStatus.scanning) &&
               state.myActiveGroup != null) {
             // Navigate to the new group's chat
             context.go(Routes.nearbyGroupChatWith(state.myActiveGroup!.id));

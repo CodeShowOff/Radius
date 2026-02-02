@@ -119,15 +119,17 @@ class ApproveJoinRequest extends RandomGroupEvent {
   final String groupId;
   final String requestId;
   final String adminId;
+  final String? requesterUsername;
 
   const ApproveJoinRequest({
     required this.groupId,
     required this.requestId,
     required this.adminId,
+    this.requesterUsername,
   });
 
   @override
-  List<Object?> get props => [groupId, requestId, adminId];
+  List<Object?> get props => [groupId, requestId, adminId, requesterUsername];
 }
 
 /// Reject a join request (admin only).
@@ -151,15 +153,17 @@ class RemoveRandomGroupMember extends RandomGroupEvent {
   final String groupId;
   final String memberId;
   final String adminId;
+  final String? memberUsername;
 
   const RemoveRandomGroupMember({
     required this.groupId,
     required this.memberId,
     required this.adminId,
+    this.memberUsername,
   });
 
   @override
-  List<Object?> get props => [groupId, memberId, adminId];
+  List<Object?> get props => [groupId, memberId, adminId, memberUsername];
 }
 
 /// Promote a member to admin.
@@ -182,14 +186,16 @@ class PromoteToAdmin extends RandomGroupEvent {
 class LeaveRandomGroup extends RandomGroupEvent {
   final String groupId;
   final String userId;
+  final String? username;
 
   const LeaveRandomGroup({
     required this.groupId,
     required this.userId,
+    this.username,
   });
 
   @override
-  List<Object?> get props => [groupId, userId];
+  List<Object?> get props => [groupId, userId, username];
 }
 
 /// Delete a group (creator only).

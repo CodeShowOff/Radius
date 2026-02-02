@@ -137,7 +137,10 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Create Group'),
+          title: const Text(
+            'Create Group',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         body: BlocBuilder<LocationGroupBloc, LocationGroupState>(
           builder: (context, state) {

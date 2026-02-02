@@ -14,7 +14,10 @@ class AppearanceSettingsPage extends StatelessWidget {
       builder: (context, themeMode) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Appearance'),
+            title: const Text(
+              'Appearance',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           body: RadioGroup<ThemeMode>(
             groupValue: themeMode,

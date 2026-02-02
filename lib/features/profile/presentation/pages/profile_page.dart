@@ -67,7 +67,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
               return Scaffold(
                 appBar: AppBar(
-                  title: const Text('Profile'),
+                  title: const Text(
+                    'Profile',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 body: SafeArea(
                   bottom:
@@ -264,6 +267,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           icon: Icons.bluetooth,
                           title: 'Bluetooth Settings',
                           onTap: () => context.push(Routes.bluetoothSettings),
+                        ),
+                        _ProfileOption(
+                          icon: Icons.location_on_outlined,
+                          title: 'Location Settings',
+                          onTap: () => context.push(Routes.locationSettings),
                         ),
                         _ProfileOption(
                           icon: Icons.palette_outlined,

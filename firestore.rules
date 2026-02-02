@@ -624,7 +624,7 @@ service cloud.firestore {
           && request.resource.data.groupId == groupId
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 2000;
+          && request.resource.data.text.size() <= 5000;
         
         // RULE: Senders can delete their own messages, creator can delete any
         allow update: if isAuthenticated()
@@ -946,7 +946,7 @@ service cloud.firestore {
           && request.resource.data.groupId == groupId
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 2000;
+          && request.resource.data.text.size() <= 5000;
         
         // RULE: Senders can delete their own messages, admins can delete any
         allow update: if false; // No edits

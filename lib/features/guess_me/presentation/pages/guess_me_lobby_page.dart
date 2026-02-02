@@ -372,7 +372,10 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Guess Me'),
+        title: const Text(
+          'Guess Me',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
       ),
       body: BlocConsumer<GuessmeBloc, GuessmeState>(

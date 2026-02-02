@@ -114,9 +114,16 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Request Nearby Help'),
+        title: const Text(
+          'Request Nearby Help',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
+        listenWhen: (previous, current) {
+          return (previous.errorMessage == null && current.errorMessage != null) ||
+              (previous.successMessage == null && current.successMessage != null);
+        },
         listener: (context, state) {
           if (state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -125,11 +132,13 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
           if (state.successMessage != null && state.activeRequest != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.successMessage!)),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
             context.pop(); // Go back after successful creation
           }
         },

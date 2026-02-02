@@ -8,12 +8,61 @@ sealed class RandomGroupChatEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-/// Open a group chat and start streaming messages.
+/// Opens a group chat and starts streaming messages.
 class OpenRandomGroupChat extends RandomGroupChatEvent {
   final String groupId;
   final String userId;
+  final String? username;
+  final String? userName;
+  final String? userPhotoUrl;
 
   const OpenRandomGroupChat({
+    required this.groupId,
+    required this.userId,
+    this.username,
+    this.userName,
+    this.userPhotoUrl,
+  });
+
+  @override
+  List<Object?> get props => [groupId, userId, username, userName, userPhotoUrl];
+}
+
+/// Closes the group chat and cancels subscriptions.
+class CloseRandomGroupChat extends RandomGroupChatEvent {
+  const CloseRandomGroupChat();
+}
+
+/// Sends a text message to the group.
+class SendRandomGroupMessage extends RandomGroupChatEvent {
+  final String text;
+
+  const SendRandomGroupMessage(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
+/// Loads more (older) messages for pagination.
+class LoadMoreRandomGroupMessages extends RandomGroupChatEvent {
+  const LoadMoreRandomGroupMessages();
+}
+
+/// Resyncs the group chat stream (for app resume/network reconnect).
+/// This resubscribes to the Firestore stream without resetting state,
+/// ensuring messages received while backgrounded are fetched.
+class ResyncRandomGroupChat extends RandomGroupChatEvent {
+  const ResyncRandomGroupChat();
+}
+
+/// Preloads group chat messages into cache without subscribing to streams.
+/// This is triggered on long-press of a group tile to warm the cache
+/// before navigation, making the chat open instantly even on cache miss.
+class PreloadRandomGroupChat extends RandomGroupChatEvent {
+  final String groupId;
+  final String userId;
+
+  const PreloadRandomGroupChat({
     required this.groupId,
     required this.userId,
   });
@@ -22,48 +71,14 @@ class OpenRandomGroupChat extends RandomGroupChatEvent {
   List<Object?> get props => [groupId, userId];
 }
 
-/// Close the current group chat.
-class CloseRandomGroupChat extends RandomGroupChatEvent {
-  const CloseRandomGroupChat();
-}
+/// Deletes a message (soft delete).
+class DeleteRandomGroupMessage extends RandomGroupChatEvent {
+  final String messageId;
 
-/// Send a message to the group.
-class SendRandomGroupMessage extends RandomGroupChatEvent {
-  final String groupId;
-  final String senderId;
-  final String senderUsername;
-  final String? senderName;
-  final String? senderPhotoUrl;
-  final String text;
-
-  const SendRandomGroupMessage({
-    required this.groupId,
-    required this.senderId,
-    required this.senderUsername,
-    this.senderName,
-    this.senderPhotoUrl,
-    required this.text,
-  });
+  const DeleteRandomGroupMessage(this.messageId);
 
   @override
-  List<Object?> get props => [
-        groupId,
-        senderId,
-        senderUsername,
-        senderName,
-        senderPhotoUrl,
-        text,
-      ];
-}
-
-/// Load older messages (pagination).
-class LoadMoreRandomGroupMessages extends RandomGroupChatEvent {
-  final String groupId;
-
-  const LoadMoreRandomGroupMessages(this.groupId);
-
-  @override
-  List<Object?> get props => [groupId];
+  List<Object?> get props => [messageId];
 }
 
 // Internal events for stream updates

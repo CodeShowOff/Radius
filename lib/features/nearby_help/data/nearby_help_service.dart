@@ -310,6 +310,7 @@ class NearbyHelpService {
         'status': HelpRequestStatus.resolved.value,
         'resolvedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'completedBy': userId,
       });
 
       _logger.i('Help request $requestId marked as completed');

@@ -53,7 +53,10 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Navigate to Help'),
+        title: const Text(
+          'Navigate to Help',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             onPressed: () => _showInfoDialog(context),
@@ -62,11 +65,16 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
         ],
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
+        listenWhen: (previous, current) {
+          return (previous.successMessage == null && current.successMessage != null) ||
+              (previous.viewedRequest?.status != current.viewedRequest?.status);
+        },
         listener: (context, state) {
           if (state.successMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.successMessage!)),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
           if (state.viewedRequest?.status == HelpRequestStatus.resolved ||
               state.viewedRequest?.status == HelpRequestStatus.cancelled) {
@@ -330,9 +338,12 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
   }
 
   void _showCompleteConfirmation(BuildContext context) {
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<NearbyHelpBloc>();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Complete Help?'),
         content: const Text(
           'Are you sure you want to mark this help as completed? '
@@ -340,15 +351,13 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Not Yet'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              context.read<NearbyHelpBloc>().add(
-                    NearbyHelpMarkCompleted(widget.requestId),
-                  );
+              Navigator.of(dialogContext).pop();
+              bloc.add(NearbyHelpMarkCompleted(widget.requestId));
             },
             child: const Text('Yes, Complete'),
           ),
@@ -360,7 +369,7 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
   void _showInfoDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Helper Information'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
@@ -377,7 +386,7 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Got it'),
           ),
         ],

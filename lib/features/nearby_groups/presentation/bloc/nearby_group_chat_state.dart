@@ -59,9 +59,17 @@ class NearbyGroupChatState extends Equatable {
       status == NearbyGroupChatStatus.loading ||
       status == NearbyGroupChatStatus.sending;
 
+  /// Whether we're in the process of verifying membership.
+  /// SECURITY: UI should show loading spinner during this state.
+  bool get isVerifyingMembership =>
+      status == NearbyGroupChatStatus.loading && !membershipVerified;
+
   /// Whether chat is ready for interaction
   bool get isReady =>
       status == NearbyGroupChatStatus.loaded && membershipVerified;
+
+  /// Whether there's an error state
+  bool get hasError => status == NearbyGroupChatStatus.error;
 
   NearbyGroupChatState copyWith({
     NearbyGroupChatStatus? status,

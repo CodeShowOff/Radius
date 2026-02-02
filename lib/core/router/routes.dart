@@ -38,6 +38,7 @@ abstract class Routes {
   // Settings routes
   static const String settings = '/settings';
   static const String bluetoothSettings = '/settings/bluetooth';
+  static const String locationSettings = '/settings/location';
   static const String appearanceSettings = '/settings/appearance';
   static const String diagnosticsLogs = '/settings/diagnostics-logs';
   static const String privacySettings = '/settings/privacy';
@@ -68,6 +69,7 @@ abstract class Routes {
 
   // Nearby Groups routes (Bluetooth-based proximity groups)
   static const String nearbyGroups = '/nearby-groups';
+  static const String discoverNearbyGroups = '/nearby-groups/discover';
   static const String createNearbyGroup = '/nearby-groups/create';
   static const String nearbyGroupChat = '/nearby-groups/:groupId/chat';
 
@@ -77,6 +79,7 @@ abstract class Routes {
 
   // Random Groups routes (Admin-approved internet-based groups)
   static const String randomGroups = '/random-groups';
+  static const String discoverRandomGroups = '/random-groups/discover';
   static const String createRandomGroup = '/random-groups/create';
   static const String randomGroupDetail = '/random-groups/:groupId';
   static const String randomGroupChat = '/random-groups/:groupId/chat';

@@ -84,7 +84,10 @@ class _DiagnosticsLogsPageState extends State<DiagnosticsLogsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Diagnostics Logs'),
+        title: const Text(
+          'Diagnostics Logs',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh',

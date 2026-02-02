@@ -20,15 +20,17 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
   String? _selectedTopic;
 
   static const _topics = [
-    'General',
+    'Technology',
     'Gaming',
     'Music',
     'Sports',
-    'Tech',
     'Movies',
     'Books',
+    'Art',
     'Food',
     'Travel',
+    'Fitness',
+    'Science',
     'Other',
   ];
 
@@ -87,7 +89,10 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Create Group'),
+          title: const Text(
+            'Create Group',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         body: BlocBuilder<RandomGroupBloc, RandomGroupState>(
           builder: (context, state) {

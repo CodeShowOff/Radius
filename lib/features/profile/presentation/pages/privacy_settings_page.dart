@@ -92,7 +92,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Privacy Settings'),
+          title: const Text(
+            'Privacy Settings',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         body: ListView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 24),

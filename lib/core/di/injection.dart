@@ -254,6 +254,7 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<RandomGroupBloc>(
       () => RandomGroupBloc(
         groupService: getIt<RandomGroupService>(),
+        chatService: getIt<RandomGroupChatService>(),
       ),
     );
   }

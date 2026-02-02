@@ -59,6 +59,21 @@ class ResyncNearbyGroupChat extends NearbyGroupChatEvent {
   const ResyncNearbyGroupChat();
 }
 
+/// Preload chat messages into cache without opening the chat.
+/// Used for faster load when user navigates to chat.
+class PreloadNearbyGroupChat extends NearbyGroupChatEvent {
+  final String groupId;
+  final String userId;
+
+  const PreloadNearbyGroupChat({
+    required this.groupId,
+    required this.userId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, userId];
+}
+
 /// Delete a message.
 class DeleteNearbyGroupMessage extends NearbyGroupChatEvent {
   final String messageId;

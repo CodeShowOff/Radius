@@ -64,7 +64,10 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Location Groups'),
+        title: const Text(
+          'Location Groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push(Routes.createLocationGroup),

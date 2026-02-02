@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
+import '../../../../core/router/routes.dart';
+import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/random_group_message.dart';
@@ -32,25 +36,15 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   final FocusNode _focusNode = FocusNode();
   bool _isLoadingMore = false;
   RandomGroupChatBloc? _chatBloc;
-  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
+    // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _chatBloc ??= context.read<RandomGroupChatBloc>();
-
-    if (!_initialized) {
-      _initialized = true;
-      _loadGroupDetails();
-      _openChat();
-    }
+    _loadGroupDetails();
+    _openChat();
   }
 
   void _loadGroupDetails() {
@@ -58,35 +52,75 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the BLoC reference for safe disposal
+    _chatBloc ??= context.read<RandomGroupChatBloc>();
+  }
+
+  /// CRITICAL: Handle app lifecycle changes for reliable message delivery.
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _openChat();
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came back to foreground - resync to get any missed messages
+        _chatBloc?.add(const ResyncRandomGroupChat());
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App going to background - subscriptions may become stale
+        // We'll resync when resumed
+        break;
     }
   }
 
   void _openChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // Notify notification service that user is viewing this group
+      try {
+        getIt<NotificationService>().setCurrentGroup(widget.groupId);
+      } catch (_) {
+        // Ignore if service not available
+      }
+
       context.read<RandomGroupChatBloc>().add(OpenRandomGroupChat(
             groupId: widget.groupId,
             userId: authState.user.id,
+            username: authState.user.username,
+            userName: authState.user.displayName,
+            userPhotoUrl: authState.user.avatarUrl,
           ));
     }
   }
 
   @override
   void dispose() {
+    // CRITICAL: Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _focusNode.dispose();
+
+    // Notify notification service that user left this group
+    try {
+      getIt<NotificationService>().clearCurrentGroup();
+    } catch (_) {
+      // Ignore if service not available
+    }
+
+    // Use cached reference to avoid context access after disposal
     _chatBloc?.add(const CloseRandomGroupChat());
     super.dispose();
   }
 
   void _onScroll() {
+    // Load more when near top (inverted list)
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200 &&
         !_isLoadingMore) {
@@ -95,7 +129,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
         _isLoadingMore = true;
         context
             .read<RandomGroupChatBloc>()
-            .add(LoadMoreRandomGroupMessages(widget.groupId));
+            .add(const LoadMoreRandomGroupMessages());
       }
     }
   }
@@ -104,22 +138,10 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return;
-
-    final user = authState.user;
-
-    context.read<RandomGroupChatBloc>().add(SendRandomGroupMessage(
-          groupId: widget.groupId,
-          senderId: user.id,
-          senderUsername: user.username,
-          senderName: user.displayName,
-          senderPhotoUrl: user.avatarUrl,
-          text: text,
-        ));
-
+    context.read<RandomGroupChatBloc>().add(SendRandomGroupMessage(text));
     _messageController.clear();
 
+    // Scroll to bottom after sending
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -134,247 +156,302 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final authState = context.read<AuthBloc>().state;
-    final currentUserId =
-        authState is AuthAuthenticated ? authState.user.id : '';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: BlocBuilder<RandomGroupBloc, RandomGroupState>(
-          builder: (context, state) {
-            final group = state.selectedGroup;
-            if (group == null) {
-              return const Text('Group Chat');
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  group.name,
-                  style: theme.textTheme.titleMedium,
-                ),
-                Text(
-                  '${group.memberCount} members',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-      body: Column(
-        children: [
-          // Membership status banner
-          BlocBuilder<RandomGroupChatBloc, RandomGroupChatState>(
-            buildWhen: (prev, curr) => prev.isMember != curr.isMember,
-            builder: (context, state) {
-              if (!state.isMember &&
-                  state.status != RandomGroupChatStatus.loading) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: theme.colorScheme.errorContainer,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.lock,
-                        size: 20,
-                        color: theme.colorScheme.error,
+    return BlocBuilder<RandomGroupBloc, RandomGroupState>(
+      builder: (context, groupState) {
+        final group = groupState.selectedGroup;
+        final groupName = group?.name ?? 'Group Chat';
+
+        return Scaffold(
+          appBar: AppBar(
+            title: InkWell(
+              onTap: () => context.push(
+                Routes.randomGroupDetailWith(widget.groupId),
+              ),
+              borderRadius: BorderRadius.circular(24),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    child: Text(
+                      groupName.isNotEmpty ? groupName[0].toUpperCase() : '?',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'You must be an approved member to view messages',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          groupName,
+                          style: theme.textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (group != null)
+                          Text(
+                            '${group.memberCount} members',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              IconButton(
+                onPressed: () => context.push(
+                  Routes.randomGroupDetailWith(widget.groupId),
+                ),
+                icon: const Icon(Icons.info_outline),
+                tooltip: 'Group Info',
+              ),
+            ],
+          ),
+          body: BlocConsumer<RandomGroupChatBloc, RandomGroupChatState>(
+            listener: (context, state) {
+              // Reset loading more flag
+              if (state.status != RandomGroupChatStatus.loading) {
+                _isLoadingMore = false;
+              }
+
+              // Handle access denial - navigate away with error
+              if (state.status == RandomGroupChatStatus.error && 
+                  !state.membershipVerified) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.errorMessage ?? 'Access denied'),
+                    backgroundColor: theme.colorScheme.error,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                // Navigate back - user should not be on this page
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(Routes.randomGroups);
+                }
+                return;
+              }
+
+              // Show other errors
+              if (state.status == RandomGroupChatStatus.error && 
+                  state.errorMessage != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.errorMessage!),
+                    backgroundColor: theme.colorScheme.error,
+                  ),
+                );
+              }
+            },
+            builder: (context, state) {
+              // ================================================================
+              // SECURITY: Show loading while verifying membership
+              // Do NOT show any content until membership is confirmed
+              // ================================================================
+              if (state.isVerifyingMembership) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Verifying access...',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
                         ),
                       ),
                     ],
                   ),
                 );
               }
-              return const SizedBox.shrink();
-            },
-          ),
 
-          // Messages list
-          Expanded(
-            child: BlocConsumer<RandomGroupChatBloc, RandomGroupChatState>(
-              listener: (context, state) {
-                if (state.status == RandomGroupChatStatus.loaded) {
-                  _isLoadingMore = false;
-                }
-                if (state.errorMessage != null &&
-                    state.status == RandomGroupChatStatus.error) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.errorMessage!),
-                      backgroundColor: theme.colorScheme.error,
-                    ),
-                  );
-                }
-              },
-              builder: (context, state) {
-                if (state.status == RandomGroupChatStatus.loading &&
-                    state.messages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!state.isMember) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.lock_outline,
-                          size: 64,
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Members Only',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Request to join this group to see messages',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                if (state.messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start the conversation!',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  itemCount: state.messages.length + (state.hasMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == state.messages.length) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-
-                    final message = state.messages[index];
-                    final isMe = message.senderId == currentUserId;
-
-                    return _MessageBubble(
-                      message: message,
-                      isMe: isMe,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-
-          // Input field
-          BlocBuilder<RandomGroupChatBloc, RandomGroupChatState>(
-            buildWhen: (prev, curr) => prev.isMember != curr.isMember,
-            builder: (context, state) {
-              final canSend = state.isMember;
-
-              return Container(
-                padding: EdgeInsets.only(
-                  left: 8,
-                  right: 8,
-                  top: 8,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: SafeArea(
-                  child: Row(
+              // SECURITY: Show access denied state for non-members
+              if (state.status == RandomGroupChatStatus.error && 
+                  !state.membershipVerified) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          focusNode: _focusNode,
-                          enabled: canSend,
-                          decoration: InputDecoration(
-                            hintText: canSend
-                                ? 'Type a message...'
-                                : 'Join to send messages',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: theme.colorScheme.surfaceContainerHighest,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                          ),
-                          textCapitalization: TextCapitalization.sentences,
-                          maxLines: 4,
-                          minLines: 1,
-                          onSubmitted: (_) => _sendMessage(),
+                      Icon(
+                        Icons.lock_outline,
+                        size: 64,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Access Denied',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.colorScheme.error,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        onPressed: canSend ? _sendMessage : null,
-                        icon: const Icon(Icons.send),
+                      const SizedBox(height: 8),
+                      Text(
+                        state.errorMessage ?? 'You must be an approved member to access this chat.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(Routes.randomGroups);
+                          }
+                        },
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Go Back'),
                       ),
                     ],
                   ),
-                ),
+                );
+              }
+
+              // Only show loading spinner during initial load
+              if (state.status == RandomGroupChatStatus.loading && 
+                  state.messages.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              // Determine if we're truly empty or still loading
+              final isLoading = state.status == RandomGroupChatStatus.loading;
+
+              return Column(
+                children: [
+                  // Messages list
+                  Expanded(
+                    child: state.messages.isEmpty
+                        ? (isLoading
+                            ? const SizedBox.shrink() // Don't show empty state while loading
+                            : _buildEmptyState(theme))
+                        : _buildMessagesList(state),
+                  ),
+
+                  // Input area (only show if membership verified)
+                  if (state.membershipVerified) _buildInputArea(theme, state),
+                ],
               );
             },
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 64,
+            color: theme.colorScheme.outline,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No messages yet',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Start the conversation!',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessagesList(RandomGroupChatState state) {
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: state.messages.length + (state.hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == state.messages.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final message = state.messages[index];
+        final isMe = message.senderId == state.currentUserId;
+
+        return _MessageBubble(
+          message: message,
+          isMe: isMe,
+        );
+      },
+    );
+  }
+
+  Widget _buildInputArea(ThemeData theme, RandomGroupChatState state) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _messageController,
+                focusNode: _focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Type a message...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 4,
+                minLines: 1,
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: _sendMessage,
+              icon: const Icon(Icons.send),
+            ),
+          ],
+        ),
       ),
     );
   }

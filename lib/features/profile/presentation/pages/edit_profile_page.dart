@@ -277,7 +277,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
           return Scaffold(
             appBar: AppBar(
-              title: const Text('Edit Profile'),
+              title: const Text(
+                'Edit Profile',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               actions: [
                 // Save button - only rebuilds when saving state changes
                 _SaveButton(

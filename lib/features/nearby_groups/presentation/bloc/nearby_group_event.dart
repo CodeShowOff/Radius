@@ -98,6 +98,17 @@ class LoadNearbyGroupDetails extends NearbyGroupEvent {
   List<Object?> get props => [groupId];
 }
 
+/// Load user's own active group (if any).
+/// Used to restore state after app restart.
+class LoadUserActiveGroup extends NearbyGroupEvent {
+  final String userId;
+
+  const LoadUserActiveGroup(this.userId);
+
+  @override
+  List<Object?> get props => [userId];
+}
+
 /// Internal event: active groups received from stream.
 class _ActiveGroupsReceived extends NearbyGroupEvent {
   final List<NearbyGroup> groups;

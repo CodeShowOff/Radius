@@ -160,6 +160,9 @@ class _GroupChatPageState extends State<GroupChatPage>
   void _confirmClearChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<LocationGroupBloc>();
 
     showDialog(
       context: context,
@@ -174,13 +177,13 @@ class _GroupChatPageState extends State<GroupChatPage>
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<LocationGroupBloc>().add(ClearGroupChat(
+              bloc.add(ClearGroupChat(
                     groupId: widget.groupId,
                     adminUserId: authState.user.id,
                   ));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Clear'),
           ),
@@ -457,23 +460,26 @@ class _GroupChatPageState extends State<GroupChatPage>
   }
 
   void _confirmDelete(GroupMessage message) {
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<GroupChatBloc>();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Message'),
         content: const Text('Are you sure you want to delete this message?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.read<GroupChatBloc>().add(DeleteGroupMessage(message.id));
+              Navigator.pop(dialogContext);
+              bloc.add(DeleteGroupMessage(message.id));
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             child: const Text('Delete'),
           ),

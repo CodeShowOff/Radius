@@ -66,6 +66,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     on<StartGroupScanning>(_onStartGroupScanning);
     on<StopGroupScanning>(_onStopGroupScanning);
     on<LoadNearbyGroupDetails>(_onLoadNearbyGroupDetails);
+    on<LoadUserActiveGroup>(_onLoadUserActiveGroup);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
     on<_UserGroupsReceived>(_onUserGroupsReceived);
     on<_GroupMembersReceived>(_onGroupMembersReceived);
@@ -113,57 +114,76 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
 
     emit(state.copyWith(status: NearbyGroupBlocStatus.creating, clearError: true));
 
-    // Check if Bluetooth is enabled
-    final isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
-    if (!isBluetoothEnabled) {
-      _logger.w('Bluetooth is not enabled');
-      emit(state.copyWith(
-        status: NearbyGroupBlocStatus.error,
-        errorMessage: 'Please turn on Bluetooth to create a group',
-      ));
-      return;
-    }
-
-    // Initialize Bluetooth service if needed
-    await _bluetoothService.initialize();
-
-    // Initialize ProximityService for advertising
-    await _proximityService.initialize(
-      event.creatorId,
-      event.creatorUsername,
-    );
-
-    final result = await _groupService.createGroup(
-      name: event.name,
-      description: event.description,
-      creatorId: event.creatorId,
-      creatorUsername: event.creatorUsername,
-      creatorDisplayName: event.creatorDisplayName,
-      creatorPhotoUrl: event.creatorPhotoUrl,
-    );
-
-    switch (result) {
-      case NearbyGroupSuccess(data: final group):
-        _logger.i('Created nearby group: ${group.id}');
-        emit(state.copyWith(
-          status: NearbyGroupBlocStatus.created,
-          myActiveGroup: group,
-          selectedGroup: group,
-        ));
-        
-        // Auto-start scanning for the creator
-        add(StartGroupScanning(
-          groupId: group.id,
-          creatorId: event.creatorId,
-          creatorUsername: event.creatorUsername,
-        ));
-        
-      case NearbyGroupFailure(message: final msg, type: final type):
-        _logger.w('Failed to create nearby group: $msg ($type)');
+    try {
+      // Check if Bluetooth is enabled with timeout
+      final isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      if (!isBluetoothEnabled) {
+        _logger.w('Bluetooth is not enabled');
         emit(state.copyWith(
           status: NearbyGroupBlocStatus.error,
-          errorMessage: msg,
+          errorMessage: 'Please turn on Bluetooth to create a group',
         ));
+        return;
+      }
+
+      // Initialize Bluetooth service if needed (with timeout)
+      final bluetoothInitialized = await _bluetoothService.initialize()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      if (!bluetoothInitialized) {
+        _logger.w('Failed to initialize Bluetooth service');
+        // Don't return - try to create group anyway, scanning can start later
+      }
+
+      // Initialize ProximityService for advertising (with timeout)
+      await _proximityService.initialize(
+        event.creatorId,
+        event.creatorUsername,
+      ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+
+      // Create the group in Firestore - this is the critical operation
+      final result = await _groupService.createGroup(
+        name: event.name,
+        description: event.description,
+        creatorId: event.creatorId,
+        creatorUsername: event.creatorUsername,
+        creatorDisplayName: event.creatorDisplayName,
+        creatorPhotoUrl: event.creatorPhotoUrl,
+      );
+
+      switch (result) {
+        case NearbyGroupSuccess(data: final group):
+          _logger.i('Created nearby group: ${group.id}');
+          
+          // Set the group first, then schedule scanning to start after navigation
+          emit(state.copyWith(
+            status: NearbyGroupBlocStatus.created,
+            myActiveGroup: group,
+            selectedGroup: group,
+          ));
+          
+          // Use a slight delay before starting scanning to allow navigation
+          Future.delayed(const Duration(milliseconds: 500), () {
+            add(StartGroupScanning(
+              groupId: group.id,
+              creatorId: event.creatorId,
+              creatorUsername: event.creatorUsername,
+            ));
+          });
+          
+        case NearbyGroupFailure(message: final msg, type: final type):
+          _logger.w('Failed to create nearby group: $msg ($type)');
+          emit(state.copyWith(
+            status: NearbyGroupBlocStatus.error,
+            errorMessage: msg,
+          ));
+      }
+    } catch (e) {
+      _logger.e('Exception during group creation', error: e);
+      emit(state.copyWith(
+        status: NearbyGroupBlocStatus.error,
+        errorMessage: 'Failed to create group: $e',
+      ));
     }
   }
 
@@ -173,21 +193,8 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   ) async {
     _logger.d('Closing and deleting nearby group: ${event.groupId}');
 
-    // Stop scanning first - do this inline to ensure completion before closing
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-    _scanCycleTimer?.cancel();
-    _scanCycleTimer = null;
-    await _proximityService.stopScan();
-    await _nearbyUsersSubscription?.cancel();
-    _nearbyUsersSubscription = null;
-    await _proximityStateSubscription?.cancel();
-    _proximityStateSubscription = null;
-    await _membersSubscription?.cancel();
-    _membersSubscription = null;
-    _currentGroupId = null;
-    _currentCreatorId = null;
-    _isScanningPhase = false;
+    // Stop scanning first using shared cleanup
+    await _cleanupScanning();
 
     try {
       // Delete the group entirely (not just mark inactive)
@@ -213,6 +220,26 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
         isScanning: false,
       ));
     }
+  }
+
+  /// Shared cleanup method for stopping scanning and subscriptions.
+  Future<void> _cleanupScanning() async {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _scanCycleTimer?.cancel();
+    _scanCycleTimer = null;
+    _isScanningPhase = false;
+
+    await _proximityService.stopScan();
+    await _nearbyUsersSubscription?.cancel();
+    _nearbyUsersSubscription = null;
+    await _proximityStateSubscription?.cancel();
+    _proximityStateSubscription = null;
+    await _membersSubscription?.cancel();
+    _membersSubscription = null;
+
+    _currentGroupId = null;
+    _currentCreatorId = null;
   }
 
   Future<void> _onStartGroupScanning(
@@ -309,22 +336,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   ) async {
     _logger.d('Stopping group scanning');
 
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-    _scanCycleTimer?.cancel();
-    _scanCycleTimer = null;
-    _isScanningPhase = false;
-
-    await _proximityService.stopScan();
-    await _nearbyUsersSubscription?.cancel();
-    _nearbyUsersSubscription = null;
-    await _proximityStateSubscription?.cancel();
-    _proximityStateSubscription = null;
-    await _membersSubscription?.cancel();
-    _membersSubscription = null;
-
-    _currentGroupId = null;
-    _currentCreatorId = null;
+    await _cleanupScanning();
 
     emit(state.copyWith(isScanning: false));
   }
@@ -363,6 +375,29 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
         status: NearbyGroupBlocStatus.error,
         errorMessage: 'Failed to load group: $e',
       ));
+    }
+  }
+
+  Future<void> _onLoadUserActiveGroup(
+    LoadUserActiveGroup event,
+    Emitter<NearbyGroupState> emit,
+  ) async {
+    _logger.d('Loading user active group for: ${event.userId}');
+
+    try {
+      final activeGroup = await _groupService.getUserActiveGroup(event.userId);
+      if (activeGroup != null) {
+        _logger.i('Found user active group: ${activeGroup.id}');
+        emit(state.copyWith(
+          myActiveGroup: activeGroup,
+          status: NearbyGroupBlocStatus.loaded,
+        ));
+      } else {
+        _logger.d('No active group found for user');
+      }
+    } catch (e) {
+      _logger.e('Failed to load user active group', error: e);
+      // Don't emit error state - this is a non-critical operation
     }
   }
 

@@ -140,7 +140,10 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bluetooth Settings'),
+        title: const Text(
+          'Bluetooth Settings',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

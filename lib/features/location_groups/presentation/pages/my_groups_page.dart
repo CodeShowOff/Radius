@@ -54,7 +54,10 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Groups'),
+        title: const Text(
+          'My Groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push(Routes.locationGroups),

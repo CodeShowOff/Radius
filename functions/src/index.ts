@@ -308,6 +308,175 @@ export const onGroupMessageNotification = onDocumentCreated(
 );
 
 /**
+ * Send push notification when a new nearby group message is sent.
+ * Notifies all members except the sender.
+ * Similar to location groups but for Bluetooth-based nearby groups.
+ */
+export const onNearbyGroupMessageNotification = onDocumentCreated(
+  "nearby_groups/{groupId}/messages/{messageId}",
+  async (event) => {
+    const message = event.data?.data();
+    if (!message) return;
+
+    const groupId = event.params.groupId;
+    const senderId = message.senderId as string;
+    const senderName = message.senderName || "Someone";
+    const messageText = message.text || "Sent a message";
+
+    // Skip system messages
+    if (message.type === "system") {
+      logger.log("Skipping notification for system message in nearby group");
+      return null;
+    }
+
+    // Get group info
+    const groupDoc = await admin
+      .firestore()
+      .collection("nearby_groups")
+      .doc(groupId)
+      .get();
+
+    if (!groupDoc.exists) {
+      logger.log("Nearby group not found");
+      return null;
+    }
+
+    const groupData = groupDoc.data();
+    const groupName = groupData?.name || "Nearby Group";
+
+    // Get all members except sender
+    const membersSnapshot = await admin
+      .firestore()
+      .collection("nearby_groups")
+      .doc(groupId)
+      .collection("members")
+      .get();
+
+    if (membersSnapshot.empty) {
+      logger.log("No members found in nearby group");
+      return null;
+    }
+
+    // Collect all tokens from all members (except sender)
+    const allTokens: string[] = [];
+    const tokenToUserMap: Map<string, string> = new Map();
+
+    for (const memberDoc of membersSnapshot.docs) {
+      const memberData = memberDoc.data();
+      const memberUserId = memberDoc.id; // Document ID is the user ID
+
+      // Skip the sender
+      if (memberUserId === senderId) continue;
+
+      // Get user's FCM tokens
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(memberUserId)
+        .get();
+
+      if (!userDoc.exists) continue;
+
+      const userData = userDoc.data();
+      const fcmTokens = userData?.fcmTokens || {};
+      const tokens = Object.keys(fcmTokens);
+
+      for (const token of tokens) {
+        allTokens.push(token);
+        tokenToUserMap.set(token, memberUserId);
+      }
+    }
+
+    if (allTokens.length === 0) {
+      logger.log("No FCM tokens for any nearby group members");
+      return null;
+    }
+
+    // Prepare notification
+    const payload = {
+      notification: {
+        title: `📍 ${groupName}`,
+        body: `${senderName}: ${messageText.substring(0, 100)}`,
+      },
+      data: {
+        groupId: groupId,
+        senderId: senderId,
+        type: "nearby_group_message",
+      },
+    };
+
+    // Send to all members' devices
+    try {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: allTokens,
+        notification: payload.notification,
+        data: payload.data,
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "radius_messages",
+            priority: "high",
+            sound: "default",
+            defaultSound: true,
+            tag: `nearby_group_${groupId}`, // Group notifications together
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+              threadId: `nearby_group_${groupId}`, // Group notifications together on iOS
+            },
+          },
+        },
+      });
+
+      logger.log(
+        `Nearby group notification: ${response.successCount} sent, ` +
+        `${response.failureCount} failed to ${allTokens.length} tokens`
+      );
+
+      // Remove invalid tokens
+      if (response.failureCount > 0) {
+        const invalidTokensByUser: Map<string, string[]> = new Map();
+
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const token = allTokens[idx];
+            const userId = tokenToUserMap.get(token);
+            if (userId) {
+              if (!invalidTokensByUser.has(userId)) {
+                invalidTokensByUser.set(userId, []);
+              }
+              invalidTokensByUser.get(userId)!.push(token);
+            }
+          }
+        });
+
+        // Remove invalid tokens for each user
+        for (const [userId, tokens] of invalidTokensByUser) {
+          const updates: Record<string, admin.firestore.FieldValue> = {};
+          tokens.forEach((token) => {
+            updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+          });
+          await admin
+            .firestore()
+            .collection("users")
+            .doc(userId)
+            .update(updates);
+        }
+      }
+
+      return response;
+    } catch (error) {
+      logger.error("Error sending nearby group notification:", error);
+      return null;
+    }
+  }
+);
+
+/**
  * Send push notification when a connection request is received.
  */
 export const onConnectionRequestReceived = onDocumentCreated(
@@ -980,10 +1149,11 @@ export const onHelpRequestCreated = onDocumentCreated(
     logger.log(`New help request created: ${requestId} with radius ${radiusMeters}m`);
 
     try {
-      // Get all users with help alerts enabled
+      // Get all users with help alerts enabled (optimized query with filter)
       const usersSnapshot = await admin
         .firestore()
         .collection("users")
+        .where("nearbyHelpSettings.receiveHelpAlerts", "!=", false)
         .get();
 
       const tokensToNotify: {token: string; userId: string; distance: number}[] = [];
@@ -1436,24 +1606,22 @@ export const onHelpRequestAssigned = onDocumentUpdated(
 
 /**
  * Scheduled function to expire old help requests.
- * Runs every 15 minutes to check for requests older than 1 hour.
+ * Runs every 10 minutes to check for requests that have passed their expiresAt time.
  */
 export const expireOldHelpRequests = onSchedule(
-  "every 15 minutes",
+  "every 10 minutes",
   async () => {
-    const oneHourAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 60 * 60 * 1000)
-    );
+    const now = admin.firestore.Timestamp.now();
 
     logger.log("Checking for expired help requests...");
 
     try {
-      // Find open requests older than 1 hour
+      // Find open requests that have passed their expiration time
       const expiredRequests = await admin
         .firestore()
         .collection("help_requests")
         .where("status", "==", "OPEN")
-        .where("createdAt", "<", oneHourAgo)
+        .where("expiresAt", "<", now)
         .get();
 
       if (expiredRequests.empty) {

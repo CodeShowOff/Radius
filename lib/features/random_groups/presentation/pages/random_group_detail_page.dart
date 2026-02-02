@@ -98,25 +98,35 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
   void _leaveGroup() {
     final userId = _getCurrentUserId();
     if (userId == null) return;
+    
+    // Get username for system message
+    final authState = context.read<AuthBloc>().state;
+    final username = authState is AuthAuthenticated 
+        ? (authState.user.displayName ?? authState.user.username)
+        : null;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<RandomGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Leave Group'),
         content: const Text('Are you sure you want to leave this group?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              Navigator.pop(context);
-              this.context.read<RandomGroupBloc>().add(LeaveRandomGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(LeaveRandomGroup(
                     groupId: widget.groupId,
                     userId: userId,
+                    username: username,
                   ));
-              this.context.pop();
+              context.pop();
             },
             child: const Text('Leave'),
           ),
@@ -128,30 +138,33 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
   void _deleteGroup() {
     final userId = _getCurrentUserId();
     if (userId == null) return;
+    
+    // Capture the bloc before showing dialog to ensure it's accessible
+    final bloc = context.read<RandomGroupBloc>();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Group'),
         content: const Text(
           'Are you sure you want to delete this group? This action cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             onPressed: () {
-              Navigator.pop(context);
-              this.context.read<RandomGroupBloc>().add(DeleteRandomGroup(
+              Navigator.pop(dialogContext);
+              bloc.add(DeleteRandomGroup(
                     groupId: widget.groupId,
                     userId: userId,
                   ));
-              this.context.pop();
+              context.pop();
             },
             child: const Text('Delete'),
           ),
@@ -198,7 +211,10 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(group.name),
+            title: Text(
+              group.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             actions: [
               if (isAdmin)
                 IconButton(
@@ -629,6 +645,7 @@ class _PendingRequestTile extends StatelessWidget {
                       groupId: groupId,
                       requestId: request.id,
                       adminId: adminId,
+                      requesterUsername: request.requesterDisplayName ?? request.requesterUsername,
                     ));
               },
               tooltip: 'Approve',
@@ -720,6 +737,7 @@ class _MemberTile extends StatelessWidget {
                           groupId: groupId,
                           memberId: member.id,
                           adminId: adminId,
+                          memberUsername: member.displayName ?? member.username,
                         ));
                     break;
                 }

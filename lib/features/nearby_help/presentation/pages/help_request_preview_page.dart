@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
@@ -54,9 +55,16 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Help Request'),
+        title: const Text(
+          'Help Request',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
+        listenWhen: (previous, current) {
+          return (previous.errorMessage == null && current.errorMessage != null) ||
+              (previous.successMessage == null && current.successMessage != null);
+        },
         listener: (context, state) {
           if (state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -65,6 +73,7 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
           }
           if (state.successMessage != null &&
               state.viewedRequest?.helperUserId == state.userId) {
@@ -72,6 +81,7 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.successMessage!)),
             );
+            context.read<NearbyHelpBloc>().add(const NearbyHelpClearMessages());
             // Navigate to helper navigation page
             context.pushReplacement(
               Routes.nearbyHelpHelperNavigationWith(widget.requestId),
@@ -434,8 +444,8 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'If you accept, you\'ll see the exact location '
-                'and can navigate to help.',
+                'If you accept, we\'ll ask for your location '
+                'so you can navigate to help them.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
@@ -484,10 +494,53 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
     );
   }
 
-  void _acceptRequest() {
-    context.read<NearbyHelpBloc>().add(
-          NearbyHelpAcceptRequest(widget.requestId),
+  Future<void> _acceptRequest() async {
+    // Request location permission before accepting
+    // Helper needs location to navigate to the seeker
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enable location services to help navigate to the person in need.'),
+          ),
         );
+      }
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is needed to navigate to help.'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location permission is permanently denied. Please enable it in settings to help.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Now accept the request
+    if (mounted) {
+      context.read<NearbyHelpBloc>().add(
+            NearbyHelpAcceptRequest(widget.requestId),
+          );
+    }
   }
 
   String _getTimeAgo(DateTime time) {

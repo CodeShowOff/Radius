@@ -164,6 +164,11 @@ class NearbyHelpUnsubscribeFromRequest extends NearbyHelpEvent {
   const NearbyHelpUnsubscribeFromRequest();
 }
 
+/// Clear success and error messages after they've been displayed.
+class NearbyHelpClearMessages extends NearbyHelpEvent {
+  const NearbyHelpClearMessages();
+}
+
 /// Internal event: locations updated from stream.
 class _LocationsUpdated extends NearbyHelpEvent {
   final List<UserLocation> locations;

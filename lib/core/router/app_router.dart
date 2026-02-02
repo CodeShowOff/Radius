@@ -25,6 +25,7 @@ import '../../features/location_groups/presentation/pages/my_groups_page.dart';
 import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.dart';
 import '../../features/nearby_groups/presentation/pages/create_nearby_group_page.dart';
+import '../../features/nearby_groups/presentation/pages/discover_nearby_groups_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_group_chat_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_groups_page.dart';
 import '../../features/nearby_help/presentation/bloc/nearby_help_bloc.dart';
@@ -36,6 +37,7 @@ import '../../features/nearby_help/presentation/pages/helper_navigation_page.dar
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
 import '../../features/random_groups/presentation/pages/create_random_group_page.dart';
+import '../../features/random_groups/presentation/pages/discover_random_groups_page.dart';
 import '../../features/random_groups/presentation/pages/random_group_chat_page.dart';
 import '../../features/random_groups/presentation/pages/random_group_detail_page.dart';
 import '../../features/random_groups/presentation/pages/random_groups_page.dart';
@@ -43,6 +45,7 @@ import '../../features/main_scaffold.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
+import '../../features/profile/presentation/pages/location_settings_page.dart';
 import '../../features/profile/presentation/pages/appearance_settings_page.dart';
 import '../diagnostics/presentation/pages/diagnostics_logs_page.dart';
 import '../../features/profile/presentation/pages/privacy_settings_page.dart';
@@ -238,6 +241,11 @@ GoRouter get appRouter {
         builder: (context, state) => const BluetoothSettingsPage(),
       ),
       GoRoute(
+        path: Routes.locationSettings,
+        name: 'locationSettings',
+        builder: (context, state) => const LocationSettingsPage(),
+      ),
+      GoRoute(
         path: Routes.appearanceSettings,
         name: 'appearanceSettings',
         builder: (context, state) => const AppearanceSettingsPage(),
@@ -400,6 +408,19 @@ GoRouter get appRouter {
 
       // Nearby Groups routes (Bluetooth-based proximity groups)
       GoRoute(
+        path: Routes.discoverNearbyGroups,
+        name: 'discoverNearbyGroups',
+        builder: (context, state) {
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+              BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
+            ],
+            child: const DiscoverNearbyGroupsPage(),
+          );
+        },
+      ),
+      GoRoute(
         path: Routes.createNearbyGroup,
         name: 'createNearbyGroup',
         builder: (context, state) {
@@ -430,6 +451,19 @@ GoRouter get appRouter {
       ),
 
       // Random Groups routes (Admin-approved internet-based groups)
+      GoRoute(
+        path: Routes.discoverRandomGroups,
+        name: 'discoverRandomGroups',
+        builder: (context, state) {
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<RandomGroupBloc>()),
+              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
+            ],
+            child: const DiscoverRandomGroupsPage(),
+          );
+        },
+      ),
       GoRoute(
         path: Routes.createRandomGroup,
         name: 'createRandomGroup',
@@ -504,7 +538,14 @@ GoRouter get appRouter {
         path: Routes.nearbyHelpRequestDetail,
         name: 'nearbyHelpRequestDetail',
         builder: (context, state) {
-          final requestId = state.pathParameters['requestId'] ?? '';
+          final requestId = state.pathParameters['requestId'];
+          if (requestId == null || requestId.isEmpty) {
+            // Return to nearby help page if no valid requestId
+            return BlocProvider.value(
+              value: getIt<NearbyHelpBloc>(),
+              child: const NearbyHelpPage(),
+            );
+          }
           return BlocProvider.value(
             value: getIt<NearbyHelpBloc>(),
             child: HelpRequestPreviewPage(requestId: requestId),
@@ -515,7 +556,14 @@ GoRouter get appRouter {
         path: Routes.nearbyHelpHelperNavigation,
         name: 'nearbyHelpHelperNavigation',
         builder: (context, state) {
-          final requestId = state.pathParameters['requestId'] ?? '';
+          final requestId = state.pathParameters['requestId'];
+          if (requestId == null || requestId.isEmpty) {
+            // Return to nearby help page if no valid requestId
+            return BlocProvider.value(
+              value: getIt<NearbyHelpBloc>(),
+              child: const NearbyHelpPage(),
+            );
+          }
           return BlocProvider.value(
             value: getIt<NearbyHelpBloc>(),
             child: HelperNavigationPage(requestId: requestId),

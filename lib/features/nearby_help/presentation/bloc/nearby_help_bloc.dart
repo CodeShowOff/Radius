@@ -30,6 +30,9 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
   StreamSubscription<List<HelpRequest>>? _seekerRequestsSubscription;
   StreamSubscription<List<HelpRequest>>? _helperRequestsSubscription;
   StreamSubscription<HelpRequest?>? _viewedRequestSubscription;
+  
+  /// Track the currently initialized user to prevent duplicate initialization
+  String? _initializedUserId;
 
   NearbyHelpBloc({
     required NearbyHelpService helpService,
@@ -51,6 +54,7 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
     on<NearbyHelpLoadRequest>(_onLoadRequest);
     on<NearbyHelpSubscribeToRequest>(_onSubscribeToRequest);
     on<NearbyHelpUnsubscribeFromRequest>(_onUnsubscribeFromRequest);
+    on<NearbyHelpClearMessages>(_onClearMessages);
     on<_LocationsUpdated>(_onLocationsUpdated);
     on<_SettingsUpdated>(_onSettingsUpdated);
     on<_ActiveRequestUpdated>(_onActiveRequestUpdated);
@@ -62,6 +66,13 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
     NearbyHelpInitialize event,
     Emitter<NearbyHelpState> emit,
   ) async {
+    // Skip if already initialized for the same user
+    if (_initializedUserId == event.userId && state.status != NearbyHelpStatus.initial) {
+      return;
+    }
+    
+    _initializedUserId = event.userId;
+    
     emit(state.copyWith(
       status: NearbyHelpStatus.loading,
       userId: event.userId,
@@ -417,6 +428,13 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
     _viewedRequestSubscription = null;
 
     emit(state.copyWith(clearViewedRequest: true));
+  }
+
+  void _onClearMessages(
+    NearbyHelpClearMessages event,
+    Emitter<NearbyHelpState> emit,
+  ) {
+    emit(state.copyWith(clearError: true, clearSuccess: true));
   }
 
   void _onLocationsUpdated(

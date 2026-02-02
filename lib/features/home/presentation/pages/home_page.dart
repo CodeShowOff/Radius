@@ -218,14 +218,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
 
-                // Location Based Groups section - same height as square cards
+                // Nearby Help section - prominent SOS button
+                _AnimatedSquareCard(
+                  onTap: () => context.push(Routes.nearbyHelp),
+                  label: 'Nearby Help',
+                  color: Theme.of(context).colorScheme.error,
+                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                  isSquare: false,
+                  useVerticalLayout: false,
+                  animationType: _CardAnimationType.sos,
+                ),
+                const SizedBox(height: 16),
+
+                // Location Based Groups section - 25% smaller height
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    // Calculate height to match square cards
+                    // Calculate height: 75% of square card size
                     // Width of each square card = (total width - gap) / 2
                     final squareCardWidth = (constraints.maxWidth - 12) / 2;
+                    final reducedHeight = squareCardWidth * 0.75;
                     return SizedBox(
-                      height: squareCardWidth,
+                      height: reducedHeight,
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.locationGroups),
                         label: 'Location Based Groups',
@@ -240,15 +253,39 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
 
-                // Nearby Help section - prominent SOS button
-                _AnimatedSquareCard(
-                  onTap: () => context.push(Routes.nearbyHelp),
-                  label: 'Nearby Help',
-                  color: Theme.of(context).colorScheme.error,
-                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                  isSquare: false,
-                  useVerticalLayout: false,
-                  animationType: _CardAnimationType.sos,
+                // Discover Groups row - Random and Nearby (matching Location Based Groups height)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Calculate height: 75% of square card size to match Location Based Groups
+                    final squareCardWidth = (constraints.maxWidth - 12) / 2;
+                    final reducedHeight = squareCardWidth * 0.75;
+                    return SizedBox(
+                      height: reducedHeight,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _DiscoverCard(
+                              onTap: () => context.push(Routes.discoverRandomGroups),
+                              label: 'Discover\nRandom Groups',
+                              icon: Icons.public,
+                              color: Theme.of(context).colorScheme.tertiary,
+                              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DiscoverCard(
+                              onTap: () => context.push(Routes.discoverNearbyGroups),
+                              label: 'Discover\nNearby Groups',
+                              icon: Icons.bluetooth_searching,
+                              color: Theme.of(context).colorScheme.secondary,
+                              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -395,4 +432,73 @@ class _AnimatedSquareCard extends StatelessWidget {
 }
 
 enum _CardAnimationType { wave, personCycle, talking, sos }
+
+/// Card widget for discover group buttons on home page.
+class _DiscoverCard extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+
+  const _DiscoverCard({
+    required this.onTap,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        color: backgroundColor,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: color.withValues(alpha: 0.7),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
