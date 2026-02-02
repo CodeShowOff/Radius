@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../bloc/nearby_group_bloc.dart';
 
@@ -14,21 +15,82 @@ class CreateNearbyGroupPage extends StatefulWidget {
   State<CreateNearbyGroupPage> createState() => _CreateNearbyGroupPageState();
 }
 
-class _CreateNearbyGroupPageState extends State<CreateNearbyGroupPage> {
+class _CreateNearbyGroupPageState extends State<CreateNearbyGroupPage>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   bool _isCreating = false;
+  bool _bluetoothEnabled = false;
+  bool _checkingBluetooth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkBluetoothStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _checkBluetoothStatus();
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
 
+  Future<void> _checkBluetoothStatus() async {
+    setState(() => _checkingBluetooth = true);
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      final isEnabled = await bluetoothService.isBluetoothEnabled();
+      if (mounted) {
+        setState(() {
+          _bluetoothEnabled = isEnabled;
+          _checkingBluetooth = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _bluetoothEnabled = false;
+          _checkingBluetooth = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _requestBluetoothOn() async {
+    try {
+      final bluetoothService = context.read<BluetoothService>();
+      await bluetoothService.requestBluetoothOn();
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _checkBluetoothStatus();
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
   void _createGroup() {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_bluetoothEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please turn on Bluetooth first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
@@ -156,6 +218,93 @@ class _CreateNearbyGroupPageState extends State<CreateNearbyGroupPage> {
                 ),
                 maxLength: 200,
               ),
+              const SizedBox(height: 24),
+
+              // Bluetooth status banner
+              if (_checkingBluetooth)
+                Card(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Checking Bluetooth status...'),
+                      ],
+                    ),
+                  ),
+                )
+              else if (!_bluetoothEnabled)
+                Card(
+                  color: theme.colorScheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.bluetooth_disabled,
+                              color: theme.colorScheme.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Bluetooth is turned off',
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Bluetooth is required to discover nearby users and manage your group.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: _requestBluetoothOn,
+                          icon: const Icon(Icons.bluetooth),
+                          label: const Text('Turn On Bluetooth'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.error,
+                            foregroundColor: theme.colorScheme.onError,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.bluetooth_connected, color: Colors.green),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Bluetooth is ready',
+                          style: TextStyle(
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               const SizedBox(height: 24),
 
               // Info cards

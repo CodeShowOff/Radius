@@ -632,8 +632,9 @@ service cloud.firestore {
               || get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted']);
         
-        // RULE: No hard deletes
-        allow delete: if false;
+        // RULE: Creator can hard delete messages (for group deletion)
+        allow delete: if isAuthenticated()
+          && get(/databases/$(database)/documents/nearby_groups/$(groupId)).data.creatorId == request.auth.uid;
       }
     }
     
@@ -822,6 +823,14 @@ service cloud.firestore {
     // RANDOM GROUPS (Admin-approved internet-based groups)
     // ============================================================
     
+    // Collection group rule for querying members across all random_groups
+    // This enables the watchUserMemberships() collection group query
+    match /{path=**}/members/{memberId} {
+      // RULE: Any authenticated user can read members via collection group query
+      // This is needed for efficient "my groups" lookup
+      allow read: if isAuthenticated();
+    }
+    
     match /random_groups/{groupId} {
       /// Check if user is the creator of this group
       function isRandomGroupCreator() {
@@ -869,11 +878,13 @@ service cloud.firestore {
         allow create: if isAuthenticated()
           && request.resource.data.userId == memberId
           && (
-            // Creator adding themselves during group creation
-            (memberId == request.auth.uid 
-              && get(/databases/$(database)/documents/random_groups/$(groupId)).data.creatorId == request.auth.uid)
-            // Admin adding approved member
-            || request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+            // Creator adding themselves during group creation (batch write)
+            // During batch, group may not exist yet, so we check if memberId matches auth uid
+            // and the member is marked as admin (creator is always admin)
+            (memberId == request.auth.uid && request.resource.data.isAdmin == true)
+            // Admin adding approved member (group exists)
+            || (exists(/databases/$(database)/documents/random_groups/$(groupId))
+                && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds)
           );
         
         // RULE: Admins can update member status

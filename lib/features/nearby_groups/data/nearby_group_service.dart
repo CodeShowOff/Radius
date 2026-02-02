@@ -224,6 +224,55 @@ class NearbyGroupService {
     }
   }
 
+  /// Deletes a nearby group entirely including all members and messages.
+  /// Only the creator can delete their group.
+  Future<void> deleteGroup({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final groupDoc = await _groupsRef.doc(groupId).get();
+      if (!groupDoc.exists) {
+        throw const DatabaseException(
+          message: 'Group not found',
+          code: 'not-found',
+        );
+      }
+
+      final creatorId = groupDoc.data()?['creatorId'] as String?;
+      if (creatorId != userId) {
+        throw const DatabaseException(
+          message: 'Only the group creator can delete the group',
+          code: 'permission-denied',
+        );
+      }
+
+      final batch = _firestore.batch();
+
+      // Delete all members
+      final members = await _groupsRef.doc(groupId).collection('members').get();
+      for (final doc in members.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Delete all messages
+      final messages = await _groupsRef.doc(groupId).collection('messages').get();
+      for (final doc in messages.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Delete the group document
+      batch.delete(_groupsRef.doc(groupId));
+
+      await batch.commit();
+
+      _logger.i('Deleted nearby group: $groupId with ${members.docs.length} members and ${messages.docs.length} messages');
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error deleting nearby group', error: e, stackTrace: stack);
+      throw _mapFirestoreException(e);
+    }
+  }
+
   /// Gets a group by ID.
   Future<NearbyGroup?> getGroup(String groupId) async {
     try {

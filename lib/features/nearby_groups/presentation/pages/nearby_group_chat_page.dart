@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/nearby_group_message.dart';
@@ -162,6 +164,28 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                 ),
                 onPressed: () => _showMembersSheet(context, state),
                 tooltip: 'View members',
+              );
+            },
+          ),
+          // Delete button for group creator
+          BlocBuilder<NearbyGroupBloc, NearbyGroupState>(
+            builder: (context, state) {
+              final authState = context.read<AuthBloc>().state;
+              final group = state.selectedGroup;
+              if (authState is! AuthAuthenticated || group == null) {
+                return const SizedBox.shrink();
+              }
+              // Only show delete button for creator
+              if (group.creatorId != authState.user.id) {
+                return const SizedBox.shrink();
+              }
+              return IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: theme.colorScheme.error,
+                ),
+                onPressed: () => _showDeleteConfirmation(context, group.id, authState.user.id),
+                tooltip: 'Delete group',
               );
             },
           ),
@@ -408,6 +432,42 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                   )),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, String groupId, String userId) {
+    final theme = Theme.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Group?'),
+        content: const Text(
+          'This will permanently delete the group, remove all members, '
+          'and erase all chat messages. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.error,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<NearbyGroupBloc>().add(CloseNearbyGroup(
+                    groupId: groupId,
+                    userId: userId,
+                  ));
+              // Navigate back to nearby groups list
+              context.go(Routes.nearbyGroups);
+            },
+            child: const Text('Delete Group'),
+          ),
+        ],
       ),
     );
   }

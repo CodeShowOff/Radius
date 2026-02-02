@@ -223,6 +223,7 @@ Future<void> configureDependencies() {
       () => NearbyGroupBloc(
         groupService: getIt<NearbyGroupService>(),
         proximityService: getIt<ProximityService>(),
+        bluetoothService: getIt<BluetoothService>(),
       ),
     );
   }

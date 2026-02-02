@@ -71,14 +71,16 @@ class CloseNearbyGroup extends NearbyGroupEvent {
 class StartGroupScanning extends NearbyGroupEvent {
   final String groupId;
   final String creatorId;
+  final String creatorUsername;
 
   const StartGroupScanning({
     required this.groupId,
     required this.creatorId,
+    required this.creatorUsername,
   });
 
   @override
-  List<Object?> get props => [groupId, creatorId];
+  List<Object?> get props => [groupId, creatorId, creatorUsername];
 }
 
 /// Stop Bluetooth scanning for a group.
@@ -144,4 +146,9 @@ class _NearbyGroupStreamError extends NearbyGroupEvent {
 
   @override
   List<Object?> get props => [error];
+}
+
+/// Internal event: scan cycle (10s) completed.
+class _ScanCycleComplete extends NearbyGroupEvent {
+  const _ScanCycleComplete();
 }

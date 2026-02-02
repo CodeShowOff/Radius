@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../services/bluetooth/bluetooth_service.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/email_verification_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -402,9 +403,14 @@ GoRouter get appRouter {
         path: Routes.createNearbyGroup,
         name: 'createNearbyGroup',
         builder: (context, state) {
-          return BlocProvider.value(
-            value: getIt<NearbyGroupBloc>(),
-            child: const CreateNearbyGroupPage(),
+          return MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider.value(value: getIt<BluetoothService>()),
+            ],
+            child: BlocProvider.value(
+              value: getIt<NearbyGroupBloc>(),
+              child: const CreateNearbyGroupPage(),
+            ),
           );
         },
       ),

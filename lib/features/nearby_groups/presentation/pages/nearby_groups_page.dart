@@ -334,10 +334,10 @@ class _MyActiveGroupCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Close Group?'),
+        title: const Text('Delete Group?'),
         content: const Text(
-          'This will end the group and remove all members. '
-          'Chat history will be preserved but the group will no longer be active.',
+          'This will permanently delete the group, remove all members, '
+          'and erase all chat messages. This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -345,6 +345,9 @@ class _MyActiveGroupCard extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               context.read<NearbyGroupBloc>().add(CloseNearbyGroup(
@@ -352,7 +355,7 @@ class _MyActiveGroupCard extends StatelessWidget {
                     userId: authState.user.id,
                   ));
             },
-            child: const Text('Close Group'),
+            child: const Text('Delete Group'),
           ),
         ],
       ),

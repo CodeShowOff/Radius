@@ -67,5 +67,11 @@
 	<!-- Microphone permission for voice messages -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Microphone access is needed to record voice messages</string>
+	
+	<!-- Location permissions for Nearby Help feature -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Radius needs your location to help you request assistance from nearby users and to help others find you when you need help.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Radius needs your location to notify you when someone nearby needs help, even when the app is in the background.</string>
 </dict>
 </plist>
