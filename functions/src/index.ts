@@ -362,7 +362,7 @@ export const onNearbyGroupMessageNotification = onDocumentCreated(
     const tokenToUserMap: Map<string, string> = new Map();
 
     for (const memberDoc of membersSnapshot.docs) {
-      const memberData = memberDoc.data();
+      // const memberData = memberDoc.data();
       const memberUserId = memberDoc.id; // Document ID is the user ID
 
       // Skip the sender
@@ -745,6 +745,159 @@ export const onGroupJoinRequestNotification = onDocumentCreated(
       return response;
     } catch (error) {
       logger.error("Error sending join request notification:", error);
+      return null;
+    }
+  }
+);
+
+/**
+ * Send push notification when a user requests to join a random group.
+ * Notifies all admins of the group.
+ */
+export const onRandomGroupJoinRequestNotification = onDocumentCreated(
+  "random_groups/{groupId}/join_requests/{requestId}",
+  async (event) => {
+    const request = event.data?.data();
+    if (!request) return;
+
+    const groupId = event.params.groupId;
+    const requesterId = request.requesterId;
+    const requesterName = request.requesterUsername || "Someone";
+    const message = request.message;
+
+    // Get group info
+    const groupDoc = await admin
+      .firestore()
+      .collection("random_groups")
+      .doc(groupId)
+      .get();
+
+    if (!groupDoc.exists) {
+      logger.log("Random group not found");
+      return null;
+    }
+
+    const groupData = groupDoc.data();
+    const groupName = groupData?.name || "Group";
+    const adminIds = (groupData?.adminIds || []) as string[];
+
+    if (adminIds.length === 0) {
+      logger.log("No admins found for random group");
+      return null;
+    }
+
+    // Collect all admin tokens
+    const allTokens: string[] = [];
+    const tokenToUserMap: Map<string, string> = new Map();
+
+    for (const adminUserId of adminIds) {
+      // Get admin's FCM tokens
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(adminUserId)
+        .get();
+
+      if (!userDoc.exists) continue;
+
+      const userData = userDoc.data();
+      const fcmTokens = userData?.fcmTokens || {};
+      const tokens = Object.keys(fcmTokens);
+
+      for (const token of tokens) {
+        allTokens.push(token);
+        tokenToUserMap.set(token, adminUserId);
+      }
+    }
+
+    if (allTokens.length === 0) {
+      logger.log("No FCM tokens for any admins in random group");
+      return null;
+    }
+
+    // Prepare notification
+    const body = message
+      ? `${requesterName}: ${message}`
+      : `${requesterName} wants to join`;
+
+    const payload = {
+      notification: {
+        title: `${groupName} - Join Request`,
+        body: body,
+      },
+      data: {
+        groupId: groupId,
+        requestId: event.params.requestId,
+        requesterId: requesterId,
+        type: "random_group_join_request",
+      },
+    };
+
+    // Send to all admins' devices
+    try {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: allTokens,
+        notification: payload.notification,
+        data: payload.data,
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "radius_messages",
+            priority: "high",
+            sound: "default",
+            defaultSound: true,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      });
+
+      logger.log(
+        `Random group join request notification: ${response.successCount} sent, ` +
+        `${response.failureCount} failed`
+      );
+
+      // Remove invalid tokens
+      if (response.failureCount > 0) {
+        const invalidTokensByUser: Map<string, string[]> = new Map();
+
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const token = allTokens[idx];
+            const userId = tokenToUserMap.get(token);
+            if (userId) {
+              if (!invalidTokensByUser.has(userId)) {
+                invalidTokensByUser.set(userId, []);
+              }
+              invalidTokensByUser.get(userId)!.push(token);
+            }
+          }
+        });
+
+        // Remove invalid tokens for each user
+        for (const [userId, tokens] of invalidTokensByUser) {
+          const updates: Record<string, admin.firestore.FieldValue> = {};
+          tokens.forEach((token) => {
+            updates[`fcmTokens.${token}`] =
+              admin.firestore.FieldValue.delete();
+          });
+          await admin
+            .firestore()
+            .collection("users")
+            .doc(userId)
+            .update(updates);
+        }
+      }
+
+      return response;
+    } catch (error) {
+      logger.error("Error sending random group join request notification:", error);
       return null;
     }
   }

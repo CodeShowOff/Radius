@@ -103,9 +103,9 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.language),
                   title: const Text('Website'),
-                  subtitle: const Text('Upcoming'),
-                  trailing: const Icon(Icons.info_outline),
-                  onTap: () => _showWebsiteComingSoon(context),
+                  subtitle: const Text('https://radiusapp.vercel.app/'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _launchWebsite(),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -759,40 +759,25 @@ App Version: 1.0.0$deviceInfo
       query: 'subject=Radius App Support',
     );
     try {
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri);
-      } else {
-        throw Exception('Could not launch email client');
-      }
+      await launchUrl(
+        emailUri,
+        mode: LaunchMode.externalApplication,
+      );
     } catch (e) {
-      // Email client not available, show snackbar with email address
+      // Email client not available
     }
   }
 
-  void _showWebsiteComingSoon(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Website Coming Soon'),
-        content: const Text(
-          'Our website is currently under development and will be available soon. '
-          'In the meantime, feel free to reach out via email for any questions or support.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _launchEmail();
-            },
-            child: const Text('Contact Us'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _launchWebsite() async {
+    final Uri websiteUri = Uri.parse('https://radiusapp.vercel.app/');
+    try {
+      await launchUrl(
+        websiteUri,
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      // Browser not available
+    }
   }
 }
 

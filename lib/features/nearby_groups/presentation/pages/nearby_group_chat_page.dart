@@ -405,68 +405,101 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       itemCount: state.messages.length + (state.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == state.messages.length) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           );
         }
 
         final message = state.messages[index];
         final isMe = message.senderId == state.currentUserId;
+        final showSenderInfo = !isMe && _shouldShowSenderInfo(state, index);
 
         return _MessageBubble(
           message: message,
           isMe: isMe,
+          showSenderInfo: showSenderInfo,
         );
       },
     );
   }
 
+  bool _shouldShowSenderInfo(NearbyGroupChatState state, int index) {
+    // Always show for first message (at the bottom visually)
+    if (index == state.messages.length - 1) return true;
+
+    final message = state.messages[index];
+    final nextMessage = state.messages[index + 1];
+
+    // Show if sender changed
+    if (message.senderId != nextMessage.senderId) return true;
+
+    // Show if there's a time gap of more than 5 minutes
+    final timeDiff = message.sentAt.difference(nextMessage.sentAt);
+    if (timeDiff.inMinutes > 5) return true;
+
+    return false;
+  }
+
   Widget _buildInputArea(ThemeData theme, NearbyGroupChatState state) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outlineVariant,
-          ),
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, -2),
+            ),
+          ],
         ),
-      ),
-      child: SafeArea(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           children: [
             Expanded(
               child: TextField(
                 controller: _messageController,
                 focusNode: _focusNode,
-                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
-                  hintText: 'Message...',
+                  hintText: 'Type a message...',
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 8,
+                    vertical: 12,
                   ),
                 ),
-                maxLines: 4,
                 minLines: 1,
+                maxLines: 5,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: _sendMessage,
-              icon: const Icon(Icons.send),
+              onPressed: state.isSending ? null : _sendMessage,
+              icon: state.isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send),
             ),
           ],
         ),
@@ -590,16 +623,19 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
 class _MessageBubble extends StatelessWidget {
   final NearbyGroupMessage message;
   final bool isMe;
+  final bool showSenderInfo;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    required this.showSenderInfo,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // System messages
     if (message.isSystemMessage) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -623,21 +659,26 @@ class _MessageBubble extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Avatar for other users
           if (!isMe) ...[
-            CachedAvatar(
-              imageUrl: message.senderPhotoUrl,
-              name: message.senderName ?? message.senderUsername ?? '?',
-              radius: 16,
-            ),
+            if (showSenderInfo)
+              CachedAvatar(
+                imageUrl: message.senderPhotoUrl,
+                name: message.senderName ?? message.senderUsername ?? '?',
+                radius: 16,
+              )
+            else
+              const SizedBox(width: 32), // Placeholder for alignment
             const SizedBox(width: 8),
           ],
-          Flexible(
+
+          // Message content
+          IntrinsicWidth(
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -645,7 +686,7 @@ class _MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: isMe
-                    ? theme.colorScheme.primary
+                    ? theme.colorScheme.primaryContainer
                     : theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
@@ -656,38 +697,64 @@ class _MessageBubble extends StatelessWidget {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!isMe) ...[
-                    Text(
-                      message.senderName ?? message.senderUsername ?? 'Unknown',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
+                  // Sender name for other users
+                  if (!isMe && showSenderInfo && (message.senderName != null || message.senderUsername != null))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        message.senderName ?? message.senderUsername ?? 'Unknown',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                  ],
-                  Text(
-                    message.text,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isMe
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatTime(message.sentAt),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: isMe
-                          ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
+
+                  // Message text with inline time (WhatsApp style)
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    children: [
+                      Text(
+                        message.text,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: isMe
+                              ? theme.colorScheme.onPrimaryContainer
+                              : theme.colorScheme.onSurface,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 1),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatTime(message.sentAt),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: isMe
+                                    ? theme.colorScheme
+                                        .onPrimaryContainer
+                                        .withValues(alpha: 0.5)
+                                    : theme.colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.5),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
+
           if (isMe) const SizedBox(width: 8),
         ],
       ),
@@ -695,8 +762,12 @@ class _MessageBubble extends StatelessWidget {
   }
 
   String _formatTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+    final now = DateTime.now();
+    final diff = now.difference(time);
+
+    if (diff.inDays > 0) {
+      return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -875,10 +875,18 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.adminIds;
       
       // RULE: Only admins can update group settings
+      // Allow non-admins to increment pendingRequestCount when creating join requests
       allow update: if isAuthenticated()
-        && isRandomGroupAdmin()
-        && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['creatorId', 'createdAt']);
+        && (
+          // Admin path: full settings updates (no immutable field changes)
+          (isRandomGroupAdmin()
+           && !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['creatorId', 'createdAt']))
+          // Non-admin path: only pendingRequestCount updates (increment by 1)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingRequestCount'])
+              && (request.resource.data.pendingRequestCount == resource.data.pendingRequestCount + 1
+                  || request.resource.data.pendingRequestCount == resource.data.pendingRequestCount - 1))
+        );
       
       // RULE: Only creator can delete (soft delete via status change)
       allow delete: if isAuthenticated() && isRandomGroupCreator();

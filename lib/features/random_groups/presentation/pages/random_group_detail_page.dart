@@ -61,13 +61,12 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
     if (authState is AuthAuthenticated) {
       final bloc = context.read<RandomGroupBloc>();
       bloc.add(LoadRandomGroupDetails(widget.groupId));
-      bloc.add(WatchRandomGroupMembers(widget.groupId));
+      // Check membership first before watching members
       bloc.add(CheckMembershipStatus(
         groupId: widget.groupId,
         userId: authState.user.id,
       ));
-      // Watch pending requests for all users (admins will see them in UI)
-      bloc.add(WatchPendingRequests(widget.groupId));
+      // Don't watch pending requests here - let CheckMembershipStatus handle it for admins
     }
   }
 

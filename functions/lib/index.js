@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.cleanupExpiredGuessMeSessions = exports.onConnectionRequestAccepted = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
+exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.cleanupExpiredGuessMeSessions = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = __importStar(require("firebase-admin"));
@@ -297,6 +297,151 @@ exports.onGroupMessageNotification = (0, firestore_1.onDocumentCreated)("locatio
     }
 });
 /**
+ * Send push notification when a new nearby group message is sent.
+ * Notifies all members except the sender.
+ * Similar to location groups but for Bluetooth-based nearby groups.
+ */
+exports.onNearbyGroupMessageNotification = (0, firestore_1.onDocumentCreated)("nearby_groups/{groupId}/messages/{messageId}", async (event) => {
+    const message = event.data?.data();
+    if (!message)
+        return;
+    const groupId = event.params.groupId;
+    const senderId = message.senderId;
+    const senderName = message.senderName || "Someone";
+    const messageText = message.text || "Sent a message";
+    // Skip system messages
+    if (message.type === "system") {
+        firebase_functions_1.logger.log("Skipping notification for system message in nearby group");
+        return null;
+    }
+    // Get group info
+    const groupDoc = await admin
+        .firestore()
+        .collection("nearby_groups")
+        .doc(groupId)
+        .get();
+    if (!groupDoc.exists) {
+        firebase_functions_1.logger.log("Nearby group not found");
+        return null;
+    }
+    const groupData = groupDoc.data();
+    const groupName = groupData?.name || "Nearby Group";
+    // Get all members except sender
+    const membersSnapshot = await admin
+        .firestore()
+        .collection("nearby_groups")
+        .doc(groupId)
+        .collection("members")
+        .get();
+    if (membersSnapshot.empty) {
+        firebase_functions_1.logger.log("No members found in nearby group");
+        return null;
+    }
+    // Collect all tokens from all members (except sender)
+    const allTokens = [];
+    const tokenToUserMap = new Map();
+    for (const memberDoc of membersSnapshot.docs) {
+        // const memberData = memberDoc.data();
+        const memberUserId = memberDoc.id; // Document ID is the user ID
+        // Skip the sender
+        if (memberUserId === senderId)
+            continue;
+        // Get user's FCM tokens
+        const userDoc = await admin
+            .firestore()
+            .collection("users")
+            .doc(memberUserId)
+            .get();
+        if (!userDoc.exists)
+            continue;
+        const userData = userDoc.data();
+        const fcmTokens = userData?.fcmTokens || {};
+        const tokens = Object.keys(fcmTokens);
+        for (const token of tokens) {
+            allTokens.push(token);
+            tokenToUserMap.set(token, memberUserId);
+        }
+    }
+    if (allTokens.length === 0) {
+        firebase_functions_1.logger.log("No FCM tokens for any nearby group members");
+        return null;
+    }
+    // Prepare notification
+    const payload = {
+        notification: {
+            title: `📍 ${groupName}`,
+            body: `${senderName}: ${messageText.substring(0, 100)}`,
+        },
+        data: {
+            groupId: groupId,
+            senderId: senderId,
+            type: "nearby_group_message",
+        },
+    };
+    // Send to all members' devices
+    try {
+        const response = await admin.messaging().sendEachForMulticast({
+            tokens: allTokens,
+            notification: payload.notification,
+            data: payload.data,
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "radius_messages",
+                    priority: "high",
+                    sound: "default",
+                    defaultSound: true,
+                    tag: `nearby_group_${groupId}`, // Group notifications together
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: 1,
+                        threadId: `nearby_group_${groupId}`, // Group notifications together on iOS
+                    },
+                },
+            },
+        });
+        firebase_functions_1.logger.log(`Nearby group notification: ${response.successCount} sent, ` +
+            `${response.failureCount} failed to ${allTokens.length} tokens`);
+        // Remove invalid tokens
+        if (response.failureCount > 0) {
+            const invalidTokensByUser = new Map();
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    const token = allTokens[idx];
+                    const userId = tokenToUserMap.get(token);
+                    if (userId) {
+                        if (!invalidTokensByUser.has(userId)) {
+                            invalidTokensByUser.set(userId, []);
+                        }
+                        invalidTokensByUser.get(userId).push(token);
+                    }
+                }
+            });
+            // Remove invalid tokens for each user
+            for (const [userId, tokens] of invalidTokensByUser) {
+                const updates = {};
+                tokens.forEach((token) => {
+                    updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+                });
+                await admin
+                    .firestore()
+                    .collection("users")
+                    .doc(userId)
+                    .update(updates);
+            }
+        }
+        return response;
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error sending nearby group notification:", error);
+        return null;
+    }
+});
+/**
  * Send push notification when a connection request is received.
  */
 exports.onConnectionRequestReceived = (0, firestore_1.onDocumentCreated)("connection_requests/{requestId}", async (event) => {
@@ -528,6 +673,137 @@ exports.onGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("loc
     }
     catch (error) {
         firebase_functions_1.logger.error("Error sending join request notification:", error);
+        return null;
+    }
+});
+/**
+ * Send push notification when a user requests to join a random group.
+ * Notifies all admins of the group.
+ */
+exports.onRandomGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("random_groups/{groupId}/join_requests/{requestId}", async (event) => {
+    const request = event.data?.data();
+    if (!request)
+        return;
+    const groupId = event.params.groupId;
+    const requesterId = request.requesterId;
+    const requesterName = request.requesterUsername || "Someone";
+    const message = request.message;
+    // Get group info
+    const groupDoc = await admin
+        .firestore()
+        .collection("random_groups")
+        .doc(groupId)
+        .get();
+    if (!groupDoc.exists) {
+        firebase_functions_1.logger.log("Random group not found");
+        return null;
+    }
+    const groupData = groupDoc.data();
+    const groupName = groupData?.name || "Group";
+    const adminIds = (groupData?.adminIds || []);
+    if (adminIds.length === 0) {
+        firebase_functions_1.logger.log("No admins found for random group");
+        return null;
+    }
+    // Collect all admin tokens
+    const allTokens = [];
+    const tokenToUserMap = new Map();
+    for (const adminUserId of adminIds) {
+        // Get admin's FCM tokens
+        const userDoc = await admin
+            .firestore()
+            .collection("users")
+            .doc(adminUserId)
+            .get();
+        if (!userDoc.exists)
+            continue;
+        const userData = userDoc.data();
+        const fcmTokens = userData?.fcmTokens || {};
+        const tokens = Object.keys(fcmTokens);
+        for (const token of tokens) {
+            allTokens.push(token);
+            tokenToUserMap.set(token, adminUserId);
+        }
+    }
+    if (allTokens.length === 0) {
+        firebase_functions_1.logger.log("No FCM tokens for any admins in random group");
+        return null;
+    }
+    // Prepare notification
+    const body = message
+        ? `${requesterName}: ${message}`
+        : `${requesterName} wants to join`;
+    const payload = {
+        notification: {
+            title: `${groupName} - Join Request`,
+            body: body,
+        },
+        data: {
+            groupId: groupId,
+            requestId: event.params.requestId,
+            requesterId: requesterId,
+            type: "random_group_join_request",
+        },
+    };
+    // Send to all admins' devices
+    try {
+        const response = await admin.messaging().sendEachForMulticast({
+            tokens: allTokens,
+            notification: payload.notification,
+            data: payload.data,
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "radius_messages",
+                    priority: "high",
+                    sound: "default",
+                    defaultSound: true,
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: 1,
+                    },
+                },
+            },
+        });
+        firebase_functions_1.logger.log(`Random group join request notification: ${response.successCount} sent, ` +
+            `${response.failureCount} failed`);
+        // Remove invalid tokens
+        if (response.failureCount > 0) {
+            const invalidTokensByUser = new Map();
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    const token = allTokens[idx];
+                    const userId = tokenToUserMap.get(token);
+                    if (userId) {
+                        if (!invalidTokensByUser.has(userId)) {
+                            invalidTokensByUser.set(userId, []);
+                        }
+                        invalidTokensByUser.get(userId).push(token);
+                    }
+                }
+            });
+            // Remove invalid tokens for each user
+            for (const [userId, tokens] of invalidTokensByUser) {
+                const updates = {};
+                tokens.forEach((token) => {
+                    updates[`fcmTokens.${token}`] =
+                        admin.firestore.FieldValue.delete();
+                });
+                await admin
+                    .firestore()
+                    .collection("users")
+                    .doc(userId)
+                    .update(updates);
+            }
+        }
+        return response;
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error sending random group join request notification:", error);
         return null;
     }
 });

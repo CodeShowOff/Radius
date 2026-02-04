@@ -613,7 +613,19 @@ class RandomGroupService {
       return RandomGroupSuccess(request.toEntity());
     } on FirebaseException catch (e, stack) {
       _logger.e('Error creating join request', error: e, stackTrace: stack);
-      throw _mapFirestoreException(e);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error creating join request', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to create join request: $e',
+        RandomGroupErrorType.unknown,
+      );
     }
   }
 

@@ -23,7 +23,7 @@ abstract class AppConstants {
   // Feature flags
   /// Enable/disable media uploads (images, audio, documents, stickers)
   /// Set to false to show "coming soon" message without Firebase Storage
-  static const bool enableMediaUploads = false;
+  static const bool enableMediaUploads = true;
 }
 
 /// Hive box names for local storage

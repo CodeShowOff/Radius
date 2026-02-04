@@ -392,13 +392,27 @@ class RandomGroupChatBloc
     // Create a Set of IDs from newly received messages for O(1) lookup
     final newMessageIds = event.messages.map((m) => m.id).toSet();
 
-    // Merge with any older messages we've loaded via pagination
-    // Filter out:
-    // 1. Duplicates (same ID as incoming messages)
-    // 2. Messages newer than the stream batch (unless they're pending optimistic)
+    // Filter out optimistic messages (those with local/temporary IDs that start with UUID pattern)
+    // and messages that are duplicates of the incoming batch
     final currentOldMessages = state.messages.where((m) {
       // Skip if message is already in the new batch (prevents duplicates)
       if (newMessageIds.contains(m.id)) return false;
+
+      // Filter out optimistic messages with temporary IDs (UUIDs)
+      // Real Firestore IDs are typically 20 characters, UUIDs are 36
+      // Check if this is an optimistic message that might have been replaced by a real one
+      if (m.id.length == 36 && m.id.contains('-')) {
+        // This looks like a temporary UUID - check if there's a matching real message
+        final hasMatchingRealMessage = event.messages.any((newMsg) =>
+            newMsg.senderId == m.senderId &&
+            newMsg.text == m.text &&
+            newMsg.sentAt.difference(m.sentAt).inSeconds.abs() < 5);
+        
+        if (hasMatchingRealMessage) {
+          _logger.d('Filtering out optimistic message ${m.id} as it has a matching real message');
+          return false; // Filter out the optimistic message
+        }
+      }
 
       // Keep messages that are older than the oldest message in the new list
       if (event.messages.isEmpty) return true;

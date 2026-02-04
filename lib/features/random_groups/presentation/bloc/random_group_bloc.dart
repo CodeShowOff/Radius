@@ -460,6 +460,9 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
         await _groupService.isMember(event.groupId, event.userId);
 
     if (isMember) {
+      // User is a member, start watching members now that we have permission
+      add(WatchRandomGroupMembers(event.groupId));
+      
       // Check if admin or creator
       final group = await _groupService.getGroup(event.groupId);
       if (group != null) {
