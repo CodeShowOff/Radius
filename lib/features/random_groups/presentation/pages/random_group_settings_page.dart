@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/services/cloudinary_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../domain/entities/join_request.dart';
 import '../bloc/random_group_bloc.dart';
 
 /// Page for editing random group settings (admin only).
@@ -17,6 +18,7 @@ import '../bloc/random_group_bloc.dart';
 /// - Update group name
 /// - Update group topic
 /// - Update group description
+/// - View and manage pending join requests
 class RandomGroupSettingsPage extends StatefulWidget {
   final String groupId;
 
@@ -60,6 +62,8 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
   void initState() {
     super.initState();
     _loadGroupDetails();
+    // Watch pending requests for admin
+    context.read<RandomGroupBloc>().add(WatchPendingRequests(widget.groupId));
   }
 
   @override
@@ -174,6 +178,41 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
       },
       builder: (context, state) {
         final group = state.selectedGroup;
+        final isAdmin = state.membershipStatus == UserMembershipStatus.admin ||
+            state.membershipStatus == UserMembershipStatus.creator;
+
+        // Only admins can access settings
+        if (!isAdmin) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Group Settings')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.lock,
+                    size: 64,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Access Denied',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Only group admins can access settings',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
         if (group == null) {
           return Scaffold(
@@ -183,6 +222,7 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
         }
 
         final isLoading = state.status == RandomGroupBlocStatus.loading;
+        final pendingRequests = state.pendingRequests;
 
         return Scaffold(
           appBar: AppBar(
@@ -285,7 +325,7 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
 
                   // Topic
                   DropdownButtonFormField<String>(
-                    value: _selectedTopic,
+                    initialValue: _selectedTopic,
                     decoration: const InputDecoration(
                       labelText: 'Topic',
                       border: OutlineInputBorder(),
@@ -316,7 +356,92 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
                     maxLines: 5,
                     maxLength: 500,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
+
+                  // Pending Join Requests Section
+                  Text(
+                    'Join Requests Management',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Review and manage user requests to join your group',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (pendingRequests.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle_outline,
+                              size: 48,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No Pending Requests',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'You have no join requests to review at this time',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ...[
+                      Card(
+                        color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.person_add,
+                                    color: theme.colorScheme.error,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${pendingRequests.length} Pending Request${pendingRequests.length > 1 ? "s" : ""}',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              ...pendingRequests.map((request) => _buildJoinRequestTile(
+                                    context,
+                                    request,
+                                    theme,
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  const SizedBox(height: 32),
 
                   // Save button
                   FilledButton.icon(
@@ -330,6 +455,87 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildJoinRequestTile(
+    BuildContext context,
+    JoinRequest request,
+    ThemeData theme,
+  ) {
+    final authState = context.read<AuthBloc>().state;
+    final adminId = authState is AuthAuthenticated ? authState.user.id : '';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            CachedAvatar(
+              imageUrl: request.requesterPhotoUrl,
+              name: request.requesterDisplayName ?? request.requesterUsername,
+              radius: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    request.requesterDisplayName ?? request.requesterUsername,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '@${request.requesterUsername}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (request.message != null && request.message!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      request.message!,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.close),
+              color: theme.colorScheme.error,
+              onPressed: () {
+                context.read<RandomGroupBloc>().add(RejectJoinRequest(
+                      groupId: widget.groupId,
+                      requestId: request.id,
+                      adminId: adminId,
+                    ));
+              },
+              tooltip: 'Reject',
+            ),
+            IconButton(
+              icon: const Icon(Icons.check),
+              color: theme.colorScheme.primary,
+              onPressed: () {
+                context.read<RandomGroupBloc>().add(ApproveJoinRequest(
+                      groupId: widget.groupId,
+                      requestId: request.id,
+                      adminId: adminId,
+                      requesterUsername:
+                          request.requesterDisplayName ?? request.requesterUsername,
+                    ));
+              },
+              tooltip: 'Approve',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

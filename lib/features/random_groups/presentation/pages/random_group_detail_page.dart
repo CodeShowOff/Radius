@@ -230,27 +230,22 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             actions: [
-              // Show pending requests badge for admins
-              if (isAdmin && state.pendingRequests.isNotEmpty)
-                IconButton(
-                  icon: Badge(
-                    label: Text('${state.pendingRequests.length}'),
-                    backgroundColor: theme.colorScheme.error,
-                    child: const Icon(Icons.person_add),
-                  ),
-                  onPressed: () {
-                    // Switch to Members tab when badge is tapped
-                    _tabController.animateTo(1);
-                  },
-                  tooltip: 'Pending Join Requests',
-                ),
+              // Settings button (admin only) with badge showing pending requests
               if (isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.settings),
+                  icon: state.pendingRequests.isNotEmpty
+                      ? Badge(
+                          label: Text('${state.pendingRequests.length}'),
+                          backgroundColor: theme.colorScheme.error,
+                          child: const Icon(Icons.settings),
+                        )
+                      : const Icon(Icons.settings),
                   onPressed: () {
                     context.push(Routes.randomGroupSettingsWith(widget.groupId));
                   },
-                  tooltip: 'Group Settings',
+                  tooltip: state.pendingRequests.isNotEmpty
+                      ? 'Group Settings (${state.pendingRequests.length} pending requests)'
+                      : 'Group Settings',
                 ),
               PopupMenuButton<String>(
                 onSelected: (value) {
