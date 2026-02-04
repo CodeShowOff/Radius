@@ -837,6 +837,7 @@ class RandomGroupService {
     String? name,
     String? topic,
     String? description,
+    String? photoUrl,
   }) async {
     try {
       final groupDoc = await _groupsRef.doc(groupId).get();
@@ -876,6 +877,10 @@ class RandomGroupService {
 
       if (description != null) {
         updates['description'] = description.trim();
+      }
+
+      if (photoUrl != null) {
+        updates['photoUrl'] = photoUrl;
       }
 
       await _groupsRef.doc(groupId).update(updates);

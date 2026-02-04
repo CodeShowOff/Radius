@@ -41,6 +41,9 @@ class RandomGroup extends Equatable {
   /// Creator's photo URL
   final String? creatorPhotoUrl;
 
+  /// Group's profile photo URL
+  final String? photoUrl;
+
   /// List of admin user IDs (includes creator)
   final List<String> adminIds;
 
@@ -74,6 +77,7 @@ class RandomGroup extends Equatable {
     required this.creatorUsername,
     this.creatorDisplayName,
     this.creatorPhotoUrl,
+    this.photoUrl,
     required this.adminIds,
     required this.status,
     required this.memberCount,
@@ -103,6 +107,7 @@ class RandomGroup extends Equatable {
     String? creatorUsername,
     String? creatorDisplayName,
     String? creatorPhotoUrl,
+    String? photoUrl,
     List<String>? adminIds,
     RandomGroupStatus? status,
     int? memberCount,
@@ -121,6 +126,7 @@ class RandomGroup extends Equatable {
       creatorUsername: creatorUsername ?? this.creatorUsername,
       creatorDisplayName: creatorDisplayName ?? this.creatorDisplayName,
       creatorPhotoUrl: creatorPhotoUrl ?? this.creatorPhotoUrl,
+      photoUrl: photoUrl ?? this.photoUrl,
       adminIds: adminIds ?? this.adminIds,
       status: status ?? this.status,
       memberCount: memberCount ?? this.memberCount,
@@ -142,6 +148,7 @@ class RandomGroup extends Equatable {
         creatorUsername,
         creatorDisplayName,
         creatorPhotoUrl,
+        photoUrl,
         adminIds,
         status,
         memberCount,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/random_group.dart';
 import '../bloc/random_group_bloc.dart';
@@ -291,15 +292,10 @@ class _RandomGroupCard extends StatelessWidget {
           child: Row(
             children: [
               // Group avatar
-              CircleAvatar(
+              CachedAvatar(
+                imageUrl: group.photoUrl,
+                name: group.name,
                 radius: 28,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Text(
-                  group.name.isNotEmpty ? group.name[0].toUpperCase() : '?',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
               ),
               const SizedBox(width: 16),
               // Group info

@@ -15,6 +15,7 @@ import '../../domain/entities/random_group.dart';
 ///   - creatorUsername: string
 ///   - creatorDisplayName: string?
 ///   - creatorPhotoUrl: string?
+///   - photoUrl: string?
 ///   - adminIds: string[]
 ///   - status: string ('active' | 'inactive')
 ///   - memberCount: int
@@ -34,6 +35,7 @@ class RandomGroupModel extends RandomGroup {
     required super.creatorUsername,
     super.creatorDisplayName,
     super.creatorPhotoUrl,
+    super.photoUrl,
     required super.adminIds,
     required super.status,
     required super.memberCount,
@@ -57,6 +59,7 @@ class RandomGroupModel extends RandomGroup {
       creatorUsername: data['creatorUsername'] as String,
       creatorDisplayName: data['creatorDisplayName'] as String?,
       creatorPhotoUrl: data['creatorPhotoUrl'] as String?,
+      photoUrl: data['photoUrl'] as String?,
       adminIds: List<String>.from(data['adminIds'] ?? [data['creatorId']]),
       status: _statusFromString(data['status'] as String?),
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
@@ -81,6 +84,7 @@ class RandomGroupModel extends RandomGroup {
       creatorUsername: data['creatorUsername'] as String,
       creatorDisplayName: data['creatorDisplayName'] as String?,
       creatorPhotoUrl: data['creatorPhotoUrl'] as String?,
+      photoUrl: data['photoUrl'] as String?,
       adminIds: List<String>.from(data['adminIds'] ?? [data['creatorId']]),
       status: _statusFromString(data['status'] as String?),
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
@@ -104,6 +108,7 @@ class RandomGroupModel extends RandomGroup {
       'creatorUsername': creatorUsername,
       if (creatorDisplayName != null) 'creatorDisplayName': creatorDisplayName,
       if (creatorPhotoUrl != null) 'creatorPhotoUrl': creatorPhotoUrl,
+      if (photoUrl != null) 'photoUrl': photoUrl,
       'adminIds': adminIds,
       'status': _statusToString(status),
       'memberCount': memberCount,
@@ -131,6 +136,7 @@ class RandomGroupModel extends RandomGroup {
       creatorUsername: creatorUsername,
       creatorDisplayName: creatorDisplayName,
       creatorPhotoUrl: creatorPhotoUrl,
+      photoUrl: photoUrl,
       adminIds: adminIds,
       status: status,
       memberCount: memberCount,

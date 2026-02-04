@@ -197,7 +197,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFF667eea).withValues(alpha: 0.3),
@@ -287,7 +287,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   onTap: () => context.push(Routes.discoverNearbyGroups),
                   title: 'Discover Nearby Groups',
                   subtitle: 'Find local communities around you',
-                  icon: Icons.bluetooth_searching,
+                  icon: Icons.all_inclusive,
                   gradientColors: [
                     const Color(0xFF667eea),
                     const Color(0xFF764ba2),

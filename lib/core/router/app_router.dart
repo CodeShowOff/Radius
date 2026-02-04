@@ -40,6 +40,7 @@ import '../../features/random_groups/presentation/pages/create_random_group_page
 import '../../features/random_groups/presentation/pages/discover_random_groups_page.dart';
 import '../../features/random_groups/presentation/pages/random_group_chat_page.dart';
 import '../../features/random_groups/presentation/pages/random_group_detail_page.dart';
+import '../../features/random_groups/presentation/pages/random_group_settings_page.dart';
 import '../../features/random_groups/presentation/pages/random_groups_page.dart';
 import '../../features/main_scaffold.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
@@ -485,6 +486,17 @@ GoRouter get appRouter {
               BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
             ],
             child: RandomGroupDetailPage(groupId: groupId),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.randomGroupSettings,
+        name: 'randomGroupSettings',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return BlocProvider.value(
+            value: getIt<RandomGroupBloc>(),
+            child: RandomGroupSettingsPage(groupId: groupId),
           );
         },
       ),

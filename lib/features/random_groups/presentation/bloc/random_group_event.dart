@@ -212,6 +212,28 @@ class DeleteRandomGroup extends RandomGroupEvent {
   List<Object?> get props => [groupId, userId];
 }
 
+/// Update group details (admin only).
+class UpdateRandomGroup extends RandomGroupEvent {
+  final String groupId;
+  final String adminId;
+  final String? name;
+  final String? topic;
+  final String? description;
+  final String? photoUrl;
+
+  const UpdateRandomGroup({
+    required this.groupId,
+    required this.adminId,
+    this.name,
+    this.topic,
+    this.description,
+    this.photoUrl,
+  });
+
+  @override
+  List<Object?> get props => [groupId, adminId, name, topic, description, photoUrl];
+}
+
 /// Watch members of a group.
 class WatchRandomGroupMembers extends RandomGroupEvent {
   final String groupId;

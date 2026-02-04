@@ -66,6 +66,8 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
         groupId: widget.groupId,
         userId: authState.user.id,
       ));
+      // Watch pending requests for all users (admins will see them in UI)
+      bloc.add(WatchPendingRequests(widget.groupId));
     }
   }
 
@@ -181,8 +183,20 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
     return BlocConsumer<RandomGroupBloc, RandomGroupState>(
       listener: (context, state) {
         if (state.status == RandomGroupBlocStatus.joined) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Join request sent!')),
+          showDialog(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Request Sent'),
+              content: const Text(
+                'Your join request has been sent to the group admin. You will be notified once your request is approved.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
           );
         } else if (state.status == RandomGroupBlocStatus.error &&
             state.errorMessage != null) {
@@ -216,11 +230,25 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             actions: [
+              // Show pending requests badge for admins
+              if (isAdmin && state.pendingRequests.isNotEmpty)
+                IconButton(
+                  icon: Badge(
+                    label: Text('${state.pendingRequests.length}'),
+                    backgroundColor: theme.colorScheme.error,
+                    child: const Icon(Icons.person_add),
+                  ),
+                  onPressed: () {
+                    // Switch to Members tab when badge is tapped
+                    _tabController.animateTo(1);
+                  },
+                  tooltip: 'Pending Join Requests',
+                ),
               if (isAdmin)
                 IconButton(
                   icon: const Icon(Icons.settings),
                   onPressed: () {
-                    // TODO: Open group settings
+                    context.push(Routes.randomGroupSettingsWith(widget.groupId));
                   },
                   tooltip: 'Group Settings',
                 ),
@@ -275,10 +303,10 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text('Members'),
-                            if (isAdmin && group.pendingRequestCount > 0) ...[
+                            if (isAdmin && state.pendingRequests.isNotEmpty) ...[
                               const SizedBox(width: 8),
                               Badge(
-                                label: Text('${group.pendingRequestCount}'),
+                                label: Text('${state.pendingRequests.length}'),
                               ),
                             ],
                           ],
@@ -344,15 +372,10 @@ class _AboutTab extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                CachedAvatar(
+                  imageUrl: group.photoUrl,
+                  name: group.name,
                   radius: 48,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Text(
-                    group.name.isNotEmpty ? group.name[0].toUpperCase() : '?',
-                    style: theme.textTheme.headlineLarge?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -483,7 +506,7 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _MembersTab extends StatefulWidget {
+class _MembersTab extends StatelessWidget {
   final String groupId;
   final List<RandomGroupMember> members;
   final List<JoinRequest> pendingRequests;
@@ -499,21 +522,6 @@ class _MembersTab extends StatefulWidget {
   });
 
   @override
-  State<_MembersTab> createState() => _MembersTabState();
-}
-
-class _MembersTabState extends State<_MembersTab> {
-  bool _showRequests = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.isAdmin) {
-      context.read<RandomGroupBloc>().add(WatchPendingRequests(widget.groupId));
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -521,60 +529,56 @@ class _MembersTabState extends State<_MembersTab> {
       padding: const EdgeInsets.all(16),
       children: [
         // Pending requests section (admin only)
-        if (widget.isAdmin && widget.pendingRequests.isNotEmpty) ...[
-          InkWell(
-            onTap: () => setState(() => _showRequests = !_showRequests),
-            borderRadius: BorderRadius.circular(8),
+        if (isAdmin && pendingRequests.isNotEmpty) ...[
+          Card(
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.person_add,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Pending Requests (${widget.pendingRequests.length})',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_add,
+                        color: theme.colorScheme.error,
+                        size: 20,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Pending Requests (${pendingRequests.length})',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ],
                   ),
-                  Icon(
-                    _showRequests
-                        ? Icons.expand_less
-                        : Icons.expand_more,
-                  ),
+                  const SizedBox(height: 12),
+                  ...pendingRequests.map((request) => _PendingRequestTile(
+                        request: request,
+                        groupId: groupId,
+                      )),
                 ],
               ),
             ),
           ),
-          if (_showRequests) ...[
-            const SizedBox(height: 8),
-            ...widget.pendingRequests.map((request) => _PendingRequestTile(
-                  request: request,
-                  groupId: widget.groupId,
-                )),
-            const Divider(height: 32),
-          ],
+          const SizedBox(height: 16),
         ],
 
         // Members section
         Text(
-          'Members (${widget.members.length})',
+          'Members (${members.length})',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 8),
-        ...widget.members.map((member) => _MemberTile(
+        ...members.map((member) => _MemberTile(
               member: member,
-              groupId: widget.groupId,
-              isAdmin: widget.isAdmin,
-              isCurrentUser: member.id == widget.currentUserId,
+              groupId: groupId,
+              isAdmin: isAdmin,
+              isCurrentUser: member.id == currentUserId,
             )),
       ],
     );
@@ -798,15 +802,10 @@ class _NonMemberView extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                CachedAvatar(
+                  imageUrl: group.photoUrl,
+                  name: group.name,
                   radius: 48,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Text(
-                    group.name.isNotEmpty ? group.name[0].toUpperCase() : '?',
-                    style: theme.textTheme.headlineLarge?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(

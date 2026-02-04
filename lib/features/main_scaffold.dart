@@ -66,13 +66,13 @@ class _MainScaffoldState extends State<MainScaffold> {
         onDestinationSelected: _onItemTapped,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.shuffle_outlined),
-            selectedIcon: Icon(Icons.shuffle),
+            icon: Icon(Icons.public_outlined),
+            selectedIcon: Icon(Icons.public),
             label: 'Random',
           ),
           NavigationDestination(
-            icon: Icon(Icons.radar_outlined),
-            selectedIcon: Icon(Icons.radar),
+            icon: Icon(Icons.all_inclusive_outlined),
+            selectedIcon: Icon(Icons.all_inclusive),
             label: 'Nearby',
           ),
           NavigationDestination(

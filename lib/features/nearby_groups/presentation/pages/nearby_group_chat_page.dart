@@ -347,22 +347,19 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
             );
           }
 
-          // Only show loading spinner during initial load
-          if (state.status == NearbyGroupChatStatus.loading && state.messages.isEmpty) {
+          // Only show loading spinner during initial load (not when sending)
+          if (state.status == NearbyGroupChatStatus.loading && 
+              state.messages.isEmpty && 
+              !state.isSending) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          // Determine if we're truly empty or still loading
-          final isLoading = state.status == NearbyGroupChatStatus.loading;
 
           return Column(
             children: [
               // Messages list
               Expanded(
                 child: state.messages.isEmpty
-                    ? (isLoading
-                        ? const SizedBox.shrink() // Don't show empty state while loading
-                        : _buildEmptyState(theme))
+                    ? _buildEmptyState(theme)
                     : _buildMessagesList(state),
               ),
 

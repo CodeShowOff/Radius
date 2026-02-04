@@ -168,7 +168,10 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
   AppBar _buildNormalAppBar() {
     return AppBar(
-      title: const Text('Connections'),
+      title: const Text(
+        'Connections',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
       actions: [
         IconButton(
           icon: const Icon(Icons.search),

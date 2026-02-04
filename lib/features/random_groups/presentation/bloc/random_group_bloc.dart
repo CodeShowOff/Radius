@@ -54,6 +54,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<PromoteToAdmin>(_onPromoteToAdmin);
     on<LeaveRandomGroup>(_onLeaveRandomGroup);
     on<DeleteRandomGroup>(_onDeleteRandomGroup);
+    on<UpdateRandomGroup>(_onUpdateRandomGroup);
     on<WatchRandomGroupMembers>(_onWatchRandomGroupMembers);
     on<CheckMembershipStatus>(_onCheckMembershipStatus);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
@@ -400,6 +401,40 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     }
   }
 
+  Future<void> _onUpdateRandomGroup(
+    UpdateRandomGroup event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Updating group: ${event.groupId}');
+
+    emit(state.copyWith(
+        status: RandomGroupBlocStatus.loading, clearError: true));
+
+    final result = await _groupService.updateGroup(
+      groupId: event.groupId,
+      adminId: event.adminId,
+      name: event.name,
+      topic: event.topic,
+      description: event.description,
+      photoUrl: event.photoUrl,
+    );
+
+    switch (result) {
+      case RandomGroupSuccess():
+        _logger.i('Updated group: ${event.groupId}');
+        emit(state.copyWith(
+          status: RandomGroupBlocStatus.loaded,
+        ));
+
+      case RandomGroupFailure(message: final msg):
+        _logger.w('Failed to update group: $msg');
+        emit(state.copyWith(
+          status: RandomGroupBlocStatus.error,
+          errorMessage: msg,
+        ));
+    }
+  }
+
   Future<void> _onWatchRandomGroupMembers(
     WatchRandomGroupMembers event,
     Emitter<RandomGroupState> emit,
@@ -432,10 +467,14 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
           emit(state.copyWith(
             membershipStatus: UserMembershipStatus.creator,
           ));
+          // Start watching pending requests for creator
+          add(WatchPendingRequests(event.groupId));
         } else if (group.adminIds.contains(event.userId)) {
           emit(state.copyWith(
             membershipStatus: UserMembershipStatus.admin,
           ));
+          // Start watching pending requests for admin
+          add(WatchPendingRequests(event.groupId));
         } else {
           emit(state.copyWith(
             membershipStatus: UserMembershipStatus.member,

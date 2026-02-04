@@ -106,8 +106,12 @@ class NearbyGroupChatBloc
 
       // ================================================================
       // Membership verified - NOW safe to show cached messages
+      // Mark as loaded even if no messages yet
       // ================================================================
-      emit(state.copyWith(membershipVerified: true));
+      emit(state.copyWith(
+        membershipVerified: true,
+        status: NearbyGroupChatStatus.loaded,
+      ));
 
       if (_cacheService.hasCache(event.groupId)) {
         final cachedMessages = _cacheService.getMessages(event.groupId);
@@ -216,15 +220,10 @@ class NearbyGroupChatBloc
         text: event.text,
       );
 
-      // Message sent - the stream will update with the real message
-      // Remove the optimistic message to avoid duplicates
-      final updatedMessages = state.messages
-          .where((m) => m.id != localId)
-          .toList();
-
+      // Message sent - keep the optimistic message until stream updates
+      // The stream handler will filter out the optimistic message when real message arrives
       emit(state.copyWith(
         status: NearbyGroupChatStatus.loaded,
-        messages: updatedMessages,
       ));
     } catch (e) {
       _logger.e('Failed to send message', error: e);

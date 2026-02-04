@@ -82,11 +82,16 @@ abstract class Routes {
   static const String discoverRandomGroups = '/random-groups/discover';
   static const String createRandomGroup = '/random-groups/create';
   static const String randomGroupDetail = '/random-groups/:groupId';
+  static const String randomGroupSettings = '/random-groups/:groupId/settings';
   static const String randomGroupChat = '/random-groups/:groupId/chat';
 
   /// Helper to build a random group detail route with group ID.
   static String randomGroupDetailWith(String groupId) =>
       '/random-groups/$groupId';
+
+  /// Helper to build a random group settings route with group ID.
+  static String randomGroupSettingsWith(String groupId) =>
+      '/random-groups/$groupId/settings';
 
   /// Helper to build a random group chat route with group ID.
   static String randomGroupChatWith(String groupId) =>
