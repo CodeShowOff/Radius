@@ -1070,7 +1070,7 @@ service cloud.firestore {
         && request.resource.data.status == 'OPEN'
         && request.resource.data.latitude is number
         && request.resource.data.longitude is number
-        && request.resource.data.radius in [10, 50, 100]
+        && request.resource.data.radius in [50, 100, 500, 1000, 2000]
         && (!('helperUserId' in request.resource.data.keys()) || request.resource.data.helperUserId == null);
       
       // RULE: Seeker can update their own request (cancel, mark completed)

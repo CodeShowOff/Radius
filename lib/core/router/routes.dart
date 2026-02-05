@@ -40,6 +40,7 @@ abstract class Routes {
   static const String bluetoothSettings = '/settings/bluetooth';
   static const String locationSettings = '/settings/location';
   static const String appearanceSettings = '/settings/appearance';
+  static const String notificationSettings = '/settings/notifications';
   static const String diagnosticsLogs = '/settings/diagnostics-logs';
   static const String privacySettings = '/settings/privacy';
   static const String helpSupport = '/help-support';

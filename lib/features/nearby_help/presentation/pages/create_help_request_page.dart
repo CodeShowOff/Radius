@@ -23,7 +23,7 @@ class CreateHelpRequestPage extends StatefulWidget {
   State<CreateHelpRequestPage> createState() => _CreateHelpRequestPageState();
 }
 
-class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
+class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> with WidgetsBindingObserver {
   final _topicController = TextEditingController();
   HelpRadius? _selectedRadius;
   double? _latitude;
@@ -37,13 +37,24 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _getCurrentLocation();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _topicController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // When app resumes (user returns from settings), recheck location status
+    if (state == AppLifecycleState.resumed && _locationServicesDisabled) {
+      _getCurrentLocation();
+    }
   }
 
   Future<void> _getCurrentLocation() async {

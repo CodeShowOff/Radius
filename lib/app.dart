@@ -114,7 +114,7 @@ class _AuthAwareApp extends StatefulWidget {
   State<_AuthAwareApp> createState() => _AuthAwareAppState();
 }
 
-class _AuthAwareAppState extends State<_AuthAwareApp> {
+class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserver {
   String? _currentUserId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -122,6 +122,9 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
   @override
   void initState() {
     super.initState();
+    
+    // Listen for app lifecycle changes (background/foreground)
+    WidgetsBinding.instance.addObserver(this);
 
     // If the app starts already authenticated, BlocListener won't fire.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -129,6 +132,38 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
       _onAuthChanged(context, context.read<AuthBloc>().state);
       _setupInAppNotifications();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    debugPrint('[RadiusApp] App lifecycle changed to: $state');
+    debugPrint('[RadiusApp] User authenticated: ${_currentUserId != null}');
+    
+    // When app resumes (user returns from home screen after turning on Bluetooth)
+    // restart advertising if user is authenticated
+    if (state == AppLifecycleState.resumed && _currentUserId != null) {
+      debugPrint('[RadiusApp] ⚡ App RESUMED - restarting BLE advertising');
+      try {
+        context.read<NearbyUsersBloc>().add(const NearbyUsersAppResumed());
+        debugPrint('[RadiusApp] ✓ BLE advertising restart event sent');
+      } catch (e) {
+        debugPrint('[RadiusApp] ✗ Failed to restart advertising: $e');
+      }
+    } else if (state == AppLifecycleState.paused) {
+      debugPrint('[RadiusApp] 📱 App PAUSED (backgrounded) - advertising continues in background');
+    } else if (state == AppLifecycleState.inactive) {
+      debugPrint('[RadiusApp] ⏸️ App INACTIVE');
+    } else if (state == AppLifecycleState.detached) {
+      debugPrint('[RadiusApp] 🔌 App DETACHED');
+    }
   }
 
   /// Setup in-app notification handler for foreground messages
@@ -213,13 +248,18 @@ class _AuthAwareAppState extends State<_AuthAwareApp> {
         }
 
         // Initialize BLE advertising to be discoverable
+        // This is CRITICAL for proximity features - log failures for debugging
         try {
-          context.read<NearbyUsersBloc>().add(NearbyUsersInitialize(
-                userId: newUserId,
-                username: state.user.username,
-              ));
-        } catch (_) {
-          // Ignore if NearbyUsersBloc isn't available in the tree yet.
+          final nearbyUsersBloc = context.read<NearbyUsersBloc>();
+          nearbyUsersBloc.add(NearbyUsersInitialize(
+            userId: newUserId,
+            username: state.user.username,
+          ));
+          debugPrint('[RadiusApp] ✓ BLE advertising initialization started for ${state.user.username}');
+        } catch (e) {
+          // This should never happen since NearbyUsersBloc is provided globally
+          debugPrint('[RadiusApp] ✗✗✗ CRITICAL: Failed to initialize BLE advertising: $e');
+          debugPrint('[RadiusApp] This means the user will NOT be discoverable!');
         }
 
         // Initialize push notifications

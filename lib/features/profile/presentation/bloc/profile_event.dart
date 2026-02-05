@@ -65,6 +65,29 @@ class ProfilePrivacySettingsUpdated extends ProfileEvent {
       [showOnlineStatus, allowConnectionRequests, showLastSeen];
 }
 
+/// Event to update notification settings.
+class ProfileNotificationSettingsUpdated extends ProfileEvent {
+  final bool? notifyDirectMessages;
+  final bool? notifyLocationGroups;
+  final bool? notifyNearbyGroups;
+  final bool? notifyRandomGroups;
+
+  const ProfileNotificationSettingsUpdated({
+    this.notifyDirectMessages,
+    this.notifyLocationGroups,
+    this.notifyNearbyGroups,
+    this.notifyRandomGroups,
+  });
+
+  @override
+  List<Object?> get props => [
+        notifyDirectMessages,
+        notifyLocationGroups,
+        notifyNearbyGroups,
+        notifyRandomGroups,
+      ];
+}
+
 /// Internal event for stream updates.
 class ProfileStreamUpdated extends ProfileEvent {
   final Profile? profile;

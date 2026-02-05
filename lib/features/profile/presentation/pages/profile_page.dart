@@ -279,6 +279,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           onTap: () => context.push(Routes.appearanceSettings),
                         ),
                         _ProfileOption(
+                          icon: Icons.notifications_outlined,
+                          title: 'Notification Settings',
+                          onTap: () => context.push(Routes.notificationSettings),
+                        ),
+                        _ProfileOption(
                           icon: Icons.visibility_outlined,
                           title: 'Privacy Settings',
                           onTap: () => context.push(Routes.privacySettings),

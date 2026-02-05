@@ -65,6 +65,12 @@ class NotificationNavigationService {
         case 'group_message':
           _navigateToGroupChat(data);
           break;
+        case 'nearby_group_message':
+          _navigateToNearbyGroupChat(data);
+          break;
+        case 'random_group_message':
+          _navigateToRandomGroupChat(data);
+          break;
         case 'connection_request':
           _navigateToConnectionRequests();
           break;
@@ -109,6 +115,30 @@ class NotificationNavigationService {
     // Determine which type of group it is and navigate accordingly
     // For now, default to location groups
     appRouter.push(Routes.locationGroupChatWith(groupId));
+  }
+
+  /// Navigate to nearby group chat screen.
+  void _navigateToNearbyGroupChat(Map<String, dynamic> data) {
+    final groupId = data['groupId'] as String?;
+    if (groupId == null) {
+      _logger.w('No groupId in nearby group notification data');
+      return;
+    }
+
+    _logger.i('Navigating to nearby group chat: $groupId');
+    appRouter.push(Routes.nearbyGroupChatWith(groupId));
+  }
+
+  /// Navigate to random group chat screen.
+  void _navigateToRandomGroupChat(Map<String, dynamic> data) {
+    final groupId = data['groupId'] as String?;
+    if (groupId == null) {
+      _logger.w('No groupId in random group notification data');
+      return;
+    }
+
+    _logger.i('Navigating to random group chat: $groupId');
+    appRouter.push(Routes.randomGroupChatWith(groupId));
   }
 
   /// Navigate to connection requests screen.
@@ -166,6 +196,12 @@ class NotificationNavigationService {
           break;
         case 'group_message':
           appRouter.push(Routes.locationGroupChatWith(id));
+          break;
+        case 'nearby_group_message':
+          appRouter.push(Routes.nearbyGroupChatWith(id));
+          break;
+        case 'random_group_message':
+          appRouter.push(Routes.randomGroupChatWith(id));
           break;
         case 'connection_request':
           appRouter.push(Routes.connectionRequests);

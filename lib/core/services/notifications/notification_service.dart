@@ -308,6 +308,10 @@ class NotificationService {
     // Format: type|id
     if (type == 'group_message' && groupId != null) {
       return 'group_message|$groupId';
+    } else if (type == 'nearby_group_message' && groupId != null) {
+      return 'nearby_group_message|$groupId';
+    } else if (type == 'random_group_message' && groupId != null) {
+      return 'random_group_message|$groupId';
     } else if (type == 'message' && conversationId != null) {
       return 'message|$conversationId';
     } else if (type == 'connection_request' && requestId != null) {

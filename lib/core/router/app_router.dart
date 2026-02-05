@@ -49,6 +49,7 @@ import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
 import '../../features/profile/presentation/pages/location_settings_page.dart';
 import '../../features/profile/presentation/pages/appearance_settings_page.dart';
+import '../../features/profile/presentation/pages/notification_settings_page.dart';
 import '../diagnostics/presentation/pages/diagnostics_logs_page.dart';
 import '../../features/profile/presentation/pages/privacy_settings_page.dart';
 import '../../features/profile/presentation/pages/help_support_page.dart';
@@ -251,6 +252,11 @@ GoRouter get appRouter {
         path: Routes.appearanceSettings,
         name: 'appearanceSettings',
         builder: (context, state) => const AppearanceSettingsPage(),
+      ),
+      GoRoute(
+        path: Routes.notificationSettings,
+        name: 'notificationSettings',
+        builder: (context, state) => const NotificationSettingsPage(),
       ),
       GoRoute(
         path: Routes.diagnosticsLogs,

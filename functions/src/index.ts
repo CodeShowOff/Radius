@@ -41,8 +41,24 @@ export const onMessageSent = onDocumentCreated(
     }
 
     // Get sender info from participantInfo (Flutter app stores it here)
-    const senderName =
-      conversation.participantInfo?.[senderId]?.displayName || "Someone";
+    // Fallback to fetching from users collection if not found
+    let senderName = conversation.participantInfo?.[senderId]?.displayName;
+    
+    if (!senderName) {
+      // Try to get name from users collection as fallback
+      const senderDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(senderId)
+        .get();
+      
+      if (senderDoc.exists) {
+        const senderData = senderDoc.data();
+        senderName = senderData?.displayName || senderData?.username || "Someone";
+      } else {
+        senderName = "Someone";
+      }
+    }
 
     // Get recipient's FCM tokens
     const userDoc = await admin
@@ -57,6 +73,14 @@ export const onMessageSent = onDocumentCreated(
     }
 
     const userData = userDoc.data();
+
+    // Check notification preferences
+    const notifPrefs = userData?.notificationPreferences;
+    if (notifPrefs?.directMessages === false) {
+      logger.log(`Skipping notification for ${recipientId}: direct messages disabled`);
+      return null;
+    }
+
     const fcmTokens = userData?.fcmTokens || {};
     const tokens = Object.keys(fcmTokens);
 
@@ -91,6 +115,8 @@ export const onMessageSent = onDocumentCreated(
             priority: "high",
             sound: "default",
             defaultSound: true,
+            // Group notifications from same sender together to avoid flooding
+            tag: `chat_${senderId}`,
           },
         },
         apns: {
@@ -98,6 +124,8 @@ export const onMessageSent = onDocumentCreated(
             aps: {
               sound: "default",
               badge: 1,
+              // Group notifications from same sender together on iOS
+              threadId: `chat_${senderId}`,
             },
           },
         },
@@ -209,6 +237,14 @@ export const onGroupMessageNotification = onDocumentCreated(
       if (!userDoc.exists) continue;
 
       const userData = userDoc.data();
+
+      // Check notification preferences
+      const notifPrefs = userData?.notificationPreferences;
+      if (notifPrefs?.locationGroups === false) {
+        logger.log(`Skipping notification for ${memberUserId}: location groups disabled`);
+        continue;
+      }
+
       const fcmTokens = userData?.fcmTokens || {};
       const tokens = Object.keys(fcmTokens);
 
@@ -378,6 +414,14 @@ export const onNearbyGroupMessageNotification = onDocumentCreated(
       if (!userDoc.exists) continue;
 
       const userData = userDoc.data();
+
+      // Check notification preferences
+      const notifPrefs = userData?.notificationPreferences;
+      if (notifPrefs?.nearbyGroups === false) {
+        logger.log(`Skipping notification for ${memberUserId}: nearby groups disabled`);
+        continue;
+      }
+
       const fcmTokens = userData?.fcmTokens || {};
       const tokens = Object.keys(fcmTokens);
 
@@ -471,6 +515,182 @@ export const onNearbyGroupMessageNotification = onDocumentCreated(
       return response;
     } catch (error) {
       logger.error("Error sending nearby group notification:", error);
+      return null;
+    }
+  }
+);
+
+/**
+ * Send push notification when a new random group message is sent.
+ * Notifies all members except the sender.
+ * Random groups are internet-based, admin-approved communities.
+ */
+export const onRandomGroupMessageNotification = onDocumentCreated(
+  "random_groups/{groupId}/messages/{messageId}",
+  async (event) => {
+    const message = event.data?.data();
+    if (!message) return;
+
+    const groupId = event.params.groupId;
+    const senderId = message.senderId as string;
+    const senderName = message.senderName || message.senderUsername || "Someone";
+    const messageText = message.text || "Sent a message";
+
+    // Skip system messages
+    if (message.type === "system") {
+      logger.log("Skipping notification for system message in random group");
+      return null;
+    }
+
+    // Get group info
+    const groupDoc = await admin
+      .firestore()
+      .collection("random_groups")
+      .doc(groupId)
+      .get();
+
+    if (!groupDoc.exists) {
+      logger.log("Random group not found");
+      return null;
+    }
+
+    const groupData = groupDoc.data();
+    const groupName = groupData?.name || "Random Group";
+
+    // Get all members (stored in subcollection)
+    const membersSnapshot = await admin
+      .firestore()
+      .collection("random_groups")
+      .doc(groupId)
+      .collection("members")
+      .get();
+
+    if (membersSnapshot.empty) {
+      logger.log("No members found in random group");
+      return null;
+    }
+
+    // Collect all tokens from all members (except sender)
+    const allTokens: string[] = [];
+    const tokenToUserMap: Map<string, string> = new Map();
+
+    for (const memberDoc of membersSnapshot.docs) {
+      const memberUserId = memberDoc.id; // Document ID is the user ID
+
+      // Skip the sender
+      if (memberUserId === senderId) continue;
+
+      // Get user's FCM tokens
+      const userDoc = await admin
+        .firestore()
+        .collection("users")
+        .doc(memberUserId)
+        .get();
+
+      if (!userDoc.exists) continue;
+
+      const userData = userDoc.data();
+
+      // Check notification preferences
+      const notifPrefs = userData?.notificationPreferences;
+      if (notifPrefs?.randomGroups === false) {
+        logger.log(`Skipping notification for ${memberUserId}: random groups disabled`);
+        continue;
+      }
+
+      const fcmTokens = userData?.fcmTokens || {};
+      const tokens = Object.keys(fcmTokens);
+
+      for (const token of tokens) {
+        allTokens.push(token);
+        tokenToUserMap.set(token, memberUserId);
+      }
+    }
+
+    if (allTokens.length === 0) {
+      logger.log("No FCM tokens for any random group members");
+      return null;
+    }
+
+    // Prepare notification
+    const payload = {
+      notification: {
+        title: `🎲 ${groupName}`,
+        body: `${senderName}: ${messageText.substring(0, 100)}`,
+      },
+      data: {
+        groupId: groupId,
+        senderId: senderId,
+        type: "random_group_message",
+      },
+    };
+
+    // Send to all members' devices
+    try {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: allTokens,
+        notification: payload.notification,
+        data: payload.data,
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "radius_messages",
+            priority: "high",
+            sound: "default",
+            defaultSound: true,
+            tag: `random_group_${groupId}`, // Group notifications together
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+              threadId: `random_group_${groupId}`, // Group notifications together on iOS
+            },
+          },
+        },
+      });
+
+      logger.log(
+        `Random group notification: ${response.successCount} sent, ` +
+        `${response.failureCount} failed to ${allTokens.length} tokens`
+      );
+
+      // Remove invalid tokens
+      if (response.failureCount > 0) {
+        const invalidTokensByUser: Map<string, string[]> = new Map();
+
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const token = allTokens[idx];
+            const userId = tokenToUserMap.get(token);
+            if (userId) {
+              if (!invalidTokensByUser.has(userId)) {
+                invalidTokensByUser.set(userId, []);
+              }
+              invalidTokensByUser.get(userId)!.push(token);
+            }
+          }
+        });
+
+        // Remove invalid tokens for each user
+        for (const [userId, tokens] of invalidTokensByUser) {
+          const updates: Record<string, admin.firestore.FieldValue> = {};
+          tokens.forEach((token) => {
+            updates[`fcmTokens.${token}`] = admin.firestore.FieldValue.delete();
+          });
+          await admin
+            .firestore()
+            .collection("users")
+            .doc(userId)
+            .update(updates);
+        }
+      }
+
+      return response;
+    } catch (error) {
+      logger.error("Error sending random group notification:", error);
       return null;
     }
   }

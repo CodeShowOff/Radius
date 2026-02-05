@@ -16,6 +16,10 @@ class Profile extends Equatable {
   final String? gender;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool notifyDirectMessages;
+  final bool notifyLocationGroups;
+  final bool notifyNearbyGroups;
+  final bool notifyRandomGroups;
 
   const Profile({
     required this.id,
@@ -32,6 +36,10 @@ class Profile extends Equatable {
     this.gender,
     required this.createdAt,
     required this.updatedAt,
+    this.notifyDirectMessages = true,
+    this.notifyLocationGroups = true,
+    this.notifyNearbyGroups = true,
+    this.notifyRandomGroups = true,
   });
 
   /// Creates a new profile with default values.
@@ -52,6 +60,10 @@ class Profile extends Equatable {
       gender: null,
       createdAt: now,
       updatedAt: now,
+      notifyDirectMessages: true,
+      notifyLocationGroups: true,
+      notifyNearbyGroups: true,
+      notifyRandomGroups: true,
     );
   }
 
@@ -71,6 +83,10 @@ class Profile extends Equatable {
     String? gender,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? notifyDirectMessages,
+    bool? notifyLocationGroups,
+    bool? notifyNearbyGroups,
+    bool? notifyRandomGroups,
   }) {
     return Profile(
       id: id ?? this.id,
@@ -88,6 +104,10 @@ class Profile extends Equatable {
       gender: gender ?? this.gender,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      notifyDirectMessages: notifyDirectMessages ?? this.notifyDirectMessages,
+      notifyLocationGroups: notifyLocationGroups ?? this.notifyLocationGroups,
+      notifyNearbyGroups: notifyNearbyGroups ?? this.notifyNearbyGroups,
+      notifyRandomGroups: notifyRandomGroups ?? this.notifyRandomGroups,
     );
   }
 
@@ -107,5 +127,9 @@ class Profile extends Equatable {
         gender,
         createdAt,
         updatedAt,
+        notifyDirectMessages,
+        notifyLocationGroups,
+        notifyNearbyGroups,
+        notifyRandomGroups,
       ];
 }
