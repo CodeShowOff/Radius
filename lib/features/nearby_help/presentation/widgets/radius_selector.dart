@@ -117,12 +117,16 @@ class _RadiusChip extends StatelessWidget {
 
   IconData _getIconForRadius(HelpRadius radius) {
     switch (radius) {
-      case HelpRadius.meters10:
-        return Icons.radio_button_unchecked;
       case HelpRadius.meters50:
         return Icons.radio_button_checked;
       case HelpRadius.meters100:
         return Icons.adjust;
+      case HelpRadius.meters500:
+        return Icons.circle_outlined;
+      case HelpRadius.kilometers1:
+        return Icons.circle;
+      case HelpRadius.kilometers2:
+        return Icons.album;
     }
   }
 }

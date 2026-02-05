@@ -349,6 +349,22 @@ class ProximityService {
     _setState(ProximityServiceState.idle);
   }
 
+  /// Stops all activity and clears all data (call on sign out).
+  /// Unlike dispose(), this allows the service to be reused after sign in.
+  Future<void> stop() async {
+    _log('[ProximityService] Stopping service...');
+    _scanTimer?.cancel();
+    _scanTimer = null;
+    await _bluetoothService.stopScanning();
+    await _bluetoothService.stopAdvertising();
+    _isAdvertising = false;
+    _currentUsername = null;
+    _nearbyUsers.clear();
+    _profileCache.clear();
+    _setState(ProximityServiceState.idle);
+    _log('[ProximityService] Service stopped');
+  }
+
   /// Stops advertising (call when app goes to background).
   Future<void> stopAdvertisingOnly() async {
     await _bluetoothService.stopAdvertising();

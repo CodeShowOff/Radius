@@ -40,6 +40,9 @@ class NearbyHelpState extends Equatable {
   /// Active help requests where user is the helper.
   final List<HelpRequest> helperRequests;
 
+  /// Incoming/open help requests from others that user can help with.
+  final List<HelpRequest> incomingRequests;
+
   /// Error message if any.
   final String? errorMessage;
 
@@ -56,6 +59,7 @@ class NearbyHelpState extends Equatable {
     this.activeRequest,
     this.viewedRequest,
     this.helperRequests = const [],
+    this.incomingRequests = const [],
     this.errorMessage,
     this.successMessage,
   });
@@ -82,6 +86,12 @@ class NearbyHelpState extends Equatable {
   /// Whether the user is currently helping someone.
   bool get isHelping => helperRequests.isNotEmpty;
 
+  /// Whether there are incoming help requests.
+  bool get hasIncomingRequests => incomingRequests.isNotEmpty;
+
+  /// Count of incoming help requests.
+  int get incomingRequestsCount => incomingRequests.length;
+
   NearbyHelpState copyWith({
     NearbyHelpStatus? status,
     String? userId,
@@ -92,6 +102,7 @@ class NearbyHelpState extends Equatable {
     HelpRequest? activeRequest,
     HelpRequest? viewedRequest,
     List<HelpRequest>? helperRequests,
+    List<HelpRequest>? incomingRequests,
     String? errorMessage,
     String? successMessage,
     bool clearActiveRequest = false,
@@ -109,6 +120,7 @@ class NearbyHelpState extends Equatable {
       activeRequest: clearActiveRequest ? null : (activeRequest ?? this.activeRequest),
       viewedRequest: clearViewedRequest ? null : (viewedRequest ?? this.viewedRequest),
       helperRequests: helperRequests ?? this.helperRequests,
+      incomingRequests: incomingRequests ?? this.incomingRequests,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       successMessage: clearSuccess ? null : (successMessage ?? this.successMessage),
     );
@@ -125,6 +137,7 @@ class NearbyHelpState extends Equatable {
         activeRequest,
         viewedRequest,
         helperRequests,
+        incomingRequests,
         errorMessage,
         successMessage,
       ];

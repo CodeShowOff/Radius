@@ -37,6 +37,7 @@ import '../services/firebase/firebase_auth_service.dart' as _i491;
 import '../services/firebase/firestore_service.dart' as _i939;
 import '../services/firebase/profile_service.dart' as _i759;
 import '../services/firebase/username_service.dart' as _i615;
+import '../services/notifications/notification_navigation_service.dart' as _i702;
 import '../services/notifications/notification_service.dart' as _i485;
 import 'chat_module.dart' as _i396;
 import 'firebase_module.dart' as _i616;
@@ -87,10 +88,15 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i356.MediaUploadService>(),
           gh<_i125.ChatCacheService>(),
         ));
+    gh.lazySingleton<_i702.NotificationNavigationService>(
+        () => notificationModule.notificationNavigationService(
+              gh<_i892.FirebaseMessaging>(),
+            ));
     gh.lazySingleton<_i485.NotificationService>(
         () => notificationModule.notificationService(
               gh<_i892.FirebaseMessaging>(),
               gh<_i163.FlutterLocalNotificationsPlugin>(),
+              gh<_i702.NotificationNavigationService>(),
             ));
     gh.lazySingleton<_i491.FirebaseAuthService>(() => _i491.FirebaseAuthService(
           firebaseAuth: gh<_i59.FirebaseAuth>(),

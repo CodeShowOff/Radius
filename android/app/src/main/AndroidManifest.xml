@@ -35,6 +35,9 @@
     <!-- Location permissions for Nearby Help feature -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Background location permission for Android 10+ (API 29+) -->
+    <!-- Required for helpers to navigate to users even when app is minimized -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     
     <!-- Storage permissions for media files -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>

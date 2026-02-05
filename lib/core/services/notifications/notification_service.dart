@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:logger/logger.dart';
 
+import 'notification_navigation_service.dart';
+
 /// Service for managing push notifications via Firebase Cloud Messaging.
 ///
 /// Handles:
@@ -19,6 +21,7 @@ class NotificationService {
   final FirebaseFirestore _firestore;
   final FlutterLocalNotificationsPlugin _localNotifications;
   final Logger _logger;
+  final NotificationNavigationService? _navigationService;
 
   String? _currentUserId;
   String? _fcmToken;
@@ -37,11 +40,13 @@ class NotificationService {
     FirebaseMessaging? messaging,
     FirebaseFirestore? firestore,
     FlutterLocalNotificationsPlugin? localNotifications,
+    NotificationNavigationService? navigationService,
     Logger? logger,
   })  : _messaging = messaging ?? FirebaseMessaging.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
         _localNotifications =
             localNotifications ?? FlutterLocalNotificationsPlugin(),
+        _navigationService = navigationService,
         _logger = logger ?? Logger();
 
   /// Initialize notification service for the given user.
@@ -63,6 +68,9 @@ class NotificationService {
 
       // Handle foreground messages
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+      // Initialize navigation service for deep linking
+      await _navigationService?.initialize();
 
       _logger.i('Notification service initialized for user: $userId');
     } catch (e, stack) {
@@ -93,22 +101,38 @@ class NotificationService {
 
   /// Initialize local notifications plugin for foreground display.
   Future<void> _initializeLocalNotifications() async {
-    // Android notification channel
-    const androidChannel = AndroidNotificationChannel(
+    // Android notification channel for messages
+    // Using Importance.max for heads-up notifications (banner at top of screen)
+    const androidMessagesChannel = AndroidNotificationChannel(
       'radius_messages', // id
       'Messages', // name
       description: 'Notifications for new messages and connection requests',
-      importance: Importance.high,
+      importance: Importance.max,
       playSound: true,
       enableVibration: true,
       showBadge: true,
     );
 
-    // Create Android channel
-    await _localNotifications
+    // Android notification channel for nearby help - CRITICAL FIX: This channel was missing!
+    // Without this channel, Android may not display nearby help notifications properly.
+    // Using Importance.max for heads-up notifications (banner at top of screen)
+    const androidNearbyHelpChannel = AndroidNotificationChannel(
+      'radius_nearby_help', // id - matches Firebase Functions channel ID
+      'Nearby Help', // name
+      description: 'Notifications for nearby help requests',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
+
+    // Create Android channels
+    final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(androidChannel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    
+    await androidPlugin?.createNotificationChannel(androidMessagesChannel);
+    await androidPlugin?.createNotificationChannel(androidNearbyHelpChannel);
 
     // Initialize settings
     const initializationSettingsAndroid =
@@ -188,6 +212,7 @@ class NotificationService {
     final messageConversationId = message.data['conversationId'] as String?;
     final messageGroupId = message.data['groupId'] as String?;
     final messageType = message.data['type'] as String?;
+    final requestId = message.data['requestId'] as String?;
 
     // Check if user is viewing the conversation that received a message
     final isViewingConversation = messageType == 'message' &&
@@ -224,28 +249,42 @@ class NotificationService {
         );
       }
 
+      // Determine the correct notification channel based on message type
+      // CRITICAL FIX: Use the correct channel for nearby help notifications
+      final isNearbyHelp = messageType?.startsWith('nearby_help') ?? false;
+      final channelId = isNearbyHelp ? 'radius_nearby_help' : 'radius_messages';
+      final channelName = isNearbyHelp ? 'Nearby Help' : 'Messages';
+      final channelDescription = isNearbyHelp 
+          ? 'Notifications for nearby help requests'
+          : 'Notifications for new messages and connection requests';
+
       // Also show system notification banner
+      // Using Importance.max and Priority.max for heads-up notifications
       await _localNotifications.show(
         notification.hashCode,
         notification.title,
         notification.body,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
-            'radius_messages',
-            'Messages',
-            channelDescription:
-                'Notifications for new messages and connection requests',
-            importance: Importance.high,
-            priority: Priority.high,
+            channelId,
+            channelName,
+            channelDescription: channelDescription,
+            importance: Importance.max,
+            priority: Priority.max,
             icon: '@mipmap/launcher_icon',
             playSound: true,
             enableVibration: true,
             showWhen: true,
+            // Additional settings for heads-up notification
+            fullScreenIntent: false,
+            category: AndroidNotificationCategory.message,
           ),
-          iOS: DarwinNotificationDetails(
+          iOS: const DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
+            // iOS will show as banner notification by default with these settings
+            interruptionLevel: InterruptionLevel.timeSensitive,
           ),
         ),
         // Include type in payload for proper navigation on tap
@@ -253,7 +292,7 @@ class NotificationService {
           type: messageType,
           conversationId: messageConversationId,
           groupId: messageGroupId,
-          requestId: message.data['requestId'] as String?,
+          requestId: requestId,
         ),
       );
     }
@@ -273,6 +312,16 @@ class NotificationService {
       return 'message|$conversationId';
     } else if (type == 'connection_request' && requestId != null) {
       return 'connection_request|$requestId';
+    } else if (type == 'nearby_help_request' && requestId != null) {
+      return 'nearby_help_request|$requestId';
+    } else if (type == 'nearby_help_assigned' && requestId != null) {
+      return 'nearby_help_assigned|$requestId';
+    } else if (type == 'nearby_help_completed' && requestId != null) {
+      return 'nearby_help_completed|$requestId';
+    } else if (type == 'nearby_help_cancelled' && requestId != null) {
+      return 'nearby_help_cancelled|$requestId';
+    } else if (type == 'nearby_help_expired' && requestId != null) {
+      return 'nearby_help_expired|$requestId';
     }
     return conversationId ?? requestId ?? '';
   }
@@ -281,8 +330,8 @@ class NotificationService {
   void _onNotificationTapped(NotificationResponse response) {
     _logger.i('Notification tapped: ${response.payload}');
 
-    // Navigation will be handled by the app router
-    // The payload contains conversationId or requestId
+    // Use navigation service to handle the navigation
+    _navigationService?.handleLocalNotificationPayload(response.payload);
   }
 
   /// Update app badge count (unread messages + pending requests).

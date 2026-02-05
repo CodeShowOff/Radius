@@ -34,6 +34,7 @@ import '../../features/nearby_help/presentation/pages/nearby_help_settings_page.
 import '../../features/nearby_help/presentation/pages/create_help_request_page.dart';
 import '../../features/nearby_help/presentation/pages/help_request_preview_page.dart';
 import '../../features/nearby_help/presentation/pages/helper_navigation_page.dart';
+import '../../features/nearby_help/presentation/pages/incoming_help_requests_page.dart';
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
 import '../../features/random_groups/presentation/pages/create_random_group_page.dart';
@@ -543,6 +544,20 @@ GoRouter get appRouter {
           return BlocProvider.value(
             value: getIt<NearbyHelpBloc>(),
             child: const CreateHelpRequestPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyHelpIncomingRequests,
+        name: 'nearbyHelpIncomingRequests',
+        builder: (context, state) {
+          // Get optional request ID from query parameters for highlighting
+          final highlightRequestId = state.uri.queryParameters['requestId'];
+          return BlocProvider.value(
+            value: getIt<NearbyHelpBloc>(),
+            child: IncomingHelpRequestsPage(
+              highlightRequestId: highlightRequestId,
+            ),
           );
         },
       ),

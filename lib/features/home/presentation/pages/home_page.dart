@@ -17,20 +17,48 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
+
+  // Animation controllers for Bluetooth off state
+  late AnimationController _blinkController;
+  late AnimationController _waveController;
+  late Animation<double> _blinkAnimation;
+  late Animation<double> _waveAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Initialize blink animation (for icon opacity pulsing)
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _blinkAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
+    );
+
+    // Initialize wave animation (for expanding circles)
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _waveAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _waveController, curve: Curves.easeOut),
+    );
+
     _checkBluetoothStatus();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _blinkController.dispose();
+    _waveController.dispose();
     super.dispose();
   }
 
@@ -52,6 +80,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _bluetoothEnabled = isEnabled;
           _checkingBluetooth = false;
         });
+        _updateBluetoothAnimations();
       }
     } catch (e) {
       if (mounted) {
@@ -59,7 +88,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _bluetoothEnabled = false;
           _checkingBluetooth = false;
         });
+        _updateBluetoothAnimations();
       }
+    }
+  }
+
+  void _updateBluetoothAnimations() {
+    if (!_bluetoothEnabled && !_checkingBluetooth) {
+      // Start animations when Bluetooth is off
+      _blinkController.repeat(reverse: true);
+      _waveController.repeat();
+    } else {
+      // Stop animations when Bluetooth is on or checking
+      _blinkController.stop();
+      _waveController.stop();
+      _blinkController.reset();
+      _waveController.reset();
     }
   }
 
@@ -101,6 +145,75 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildBluetoothIcon() {
+    if (_checkingBluetooth) {
+      // Show loading state
+      return IconButton(
+        onPressed: null,
+        icon: Icon(
+          Icons.bluetooth,
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          size: 22,
+        ),
+        tooltip: 'Checking Bluetooth...',
+      );
+    }
+
+    if (_bluetoothEnabled) {
+      // Bluetooth is on - show normal blue icon
+      return IconButton(
+        onPressed: null,
+        icon: const Icon(
+          Icons.bluetooth,
+          color: Colors.blue,
+          size: 22,
+        ),
+        tooltip: 'Bluetooth is on',
+      );
+    }
+
+    // Bluetooth is off - show animated blinking red icon with waves
+    return GestureDetector(
+      onTap: () => _showBluetoothPrompt(context),
+      child: Tooltip(
+        message: 'Bluetooth is off - Tap to enable',
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Expanding wave circles
+              AnimatedBuilder(
+                animation: _waveAnimation,
+                builder: (context, child) {
+                  return CustomPaint(
+                    size: const Size(48, 48),
+                    painter: _BluetoothWavePainter(
+                      progress: _waveAnimation.value,
+                      color: Colors.red,
+                    ),
+                  );
+                },
+              ),
+              // Blinking Bluetooth icon
+              AnimatedBuilder(
+                animation: _blinkAnimation,
+                builder: (context, child) {
+                  return Icon(
+                    Icons.bluetooth_disabled,
+                    color: Colors.red.withValues(alpha: _blinkAnimation.value),
+                    size: 22,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
@@ -116,28 +229,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           actions: [
-            // Bluetooth status icon
-            IconButton(
-              onPressed: () {
-                if (!_bluetoothEnabled && !_checkingBluetooth) {
-                  _showBluetoothPrompt(context);
-                }
-              },
-              icon: Icon(
-                _bluetoothEnabled ? Icons.bluetooth : Icons.bluetooth_disabled,
-                color: _checkingBluetooth
-                    ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
-                    : _bluetoothEnabled
-                        ? Colors.blue
-                        : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                size: 22,
-              ),
-              tooltip: _checkingBluetooth
-                  ? 'Checking Bluetooth...'
-                  : _bluetoothEnabled
-                      ? 'Bluetooth is on'
-                      : 'Bluetooth is off - Tap to enable',
-            ),
+            // Bluetooth status icon with animation when off
+            _buildBluetoothIcon(),
             BlocBuilder<ProfileBloc, ProfileState>(
               builder: (context, profileState) {
                 return BlocBuilder<AuthBloc, AuthState>(
@@ -148,8 +241,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     // Use profile data as primary source (same logic as connections page)
                     if (profileState is ProfileLoaded) {
                       photoUrl = profileState.profile.photoUrl;
-                      displayName = profileState.profile.name.isNotEmpty 
-                          ? profileState.profile.name 
+                      displayName = profileState.profile.name.isNotEmpty
+                          ? profileState.profile.name
                           : 'U';
                     } else if (authState is AuthAuthenticated) {
                       // Fallback to auth data only if profile not loaded
@@ -218,7 +311,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onTap: () => context.push(Routes.nearby),
                         label: 'Nearby',
                         color: Colors.white,
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
                         gradientColors: [
                           const Color(0xFF667eea),
                           const Color(0xFF764ba2),
@@ -233,7 +327,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onTap: () => context.push(Routes.guessme),
                         label: 'Guess Me',
                         color: Colors.white,
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
                         gradientColors: [
                           const Color(0xFF667eea),
                           const Color(0xFF764ba2),
@@ -364,7 +459,8 @@ class _AnimatedSquareCard extends StatelessWidget {
           child: (isSquare || useVerticalLayout)
               ? _buildVerticalContent(theme)
               : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -412,7 +508,8 @@ class _AnimatedSquareCard extends StatelessWidget {
         child: (isSquare || useVerticalLayout)
             ? _buildVerticalContent(theme)
             : Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -454,9 +551,9 @@ class _AnimatedSquareCard extends StatelessWidget {
     final double iconPad = 14;
     final double iconSize = 34;
     final double gap = 12;
-    
+
     // Use white with transparency for gradient backgrounds
-    final iconBgColor = gradientColors != null 
+    final iconBgColor = gradientColors != null
         ? Colors.white.withValues(alpha: 0.2)
         : color.withValues(alpha: 0.2);
 
@@ -607,3 +704,39 @@ class _ModernGroupCard extends StatelessWidget {
   }
 }
 
+/// Custom painter for expanding wave circles around Bluetooth icon
+class _BluetoothWavePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _BluetoothWavePainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+
+    // Draw multiple expanding circles with fading opacity
+    for (int i = 0; i < 3; i++) {
+      // Stagger each wave by 0.33 of the cycle
+      final waveProgress = (progress + i * 0.33) % 1.0;
+      final radius = maxRadius * 0.3 + (maxRadius * 0.7 * waveProgress);
+      final opacity = (1.0 - waveProgress) * 0.6;
+
+      final paint = Paint()
+        ..color = color.withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0 * (1.0 - waveProgress * 0.5);
+
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BluetoothWavePainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
+}

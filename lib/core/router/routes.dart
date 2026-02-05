@@ -101,6 +101,7 @@ abstract class Routes {
   static const String nearbyHelp = '/nearby-help';
   static const String nearbyHelpSettings = '/nearby-help/settings';
   static const String nearbyHelpCreateRequest = '/nearby-help/create';
+  static const String nearbyHelpIncomingRequests = '/nearby-help/incoming';
   static const String nearbyHelpRequestDetail = '/nearby-help/request/:requestId';
   static const String nearbyHelpHelperNavigation = '/nearby-help/navigate/:requestId';
 
@@ -111,4 +112,12 @@ abstract class Routes {
   /// Helper to build a helper navigation route with request ID.
   static String nearbyHelpHelperNavigationWith(String requestId) =>
       '/nearby-help/navigate/$requestId';
+
+  /// Helper to build an incoming requests route with optional highlight request ID.
+  static String nearbyHelpIncomingRequestsWith({String? highlightRequestId}) {
+    if (highlightRequestId != null) {
+      return '/nearby-help/incoming?requestId=$highlightRequestId';
+    }
+    return '/nearby-help/incoming';
+  }
 }

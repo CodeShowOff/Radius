@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:hive/hive.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../features/chat/data/chat_cache_service.dart';
 import '../../../../features/location_groups/data/group_chat_cache_service.dart';
+import '../../../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
+import '../../../../features/random_groups/data/random_group_chat_cache_service.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
@@ -171,12 +175,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
-      // Clear all cached data before signing out
+      // Clear ALL cached data before signing out to prevent data leakage
+      // between different user accounts
+      
+      // 1. Clear chat cache services (in-memory caches)
       if (getIt.isRegistered<ChatCacheService>()) {
         getIt<ChatCacheService>().clearAll();
       }
       if (getIt.isRegistered<GroupChatCacheService>()) {
         getIt<GroupChatCacheService>().clearAll();
+      }
+      if (getIt.isRegistered<NearbyGroupChatCacheService>()) {
+        getIt<NearbyGroupChatCacheService>().clearAll();
+      }
+      if (getIt.isRegistered<RandomGroupChatCacheService>()) {
+        getIt<RandomGroupChatCacheService>().clearAll();
+      }
+      
+      // 2. Clear all notifications
+      if (getIt.isRegistered<NotificationService>()) {
+        await getIt<NotificationService>().clearAllNotifications();
+      }
+      
+      // 3. Clear Hive local storage (user-specific data)
+      try {
+        // Clear radius_settings box if it exists
+        if (Hive.isBoxOpen('radius_settings')) {
+          final settingsBox = Hive.box('radius_settings');
+          await settingsBox.clear();
+        }
+      } catch (_) {
+        // Ignore Hive errors during sign out
       }
 
       final result = await _authRepository.signOut();

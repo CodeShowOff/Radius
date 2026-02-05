@@ -28,8 +28,11 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
   HelpRadius? _selectedRadius;
   double? _latitude;
   double? _longitude;
+  double? _locationAccuracy; // GPS accuracy in meters
   bool _isGettingLocation = false;
   String? _locationError;
+  bool _locationServicesDisabled =
+      false; // Track if location services are disabled
 
   @override
   void initState() {
@@ -54,11 +57,16 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() {
-          _locationError = 'Location services are disabled. Please enable them in settings.';
+          _locationError =
+              'Location services are disabled. Please enable them in settings.';
           _isGettingLocation = false;
+          _locationServicesDisabled = true;
         });
         return;
       }
+
+      // Reset the flag if services are now enabled
+      _locationServicesDisabled = false;
 
       // Check and request permission
       var permission = await Geolocator.checkPermission();
@@ -75,30 +83,62 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
 
       if (permission == LocationPermission.deniedForever) {
         setState(() {
-          _locationError = 'Location permissions are permanently denied. Please enable them in settings.';
+          _locationError =
+              'Location permissions are permanently denied. Please enable them in settings.';
           _isGettingLocation = false;
         });
         return;
       }
 
-      // Get current position
+      // CRITICAL FIX: Use best accuracy for precise location.
+      // For small radius values (50m, 100m), maximum accuracy is essential.
+      // This is critical for the seeker's position to correctly match nearby helpers.
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
+          accuracy: LocationAccuracy.best,
+          timeLimit: Duration(seconds: 30), // Increased for better accuracy
         ),
       );
+
+      // Log accuracy for debugging
+      debugPrint(
+          'Help request location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
 
       setState(() {
         _latitude = position.latitude;
         _longitude = position.longitude;
+        _locationAccuracy = position.accuracy;
         _isGettingLocation = false;
       });
+
+      // Warn if GPS accuracy is poor
+      if (position.accuracy > 50 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'GPS accuracy is ${position.accuracy.toStringAsFixed(0)}m. '
+              'For best results with small radius, move outdoors.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
       setState(() {
         _locationError = 'Failed to get location: $e';
         _isGettingLocation = false;
       });
+    }
+  }
+
+  Future<void> _openLocationSettings() async {
+    // Open location settings so user can enable location services
+    final opened = await Geolocator.openLocationSettings();
+    if (opened && mounted) {
+      // After settings opened, try getting location again after a delay
+      // to allow user to enable location
+      await Future.delayed(const Duration(milliseconds: 1000));
+      _getCurrentLocation();
     }
   }
 
@@ -121,8 +161,10 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
         listenWhen: (previous, current) {
-          return (previous.errorMessage == null && current.errorMessage != null) ||
-              (previous.successMessage == null && current.successMessage != null);
+          return (previous.errorMessage == null &&
+                  current.errorMessage != null) ||
+              (previous.successMessage == null &&
+                  current.successMessage != null);
         },
         listener: (context, state) {
           if (state.errorMessage != null) {
@@ -248,13 +290,26 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
                             color: theme.colorScheme.error,
                           ),
                         )
-                      else if (_latitude != null)
+                      else if (_latitude != null) ...[
                         Text(
                           'Location acquired ✓',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.green,
                           ),
                         ),
+                        // Show GPS accuracy to help users understand precision
+                        if (_locationAccuracy != null)
+                          Text(
+                            'GPS accuracy: ${_locationAccuracy!.toStringAsFixed(0)}m',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _locationAccuracy! > 50
+                                  ? theme.colorScheme.error
+                                      .withValues(alpha: 0.8)
+                                  : theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.5),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
@@ -266,9 +321,15 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> {
                   )
                 else if (_locationError != null)
                   IconButton(
-                    onPressed: _getCurrentLocation,
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Retry',
+                    onPressed: _locationServicesDisabled
+                        ? _openLocationSettings
+                        : _getCurrentLocation,
+                    icon: Icon(_locationServicesDisabled
+                        ? Icons.settings
+                        : Icons.refresh),
+                    tooltip: _locationServicesDisabled
+                        ? 'Open Location Settings'
+                        : 'Retry',
                   )
                 else if (_latitude != null)
                   const Icon(Icons.check_circle, color: Colors.green),

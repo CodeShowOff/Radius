@@ -418,6 +418,57 @@ class NearbyHelpService {
         });
   }
 
+  /// Streams open help requests that the user can potentially help with.
+  /// 
+  /// This streams all open requests that:
+  /// - Are not created by the user (can't help your own request)
+  /// - Are still open (not assigned to anyone yet)
+  /// - Haven't expired
+  /// 
+  /// Note: Distance filtering should be done on the client side
+  /// since the user's current location may not match their saved locations.
+  Stream<List<HelpRequest>> streamOpenHelpRequests(String excludeUserId) {
+    return _helpRequestsRef
+        .where('status', isEqualTo: 'OPEN')
+        .snapshots()
+        .map((snapshot) {
+          final now = DateTime.now();
+          final requests = snapshot.docs
+              .map((doc) => HelpRequestModel.fromFirestore(doc))
+              .where((request) => 
+                  request.seekerUserId != excludeUserId &&
+                  now.isBefore(request.expiresAt))
+              .toList();
+          // Sort by createdAt descending (most recent first)
+          requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return requests;
+        });
+  }
+
+  /// Gets all open help requests that the user might be able to help with.
+  Future<List<HelpRequest>> getOpenHelpRequests(String excludeUserId) async {
+    try {
+      final snapshot = await _helpRequestsRef
+          .where('status', isEqualTo: 'OPEN')
+          .get();
+      
+      final now = DateTime.now();
+      final requests = snapshot.docs
+          .map((doc) => HelpRequestModel.fromFirestore(doc))
+          .where((request) =>
+              request.seekerUserId != excludeUserId &&
+              now.isBefore(request.expiresAt))
+          .toList();
+      
+      // Sort by createdAt descending
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
+    } catch (e, stack) {
+      _logger.e('Error getting open help requests', error: e, stackTrace: stack);
+      return [];
+    }
+  }
+
   /// Finds nearby users who can help based on their saved locations.
   ///
   /// Returns user IDs of users whose home/work location is within the radius
@@ -563,11 +614,12 @@ class NearbyHelpService {
   /// Calculates approximate distance for display (before helper accepts).
   /// Returns a human-readable string like "~50m" or "~100m".
   String getApproximateDistance(double distance) {
-    if (distance < 10) return '~10m';
-    if (distance < 25) return '~25m';
     if (distance < 50) return '~50m';
-    if (distance < 75) return '~75m';
     if (distance < 100) return '~100m';
-    return '>100m';
+    if (distance < 250) return '~250m';
+    if (distance < 500) return '~500m';
+    if (distance < 1000) return '~1km';
+    if (distance < 2000) return '~2km';
+    return '>2km';
   }
 }

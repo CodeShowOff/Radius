@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 /// Location settings page for managing location permissions and preferences.
 /// Used for SOS Nearby Help feature.
@@ -18,6 +19,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
   bool _hasPermission = false;
   bool _hasBackgroundPermission = false;
   bool _isLoading = true;
+  int _androidSdkVersion = 0;
 
   @override
   void initState() {
@@ -32,10 +34,24 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
     final permissionStatus = await Permission.location.status;
     final backgroundStatus = await Permission.locationAlways.status;
 
+    // Get Android SDK version for proper background location handling
+    int sdkVersion = 0;
+    if (Platform.isAndroid) {
+      try {
+        final deviceInfo = DeviceInfoPlugin();
+        final androidInfo = await deviceInfo.androidInfo;
+        sdkVersion = androidInfo.version.sdkInt;
+      } catch (_) {
+        // Default to a safe value if we can't get SDK version
+        sdkVersion = 30;
+      }
+    }
+
     setState(() {
       _isLocationEnabled = locationEnabled;
       _hasPermission = permissionStatus.isGranted;
       _hasBackgroundPermission = backgroundStatus.isGranted;
+      _androidSdkVersion = sdkVersion;
       _isLoading = false;
     });
   }
@@ -78,6 +94,57 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
       if (!_hasPermission) return;
     }
 
+    // On Android 11+ (API 30+), background location cannot be requested via dialog
+    // User must be directed to app settings to enable "Allow all the time"
+    if (Platform.isAndroid && _androidSdkVersion >= 30) {
+      // Show educational dialog explaining why background location is needed
+      // and how to enable it in settings
+      if (!mounted) return;
+      
+      final shouldOpenSettings = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Background Location Required'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'To allow helpers to navigate to you even when the app is minimized, '
+                'please enable background location access.',
+              ),
+              SizedBox(height: 16),
+              Text(
+                'In Settings, select:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text('Location → Allow all the time'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not Now'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldOpenSettings == true) {
+        await openAppSettings();
+        // Wait a bit then recheck status when user returns
+        await Future.delayed(const Duration(seconds: 1));
+        await _checkStatus();
+      }
+      return;
+    }
+
+    // On Android 10 and below, or iOS, we can request permission directly
     final status = await Permission.locationAlways.request();
 
     await _checkStatus();

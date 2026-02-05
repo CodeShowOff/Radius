@@ -1122,6 +1122,10 @@ function getApproximateDistance(distanceMeters) {
 /**
  * Send push notification when a new help request is created.
  * Notifies nearby users who have help alerts enabled.
+ *
+ * CRITICAL FIX: The previous query used "!=" which excluded users without the field.
+ * Now we query ALL users who have saved locations and check settings manually.
+ * Users default to receiving alerts unless they explicitly opted out.
  */
 exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests/{requestId}", async (event) => {
     const helpRequest = event.data?.data();
@@ -1134,29 +1138,48 @@ exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests
     const seekerLon = helpRequest.longitude;
     const topic = helpRequest.topic || "General help";
     firebase_functions_1.logger.log(`New help request created: ${requestId} with radius ${radiusMeters}m`);
+    firebase_functions_1.logger.log(`Seeker location: lat=${seekerLat}, lon=${seekerLon}`);
     try {
-        // Get all users with help alerts enabled (optimized query with filter)
+        // CRITICAL FIX: Query ALL users with FCM tokens instead of filtering by settings.
+        // The previous query with "!=" excluded users who never set nearbyHelpSettings,
+        // which means new users with default settings (receiveHelpAlerts=true) were missed.
+        // 
+        // Now we get all users and filter in code, which ensures:
+        // 1. Users who never set settings (default to true) are included
+        // 2. Users who explicitly set receiveHelpAlerts=true are included
+        // 3. Only users who explicitly set receiveHelpAlerts=false are excluded
         const usersSnapshot = await admin
             .firestore()
             .collection("users")
-            .where("nearbyHelpSettings.receiveHelpAlerts", "!=", false)
             .get();
         const tokensToNotify = [];
+        let usersChecked = 0;
+        let usersWithLocations = 0;
+        let usersWithTokens = 0;
+        let usersOptedOut = 0;
         for (const userDoc of usersSnapshot.docs) {
             const userId = userDoc.id;
+            usersChecked++;
             // Skip the seeker themselves
             if (userId === seekerId)
                 continue;
             const userData = userDoc.data();
-            // Check if user has opted in for help alerts
+            // CRITICAL FIX: Check if user has EXPLICITLY opted out of help alerts.
+            // Default behavior: if nearbyHelpSettings doesn't exist OR receiveHelpAlerts
+            // is undefined/null, the user SHOULD receive alerts (opt-out model, not opt-in).
             const helpSettings = userData?.nearbyHelpSettings;
-            if (helpSettings?.receiveHelpAlerts === false)
+            if (helpSettings?.receiveHelpAlerts === false) {
+                usersOptedOut++;
+                firebase_functions_1.logger.log(`User ${userId} explicitly opted out of help alerts`);
                 continue;
+            }
             // Check if user has FCM tokens
             const fcmTokens = userData?.fcmTokens || {};
             const tokens = Object.keys(fcmTokens);
-            if (tokens.length === 0)
+            if (tokens.length === 0) {
                 continue;
+            }
+            usersWithTokens++;
             // Get user's locations (home/work)
             const locationsSnapshot = await admin
                 .firestore()
@@ -1164,40 +1187,69 @@ exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests
                 .doc(userId)
                 .collection("locations")
                 .get();
+            if (locationsSnapshot.empty) {
+                continue;
+            }
+            usersWithLocations++;
             // Check each location for proximity
+            let userMatched = false;
             for (const locationDoc of locationsSnapshot.docs) {
                 const location = locationDoc.data();
-                // Skip if this location is not active for help alerts
-                if (location.isActive === false)
+                // CRITICAL FIX: Only skip if isActive is EXPLICITLY false.
+                // If isActive is undefined/null/true, include this location.
+                // Previous code: `if (location.isActive === false)` was correct,
+                // but we need to also handle missing isActive field gracefully.
+                if (location.isActive === false) {
+                    firebase_functions_1.logger.log(`User ${userId} location ${locationDoc.id} is inactive, skipping`);
                     continue;
+                }
                 const userLat = location.latitude;
                 const userLon = location.longitude;
-                if (userLat == null || userLon == null)
+                if (userLat == null || userLon == null) {
+                    firebase_functions_1.logger.log(`User ${userId} location ${locationDoc.id} has invalid coords`);
                     continue;
+                }
                 const distance = calculateDistance(seekerLat, seekerLon, userLat, userLon);
+                firebase_functions_1.logger.log(`User ${userId} location ${locationDoc.id}: ` +
+                    `distance=${distance.toFixed(2)}m, radius=${radiusMeters}m`);
                 // Check if within radius
                 if (distance <= radiusMeters) {
                     // Add all tokens for this user
                     for (const token of tokens) {
                         tokensToNotify.push({ token, userId, distance });
                     }
+                    userMatched = true;
+                    firebase_functions_1.logger.log(`User ${userId} is within radius! Adding ${tokens.length} token(s)`);
                     // Only count user once (break after first matching location)
                     break;
                 }
             }
+            if (!userMatched) {
+                firebase_functions_1.logger.log(`User ${userId} has locations but none within ${radiusMeters}m radius`);
+            }
         }
+        firebase_functions_1.logger.log(`Stats: checked=${usersChecked}, withTokens=${usersWithTokens}, ` +
+            `withLocations=${usersWithLocations}, optedOut=${usersOptedOut}`);
         if (tokensToNotify.length === 0) {
-            firebase_functions_1.logger.log("No nearby users found for help request");
+            firebase_functions_1.logger.log("No nearby users found for help request - this could indicate:");
+            firebase_functions_1.logger.log("1. No users have saved locations within the radius");
+            firebase_functions_1.logger.log("2. All nearby users have opted out of help alerts");
+            firebase_functions_1.logger.log("3. Nearby users don't have FCM tokens (not logged in)");
             return null;
         }
-        firebase_functions_1.logger.log(`Found ${tokensToNotify.length} tokens to notify`);
-        // Get seeker's name
-        const seekerDoc = await admin
-            .firestore()
-            .collection("users")
-            .doc(seekerId)
-            .get();
-        const seekerName = seekerDoc.data()?.displayName || "Someone nearby";
+        const uniqueUserCount = [...new Set(tokensToNotify.map(t => t.userId))].length;
+        firebase_functions_1.logger.log(`Found ${tokensToNotify.length} tokens to notify from ` +
+            `${uniqueUserCount} users`);
+        // Get seeker's name - prefer the name stored in the request, fallback to user document
+        let seekerName = helpRequest.seekerName;
+        if (!seekerName) {
+            const seekerDoc = await admin
+                .firestore()
+                .collection("users")
+                .doc(seekerId)
+                .get();
+            seekerName = seekerDoc.data()?.displayName || "Someone nearby";
+        }
         // Group tokens by user and send with approximate distance
         const uniqueUsers = [...new Set(tokensToNotify.map(t => t.userId))];
         for (const userId of uniqueUsers) {

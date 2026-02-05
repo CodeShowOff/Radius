@@ -20,6 +20,7 @@ part 'nearby_help_state.dart';
 /// - Help request creation and management
 /// - Helper acceptance flow
 /// - Real-time status updates
+/// - Incoming help requests from others
 class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
   final NearbyHelpService _helpService;
   final UserLocationService _locationService;
@@ -30,6 +31,7 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
   StreamSubscription<List<HelpRequest>>? _seekerRequestsSubscription;
   StreamSubscription<List<HelpRequest>>? _helperRequestsSubscription;
   StreamSubscription<HelpRequest?>? _viewedRequestSubscription;
+  StreamSubscription<List<HelpRequest>>? _incomingRequestsSubscription;
   
   /// Track the currently initialized user to prevent duplicate initialization
   String? _initializedUserId;
@@ -55,11 +57,14 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
     on<NearbyHelpSubscribeToRequest>(_onSubscribeToRequest);
     on<NearbyHelpUnsubscribeFromRequest>(_onUnsubscribeFromRequest);
     on<NearbyHelpClearMessages>(_onClearMessages);
+    on<NearbyHelpWatchIncomingRequests>(_onWatchIncomingRequests);
+    on<NearbyHelpStopWatchingIncomingRequests>(_onStopWatchingIncomingRequests);
     on<_LocationsUpdated>(_onLocationsUpdated);
     on<_SettingsUpdated>(_onSettingsUpdated);
     on<_ActiveRequestUpdated>(_onActiveRequestUpdated);
     on<_ViewedRequestUpdated>(_onViewedRequestUpdated);
     on<_HelperRequestsUpdated>(_onHelperRequestsUpdated);
+    on<_IncomingRequestsUpdated>(_onIncomingRequestsUpdated);
   }
 
   Future<void> _onInitialize(
@@ -480,17 +485,52 @@ class NearbyHelpBloc extends Bloc<NearbyHelpEvent, NearbyHelpState> {
     emit(state.copyWith(helperRequests: event.requests));
   }
 
+  void _onIncomingRequestsUpdated(
+    _IncomingRequestsUpdated event,
+    Emitter<NearbyHelpState> emit,
+  ) {
+    emit(state.copyWith(incomingRequests: event.requests));
+  }
+
+  Future<void> _onWatchIncomingRequests(
+    NearbyHelpWatchIncomingRequests event,
+    Emitter<NearbyHelpState> emit,
+  ) async {
+    if (state.userId == null) return;
+
+    await _incomingRequestsSubscription?.cancel();
+
+    _incomingRequestsSubscription = _helpService
+        .streamOpenHelpRequests(state.userId!)
+        .listen((requests) {
+      if (!isClosed) {
+        add(_IncomingRequestsUpdated(requests));
+      }
+    });
+  }
+
+  Future<void> _onStopWatchingIncomingRequests(
+    NearbyHelpStopWatchingIncomingRequests event,
+    Emitter<NearbyHelpState> emit,
+  ) async {
+    await _incomingRequestsSubscription?.cancel();
+    _incomingRequestsSubscription = null;
+    emit(state.copyWith(incomingRequests: []));
+  }
+
   Future<void> _cancelSubscriptions() async {
     await _locationsSubscription?.cancel();
     await _settingsSubscription?.cancel();
     await _seekerRequestsSubscription?.cancel();
     await _helperRequestsSubscription?.cancel();
     await _viewedRequestSubscription?.cancel();
+    await _incomingRequestsSubscription?.cancel();
     _locationsSubscription = null;
     _settingsSubscription = null;
     _seekerRequestsSubscription = null;
     _helperRequestsSubscription = null;
     _viewedRequestSubscription = null;
+    _incomingRequestsSubscription = null;
   }
 
   @override

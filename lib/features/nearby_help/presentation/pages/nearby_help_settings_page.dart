@@ -288,16 +288,35 @@ class NearbyHelpSettingsPage extends StatelessWidget {
       );
 
       try {
-        // Get current position
+        // CRITICAL FIX: Use best accuracy for more precise location.
+        // For small radius values (10m, 50m), high accuracy is essential.
+        // The previous 'high' setting may not be sufficient for all devices.
+        // Using 'best' ensures we get the most accurate GPS reading.
         final position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 15),
+            accuracy: LocationAccuracy.best,
+            timeLimit: Duration(seconds: 30), // Increased timeout for better accuracy
           ),
         );
+        
+        // Log the accuracy for debugging
+        debugPrint('Got location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
 
         if (context.mounted) {
           Navigator.of(context).pop(); // Close loading dialog
+          
+          // Warn user if accuracy is poor for small radius scenarios
+          if (position.accuracy > 50) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Location saved, but GPS accuracy is ${position.accuracy.toStringAsFixed(0)}m. '
+                  'For best results, try again outdoors with clear sky view.',
+                ),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
 
           context.read<NearbyHelpBloc>().add(
                 NearbyHelpSaveLocation(

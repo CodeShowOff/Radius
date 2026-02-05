@@ -25,6 +25,8 @@ class UserLocationService {
   // ==================== LOCATION MANAGEMENT ====================
 
   /// Saves or updates a user location (home or work).
+  /// Also ensures nearbyHelpSettings exists with defaults so Firebase Functions
+  /// can properly query users for nearby help notifications.
   Future<void> saveLocation({
     required String userId,
     required LocationType type,
@@ -44,14 +46,37 @@ class UserLocationService {
         geoHash: _generateGeoHash(latitude, longitude),
       );
 
-      await _firestore
+      // Use a batch to ensure both operations succeed together
+      final batch = _firestore.batch();
+
+      // Save the location
+      final locationRef = _firestore
           .collection('users')
           .doc(userId)
           .collection('locations')
-          .doc(type.value)
-          .set(locationModel.toFirestore());
+          .doc(type.value);
+      batch.set(locationRef, locationModel.toFirestore());
 
-      _logger.i('Saved ${type.value} location for user $userId');
+      // CRITICAL FIX: Ensure nearbyHelpSettings exists in the user document.
+      // This ensures Firebase Functions can find this user when querying for
+      // nearby help notifications. Without this, users who never opened the
+      // settings page would have no nearbyHelpSettings field, and the Firebase
+      // query could miss them.
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(
+        userRef,
+        {
+          'nearbyHelpSettings': {
+            'receiveHelpAlerts': true,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
+
+      _logger.i('Saved ${type.value} location for user $userId with help settings');
     } catch (e, stack) {
       _logger.e('Error saving location', error: e, stackTrace: stack);
       rethrow;

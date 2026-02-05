@@ -49,6 +49,12 @@ class RandomGroupChatBloc
   /// This prevents the bug where state.status == loaded but subscriptions are null.
   bool _hasActiveSubscriptions = false;
 
+  /// Cache for verified memberships: Map<"userId:groupId", DateTime>
+  /// This prevents repeated Firestore calls when navigating between groups.
+  /// TTL: 5 minutes - balances performance with security (catching removals).
+  static final Map<String, DateTime> _membershipCache = {};
+  static const Duration _membershipCacheTtl = Duration(minutes: 5);
+
   RandomGroupChatBloc({
     required RandomGroupChatService chatService,
     required RandomGroupChatCacheService cacheService,
@@ -66,6 +72,28 @@ class RandomGroupChatBloc
     on<_MessagesReceived>(_onMessagesReceived);
     on<_ChatStreamError>(_onChatStreamError);
     on<DeleteRandomGroupMessage>(_onDeleteRandomGroupMessage);
+  }
+
+  /// Check if membership is cached and still valid.
+  bool _isMembershipCached(String userId, String groupId) {
+    final key = '$userId:$groupId';
+    final cachedAt = _membershipCache[key];
+    if (cachedAt == null) return false;
+    return DateTime.now().difference(cachedAt) < _membershipCacheTtl;
+  }
+
+  /// Cache a verified membership.
+  void _cacheMembership(String userId, String groupId) {
+    final key = '$userId:$groupId';
+    _membershipCache[key] = DateTime.now();
+    _logger.d('Cached membership for $key');
+  }
+
+  /// Invalidate membership cache for a user/group (e.g., on error or removal).
+  void _invalidateMembershipCache(String userId, String groupId) {
+    final key = '$userId:$groupId';
+    _membershipCache.remove(key);
+    _logger.d('Invalidated membership cache for $key');
   }
 
   /// Whether the bloc has active Firestore subscriptions.
@@ -91,8 +119,12 @@ class RandomGroupChatBloc
     final bool isMembershipVerified = state.membershipVerified;
 
     // OPTIMIZATION: Only skip full reload if we have ACTIVE subscriptions AND verified membership
-    if (isSameGroup && isAlreadyLoaded && _hasActiveSubscriptions && isMembershipVerified) {
-      _logger.i('Random group chat already loaded with active streams for ${event.groupId}, skipping reload');
+    if (isSameGroup &&
+        isAlreadyLoaded &&
+        _hasActiveSubscriptions &&
+        isMembershipVerified) {
+      _logger.i(
+          'Random group chat already loaded with active streams for ${event.groupId}, skipping reload');
 
       // Just update user info if changed (photo/name updates)
       if (state.currentUserName != event.userName ||
@@ -108,8 +140,12 @@ class RandomGroupChatBloc
 
     // CRITICAL: If same group but no active subscriptions, we need to resubscribe!
     // This happens when user left and returned to the same chat.
-    if (isSameGroup && isAlreadyLoaded && !_hasActiveSubscriptions && isMembershipVerified) {
-      _logger.i('Same group ${event.groupId} but subscriptions inactive, resubscribing...');
+    if (isSameGroup &&
+        isAlreadyLoaded &&
+        !_hasActiveSubscriptions &&
+        isMembershipVerified) {
+      _logger.i(
+          'Same group ${event.groupId} but subscriptions inactive, resubscribing...');
       // Don't reset state - keep cached messages visible, just resubscribe
       await _subscribeToMessages(event.groupId);
       return;
@@ -123,6 +159,36 @@ class RandomGroupChatBloc
     // Do NOT show cached messages until membership is confirmed.
     // This prevents privacy leaks from stale cache or URL manipulation.
     // ========================================================================
+
+    // Check if we have a cached membership verification (optimization)
+    final hasCachedMembership =
+        _isMembershipCached(event.userId, event.groupId);
+    final cachedMessages = _cacheService.getMessages(event.groupId);
+    final hasCache = cachedMessages.isNotEmpty;
+
+    if (hasCachedMembership && hasCache) {
+      // FAST PATH: Membership was recently verified, show cached messages immediately
+      _logger.i(
+          'Using cached membership for ${event.groupId} - skipping Firestore check');
+      final cachedEntry = _cacheService.getCache(event.groupId);
+
+      emit(state.copyWith(
+        status: RandomGroupChatStatus.loaded,
+        currentGroupId: event.groupId,
+        currentUserId: event.userId,
+        currentUserUsername: event.username,
+        currentUserName: event.userName,
+        currentUserPhotoUrl: event.userPhotoUrl,
+        messages: cachedMessages,
+        hasMore: cachedEntry?.hasMore ?? true,
+        clearError: true,
+        membershipVerified: true,
+      ));
+
+      // Start listening to messages (already verified)
+      await _subscribeToMessages(event.groupId);
+      return;
+    }
 
     // Always start with loading state and unverified membership
     emit(state.copyWith(
@@ -148,7 +214,10 @@ class RandomGroupChatBloc
       );
 
       if (!canRead) {
-        _logger.w('Access denied: User ${event.userId} is not a member of random group ${event.groupId}');
+        _logger.w(
+            'Access denied: User ${event.userId} is not a member of random group ${event.groupId}');
+        // Invalidate any cached membership
+        _invalidateMembershipCache(event.userId, event.groupId);
         // Clear any cached messages for this group to prevent stale data display
         _cacheService.clearCache(event.groupId);
         emit(state.copyWith(
@@ -161,21 +230,25 @@ class RandomGroupChatBloc
       }
 
       // ======================================================================
-      // STEP 2: Membership verified - NOW we can show cached messages
+      // STEP 2: Membership verified - cache it and show messages
       // ======================================================================
-      _logger.i('Membership verified for user ${event.userId} in random group ${event.groupId}');
+      _cacheMembership(event.userId, event.groupId);
+      _logger.i(
+          'Membership verified for user ${event.userId} in random group ${event.groupId}');
 
-      final cachedMessages = _cacheService.getMessages(event.groupId);
-      final hasCache = cachedMessages.isNotEmpty;
-      final cachedEntry = _cacheService.getCache(event.groupId);
+      final cachedMessagesAfterVerify =
+          _cacheService.getMessages(event.groupId);
+      final hasCacheAfterVerify = cachedMessagesAfterVerify.isNotEmpty;
+      final cachedEntryAfterVerify = _cacheService.getCache(event.groupId);
 
-      if (hasCache) {
+      if (hasCacheAfterVerify) {
         // Show cached messages now that membership is confirmed
-        _logger.i('Cache hit for random group ${event.groupId}: ${cachedMessages.length} messages');
+        _logger.i(
+            'Cache hit for random group ${event.groupId}: ${cachedMessagesAfterVerify.length} messages');
         emit(state.copyWith(
           status: RandomGroupChatStatus.loaded,
-          messages: cachedMessages,
-          hasMore: cachedEntry?.hasMore ?? true,
+          messages: cachedMessagesAfterVerify,
+          hasMore: cachedEntryAfterVerify?.hasMore ?? true,
           membershipVerified: true, // CRITICAL: Enable access
         ));
       } else {
@@ -207,6 +280,8 @@ class RandomGroupChatBloc
         errorMessage: 'Failed to load messages',
         membershipVerified: false,
       ));
+      // Invalidate membership cache on error
+      _invalidateMembershipCache(event.userId, event.groupId);
     }
   }
 
@@ -215,6 +290,11 @@ class RandomGroupChatBloc
     Emitter<RandomGroupChatState> emit,
   ) async {
     await _cancelSubscriptions();
+
+    // Invalidate membership cache when stream errors (likely permission denied)
+    if (state.currentUserId != null && state.currentGroupId != null) {
+      _invalidateMembershipCache(state.currentUserId!, state.currentGroupId!);
+    }
 
     // SECURITY: On access error, revoke membership verification
     // This handles the case where user was removed while viewing chat
@@ -261,7 +341,8 @@ class RandomGroupChatBloc
     final text = event.text.trim();
     if (text.isEmpty) return;
 
-    _logger.d('Sending message: ${text.substring(0, text.length.clamp(0, 20))}...');
+    _logger.d(
+        'Sending message: ${text.substring(0, text.length.clamp(0, 20))}...');
 
     // ========================================================================
     // OPTIMISTIC UPDATE: Show message immediately in UI for instant feedback
@@ -306,17 +387,18 @@ class RandomGroupChatBloc
       _logger.e('Error sending message', error: e, stackTrace: stack);
 
       // Remove the failed optimistic message and show error
-      final messagesWithoutFailed = state.messages
-          .where((m) => m.id != localId)
-          .toList();
+      final messagesWithoutFailed =
+          state.messages.where((m) => m.id != localId).toList();
 
       // Provide helpful error messages based on error type
       String errorMessage = 'Failed to send message. Please try again.';
       if (e is FirebaseException) {
         if (e.code == 'permission-denied') {
-          errorMessage = 'Unable to send message. This may happen if you just joined. Please wait a moment and try again.';
+          errorMessage =
+              'Unable to send message. This may happen if you just joined. Please wait a moment and try again.';
         } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
-          errorMessage = 'Network error. Please check your connection and try again.';
+          errorMessage =
+              'Network error. Please check your connection and try again.';
         }
       }
 
@@ -355,9 +437,8 @@ class RandomGroupChatBloc
 
       // Deduplicate: ensure no overlap with existing messages
       final existingIds = state.messages.map((m) => m.id).toSet();
-      final uniqueOlderMessages = olderMessages
-          .where((m) => !existingIds.contains(m.id))
-          .toList();
+      final uniqueOlderMessages =
+          olderMessages.where((m) => !existingIds.contains(m.id)).toList();
 
       final allMessages = [...state.messages, ...uniqueOlderMessages];
 
@@ -407,9 +488,10 @@ class RandomGroupChatBloc
             newMsg.senderId == m.senderId &&
             newMsg.text == m.text &&
             newMsg.sentAt.difference(m.sentAt).inSeconds.abs() < 5);
-        
+
         if (hasMatchingRealMessage) {
-          _logger.d('Filtering out optimistic message ${m.id} as it has a matching real message');
+          _logger.d(
+              'Filtering out optimistic message ${m.id} as it has a matching real message');
           return false; // Filter out the optimistic message
         }
       }
@@ -547,7 +629,8 @@ class RandomGroupChatBloc
           hasMore: messages.length >= 50,
           isPreload: true,
         );
-        _logger.i('Preloaded ${messages.length} messages for random group ${event.groupId}');
+        _logger.i(
+            'Preloaded ${messages.length} messages for random group ${event.groupId}');
       }
     } catch (e) {
       // Preload failures are silent - don't affect UX
@@ -571,31 +654,32 @@ class RandomGroupChatBloc
     await _cancelSubscriptions();
 
     // Subscribe to messages stream with better error handling
-    _messagesSubscription = _chatService
-        .watchMessages(groupId, limit: 50)
-        .listen(
-          (messages) {
-            if (!isClosed) {
-              add(_MessagesReceived(messages));
-            }
-          },
-          onError: (error) {
-            _logger.e('Error watching messages: $error');
-            _hasActiveSubscriptions = false;
-            if (isClosed) return;
+    _messagesSubscription =
+        _chatService.watchMessages(groupId, limit: 50).listen(
+      (messages) {
+        if (!isClosed) {
+          add(_MessagesReceived(messages));
+        }
+      },
+      onError: (error) {
+        _logger.e('Error watching messages: $error');
+        _hasActiveSubscriptions = false;
+        if (isClosed) return;
 
-            if (error is FirebaseException && error.code == 'permission-denied') {
-              add(const _ChatStreamError('You no longer have access to this group chat.'));
-              return;
-            }
+        if (error is FirebaseException && error.code == 'permission-denied') {
+          add(const _ChatStreamError(
+              'You no longer have access to this group chat.'));
+          return;
+        }
 
-            add(const _ChatStreamError('Failed to load messages.'));
-          },
-        );
+        add(const _ChatStreamError('Failed to load messages.'));
+      },
+    );
 
     // CRITICAL: Mark subscriptions as active
     _hasActiveSubscriptions = true;
-    _logger.i('Message subscription created for random group $groupId, _hasActiveSubscriptions = true');
+    _logger.i(
+        'Message subscription created for random group $groupId, _hasActiveSubscriptions = true');
   }
 
   @override

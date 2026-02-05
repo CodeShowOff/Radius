@@ -1,13 +1,19 @@
 /// Predefined radius options for help discovery.
 enum HelpRadius {
-  /// 10 meters - very close proximity
-  meters10(10, '10 meters'),
+  /// 50 meters - very close proximity
+  meters50(50, '50m'),
 
-  /// 50 meters - nearby
-  meters50(50, '50 meters'),
+  /// 100 meters - nearby
+  meters100(100, '100m'),
 
-  /// 100 meters - extended range
-  meters100(100, '100 meters');
+  /// 500 meters - extended range
+  meters500(500, '500m'),
+
+  /// 1 kilometer - wide area
+  kilometers1(1000, '1km'),
+
+  /// 2 kilometers - very wide area
+  kilometers2(2000, '2km');
 
   final int meters;
   final String displayName;
@@ -24,14 +30,18 @@ enum HelpRadius {
 
   static HelpRadius fromMeters(int meters) {
     switch (meters) {
-      case 10:
-        return HelpRadius.meters10;
       case 50:
         return HelpRadius.meters50;
       case 100:
         return HelpRadius.meters100;
+      case 500:
+        return HelpRadius.meters500;
+      case 1000:
+        return HelpRadius.kilometers1;
+      case 2000:
+        return HelpRadius.kilometers2;
       default:
-        return HelpRadius.meters50;
+        return HelpRadius.meters100;
     }
   }
 }

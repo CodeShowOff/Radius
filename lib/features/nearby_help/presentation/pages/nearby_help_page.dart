@@ -16,6 +16,7 @@ import '../widgets/help_request_card.dart';
 /// - Active help request (if any)
 /// - Button to request help
 /// - Active helper assignments
+/// - Incoming help requests from others
 /// - Settings access
 class NearbyHelpPage extends StatefulWidget {
   const NearbyHelpPage({super.key});
@@ -50,6 +51,9 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
             userName: userName,
             userPhotoUrl: userPhotoUrl,
           ));
+      
+      // Start watching for incoming requests
+      context.read<NearbyHelpBloc>().add(const NearbyHelpWatchIncomingRequests());
     }
   }
 
@@ -62,6 +66,25 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+          // Incoming requests badge button
+          BlocBuilder<NearbyHelpBloc, NearbyHelpState>(
+            buildWhen: (previous, current) =>
+                previous.incomingRequestsCount != current.incomingRequestsCount,
+            builder: (context, state) {
+              final count = state.incomingRequestsCount;
+              return IconButton(
+                onPressed: () => context.push(Routes.nearbyHelpIncomingRequests),
+                icon: Badge(
+                  isLabelVisible: count > 0,
+                  label: Text('$count'),
+                  child: const Icon(Icons.notifications_active_outlined),
+                ),
+                tooltip: count > 0
+                    ? '$count help request${count != 1 ? 's' : ''} nearby'
+                    : 'View help requests',
+              );
+            },
+          ),
           IconButton(
             onPressed: () => context.push(Routes.nearbyHelpSettings),
             icon: const Icon(Icons.settings),
@@ -103,6 +126,7 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
           return RefreshIndicator(
             onRefresh: () async {
               context.read<NearbyHelpBloc>().add(const NearbyHelpLoadLocations());
+              context.read<NearbyHelpBloc>().add(const NearbyHelpWatchIncomingRequests());
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -110,6 +134,12 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Incoming requests banner (if any)
+                  if (state.hasIncomingRequests) ...[
+                    _buildIncomingRequestsBanner(context, state),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Active request section
                   if (state.hasActiveRequest) ...[
                     _buildActiveRequestSection(context, state),
@@ -137,6 +167,64 @@ class _NearbyHelpPageState extends State<NearbyHelpPage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildIncomingRequestsBanner(BuildContext context, NearbyHelpState state) {
+    final theme = Theme.of(context);
+    final count = state.incomingRequestsCount;
+
+    return Card(
+      color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push(Routes.nearbyHelpIncomingRequests),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.error.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.sos,
+                  size: 28,
+                  color: theme.colorScheme.error,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count Help Request${count != 1 ? 's' : ''} Nearby',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tap to view and help someone in need',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.error,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

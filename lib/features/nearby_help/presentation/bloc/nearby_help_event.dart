@@ -169,6 +169,16 @@ class NearbyHelpClearMessages extends NearbyHelpEvent {
   const NearbyHelpClearMessages();
 }
 
+/// Start watching for incoming help requests from others.
+class NearbyHelpWatchIncomingRequests extends NearbyHelpEvent {
+  const NearbyHelpWatchIncomingRequests();
+}
+
+/// Stop watching for incoming help requests.
+class NearbyHelpStopWatchingIncomingRequests extends NearbyHelpEvent {
+  const NearbyHelpStopWatchingIncomingRequests();
+}
+
 /// Internal event: locations updated from stream.
 class _LocationsUpdated extends NearbyHelpEvent {
   final List<UserLocation> locations;
@@ -214,6 +224,16 @@ class _HelperRequestsUpdated extends NearbyHelpEvent {
   final List<HelpRequest> requests;
 
   const _HelperRequestsUpdated(this.requests);
+
+  @override
+  List<Object?> get props => [requests];
+}
+
+/// Internal event: incoming/open help requests updated from stream.
+class _IncomingRequestsUpdated extends NearbyHelpEvent {
+  final List<HelpRequest> requests;
+
+  const _IncomingRequestsUpdated(this.requests);
 
   @override
   List<Object?> get props => [requests];
