@@ -590,10 +590,19 @@ service cloud.firestore {
         && request.resource.data.memberCount == 1;
       
       // RULE: Only creator can update group (for status changes, heartbeat)
+      // Exception: Members can update message activity fields when sending messages
       allow update: if isAuthenticated()
-        && isNearbyGroupCreator()
-        && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['creatorId', 'createdAt']);
+        && (
+          // Creator path: full updates (no immutable field changes)
+          (isNearbyGroupCreator()
+           && !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['creatorId', 'createdAt']))
+          // Message activity path: members can update message preview and timestamps
+          // Required for sendMessage to update group metadata
+          || (isNearbyGroupMember()
+              && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['lastMessagePreview', 'lastMessageAt', 'lastActiveAt']))
+        );
       
       // RULE: Only creator can delete their group
       allow delete: if isAuthenticated() && isNearbyGroupCreator();
@@ -634,7 +643,14 @@ service cloud.firestore {
         // RULE: Only members can send messages
         allow create: if isAuthenticated()
           && isNearbyGroupMember()
-          && request.resource.data.senderId == request.auth.uid
+          && (
+            // Regular text messages from members
+            (request.resource.data.senderId == request.auth.uid
+             && request.resource.data.type != 'system')
+            // System messages: sent by members for join/leave notifications
+            || (request.resource.data.senderId == null
+                && request.resource.data.type == 'system')
+          )
           && request.resource.data.groupId == groupId
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
@@ -876,6 +892,7 @@ service cloud.firestore {
       
       // RULE: Only admins can update group settings
       // Allow non-admins to increment pendingRequestCount when creating join requests
+      // Allow members to update message activity fields when sending messages
       allow update: if isAuthenticated()
         && (
           // Admin path: full settings updates (no immutable field changes)
@@ -886,6 +903,11 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingRequestCount'])
               && (request.resource.data.pendingRequestCount == resource.data.pendingRequestCount + 1
                   || request.resource.data.pendingRequestCount == resource.data.pendingRequestCount - 1))
+          // Message activity path: members can update message preview and timestamps
+          // Required for sendMessage to update group metadata
+          || (isRandomGroupMember()
+              && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['lastMessagePreview', 'lastMessageAt', 'lastActiveAt']))
         );
       
       // RULE: Only creator can delete (soft delete via status change)
@@ -909,9 +931,15 @@ service cloud.firestore {
                 && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds)
           );
         
-        // RULE: Admins can update member status
+        // RULE: Admins can update any member, members can update their own document
+        // Self-update is needed for marking messages as read (lastReadAt, updatedAt)
         allow update: if isAuthenticated()
-          && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds;
+          && (
+            // Admin full update: can change any fields
+            request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds
+            // Self update: member can update their own document (for marking read)
+            || memberId == request.auth.uid
+          );
         
         // RULE: Admins can remove members (except creator), members can leave
         allow delete: if isAuthenticated()
@@ -960,10 +988,10 @@ service cloud.firestore {
             // Regular text messages from members
             (request.resource.data.senderId == request.auth.uid
              && request.resource.data.type != 'system')
-            // System messages: sent by service for join/leave notifications
+            // System messages: sent by members for join/leave notifications
+            // Any member can send system messages (e.g., when leaving the group)
             || (request.resource.data.senderId == null
-                && request.resource.data.type == 'system'
-                && request.auth.uid in get(/databases/$(database)/documents/random_groups/$(groupId)).data.adminIds)
+                && request.resource.data.type == 'system')
           )
           && request.resource.data.groupId == groupId
           && request.resource.data.text is string
