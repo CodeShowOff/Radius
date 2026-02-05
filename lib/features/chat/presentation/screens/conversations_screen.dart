@@ -39,6 +39,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
   }
 
+  void _showSearch() {
+    showSearch(
+      context: context,
+      delegate: _ConversationSearchDelegate(
+        currentUserId: widget.currentUserId,
+        onConversationTap: widget.onConversationTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -52,9 +62,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
-            },
+            onPressed: _showSearch,
           ),
         ],
       ),
@@ -448,5 +456,182 @@ class _ConversationTileState extends State<_ConversationTile> {
     } else {
       return '${time.day}/${time.month}';
     }
+  }
+}
+
+/// Search delegate for filtering conversations.
+class _ConversationSearchDelegate extends SearchDelegate<Conversation?> {
+  final String currentUserId;
+  final void Function(Conversation conversation) onConversationTap;
+
+  _ConversationSearchDelegate({
+    required this.currentUserId,
+    required this.onConversationTap,
+  }) : super(
+          searchFieldLabel: 'Search conversations...',
+          searchFieldStyle: const TextStyle(fontSize: 16),
+        );
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            query = '';
+          },
+        ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, null);
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildSearchResults(context);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return _buildSearchResults(context);
+  }
+
+  Widget _buildSearchResults(BuildContext context) {
+    return BlocBuilder<ConversationsBloc, ConversationsState>(
+      builder: (context, state) {
+        if (state.status == ConversationsStatus.loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (state.conversations.isEmpty) {
+          return const Center(
+            child: Text('No conversations yet'),
+          );
+        }
+
+        // Filter conversations based on search query
+        final filteredConversations = query.isEmpty
+            ? state.conversations
+            : state.conversations.where((conversation) {
+                final otherParticipant =
+                    conversation.getOtherParticipantInfo(currentUserId);
+                final participantName =
+                    (otherParticipant?.displayName ?? '').toLowerCase();
+                final lastMessage =
+                    (conversation.lastMessageText ?? '').toLowerCase();
+                final searchLower = query.toLowerCase();
+
+                return participantName.contains(searchLower) ||
+                    lastMessage.contains(searchLower);
+              }).toList();
+
+        if (filteredConversations.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.search_off,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No conversations found',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Try a different search term',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: filteredConversations.length,
+          itemBuilder: (context, index) {
+            final conversation = filteredConversations[index];
+            final otherParticipant =
+                conversation.getOtherParticipantInfo(currentUserId);
+
+            return ListTile(
+              leading: CircleAvatar(
+                radius: 24,
+                backgroundImage: otherParticipant?.photoUrl != null
+                    ? NetworkImage(otherParticipant!.photoUrl!)
+                    : null,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                child: otherParticipant?.photoUrl == null
+                    ? Text(
+                        (otherParticipant?.displayName ?? '?')[0].toUpperCase(),
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+              title: Text(
+                otherParticipant?.displayName ?? 'Unknown',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              subtitle: Text(
+                conversation.lastMessageText ?? 'No messages yet',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+              ),
+              trailing: conversation.getUnreadCount(currentUserId) > 0
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        conversation.getUnreadCount(currentUserId) > 99
+                            ? '99+'
+                            : conversation
+                                .getUnreadCount(currentUserId)
+                                .toString(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  : null,
+              onTap: () {
+                close(context, conversation);
+                onConversationTap(conversation);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../domain/entities/message.dart';
 
@@ -352,24 +353,190 @@ class _StickerContent extends StatelessWidget {
   }
 }
 
-/// Video message content (placeholder - requires video player).
-class _VideoContent extends StatelessWidget {
+/// Video message content.
+class _VideoContent extends StatefulWidget {
   final Message message;
 
   const _VideoContent({required this.message});
 
   @override
+  State<_VideoContent> createState() => _VideoContentState();
+}
+
+class _VideoContentState extends State<_VideoContent> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePlayer();
+  }
+
+  Future<void> _initializePlayer() async {
+    if (widget.message.mediaUrl == null) return;
+
+    try {
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.message.mediaUrl!),
+      );
+
+      await _controller!.initialize();
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    if (_controller == null || !_isInitialized) return;
+
+    setState(() {
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+      } else {
+        _controller!.play();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // TODO: Implement video player when needed
-    return Container(
-      width: 250,
-      height: 150,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Icon(Icons.play_circle_outline, size: 64),
+    final theme = Theme.of(context);
+
+    if (widget.message.mediaUrl == null) {
+      return const _LoadingPlaceholder(icon: Icons.videocam);
+    }
+
+    if (_hasError) {
+      return Container(
+        width: 250,
+        height: 150,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Failed to load video',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_isInitialized) {
+      return Container(
+        width: 250,
+        height: 150,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 250,
+        height: 150,
+        color: Colors.black,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 250,
+              height: 150,
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _togglePlayPause,
+                child: Container(
+                  color: Colors.transparent,
+                  child: AnimatedOpacity(
+                    opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _controller!.value.isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                          size: 48,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: ValueListenableBuilder(
+                valueListenable: _controller!,
+                builder: (context, VideoPlayerValue value, child) {
+                  return LinearProgressIndicator(
+                    value: value.duration.inMilliseconds > 0
+                        ? value.position.inMilliseconds /
+                            value.duration.inMilliseconds
+                        : 0.0,
+                    backgroundColor: Colors.white24,
+                    valueColor: AlwaysStoppedAnimation(
+                      theme.colorScheme.primary,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

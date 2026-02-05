@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
+import 'core/router/routes.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/services/notifications/notification_service.dart';
 import 'core/services/realtime/realtime_data_manager.dart';
@@ -211,8 +212,10 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
                 label: 'VIEW',
                 textColor: Colors.white,
                 onPressed: () {
-                  // TODO: Navigate to the conversation
-                  // Will need context.go or Navigator to go to chat
+                  final conversationId = data['conversationId'] as String?;
+                  if (conversationId != null) {
+                    appRouter.go(Routes.chatWith(conversationId));
+                  }
                 },
               ),
             ),
