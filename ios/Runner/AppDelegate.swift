@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import Firebase
 import FirebaseMessaging
+import GoogleMaps
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -11,7 +12,10 @@ import FirebaseMessaging
   ) -> Bool {
     // Configure Firebase
     FirebaseApp.configure()
-    
+
+    // Configure Google Maps for Nearby Help feature
+    GMSServices.provideAPIKey("YOUR_IOS_API_KEY_HERE")
+
     // Configure notifications
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
