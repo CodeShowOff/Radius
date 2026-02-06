@@ -515,61 +515,63 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
 
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Nearby Members',
-              style: theme.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Members are auto-joined when detected via Bluetooth',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nearby Members',
+                style: theme.textTheme.titleLarge,
               ),
-            ),
-            const SizedBox(height: 16),
-            if (state.groupMembers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: Text('No members detected')),
-              )
-            else
-              ...state.groupMembers.map((member) => ListTile(
-                    leading: CachedAvatar(
-                      imageUrl: member.photoUrl,
-                      name: member.displayName ?? member.username,
-                      radius: 20,
-                    ),
-                    title: Text(member.displayName ?? member.username),
-                    subtitle: Text('@${member.username}'),
-                    trailing: member.isCurrentlyPresent
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Nearby',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.green,
+              const SizedBox(height: 8),
+              Text(
+                'Members are auto-joined when detected via Bluetooth',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (state.groupMembers.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: Text('No members detected')),
+                )
+              else
+                ...state.groupMembers.map((member) => ListTile(
+                      leading: CachedAvatar(
+                        imageUrl: member.photoUrl,
+                        name: member.displayName ?? member.username,
+                        radius: 20,
+                      ),
+                      title: Text(member.displayName ?? member.username),
+                      subtitle: Text('@${member.username}'),
+                      trailing: member.isCurrentlyPresent
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Nearby',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.green,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Last seen ${_formatLastSeen(member.lastSeenAt)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
-                          )
-                        : Text(
-                            'Last seen ${_formatLastSeen(member.lastSeenAt)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                  )),
-          ],
+                    )),
+            ],
+          ),
         ),
       ),
     );

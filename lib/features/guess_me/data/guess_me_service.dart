@@ -416,19 +416,24 @@ class GuessmeService {
       return existingSessionId;
     }
 
-    // Fetch player names
-    final player1Doc = await _firestore.collection('users').doc(player1Id).get();
-    final player2Doc = await _firestore.collection('users').doc(player2Id).get();
-    
-    final player1Name = player1Doc.exists ? (player1Doc.data()?['displayName'] as String?) : null;
-    final player2Name = player2Doc.exists ? (player2Doc.data()?['displayName'] as String?) : null;
+    // Fetch player names from 'profiles' collection (not 'users' which is owner-only read)
+    final player1ProfileDoc = await _firestore.collection('profiles').doc(playerIds[0]).get();
+    final player2ProfileDoc = await _firestore.collection('profiles').doc(playerIds[1]).get();
 
+    final player1Name = player1ProfileDoc.exists
+        ? (player1ProfileDoc.data()?['displayName'] as String? ?? player1ProfileDoc.data()?['name'] as String?)
+        : null;
+    final player2Name = player2ProfileDoc.exists
+        ? (player2ProfileDoc.data()?['displayName'] as String? ?? player2ProfileDoc.data()?['name'] as String?)
+        : null;
+
+    // Use sorted player IDs for consistency - both users racing will produce identical data
     final session = GuessmeSessionModel(
       id: deterministicSessionId,
-      players: [player1Id, player2Id],
-      player1Id: player1Id,
+      players: [playerIds[0], playerIds[1]],
+      player1Id: playerIds[0],
       player1Name: player1Name ?? 'Mystery User A',
-      player2Id: player2Id,
+      player2Id: playerIds[1],
       player2Name: player2Name ?? 'Mystery User B',
       status: GuessmeSessionStatus.active.name,
       createdAt: now,
@@ -1093,33 +1098,44 @@ class GuessmeService {
       final conversationId = _createConversationId(player1Id, player2Id);
 
       // Check if conversation already exists
-      final existingConv = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
+      // Wrapped in try-catch because Firestore read rules deny access to non-existent
+      // conversation docs (resource.data is null, so participantIds check fails)
+      bool conversationExists = false;
+      try {
+        final existingConv = await _firestore
+            .collection('conversations')
+            .doc(conversationId)
+            .get();
+        conversationExists = existingConv.exists;
+      } catch (e) {
+        // Expected for non-existent conversation docs - permission-denied is normal
+        _logger.d('Conversation $conversationId does not exist yet (or no access): $e');
+      }
 
-      if (existingConv.exists) {
+      if (conversationExists) {
         _logger.i('Conversation $conversationId already exists, returning existing');
         return conversationId;
       }
 
-      // Get user profiles
-      final profiles = await Future.wait([
-        _firestore.collection('users').doc(player1Id).get(),
-        _firestore.collection('users').doc(player2Id).get(),
+      // Get user profiles from 'profiles' collection (not 'users' which is owner-only read)
+      final profileDocs = await Future.wait([
+        _firestore.collection('profiles').doc(player1Id).get(),
+        _firestore.collection('profiles').doc(player2Id).get(),
       ]);
 
-      final player1Profile = profiles[0];
-      final player2Profile = profiles[1];
+      final player1Profile = profileDocs[0];
+      final player2Profile = profileDocs[1];
 
       if (!player1Profile.exists || !player2Profile.exists) {
         _logger.w('Cannot convert: one or both user profiles not found');
         return null;
       }
 
-      final player1Name = player1Profile.data()?['name'] as String? ?? 'User';
+      final player1Name = player1Profile.data()?['displayName'] as String?
+          ?? player1Profile.data()?['name'] as String? ?? 'User';
       final player1Photo = player1Profile.data()?['photoUrl'] as String?;
-      final player2Name = player2Profile.data()?['name'] as String? ?? 'User';
+      final player2Name = player2Profile.data()?['displayName'] as String?
+          ?? player2Profile.data()?['name'] as String? ?? 'User';
       final player2Photo = player2Profile.data()?['photoUrl'] as String?;
 
       // Create the connection record
@@ -1179,6 +1195,7 @@ class GuessmeService {
     await connectionsRef.doc(connectionId).set({
       'userId1': ids[0],
       'userId2': ids[1],
+      'users': [ids[0], ids[1]], // Required for array-contains list queries
       'status': 'connected',
       'connectedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -1204,10 +1221,17 @@ class GuessmeService {
     final conversationsRef = _firestore.collection('conversations');
 
     // Check if conversation already exists
-    final existingConv = await conversationsRef.doc(conversationId).get();
-    if (existingConv.exists) {
-      _logger.d('Conversation $conversationId already exists, skipping creation');
-      return;
+    // Wrapped in try-catch because Firestore read rules deny access to non-existent
+    // conversation docs (resource.data is null, so participantIds check fails)
+    try {
+      final existingConv = await conversationsRef.doc(conversationId).get();
+      if (existingConv.exists) {
+        _logger.d('Conversation $conversationId already exists, skipping creation');
+        return;
+      }
+    } catch (e) {
+      // Expected for non-existent docs - proceed with creation
+      _logger.d('Conversation existence check failed (expected for new docs): $e');
     }
 
     // Create new conversation

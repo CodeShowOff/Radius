@@ -80,7 +80,7 @@ class NearbyGroupChatBloc
       currentUserName: event.currentUserName,
       currentUserPhotoUrl: event.currentUserPhotoUrl,
       messages: const [],
-      hasMore: true,
+      hasMore: false,
       membershipVerified: false,
       clearError: true,
     ));

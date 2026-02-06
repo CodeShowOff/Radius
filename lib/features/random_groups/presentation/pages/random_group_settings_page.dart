@@ -242,18 +242,19 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
                 ),
             ],
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              onChanged: () {
-                if (!_hasChanges) {
-                  setState(() => _hasChanges = true);
-                }
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                onChanged: () {
+                  if (!_hasChanges) {
+                    setState(() => _hasChanges = true);
+                  }
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   // Group photo section
                   Center(
                     child: Stack(
@@ -449,7 +450,9 @@ class _RandomGroupSettingsPageState extends State<RandomGroupSettingsPage> {
                     icon: const Icon(Icons.save),
                     label: const Text('Save Changes'),
                   ),
-                ],
+                  const SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
           ),
