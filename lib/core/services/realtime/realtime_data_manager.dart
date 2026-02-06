@@ -8,6 +8,7 @@ import '../../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
+import '../../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../presence/presence_service.dart';
 import 'realtime_connection_service.dart';
 
@@ -20,6 +21,13 @@ import 'realtime_connection_service.dart';
 /// 4. Coordinating reconnection when network is restored
 /// 5. Ensuring data is always fresh and available instantly on navigation
 ///
+/// Preloaded streams on app startup:
+/// - User profile
+/// - Connections
+/// - Conversations
+/// - Location groups (user's groups)
+/// - Random groups (active groups + user's memberships)
+///
 /// This eliminates the loading-on-every-navigation anti-pattern and provides
 /// an industry-standard experience similar to WhatsApp, Slack, or Discord.
 class RealTimeDataManager {
@@ -29,6 +37,7 @@ class RealTimeDataManager {
   final ConnectionBloc _connectionBloc;
   final ConversationsBloc _conversationsBloc;
   final LocationGroupBloc _locationGroupBloc;
+  final RandomGroupBloc _randomGroupBloc;
   final ProfileBloc _profileBloc;
   final Logger _logger;
 
@@ -42,6 +51,7 @@ class RealTimeDataManager {
     required ConnectionBloc connectionBloc,
     required ConversationsBloc conversationsBloc,
     required LocationGroupBloc locationGroupBloc,
+    required RandomGroupBloc randomGroupBloc,
     required ProfileBloc profileBloc,
     PresenceService? presenceService,
     ChatPreloadService? chatPreloadService,
@@ -52,6 +62,7 @@ class RealTimeDataManager {
         _connectionBloc = connectionBloc,
         _conversationsBloc = conversationsBloc,
         _locationGroupBloc = locationGroupBloc,
+        _randomGroupBloc = randomGroupBloc,
         _profileBloc = profileBloc,
         _logger = logger ?? Logger();
 
@@ -152,7 +163,13 @@ class RealTimeDataManager {
       // NOTE: The LocationGroupBloc streams will also wait for auth token internally
       _locationGroupBloc.add(LoadUserGroups(userId: userId));
 
-      // 5. Initialize presence tracking (online/offline status via Firebase RTDB)
+      // 5. Load random groups (uses real-time Firestore streams)
+      // Preload both active groups (for discovery) and user's memberships
+      // This ensures instant loading when user navigates to random groups page
+      _randomGroupBloc.add(WatchActiveRandomGroups());
+      _randomGroupBloc.add(WatchUserRandomGroups(userId));
+
+      // 6. Initialize presence tracking (online/offline status via Firebase RTDB)
       // This enables WhatsApp-style "last seen" and online indicators
       try {
         await _presenceService?.initialize(userId);
@@ -165,7 +182,7 @@ class RealTimeDataManager {
       _isInitialized = true;
       _logger.i('RealTimeDataManager initialization complete');
 
-      // 6. Preload recent/unread chats in the background (non-blocking)
+      // 7. Preload recent/unread chats in the background (non-blocking)
       // This warms the cache so first chat opens are instant
       _triggerChatPreload(userId);
     } finally {

@@ -18,6 +18,7 @@ import 'features/guess_me/presentation/bloc/guess_me_bloc.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
+import 'features/random_groups/presentation/bloc/random_group_bloc.dart';
 
 /// Root widget of the Radius application.
 ///
@@ -65,6 +66,11 @@ class RadiusApp extends StatelessWidget {
           // Location Groups BLoC (app-wide for preloading)
           BlocProvider<LocationGroupBloc>(
             create: (_) => getIt<LocationGroupBloc>(),
+          ),
+
+          // Random Groups BLoC (app-wide for preloading)
+          BlocProvider<RandomGroupBloc>(
+            create: (_) => getIt<RandomGroupBloc>(),
           ),
 
           // Theme settings

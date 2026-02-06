@@ -439,7 +439,7 @@ export const onNearbyGroupMessageNotification = onDocumentCreated(
     // Prepare notification
     const payload = {
       notification: {
-        title: `📍 ${groupName}`,
+        title: `${groupName}`,
         body: `${senderName}: ${messageText.substring(0, 100)}`,
       },
       data: {
@@ -615,7 +615,7 @@ export const onRandomGroupMessageNotification = onDocumentCreated(
     // Prepare notification
     const payload = {
       notification: {
-        title: `🎲 ${groupName}`,
+        title: `${groupName}`,
         body: `${senderName}: ${messageText.substring(0, 100)}`,
       },
       data: {
@@ -1819,7 +1819,7 @@ export const onHelpRequestAssigned = onDocumentUpdated(
 
         const payload = {
           notification: {
-            title: "✅ Help is on the way!",
+            title: "Help is on the way!",
             body: `${helperName} is coming to help you`,
           },
           data: {
@@ -1927,7 +1927,7 @@ export const onHelpRequestAssigned = onDocumentUpdated(
         const isSeeker = notifyUserId === seekerId;
         const payload = {
           notification: {
-            title: "🎉 Help Request Completed",
+            title: "Help Request Completed",
             body: isSeeker 
               ? "Your helper marked the request as completed"
               : "The requester confirmed help was received",

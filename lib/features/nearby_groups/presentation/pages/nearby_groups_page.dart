@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
-import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/nearby_group.dart';
 import '../bloc/nearby_group_bloc.dart';
@@ -117,7 +116,7 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
                   SliverToBoxAdapter(
                     child: _SectionHeader(
                       title: 'My Active Group',
-                      icon: Icons.bluetooth_searching,
+                      icon: Icons.all_inclusive,
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -246,7 +245,7 @@ class _MyActiveGroupCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons.bluetooth_searching,
+                      Icons.all_inclusive,
                       color: theme.colorScheme.primary,
                     ),
                   ),
@@ -369,10 +368,16 @@ class _NearbyGroupCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              CachedAvatar(
-                imageUrl: group.creatorPhotoUrl,
-                name: group.name,
+              CircleAvatar(
                 radius: 24,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: Text(
+                  group.name.isNotEmpty ? group.name[0].toUpperCase() : 'G',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

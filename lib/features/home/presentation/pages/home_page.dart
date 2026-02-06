@@ -18,15 +18,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage>
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
 
-  // Animation controllers for Bluetooth off state
+  // Animation controller for Bluetooth off state (simple blinking)
   late AnimationController _blinkController;
-  late AnimationController _waveController;
   late Animation<double> _blinkAnimation;
-  late Animation<double> _waveAnimation;
 
   @override
   void initState() {
@@ -38,17 +36,8 @@ class _HomePageState extends State<HomePage>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _blinkAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+    _blinkAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
-    );
-
-    // Initialize wave animation (for expanding circles)
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-    _waveAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _waveController, curve: Curves.easeOut),
     );
 
     _checkBluetoothStatus();
@@ -58,7 +47,6 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _blinkController.dispose();
-    _waveController.dispose();
     super.dispose();
   }
 
@@ -95,15 +83,12 @@ class _HomePageState extends State<HomePage>
 
   void _updateBluetoothAnimations() {
     if (!_bluetoothEnabled && !_checkingBluetooth) {
-      // Start animations when Bluetooth is off
+      // Start blinking animation when Bluetooth is off
       _blinkController.repeat(reverse: true);
-      _waveController.repeat();
     } else {
-      // Stop animations when Bluetooth is on or checking
+      // Stop animation when Bluetooth is on or checking
       _blinkController.stop();
-      _waveController.stop();
       _blinkController.reset();
-      _waveController.reset();
     }
   }
 
@@ -153,61 +138,43 @@ class _HomePageState extends State<HomePage>
         icon: Icon(
           Icons.bluetooth,
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          size: 22,
+          size: 26,
         ),
         tooltip: 'Checking Bluetooth...',
       );
     }
 
     if (_bluetoothEnabled) {
-      // Bluetooth is on - show normal blue icon
+      // Bluetooth is on - show normal blue icon (more bold)
       return IconButton(
         onPressed: null,
         icon: const Icon(
           Icons.bluetooth,
           color: Colors.blue,
-          size: 22,
+          size: 26,
+          weight: 700,
         ),
         tooltip: 'Bluetooth is on',
       );
     }
 
-    // Bluetooth is off - show animated blinking red icon with waves
+    // Bluetooth is off - show blinking red icon (no waves)
     return GestureDetector(
       onTap: () => _showBluetoothPrompt(context),
       child: Tooltip(
         message: 'Bluetooth is off - Tap to enable',
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Expanding wave circles
-              AnimatedBuilder(
-                animation: _waveAnimation,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: const Size(48, 48),
-                    painter: _BluetoothWavePainter(
-                      progress: _waveAnimation.value,
-                      color: Colors.red,
-                    ),
-                  );
-                },
-              ),
-              // Blinking Bluetooth icon
-              AnimatedBuilder(
-                animation: _blinkAnimation,
-                builder: (context, child) {
-                  return Icon(
-                    Icons.bluetooth_disabled,
-                    color: Colors.red.withValues(alpha: _blinkAnimation.value),
-                    size: 22,
-                  );
-                },
-              ),
-            ],
+        child: IconButton(
+          onPressed: null,
+          icon: AnimatedBuilder(
+            animation: _blinkAnimation,
+            builder: (context, child) {
+              return Icon(
+                Icons.bluetooth_disabled,
+                color: Colors.red.withValues(alpha: _blinkAnimation.value),
+                size: 26,
+                weight: 700,
+              );
+            },
           ),
         ),
       ),
@@ -279,27 +246,24 @@ class _HomePageState extends State<HomePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Mood selector with gradient
+                // Mood selector - with blue border effect
                 Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF667eea),
-                        const Color(0xFF764ba2),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF667eea).withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(18),
                   ),
-                  child: const MoodSelector(showLabel: true, compact: false),
+                  padding: const EdgeInsets.all(3),
+                  child: Card(
+                    elevation: 2,
+                    margin: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: const MoodSelector(showLabel: true, compact: false),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -310,13 +274,9 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.nearby),
                         label: 'Nearby',
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
                         backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        gradientColors: [
-                          const Color(0xFF667eea),
-                          const Color(0xFF764ba2),
-                        ],
+                            Theme.of(context).colorScheme.secondaryContainer,
                         isSquare: true,
                         animationType: _CardAnimationType.wave,
                       ),
@@ -326,13 +286,9 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.guessme),
                         label: 'Guess Me',
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
                         backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        gradientColors: [
-                          const Color(0xFF667eea),
-                          const Color(0xFF764ba2),
-                        ],
+                            Theme.of(context).colorScheme.secondaryContainer,
                         isSquare: true,
                         animationType: _CardAnimationType.personCycle,
                       ),
@@ -353,40 +309,28 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
-                // Location Based Groups section - Modern gradient design
-                _ModernGroupCard(
+                // Location Based Groups section - Simple card design
+                _SimpleGroupCard(
                   onTap: () => context.push(Routes.locationGroups),
                   title: 'Location Based Groups',
                   subtitle: 'Connect with people in your area',
                   icon: Icons.location_on,
-                  gradientColors: [
-                    const Color(0xFF667eea),
-                    const Color(0xFF764ba2),
-                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // Discover Groups - Modern gradient design
-                _ModernGroupCard(
+                // Discover Groups - Simple card design
+                _SimpleGroupCard(
                   onTap: () => context.push(Routes.discoverRandomGroups),
                   title: 'Discover Random Groups',
                   subtitle: 'Join global communities worldwide',
                   icon: Icons.public,
-                  gradientColors: [
-                    const Color(0xFF667eea),
-                    const Color(0xFF764ba2),
-                  ],
                 ),
                 const SizedBox(height: 16),
-                _ModernGroupCard(
+                _SimpleGroupCard(
                   onTap: () => context.push(Routes.discoverNearbyGroups),
                   title: 'Discover Nearby Groups',
                   subtitle: 'Find local communities around you',
                   icon: Icons.all_inclusive,
-                  gradientColors: [
-                    const Color(0xFF667eea),
-                    const Color(0xFF764ba2),
-                  ],
                 ),
               ],
             ),
@@ -403,7 +347,6 @@ class _AnimatedSquareCard extends StatelessWidget {
   final String label;
   final Color color;
   final Color backgroundColor;
-  final List<Color>? gradientColors;
   final bool isSquare;
   final bool useVerticalLayout;
   final _CardAnimationType animationType;
@@ -413,7 +356,6 @@ class _AnimatedSquareCard extends StatelessWidget {
     required this.label,
     required this.color,
     required this.backgroundColor,
-    this.gradientColors,
     this.isSquare = false,
     this.useVerticalLayout = false,
     this.animationType = _CardAnimationType.wave,
@@ -436,71 +378,11 @@ class _AnimatedSquareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (gradientColors != null) {
-      // Use gradient style
-      return GestureDetector(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradientColors!,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: gradientColors![0].withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: (isSquare || useVerticalLayout)
-              ? _buildVerticalContent(theme)
-              : Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _getIcon(),
-                          size: 28,
-                          color: color,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: Text(
-                          label,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-      );
-    }
-
     // Use solid color style
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        elevation: 3,
+        elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -552,10 +434,7 @@ class _AnimatedSquareCard extends StatelessWidget {
     final double iconSize = 34;
     final double gap = 12;
 
-    // Use white with transparency for gradient backgrounds
-    final iconBgColor = gradientColors != null
-        ? Colors.white.withValues(alpha: 0.2)
-        : color.withValues(alpha: 0.2);
+    final iconBgColor = color.withValues(alpha: 0.2);
 
     final content = Padding(
       padding: outerPadding,
@@ -603,61 +482,47 @@ class _AnimatedSquareCard extends StatelessWidget {
 
 enum _CardAnimationType { wave, personCycle, talking, sos }
 
-/// Modern card widget with gradient background for group discovery on home page.
-class _ModernGroupCard extends StatelessWidget {
+/// Simple card widget for group discovery on home page - consistent with app theme.
+class _SimpleGroupCard extends StatelessWidget {
   final VoidCallback onTap;
   final String title;
   final String subtitle;
   final IconData icon;
-  final List<Color> gradientColors;
 
-  const _ModernGroupCard({
+  const _SimpleGroupCard({
     required this.onTap,
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.gradientColors,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Material(
-      color: Colors.transparent,
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradientColors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: gradientColors[0].withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Icon container with white background
+              // Icon container
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(16),
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   icon,
-                  size: 32,
-                  color: Colors.white,
+                  size: 28,
+                  color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
               const SizedBox(width: 16),
@@ -671,18 +536,15 @@ class _ModernGroupCard extends StatelessWidget {
                       title,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 16,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -693,50 +555,13 @@ class _ModernGroupCard extends StatelessWidget {
               // Arrow icon
               Icon(
                 Icons.arrow_forward_ios,
-                size: 18,
-                color: Colors.white.withValues(alpha: 0.9),
+                size: 16,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-/// Custom painter for expanding wave circles around Bluetooth icon
-class _BluetoothWavePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _BluetoothWavePainter({
-    required this.progress,
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = size.width / 2;
-
-    // Draw multiple expanding circles with fading opacity
-    for (int i = 0; i < 3; i++) {
-      // Stagger each wave by 0.33 of the cycle
-      final waveProgress = (progress + i * 0.33) % 1.0;
-      final radius = maxRadius * 0.3 + (maxRadius * 0.7 * waveProgress);
-      final opacity = (1.0 - waveProgress) * 0.6;
-
-      final paint = Paint()
-        ..color = color.withValues(alpha: opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0 * (1.0 - waveProgress * 0.5);
-
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_BluetoothWavePainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

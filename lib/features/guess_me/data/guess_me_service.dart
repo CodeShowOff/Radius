@@ -116,48 +116,87 @@ class GuessmeService {
   /// 1. They have `isSearchingGuessMeGame: true` in their profile
   /// 2. They do NOT have `isInGuessMeGame: true` in their profile
   /// 3. They do NOT have an active GuessMe session
+  ///
+  /// FIX: Includes retry logic with server-side reads to handle race conditions
+  /// where users tap "Play Game" simultaneously but Firestore reads may be stale.
   Future<bool> _isUserAvailable(String userId) async {
-    try {
-      // Check if user has an active session (most definitive check)
-      final sessionQuery = await _sessionsRef
-          .where('players', arrayContains: userId)
-          .where('status', isEqualTo: GuessmeSessionStatus.active.name)
-          .limit(1)
-          .get();
-      
-      if (sessionQuery.docs.isNotEmpty) {
-        _logger.d('User $userId has active session - not available');
-        return false;
-      }
+    const maxRetries = 3;
+    const retryDelays = [
+      Duration.zero,        // First attempt: immediate
+      Duration(milliseconds: 500),  // Second attempt: 500ms delay
+      Duration(milliseconds: 1000), // Third attempt: 1s delay
+    ];
 
-      // Check profile status
-      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
-      if (!profileDoc.exists) {
-        // Profile doesn't exist - user is not available
-        _logger.d('User $userId profile does not exist - not available');
-        return false;
-      }
-      
-      final data = profileDoc.data();
-      final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
-      if (isInGame) {
-        _logger.d('User $userId isInGuessMeGame=true - not available');
-        return false;
-      }
-      
-      // CRITICAL: User must be actively searching to be available
-      final isSearching = data?['isSearchingGuessMeGame'] as bool? ?? false;
-      if (!isSearching) {
-        _logger.d('User $userId isSearchingGuessMeGame=false - not available');
-        return false;
-      }
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Add delay for retry attempts (not for first attempt)
+        if (attempt > 0) {
+          _logger.d('Retry attempt $attempt for user $userId availability check');
+          await Future.delayed(retryDelays[attempt]);
+        }
 
-      _logger.d('User $userId is available for matching');
-      return true;
-    } catch (e) {
-      _logger.w('Error checking user availability for $userId', error: e);
-      return false;
+        // Check if user has an active session (most definitive check)
+        // Use getOptions with source: server to bypass cache on retries
+        final sessionQuery = await _sessionsRef
+            .where('players', arrayContains: userId)
+            .where('status', isEqualTo: GuessmeSessionStatus.active.name)
+            .limit(1)
+            .get(GetOptions(source: attempt > 0 ? Source.server : Source.serverAndCache));
+
+        if (sessionQuery.docs.isNotEmpty) {
+          _logger.d('User $userId has active session - not available');
+          return false;
+        }
+
+        // Check profile status
+        // CRITICAL FIX: Use Source.server on retries to bypass Firestore cache
+        // This ensures we get fresh data when checking if user is searching
+        final profileDoc = await _firestore
+            .collection('profiles')
+            .doc(userId)
+            .get(GetOptions(source: attempt > 0 ? Source.server : Source.serverAndCache));
+
+        if (!profileDoc.exists) {
+          // Profile doesn't exist - user is not available
+          _logger.d('User $userId profile does not exist - not available');
+          return false;
+        }
+
+        final data = profileDoc.data();
+        final isInGame = data?['isInGuessMeGame'] as bool? ?? false;
+        if (isInGame) {
+          _logger.d('User $userId isInGuessMeGame=true - not available');
+          return false;
+        }
+
+        // CRITICAL: User must be actively searching to be available
+        final isSearching = data?['isSearchingGuessMeGame'] as bool? ?? false;
+        if (!isSearching) {
+          // On first attempts, user might not be marked as searching yet due to race condition
+          // Retry with server-side read to get fresh data
+          if (attempt < maxRetries - 1) {
+            _logger.d('User $userId isSearchingGuessMeGame=false on attempt ${attempt + 1} - will retry');
+            continue; // Retry with server-side read
+          }
+
+          _logger.d('User $userId isSearchingGuessMeGame=false after all retries - not available');
+          return false;
+        }
+
+        _logger.d('User $userId is available for matching (verified on attempt ${attempt + 1})');
+        return true;
+      } catch (e) {
+        _logger.w('Error checking user availability for $userId on attempt ${attempt + 1}', error: e);
+
+        // On last attempt, return false
+        if (attempt == maxRetries - 1) {
+          return false;
+        }
+        // Otherwise, retry
+      }
     }
+
+    return false; // Fallback
   }
 
   // ==================== QUEUE MANAGEMENT ====================
@@ -335,9 +374,12 @@ class GuessmeService {
     final deterministicSessionId = 'guessme_${playerIds[0]}_${playerIds[1]}_$dateHour';
     
     _logger.i('Deterministic session ID: $deterministicSessionId');
-    
+
     // Check if this exact session already exists
-    final existingSessionDoc = await _sessionsRef.doc(deterministicSessionId).get();
+    // CRITICAL FIX: Use Source.server to bypass cache and get fresh data
+    final existingSessionDoc = await _sessionsRef
+        .doc(deterministicSessionId)
+        .get(const GetOptions(source: Source.server));
     if (existingSessionDoc.exists) {
       final existingStatus = existingSessionDoc.data()?['status'] as String?;
       if (existingStatus == GuessmeSessionStatus.active.name) {
@@ -347,25 +389,26 @@ class GuessmeService {
       // Session exists but is not active - allow creating a new one with different hour
       _logger.w('Session $deterministicSessionId exists but status is $existingStatus');
     }
-    
+
     // Check if either player already has ANY active session
+    // CRITICAL FIX: Use Source.server to bypass cache
     final player1SessionQuery = await _sessionsRef
         .where('players', arrayContains: player1Id)
         .where('status', isEqualTo: GuessmeSessionStatus.active.name)
         .limit(1)
-        .get();
+        .get(const GetOptions(source: Source.server));
     
     if (player1SessionQuery.docs.isNotEmpty) {
       final existingSessionId = player1SessionQuery.docs.first.id;
       _logger.i('Player $player1Id already has active session: $existingSessionId - returning it');
       return existingSessionId;
     }
-    
+
     final player2SessionQuery = await _sessionsRef
         .where('players', arrayContains: player2Id)
         .where('status', isEqualTo: GuessmeSessionStatus.active.name)
         .limit(1)
-        .get();
+        .get(const GetOptions(source: Source.server));
     
     if (player2SessionQuery.docs.isNotEmpty) {
       final existingSessionId = player2SessionQuery.docs.first.id;

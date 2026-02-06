@@ -155,19 +155,21 @@ class _GuessMeLobbyPageState extends State<GuessMeLobbyPage>
     if (!mounted || !_isSearching) return;
 
     final nearbyBloc = context.read<NearbyUsersBloc>();
-    
+
     // Initialize advertising if not already
     nearbyBloc.add(NearbyUsersInitialize(
       userId: authState.user.id,
       username: authState.user.username,
     ));
-    
+
     // Clear previous results
     nearbyBloc.add(const NearbyUsersClearResults());
 
-    // Start scanning with 7-second duration
-    // Small delay to allow BLE to initialize
-    await Future.delayed(const Duration(milliseconds: 300));
+    // CRITICAL FIX: Increased delay to 1 second (was 300ms) to allow Firestore
+    // to propagate the searching status update before starting BLE scan.
+    // This reduces race conditions where other users discover us via BLE but
+    // see our Firestore profile with stale data (isSearchingGuessMeGame=false).
+    await Future.delayed(const Duration(milliseconds: 1000));
     if (!mounted || !_isSearching) return;
     
     // Start 7-second scan for GuessMe

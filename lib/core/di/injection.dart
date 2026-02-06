@@ -312,6 +312,7 @@ Future<void> configureDependencies() {
         connectionBloc: getIt<ConnectionBloc>(),
         conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),
+        randomGroupBloc: getIt<RandomGroupBloc>(),
         profileBloc: getIt<ProfileBloc>(),
       ),
     );
