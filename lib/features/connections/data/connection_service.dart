@@ -530,7 +530,11 @@ class ConnectionService {
     }
   }
 
-  /// Unblocks a user.
+  /// Unblocks a user and restores the connection.
+  ///
+  /// BEHAVIOR: Unblocking restores the previous connection status (connected)
+  /// so the user reappears in the Connections page immediately.
+  /// This treats blocking as a temporary visibility restriction, not deletion.
   Future<ConnectionResult<void>> unblockUser({
     required String blockerId,
     required String blockedId,
@@ -544,15 +548,17 @@ class ConnectionService {
           .doc(blockedId)
           .delete();
 
-      // Update connection status if exists
+      // Update connection status if exists - restore to connected
       final connectionId = Connection.createConnectionId(blockerId, blockedId);
       final connectionDoc = await _connectionsRef.doc(connectionId).get();
 
       if (connectionDoc.exists) {
         final connection = ConnectionModel.fromFirestore(connectionDoc);
         if (connection.blockedBy == blockerId) {
+          // CRITICAL FIX: Restore connection to 'connected' status
+          // This makes the user reappear in Connections page immediately
           await _connectionsRef.doc(connectionId).update({
-            'status': ConnectionStatus.disconnected.name,
+            'status': ConnectionStatus.connected.name,
             'blockedBy': null,
             'updatedAt': Timestamp.fromDate(DateTime.now()),
           });

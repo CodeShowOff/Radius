@@ -220,7 +220,11 @@ class NotificationService {
         messageConversationId == _currentConversationId;
 
     // Check if user is viewing the group chat that received a message
-    final isViewingGroupChat = messageType == 'group_message' &&
+    // Must check all group message types: location, nearby, and random
+    final isGroupMessageType = messageType == 'group_message' ||
+        messageType == 'nearby_group_message' ||
+        messageType == 'random_group_message';
+    final isViewingGroupChat = isGroupMessageType &&
         messageGroupId != null &&
         messageGroupId == _currentGroupId;
 

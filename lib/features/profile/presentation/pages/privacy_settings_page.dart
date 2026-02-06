@@ -8,6 +8,7 @@ import '../../../../core/di/injection.dart';
 import '../../../auth/domain/repositories/i_auth_repository.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/data/connection_service.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../bloc/profile_bloc.dart';
 
 /// Privacy settings page for managing discovery and profile visibility.
@@ -398,11 +399,13 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
       final navigator = Navigator.of(sheetContext);
 
       try {
-        final connectionService = getIt<ConnectionService>();
-        await connectionService.unblockUser(
-          blockerId: authState.user.id,
-          blockedId: blockedId,
-        );
+        // Unblock via ConnectionBloc - this updates both Firestore and bloc state
+        context.read<ConnectionBloc>().add(
+              ConnectionUnblockUser(blockedId),
+            );
+
+        // Wait for the operation to complete
+        await Future.delayed(const Duration(milliseconds: 500));
 
         if (mounted) {
           setState(() {

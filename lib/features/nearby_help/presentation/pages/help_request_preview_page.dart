@@ -18,12 +18,15 @@ import '../widgets/help_status_indicator.dart';
 /// - Approximate distance
 /// - Request status
 /// - Accept/Decline buttons
+/// - Confirmation dialog if opened from notification
 class HelpRequestPreviewPage extends StatefulWidget {
   final String requestId;
+  final bool confirmAcceptance;
 
   const HelpRequestPreviewPage({
     super.key,
     required this.requestId,
+    this.confirmAcceptance = false,
   });
 
   @override
@@ -31,6 +34,8 @@ class HelpRequestPreviewPage extends StatefulWidget {
 }
 
 class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
+  bool _hasShownConfirmDialog = false;
+
   @override
   void initState() {
     super.initState();
@@ -127,8 +132,100 @@ class _HelpRequestPreviewPageState extends State<HelpRequestPreviewPage> {
             );
           }
 
+          // Show confirmation dialog if opened from notification
+          if (widget.confirmAcceptance && !_hasShownConfirmDialog) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showAcceptanceConfirmationDialog(context, request, state);
+            });
+          }
+
           return _buildContent(context, state, request);
         },
+      ),
+    );
+  }
+
+  /// Show confirmation dialog asking if the user wants to accept this help request.
+  void _showAcceptanceConfirmationDialog(
+    BuildContext context,
+    HelpRequest request,
+    NearbyHelpState state,
+  ) {
+    if (_hasShownConfirmDialog) return;
+    _hasShownConfirmDialog = true;
+
+    final theme = Theme.of(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.help_outline,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Help Request Received'),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${request.seekerName} needs help nearby.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (request.topic != null && request.topic!.isNotEmpty) ...[
+              Text(
+                'Topic: ${request.topic}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              'Distance: ~${request.radius.meters}m',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Do you want to accept this help request?',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              // Go back to previous page
+              context.pop();
+            },
+            child: const Text('Decline'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              // Accept the request if not already helping
+              if (request.helperUserId != state.userId) {
+                context.read<NearbyHelpBloc>().add(
+                      NearbyHelpAcceptRequest(request.id),
+                    );
+              }
+              // Otherwise just proceed to view the request
+            },
+            child: const Text('Accept'),
+          ),
+        ],
       ),
     );
   }

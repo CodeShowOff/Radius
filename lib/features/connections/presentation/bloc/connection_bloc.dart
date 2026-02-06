@@ -503,7 +503,8 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
       case ConnectionSuccess<void>():
         final updatedStates =
             Map<String, UserConnectionState>.from(state.userConnectionStates);
-        updatedStates[event.userId] = UserConnectionState.notConnected;
+        // CRITICAL FIX: Set to 'connected' so user reappears in Connections page
+        updatedStates[event.userId] = UserConnectionState.connected;
 
         emit(state.copyWith(
           isActionLoading: false,

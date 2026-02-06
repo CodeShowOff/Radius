@@ -40,6 +40,16 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   @override
   void initState() {
     super.initState();
+
+    // CRITICAL FIX: Set group context IMMEDIATELY to prevent race condition
+    // This must be the FIRST operation to ensure no notifications slip through
+    // while the screen is initializing
+    try {
+      getIt<NotificationService>().setCurrentGroup(widget.groupId);
+    } catch (_) {
+      // Ignore if service not available
+    }
+
     // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
@@ -90,13 +100,6 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   void _openChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      // Notify notification service that user is viewing this group
-      try {
-        getIt<NotificationService>().setCurrentGroup(widget.groupId);
-      } catch (_) {
-        // Ignore if service not available
-      }
-
       context.read<RandomGroupChatBloc>().add(OpenRandomGroupChat(
             groupId: widget.groupId,
             userId: authState.user.id,

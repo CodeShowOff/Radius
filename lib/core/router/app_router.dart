@@ -579,9 +579,14 @@ GoRouter get appRouter {
               child: const NearbyHelpPage(),
             );
           }
+          // Check for confirmAcceptance query parameter
+          final confirmAcceptance = state.uri.queryParameters['confirmAcceptance'] == 'true';
           return BlocProvider.value(
             value: getIt<NearbyHelpBloc>(),
-            child: HelpRequestPreviewPage(requestId: requestId),
+            child: HelpRequestPreviewPage(
+              requestId: requestId,
+              confirmAcceptance: confirmAcceptance,
+            ),
           );
         },
       ),

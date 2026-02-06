@@ -67,10 +67,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    
+
+    // CRITICAL FIX: Set conversation context IMMEDIATELY to prevent race condition
+    // This must be the FIRST operation to ensure no notifications slip through
+    // while the screen is initializing
+    try {
+      getIt<NotificationService>()
+          .setCurrentConversation(widget.conversationId);
+    } catch (_) {
+      // Ignore if service not available
+    }
+
     // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
-    
+
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
     _initPresenceTracking();
@@ -85,14 +95,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (_) {
       // ProfileBloc may not be available in some navigation flows.
-    }
-
-    // Notify notification service that user is viewing this conversation
-    try {
-      getIt<NotificationService>()
-          .setCurrentConversation(widget.conversationId);
-    } catch (_) {
-      // Ignore if service not available
     }
 
     // Open the chat

@@ -149,10 +149,10 @@ class NotificationNavigationService {
   /// Navigate to incoming help requests page with the specific request highlighted.
   void _navigateToHelpRequest(Map<String, dynamic> data) {
     final requestId = data['requestId'] as String?;
-    
+
     if (requestId != null) {
       // Navigate to incoming requests with the request highlighted,
-      // which will then navigate to the request detail
+      // which will then navigate to the request detail with confirmation
       appRouter.push(Routes.nearbyHelpIncomingRequestsWith(highlightRequestId: requestId));
     } else {
       // If no specific request, just go to incoming requests
@@ -160,12 +160,14 @@ class NotificationNavigationService {
     }
   }
 
-  /// Navigate directly to help request detail page.
+  /// Navigate directly to help request detail page with confirmation prompt.
+  /// This is used when a helper has been assigned and needs to confirm acceptance.
   void _navigateToHelpRequestDetail(Map<String, dynamic> data) {
     final requestId = data['requestId'] as String?;
-    
+
     if (requestId != null) {
-      appRouter.push(Routes.nearbyHelpRequestDetailWith(requestId));
+      // Add query parameter to trigger confirmation dialog
+      appRouter.push('${Routes.nearbyHelpRequestDetailWith(requestId)}?confirmAcceptance=true');
     } else {
       // Fallback to nearby help main page
       appRouter.push(Routes.nearbyHelp);
@@ -210,6 +212,9 @@ class NotificationNavigationService {
           appRouter.push(Routes.nearbyHelpIncomingRequestsWith(highlightRequestId: id));
           break;
         case 'nearby_help_assigned':
+          // Add confirmation query parameter
+          appRouter.push('${Routes.nearbyHelpRequestDetailWith(id)}?confirmAcceptance=true');
+          break;
         case 'nearby_help_completed':
         case 'nearby_help_cancelled':
         case 'nearby_help_expired':

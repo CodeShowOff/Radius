@@ -368,13 +368,7 @@ class NearbyGroupChatBloc
   ) {
     _logger.d('Received ${event.messages.length} messages from stream');
 
-    // Update cache
-    if (state.groupId != null) {
-      _cacheService.updateCache(
-        groupId: state.groupId!,
-        messages: event.messages,
-      );
-    }
+    const pageSize = 50;
 
     // Filter out local/optimistic messages when merging
     final existingOlderMessages = state.messages
@@ -387,9 +381,22 @@ class NearbyGroupChatBloc
 
     final allMessages = [...event.messages, ...existingOlderMessages];
 
+    // If we received fewer than pageSize messages, there are no more to load
+    final hasMore = event.messages.length >= pageSize;
+
+    // Update cache
+    if (state.groupId != null) {
+      _cacheService.updateCache(
+        groupId: state.groupId!,
+        messages: allMessages,
+        hasMore: hasMore,
+      );
+    }
+
     emit(state.copyWith(
       status: NearbyGroupChatStatus.loaded,
       messages: allMessages,
+      hasMore: hasMore,
     ));
   }
 
