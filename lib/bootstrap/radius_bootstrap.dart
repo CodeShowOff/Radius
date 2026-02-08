@@ -14,6 +14,7 @@ import '../core/di/injection.dart';
 import '../core/settings/app_settings_store.dart';
 import '../core/services/crash/crash_service.dart';
 import '../core/services/logging/device_log.dart';
+import '../core/services/notifications/notification_navigation_service.dart';
 import '../core/services/notifications/notification_service.dart';
 import '../core/theme/app_theme.dart';
 import '../firebase_options.dart';
@@ -43,67 +44,86 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
   Future<void> _initialize() async {
     try {
-      _setPhase(_InitPhase.initializing, 'Configuring device…');
+      // ── Phase 1: Independent systems in parallel ─────────────────────
+      // Firebase, Hive, and orientation lock have no mutual dependencies.
+      // Running them concurrently instead of sequentially typically saves
+      // 1-3 seconds on cold start (Firebase alone can take 2-4s).
+      _setPhase(_InitPhase.initializing, 'Starting up…');
 
-      await SystemChrome.setPreferredOrientations(const [
+      final firebaseFuture = Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 12));
+
+      final hiveFuture =
+          Hive.initFlutter().timeout(const Duration(seconds: 5));
+
+      final orientationFuture = SystemChrome.setPreferredOrientations(const [
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
       ]).timeout(const Duration(seconds: 5));
 
-      _setPhase(_InitPhase.initializing, 'Connecting to Firebase…');
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ).timeout(const Duration(seconds: 12));
+      await Future.wait([firebaseFuture, hiveFuture, orientationFuture]);
 
-      // App Check is optional, but when enabled in the Firebase console it can
-      // block Firestore/Functions/Storage calls. In debug builds we activate the
-      // Debug provider to avoid placeholder tokens.
-      if (kDebugMode) {
-        _setPhase(_InitPhase.initializing, 'Activating App Check…');
-        try {
-          // ignore: deprecated_member_use
-          await FirebaseAppCheck.instance.activate(
-            // ignore: deprecated_member_use
-            androidProvider: AndroidProvider.debug,
-            // ignore: deprecated_member_use
-            appleProvider: AppleProvider.debug,
-          ).timeout(const Duration(seconds: 5));
-        } catch (e, st) {
-          debugPrint('[Bootstrap] App Check activation failed: $e');
-          debugPrintStack(stackTrace: st);
-        }
-      }
+      // Firebase is ready — capture any pending notification immediately so
+      // it isn't lost during the rest of the init chain.
+      NotificationNavigationService.captureInitialMessage();
 
-      // Register background message handler
+      // Register background message handler (sync, fast).
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      if (AppConfig.enableCrashReporting) {
-        _setPhase(_InitPhase.initializing, 'Starting crash reporting…');
-        await CrashService().initialize().timeout(const Duration(seconds: 5));
-      }
+      // ── Phase 2: Dependent tasks in parallel ─────────────────────────
+      // Chain A (critical path): Hive settings → DI registration
+      // Chain B (non-blocking): App Check (debug only)
+      // Chain C (non-blocking): Crash reporting
 
-      _setPhase(_InitPhase.initializing, 'Preparing local storage…');
-      await Hive.initFlutter().timeout(const Duration(seconds: 5));
+      late final Box<dynamic> settingsBox;
 
-      // Load persisted app settings (theme, etc.)
-      final settingsBox =
-          await Hive.openBox('radius_settings').timeout(const Duration(seconds: 5));
-      if (!getIt.isRegistered<Box<dynamic>>(instanceName: 'radius_settings')) {
-        getIt.registerSingleton<Box<dynamic>>(
-          settingsBox,
-          instanceName: 'radius_settings',
-        );
-      }
-      if (!getIt.isRegistered<AppSettingsStore>()) {
-        getIt.registerSingleton<AppSettingsStore>(
-          AppSettingsStore(box: settingsBox),
-        );
-      }
+      final diFuture = () async {
+        settingsBox = await Hive.openBox('radius_settings')
+            .timeout(const Duration(seconds: 5));
+        if (!getIt.isRegistered<Box<dynamic>>(
+            instanceName: 'radius_settings')) {
+          getIt.registerSingleton<Box<dynamic>>(
+            settingsBox,
+            instanceName: 'radius_settings',
+          );
+        }
+        if (!getIt.isRegistered<AppSettingsStore>()) {
+          getIt.registerSingleton<AppSettingsStore>(
+            AppSettingsStore(box: settingsBox),
+          );
+        }
+        await configureDependencies().timeout(const Duration(seconds: 10));
+      }();
 
-      _setPhase(_InitPhase.initializing, 'Loading services…');
-      await configureDependencies().timeout(const Duration(seconds: 10));
+      final appCheckFuture = () async {
+        if (kDebugMode) {
+          try {
+            // ignore: deprecated_member_use
+            await FirebaseAppCheck.instance.activate(
+              // ignore: deprecated_member_use
+              androidProvider: AndroidProvider.debug,
+              // ignore: deprecated_member_use
+              appleProvider: AppleProvider.debug,
+            ).timeout(const Duration(seconds: 5));
+          } catch (e, st) {
+            debugPrint('[Bootstrap] App Check activation failed: $e');
+            debugPrintStack(stackTrace: st);
+          }
+        }
+      }();
 
-      _setPhase(_InitPhase.initializing, 'Starting diagnostics…');
+      final crashFuture = () async {
+        if (AppConfig.enableCrashReporting) {
+          await CrashService()
+              .initialize()
+              .timeout(const Duration(seconds: 5));
+        }
+      }();
+
+      await Future.wait([diFuture, appCheckFuture, crashFuture]);
+
+      // ── Phase 3: Final diagnostics ───────────────────────────────────
       await DeviceLog.instance.init().timeout(const Duration(seconds: 5));
 
       DeviceLog.instance.info('app', 'Bootstrap complete', data: {

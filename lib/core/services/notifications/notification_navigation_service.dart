@@ -16,6 +16,17 @@ class NotificationNavigationService {
   
   bool _initialized = false;
 
+  /// Pre-captured initial message future from bootstrap.
+  /// Captured immediately after Firebase init to avoid losing the message
+  /// during the long auth + notification service init chain.
+  static Future<RemoteMessage?>? _initialMessageFuture;
+
+  /// Call this early (right after Firebase.initializeApp) to capture
+  /// the initial notification message before it can be lost.
+  static void captureInitialMessage() {
+    _initialMessageFuture = FirebaseMessaging.instance.getInitialMessage();
+  }
+
   NotificationNavigationService({
     FirebaseMessaging? messaging,
     Logger? logger,
@@ -28,12 +39,18 @@ class NotificationNavigationService {
     if (_initialized) return;
     _initialized = true;
 
-    // Handle notification tap when app was terminated
-    final initialMessage = await _messaging.getInitialMessage();
+    // Use pre-captured initial message (captured in bootstrap right after
+    // Firebase init) so we don't lose the message during the long init chain.
+    // Falls back to getInitialMessage() if capture wasn't called.
+    final initialMessage =
+        await (_initialMessageFuture ?? _messaging.getInitialMessage());
+    _initialMessageFuture = null;
+
     if (initialMessage != null) {
       _logger.i('App opened from terminated state via notification');
-      // Delay navigation slightly to ensure router is ready
-      Future.delayed(const Duration(milliseconds: 500), () {
+      // Short delay to ensure splash → home router transition has settled.
+      // 150ms is imperceptible but sufficient (down from 500ms).
+      Future.delayed(const Duration(milliseconds: 150), () {
         _handleNotificationNavigation(initialMessage);
       });
     }

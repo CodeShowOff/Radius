@@ -54,13 +54,18 @@ class NotificationService {
     _currentUserId = userId;
 
     try {
-      // Request permissions (iOS/Web)
-      await _requestPermissions();
+      // PRIORITY: Handle pending notification navigation immediately.
+      // This must run first so tapping a notification opens the target screen
+      // without waiting for permissions, channels, or FCM token setup.
+      await _navigationService?.initialize();
 
-      // Initialize local notifications
-      await _initializeLocalNotifications();
+      // Permissions and local notification channels are independent — run in parallel.
+      await Future.wait([
+        _requestPermissions(),
+        _initializeLocalNotifications(),
+      ]);
 
-      // Get and save FCM token
+      // Get and save FCM token (depends on permissions being granted)
       await _setupFCMToken();
 
       // Listen for token refresh
@@ -68,9 +73,6 @@ class NotificationService {
 
       // Handle foreground messages
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-      // Initialize navigation service for deep linking
-      await _navigationService?.initialize();
 
       _logger.i('Notification service initialized for user: $userId');
     } catch (e, stack) {
