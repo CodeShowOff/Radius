@@ -79,6 +79,7 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<_GroupMessagesReceived>(_onGroupMessagesReceived);
     on<_GroupChatStreamError>(_onGroupChatStreamError);
     on<DeleteGroupMessage>(_onDeleteGroupMessage);
+    on<ClearGroupChatMessages>(_onClearGroupChatMessages);
   }
 
   /// Check if membership is cached and still valid.
@@ -570,6 +571,27 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       emit(state.copyWith(
         errorMessage: 'Failed to delete message',
       ));
+    }
+  }
+
+  /// Clears all local chat messages immediately.
+  /// This is called after an admin successfully clears the chat,
+  /// to provide immediate feedback without waiting for Firestore stream updates.
+  void _onClearGroupChatMessages(
+    ClearGroupChatMessages event,
+    Emitter<GroupChatState> emit,
+  ) {
+    _logger.d('Clearing all local chat messages');
+
+    // Clear messages from local state
+    emit(state.copyWith(
+      messages: const [],
+      hasMore: false,
+    ));
+
+    // Clear messages from cache
+    if (state.groupId != null) {
+      _cacheService.clearGroup(state.groupId!);
     }
   }
 

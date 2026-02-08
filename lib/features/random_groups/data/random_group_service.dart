@@ -964,4 +964,83 @@ class RandomGroupService {
       );
     }
   }
+
+  /// Clears all messages in a group (admin only).
+  Future<RandomGroupResult<void>> clearGroupMessages({
+    required String groupId,
+    required String adminUserId,
+  }) async {
+    try {
+      final groupDoc = await _groupsRef.doc(groupId).get();
+      if (!groupDoc.exists) {
+        return const RandomGroupFailure(
+          'Group not found',
+          RandomGroupErrorType.notFound,
+        );
+      }
+
+      final group = RandomGroupModel.fromFirestore(groupDoc);
+      if (!group.adminIds.contains(adminUserId)) {
+        return const RandomGroupFailure(
+          'Only admins can clear chat',
+          RandomGroupErrorType.notAuthorized,
+        );
+      }
+
+      await _softDeleteGroupMessages(groupId);
+
+      await _groupsRef.doc(groupId).update({
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'lastMessagePreview': null,
+      });
+
+      _logger.i('Cleared messages for group $groupId');
+      return const RandomGroupSuccess(null);
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error clearing group messages', error: e, stackTrace: stack);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error clearing group messages', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to clear chat: $e',
+        RandomGroupErrorType.unknown,
+      );
+    }
+  }
+
+  /// Soft-deletes all messages in a group in batches.
+  Future<void> _softDeleteGroupMessages(
+    String groupId, {
+    int batchSize = 450,
+  }) async {
+    try {
+      final collectionRef = _groupsRef.doc(groupId).collection('messages');
+
+      while (true) {
+        final snapshot = await collectionRef
+            .where('isDeleted', isEqualTo: false)
+            .limit(batchSize)
+            .get();
+
+        if (snapshot.docs.isEmpty) break;
+
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.update(doc.reference, const {'isDeleted': true});
+        }
+        await batch.commit();
+
+        if (snapshot.size < batchSize) break;
+      }
+    } catch (e) {
+      _logger.e('Error soft-deleting messages', error: e);
+      rethrow;
+    }
+  }
 }

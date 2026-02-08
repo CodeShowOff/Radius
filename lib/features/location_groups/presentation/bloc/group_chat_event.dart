@@ -98,3 +98,8 @@ class PreloadGroupChat extends GroupChatEvent {
   @override
   List<Object?> get props => [groupId, userId];
 }
+
+/// Clears all local chat messages immediately (after admin clears chat).
+class ClearGroupChatMessages extends GroupChatEvent {
+  const ClearGroupChatMessages();
+}

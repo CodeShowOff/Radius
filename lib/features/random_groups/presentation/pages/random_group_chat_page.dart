@@ -165,6 +165,55 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
     });
   }
 
+  void _confirmClearChat() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+    
+    // Capture the blocs before showing dialog to ensure they're accessible
+    final randomGroupBloc = context.read<RandomGroupBloc>();
+    final chatBloc = context.read<RandomGroupChatBloc>();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear Chat'),
+        content: const Text('Are you sure you want to clear all messages?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              
+              // Clear messages from UI immediately for instant feedback
+              chatBloc.add(const ClearRandomGroupChatMessages());
+              
+              // Clear messages from backend (will also trigger stream update)
+              randomGroupBloc.add(ClearRandomGroupChat(
+                    groupId: widget.groupId,
+                    adminUserId: authState.user.id,
+                  ));
+              
+              // Show confirmation message
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Chat cleared'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -240,6 +289,21 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'Group Info',
               ),
+              // Clear chat option for admins
+              if (isAdmin)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'clear') {
+                      _confirmClearChat();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Text('Clear chat'),
+                    ),
+                  ],
+                ),
             ],
           ),
           body: BlocConsumer<RandomGroupChatBloc, RandomGroupChatState>(

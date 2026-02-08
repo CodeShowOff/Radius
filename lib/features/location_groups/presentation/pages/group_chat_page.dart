@@ -164,8 +164,9 @@ class _GroupChatPageState extends State<GroupChatPage>
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
     
-    // Capture the bloc before showing dialog to ensure it's accessible
-    final bloc = context.read<LocationGroupBloc>();
+    // Capture the blocs before showing dialog to ensure they're accessible
+    final locationGroupBloc = context.read<LocationGroupBloc>();
+    final chatBloc = context.read<GroupChatBloc>();
 
     showDialog(
       context: context,
@@ -180,10 +181,23 @@ class _GroupChatPageState extends State<GroupChatPage>
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              bloc.add(ClearGroupChat(
+              
+              // Clear messages from UI immediately for instant feedback
+              chatBloc.add(const ClearGroupChatMessages());
+              
+              // Clear messages from backend (will also trigger stream update)
+              locationGroupBloc.add(ClearGroupChat(
                     groupId: widget.groupId,
                     adminUserId: authState.user.id,
                   ));
+              
+              // Show confirmation message
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Chat cleared'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
             },
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
@@ -290,7 +304,7 @@ class _GroupChatPageState extends State<GroupChatPage>
             builder: (context, state) {
               // ================================================================
               // SECURITY: Show loading while verifying membership
-              // Do NOT show any content until membership is confirmed
+              // DO NOT show any content until membership is confirmed
               // ================================================================
               if (state.isVerifyingMembership) {
                 return Center(

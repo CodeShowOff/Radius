@@ -57,6 +57,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<UpdateRandomGroup>(_onUpdateRandomGroup);
     on<WatchRandomGroupMembers>(_onWatchRandomGroupMembers);
     on<CheckMembershipStatus>(_onCheckMembershipStatus);
+    on<ClearRandomGroupChat>(_onClearRandomGroupChat);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
     on<_UserGroupsReceived>(_onUserGroupsReceived);
     on<_UserCreatedGroupsReceived>(_onUserCreatedGroupsReceived);
@@ -501,6 +502,33 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
         membershipStatus: UserMembershipStatus.notMember,
         clearUserJoinRequest: true,
       ));
+    }
+  }
+
+  Future<void> _onClearRandomGroupChat(
+    ClearRandomGroupChat event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Clearing chat for group: ${event.groupId}');
+
+    emit(state.copyWith(status: RandomGroupBlocStatus.loading, clearError: true));
+
+    final result = await _groupService.clearGroupMessages(
+      groupId: event.groupId,
+      adminUserId: event.adminUserId,
+    );
+
+    switch (result) {
+      case RandomGroupSuccess():
+        _logger.i('Cleared chat for group: ${event.groupId}');
+        emit(state.copyWith(status: RandomGroupBlocStatus.loaded));
+
+      case RandomGroupFailure(message: final msg):
+        _logger.w('Failed to clear chat: $msg');
+        emit(state.copyWith(
+          status: RandomGroupBlocStatus.error,
+          errorMessage: msg,
+        ));
     }
   }
 

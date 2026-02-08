@@ -72,6 +72,7 @@ class RandomGroupChatBloc
     on<_MessagesReceived>(_onMessagesReceived);
     on<_ChatStreamError>(_onChatStreamError);
     on<DeleteRandomGroupMessage>(_onDeleteRandomGroupMessage);
+    on<ClearRandomGroupChatMessages>(_onClearRandomGroupChatMessages);
   }
 
   /// Check if membership is cached and still valid.
@@ -551,6 +552,27 @@ class RandomGroupChatBloc
       emit(state.copyWith(
         errorMessage: 'Failed to delete message',
       ));
+    }
+  }
+
+  /// Clears all local chat messages immediately.
+  /// This is called after an admin successfully clears the chat,
+  /// to provide immediate feedback without waiting for Firestore stream updates.
+  void _onClearRandomGroupChatMessages(
+    ClearRandomGroupChatMessages event,
+    Emitter<RandomGroupChatState> emit,
+  ) {
+    _logger.d('Clearing all local chat messages');
+
+    // Clear messages from local state
+    emit(state.copyWith(
+      messages: const [],
+      hasMore: false,
+    ));
+
+    // Clear messages from cache
+    if (state.currentGroupId != null) {
+      _cacheService.clearCache(state.currentGroupId!);
     }
   }
 

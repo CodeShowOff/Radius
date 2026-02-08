@@ -81,6 +81,11 @@ class DeleteRandomGroupMessage extends RandomGroupChatEvent {
   List<Object?> get props => [messageId];
 }
 
+/// Clears all local chat messages immediately (after admin clears chat).
+class ClearRandomGroupChatMessages extends RandomGroupChatEvent {
+  const ClearRandomGroupChatMessages();
+}
+
 // Internal events for stream updates
 class _MessagesReceived extends RandomGroupChatEvent {
   final List<RandomGroupMessage> messages;
