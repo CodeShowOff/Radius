@@ -114,11 +114,19 @@ class ConnectionService {
         }
       }
 
-      // Check if blocked
-      final isBlocked = await _isUserBlocked(receiverId, senderId);
-      if (isBlocked) {
+      // Check if either user has blocked the other
+      final receiverBlockedSender = await _isUserBlocked(receiverId, senderId);
+      if (receiverBlockedSender) {
         return const ConnectionFailure(
           'Cannot send request to this user',
+          ConnectionErrorType.blockedUser,
+        );
+      }
+
+      final senderBlockedReceiver = await _isUserBlocked(senderId, receiverId);
+      if (senderBlockedReceiver) {
+        return const ConnectionFailure(
+          'Cannot send request to blocked user',
           ConnectionErrorType.blockedUser,
         );
       }
@@ -530,11 +538,12 @@ class ConnectionService {
     }
   }
 
-  /// Unblocks a user and restores the connection.
+  /// Unblocks a user.
   ///
-  /// BEHAVIOR: Unblocking restores the previous connection status (connected)
-  /// so the user reappears in the Connections page immediately.
-  /// This treats blocking as a temporary visibility restriction, not deletion.
+  /// BEHAVIOR: Unblocking removes the block restriction and sets any existing
+  /// connection status to 'disconnected'. This allows the previously blocked
+  /// user to send a new connection request rather than being automatically
+  /// reconnected. To reconnect, a new connection request must be sent and accepted.
   Future<ConnectionResult<void>> unblockUser({
     required String blockerId,
     required String blockedId,
@@ -555,10 +564,11 @@ class ConnectionService {
       if (connectionDoc.exists) {
         final connection = ConnectionModel.fromFirestore(connectionDoc);
         if (connection.blockedBy == blockerId) {
-          // CRITICAL FIX: Restore connection to 'connected' status
-          // This makes the user reappear in Connections page immediately
+          // CHANGED: Set status to 'disconnected' instead of 'connected'
+          // This allows the blocked user to send a new connection request
+          // rather than being automatically reconnected
           await _connectionsRef.doc(connectionId).update({
-            'status': ConnectionStatus.connected.name,
+            'status': ConnectionStatus.disconnected.name,
             'blockedBy': null,
             'updatedAt': Timestamp.fromDate(DateTime.now()),
           });

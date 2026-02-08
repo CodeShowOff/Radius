@@ -225,12 +225,21 @@ service cloud.firestore {
         && !hasBlockRelationship(request.resource.data.userId1, request.resource.data.userId2);
       
       // RULE: Only participants can update (but cannot change core user fields)
+      // EXCEPTION: connectedAt and initiatedBy can change when reconnecting
+      // (transitioning from disconnected/blocked to connected status)
       allow update: if isAuthenticated() 
         && isParticipant()
         && request.resource.data.userId1 == resource.data.userId1
         && request.resource.data.userId2 == resource.data.userId2
-        && request.resource.data.connectedAt == resource.data.connectedAt
-        && request.resource.data.initiatedBy == resource.data.initiatedBy;
+        && (
+          // Normal updates: connectedAt and initiatedBy must stay the same
+          (request.resource.data.connectedAt == resource.data.connectedAt
+           && request.resource.data.initiatedBy == resource.data.initiatedBy)
+          // Reconnection: allow changing these fields when transitioning to 'connected'
+          // from 'disconnected' or 'blocked' status
+          || (resource.data.status in ['disconnected', 'blocked']
+              && request.resource.data.status == 'connected')
+        );
       
       // RULE: Either participant can delete the connection
       allow delete: if isAuthenticated() && isParticipant();
@@ -260,8 +269,8 @@ service cloud.firestore {
             || (request.auth.uid == resource.data.senderId 
                 && resource.data.status == 'pending'
                 && request.resource.data.status == 'cancelled'))
-        && request.resource.data.senderId == resource.data.senderId
-        && request.resource.data.receiverId == resource.data.receiverId;
+        && (!('senderId' in request.resource.data.keys()) || request.resource.data.senderId == resource.data.senderId)
+        && (!('receiverId' in request.resource.data.keys()) || request.resource.data.receiverId == resource.data.receiverId);
       
       // RULE: Sender can delete cancelled requests, receiver can delete rejected
       allow delete: if isAuthenticated()
