@@ -407,7 +407,7 @@ exports.onNearbyGroupMessageNotification = (0, firestore_1.onDocumentCreated)("n
     // Prepare notification
     const payload = {
         notification: {
-            title: `📍 ${groupName}`,
+            title: `${groupName}`,
             body: `${senderName}: ${messageText.substring(0, 100)}`,
         },
         data: {
@@ -557,7 +557,7 @@ exports.onRandomGroupMessageNotification = (0, firestore_1.onDocumentCreated)("r
     // Prepare notification
     const payload = {
         notification: {
-            title: `🎲 ${groupName}`,
+            title: `${groupName}`,
             body: `${senderName}: ${messageText.substring(0, 100)}`,
         },
         data: {
@@ -1573,7 +1573,7 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
             }
             const payload = {
                 notification: {
-                    title: "✅ Help is on the way!",
+                    title: "Help is on the way!",
                     body: `${helperName} is coming to help you`,
                 },
                 data: {
@@ -1666,7 +1666,7 @@ exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_request
             const isSeeker = notifyUserId === seekerId;
             const payload = {
                 notification: {
-                    title: "🎉 Help Request Completed",
+                    title: "Help Request Completed",
                     body: isSeeker
                         ? "Your helper marked the request as completed"
                         : "The requester confirmed help was received",
