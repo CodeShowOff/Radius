@@ -95,7 +95,7 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.email),
                   title: const Text('Email Support'),
-                  subtitle: const Text('connectme.shubham@gmail.com'),
+                  subtitle: const Text('support@rediusapp.tech'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _launchEmail(),
                 ),
@@ -103,7 +103,7 @@ class HelpSupportPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.language),
                   title: const Text('Website'),
-                  subtitle: const Text('https://radiusapp.vercel.app/'),
+                  subtitle: const Text('https://radiusapp.tech/'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _launchWebsite(),
                 ),
@@ -241,105 +241,6 @@ class HelpSupportPage extends StatelessWidget {
   }
 
   Future<void> _showReportBugDialog(BuildContext context) async {
-    final descriptionController = TextEditingController();
-    String selectedCategory = 'General';
-    final categories = [
-      'General',
-      'Bluetooth/Discovery',
-      'Connections',
-      'Chat',
-      'Profile',
-      'Performance',
-      'Other'
-    ];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('Report a Bug'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Category:'),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedCategory,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: categories
-                        .map((cat) => DropdownMenuItem(
-                              value: cat,
-                              child: Text(cat),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setDialogState(
-                          () => selectedCategory = value ?? 'General');
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Description:'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: descriptionController,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      hintText:
-                          'Please describe what happened, what you expected, and any steps to reproduce the issue...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Device info will be automatically included.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: descriptionController.text.trim().isEmpty
-                    ? null
-                    : () async {
-                        final description = descriptionController.text.trim();
-                        Navigator.pop(dialogContext);
-
-                        // Collect device info and send bug report
-                        await _submitBugReport(
-                          context,
-                          selectedCategory,
-                          description,
-                        );
-                      },
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _submitBugReport(
-    BuildContext context,
-    String category,
-    String description,
-  ) async {
     try {
       // Collect device information
       String deviceInfo = '';
@@ -365,12 +266,11 @@ iOS Version: ${iosInfo.systemVersion}
         deviceInfo = 'Platform: ${Platform.operatingSystem}';
       }
 
-      // Create email body with bug report
+      // Create email body with bug report template
       final emailBody = Uri.encodeComponent('''
-Category: $category
+Please describe the bug you encountered:
 
-Description:
-$description
+
 
 ---
 Device Information:
@@ -381,7 +281,7 @@ Build: 1
 
       // Launch email client with pre-filled bug report
       final Uri emailUri = Uri.parse(
-        'mailto:connectme.shubham@gmail.com?subject=Bug Report - $category&body=$emailBody',
+        'mailto:support@radiusapp.tech?subject=Bug Report&body=$emailBody',
       );
 
       if (await canLaunchUrl(emailUri)) {
@@ -390,7 +290,7 @@ Build: 1
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Opening email client with bug report. Please send it to help us improve!'),
+                  'Opening email app. Please describe the bug and send to support@radiusapp.tech'),
               duration: Duration(seconds: 3),
             ),
           );
@@ -399,16 +299,10 @@ Build: 1
         // Fallback if email client not available
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                  'Please email your bug report to connectme.shubham@gmail.com'),
-              duration: const Duration(seconds: 4),
-              action: SnackBarAction(
-                label: 'Copy Email',
-                onPressed: () {
-                  // Email address copying would require clipboard package
-                },
-              ),
+            const SnackBar(
+              content: Text(
+                  'Please email your bug report to support@radiusapp.tech'),
+              duration: Duration(seconds: 4),
             ),
           );
         }
@@ -417,7 +311,7 @@ Build: 1
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error preparing bug report: $e'),
+            content: Text('Error opening email: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -426,104 +320,6 @@ Build: 1
   }
 
   Future<void> _showFeedbackDialog(BuildContext context) async {
-    final feedbackController = TextEditingController();
-    String selectedCategory = 'General';
-    final categories = [
-      'General',
-      'User Experience',
-      'Features',
-      'Design',
-      'Performance',
-      'Other'
-    ];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('Send Feedback'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Category:'),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedCategory,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: categories
-                        .map((cat) => DropdownMenuItem(
-                              value: cat,
-                              child: Text(cat),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setDialogState(
-                          () => selectedCategory = value ?? 'General');
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Your Feedback:'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: feedbackController,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      hintText:
-                          'Tell us what you think about Radius. What do you like? What could be better?',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Your feedback helps us make Radius better!',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: feedbackController.text.trim().isEmpty
-                    ? null
-                    : () async {
-                        final feedback = feedbackController.text.trim();
-                        Navigator.pop(dialogContext);
-
-                        // Submit feedback via email
-                        await _submitFeedback(
-                          context,
-                          selectedCategory,
-                          feedback,
-                        );
-                      },
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _submitFeedback(
-    BuildContext context,
-    String category,
-    String feedback,
-  ) async {
     try {
       // Collect device information
       String deviceInfo = '';
@@ -531,19 +327,20 @@ Build: 1
       if (Platform.isAndroid) {
         final deviceInfoPlugin = DeviceInfoPlugin();
         final androidInfo = await deviceInfoPlugin.androidInfo;
-        deviceInfo = '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
+        deviceInfo =
+            '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
       } else if (Platform.isIOS) {
         final deviceInfoPlugin = DeviceInfoPlugin();
         final iosInfo = await deviceInfoPlugin.iosInfo;
-        deviceInfo = '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
+        deviceInfo =
+            '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
       }
 
-      // Create email body with feedback
+      // Create email body with feedback template
       final emailBody = Uri.encodeComponent('''
-Category: $category
+Please share your feedback:
 
-Feedback:
-$feedback
+
 
 ---
 App Version: 1.0.0$deviceInfo
@@ -551,7 +348,7 @@ App Version: 1.0.0$deviceInfo
 
       // Launch email client with pre-filled feedback
       final Uri emailUri = Uri.parse(
-        'mailto:connectme.shubham@gmail.com?subject=Radius Feedback - $category&body=$emailBody',
+        'mailto:support@radiusapp.tech?subject=Radius Feedback&body=$emailBody',
       );
 
       if (await canLaunchUrl(emailUri)) {
@@ -560,7 +357,7 @@ App Version: 1.0.0$deviceInfo
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Opening email client with your feedback. Thank you for helping us improve!'),
+                  'Opening email app. Please share your feedback and send to support@radiusapp.tech'),
               duration: Duration(seconds: 3),
             ),
           );
@@ -569,8 +366,8 @@ App Version: 1.0.0$deviceInfo
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                  'Please email your feedback to connectme.shubham@gmail.com'),
+              content:
+                  Text('Please email your feedback to support@radiusapp.tech'),
               duration: Duration(seconds: 4),
             ),
           );
@@ -580,7 +377,7 @@ App Version: 1.0.0$deviceInfo
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error preparing feedback: $e'),
+            content: Text('Error opening email: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -589,105 +386,6 @@ App Version: 1.0.0$deviceInfo
   }
 
   Future<void> _showFeatureSuggestionDialog(BuildContext context) async {
-    final suggestionController = TextEditingController();
-    String selectedCategory = 'New Feature';
-    final categories = [
-      'New Feature',
-      'Enhancement',
-      'Discovery',
-      'Chat',
-      'Profile',
-      'Privacy',
-      'Other'
-    ];
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('Suggest a Feature'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Category:'),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedCategory,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: categories
-                        .map((cat) => DropdownMenuItem(
-                              value: cat,
-                              child: Text(cat),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setDialogState(
-                          () => selectedCategory = value ?? 'New Feature');
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Your Suggestion:'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: suggestionController,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      hintText:
-                          'Describe the feature you\'d like to see in Radius. How would it work? What problem would it solve?',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'We love hearing your ideas!',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: suggestionController.text.trim().isEmpty
-                    ? null
-                    : () async {
-                        final suggestion = suggestionController.text.trim();
-                        Navigator.pop(dialogContext);
-
-                        // Submit feature suggestion via email
-                        await _submitFeatureSuggestion(
-                          context,
-                          selectedCategory,
-                          suggestion,
-                        );
-                      },
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _submitFeatureSuggestion(
-    BuildContext context,
-    String category,
-    String suggestion,
-  ) async {
     try {
       // Collect device information
       String deviceInfo = '';
@@ -695,19 +393,20 @@ App Version: 1.0.0$deviceInfo
       if (Platform.isAndroid) {
         final deviceInfoPlugin = DeviceInfoPlugin();
         final androidInfo = await deviceInfoPlugin.androidInfo;
-        deviceInfo = '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
+        deviceInfo =
+            '''\nDevice: ${androidInfo.manufacturer} ${androidInfo.model} (Android ${androidInfo.version.release})''';
       } else if (Platform.isIOS) {
         final deviceInfoPlugin = DeviceInfoPlugin();
         final iosInfo = await deviceInfoPlugin.iosInfo;
-        deviceInfo = '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
+        deviceInfo =
+            '''\nDevice: ${iosInfo.name} (iOS ${iosInfo.systemVersion})''';
       }
 
-      // Create email body with feature suggestion
+      // Create email body with feature suggestion template
       final emailBody = Uri.encodeComponent('''
-Category: $category
+Please describe your feature suggestion:
 
-Feature Suggestion:
-$suggestion
+
 
 ---
 App Version: 1.0.0$deviceInfo
@@ -715,7 +414,7 @@ App Version: 1.0.0$deviceInfo
 
       // Launch email client with pre-filled suggestion
       final Uri emailUri = Uri.parse(
-        'mailto:connectme.shubham@gmail.com?subject=Radius Feature Suggestion - $category&body=$emailBody',
+        'mailto:support@radiusapp.tech?subject=Feature Suggestion&body=$emailBody',
       );
 
       if (await canLaunchUrl(emailUri)) {
@@ -724,7 +423,7 @@ App Version: 1.0.0$deviceInfo
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Opening email client with your suggestion. We appreciate your input!'),
+                  'Opening email app. Please describe your suggestion and send to support@radiusapp.tech'),
               duration: Duration(seconds: 3),
             ),
           );
@@ -734,7 +433,7 @@ App Version: 1.0.0$deviceInfo
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Please email your suggestion to connectme.shubham@gmail.com'),
+                  'Please email your suggestion to support@radiusapp.tech'),
               duration: Duration(seconds: 4),
             ),
           );
@@ -744,7 +443,7 @@ App Version: 1.0.0$deviceInfo
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error preparing suggestion: $e'),
+            content: Text('Error opening email: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -755,7 +454,7 @@ App Version: 1.0.0$deviceInfo
   Future<void> _launchEmail() async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: 'connectme.shubham@gmail.com',
+      path: 'support@radiusapp.tech',
       query: 'subject=Radius App Support',
     );
     try {
@@ -769,7 +468,7 @@ App Version: 1.0.0$deviceInfo
   }
 
   Future<void> _launchWebsite() async {
-    final Uri websiteUri = Uri.parse('https://radiusapp.vercel.app/');
+    final Uri websiteUri = Uri.parse('https://radiusapp.tech/');
     try {
       await launchUrl(
         websiteUri,
@@ -1527,8 +1226,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           const _PolicySection(
             title: '3. How We Use Your Information',
-            content:
-                'We use the collected information for:\n\n'
+            content: 'We use the collected information for:\n\n'
                 '• Providing Core Services: User discovery, connection management, and real-time messaging\n'
                 '• Account Management: Authentication, profile customization, and account recovery\n'
                 '• Communication: Sending notifications for connection requests and new messages\n'
@@ -1586,8 +1284,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           const _PolicySection(
             title: '7. Nearby Help Data',
-            content:
-                'When you use Nearby Help:\n\n'
+            content: 'When you use Nearby Help:\n\n'
                 '• Your GPS coordinates are collected when you request help\n'
                 '• Help requests include: your location, selected radius, topic, and contact info\n'
                 '• Nearby users within the radius receive push notifications with your name and topic\n'
@@ -1599,8 +1296,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           const _PolicySection(
             title: '8. Data Storage & Security',
-            content:
-                'We implement industry-standard security measures:\n\n'
+            content: 'We implement industry-standard security measures:\n\n'
                 '• All data is stored in Firebase Cloud Firestore with encryption at rest\n'
                 '• Messages are encrypted in transit using TLS/SSL protocols\n'
                 '• User passwords are hashed and never stored in plain text\n'
@@ -1621,8 +1317,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           const _PolicySection(
             title: '10. Your Privacy Rights',
-            content:
-                'You have the following rights regarding your data:\n\n'
+            content: 'You have the following rights regarding your data:\n\n'
                 '• Access: Request a copy of your personal data\n'
                 '• Correction: Update or correct inaccurate information\n'
                 '• Deletion: Request deletion of your account and associated data\n'
@@ -1810,8 +1505,7 @@ class _TermsOfServicePage extends StatelessWidget {
           ),
           const _PolicySection(
             title: '9. Group Features',
-            content:
-                'Radius offers multiple group chat features:\n\n'
+            content: 'Radius offers multiple group chat features:\n\n'
                 'Random Group Chatrooms:\n'
                 '• You can create or request to join internet-based groups\n'
                 '• Group admins review and approve/reject join requests\n'
