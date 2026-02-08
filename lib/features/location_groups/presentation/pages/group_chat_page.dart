@@ -6,6 +6,7 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
+import '../../../../core/widgets/pending_requests_sheet.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/group_message.dart';
 import '../bloc/group_chat_bloc.dart';
@@ -62,10 +63,13 @@ class _GroupChatPageState extends State<GroupChatPage>
     final authState = context.read<AuthBloc>().state;
     final userId = authState is AuthAuthenticated ? authState.user.id : null;
 
-    context.read<LocationGroupBloc>().add(LoadGroupDetails(
-          groupId: widget.groupId,
-          currentUserId: userId,
-        ));
+    final bloc = context.read<LocationGroupBloc>();
+    bloc.add(LoadGroupDetails(
+      groupId: widget.groupId,
+      currentUserId: userId,
+    ));
+    // Load join requests so admin can see badge for pending requests
+    bloc.add(LoadJoinRequests(groupId: widget.groupId));
   }
 
   @override
@@ -163,7 +167,7 @@ class _GroupChatPageState extends State<GroupChatPage>
   void _confirmClearChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
-    
+
     // Capture the blocs before showing dialog to ensure they're accessible
     final locationGroupBloc = context.read<LocationGroupBloc>();
     final chatBloc = context.read<GroupChatBloc>();
@@ -181,16 +185,16 @@ class _GroupChatPageState extends State<GroupChatPage>
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              
+
               // Clear messages from UI immediately for instant feedback
               chatBloc.add(const ClearGroupChatMessages());
-              
+
               // Clear messages from backend (will also trigger stream update)
               locationGroupBloc.add(ClearGroupChat(
-                    groupId: widget.groupId,
-                    adminUserId: authState.user.id,
-                  ));
-              
+                groupId: widget.groupId,
+                adminUserId: authState.user.id,
+              ));
+
               // Show confirmation message
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -209,6 +213,63 @@ class _GroupChatPageState extends State<GroupChatPage>
     );
   }
 
+  void _showPendingRequestsSheet(
+      BuildContext context, LocationGroupState groupState) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final bloc = context.read<LocationGroupBloc>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (modalContext) => BlocProvider.value(
+        value: bloc,
+        child: BlocBuilder<LocationGroupBloc, LocationGroupState>(
+          builder: (builderContext, state) {
+            final requests = state.joinRequests
+                .map((r) => PendingRequestItem(
+                      id: r.id,
+                      userId: r.userId,
+                      displayName: r.userName ?? 'Unknown User',
+                      photoUrl: r.userPhotoUrl,
+                      message: r.message,
+                      requestedAt: r.requestedAt,
+                    ))
+                .toList();
+
+            return PendingRequestsSheet(
+              requests: requests,
+              onApprove: (request) {
+                builderContext.read<LocationGroupBloc>().add(ApproveJoinRequest(
+                      groupId: widget.groupId,
+                      requestUserId: request.userId,
+                      adminUserId: authState.user.id,
+                    ));
+              },
+              onReject: (request) {
+                builderContext.read<LocationGroupBloc>().add(RejectJoinRequest(
+                      groupId: widget.groupId,
+                      requestUserId: request.userId,
+                      adminUserId: authState.user.id,
+                    ));
+              },
+              onAcceptAll: () {
+                builderContext
+                    .read<LocationGroupBloc>()
+                    .add(ApproveAllJoinRequests(
+                      groupId: widget.groupId,
+                      adminUserId: authState.user.id,
+                    ));
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -217,13 +278,21 @@ class _GroupChatPageState extends State<GroupChatPage>
       builder: (context, groupState) {
         final group = groupState.currentGroup;
         final groupName = group?.name ?? 'Group Chat';
+        final hasPendingRequests =
+            groupState.isAdmin && groupState.joinRequests.isNotEmpty;
 
         return Scaffold(
           appBar: AppBar(
             title: InkWell(
-              onTap: () => context.push(
-                Routes.locationGroupDetailWith(widget.groupId),
-              ),
+              onTap: () {
+                if (hasPendingRequests) {
+                  _showPendingRequestsSheet(context, groupState);
+                } else {
+                  context.push(
+                    Routes.locationGroupDetailWith(widget.groupId),
+                  );
+                }
+              },
               borderRadius: BorderRadius.circular(24),
               child: Row(
                 children: [
@@ -243,6 +312,18 @@ class _GroupChatPageState extends State<GroupChatPage>
               ),
             ),
             actions: [
+              // Show dot badge for pending requests (admin only)
+              if (hasPendingRequests)
+                IconButton(
+                  onPressed: () =>
+                      _showPendingRequestsSheet(context, groupState),
+                  icon: Badge(
+                    backgroundColor: theme.colorScheme.error,
+                    smallSize: 10,
+                    child: const Icon(Icons.person_add),
+                  ),
+                  tooltip: 'Pending join requests',
+                ),
               IconButton(
                 onPressed: () => context.push(
                   Routes.locationGroupDetailWith(widget.groupId),
@@ -344,7 +425,8 @@ class _GroupChatPageState extends State<GroupChatPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        state.errorMessage ?? 'You must be a member to access this chat.',
+                        state.errorMessage ??
+                            'You must be a member to access this chat.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
@@ -368,20 +450,22 @@ class _GroupChatPageState extends State<GroupChatPage>
               }
 
               // Only show loading spinner during initial load
-              if (state.status == GroupChatStatus.loading && state.messages.isEmpty) {
+              if (state.status == GroupChatStatus.loading &&
+                  state.messages.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
               // Determine if we're truly empty or still loading
               final isLoading = state.status == GroupChatStatus.loading;
-              
+
               return Column(
                 children: [
                   // Messages list
                   Expanded(
                     child: state.messages.isEmpty
                         ? (isLoading
-                            ? const SizedBox.shrink() // Don't show empty state while loading
+                            ? const SizedBox
+                                .shrink() // Don't show empty state while loading
                             : _buildEmptyState(theme))
                         : _buildMessagesList(state),
                   ),
@@ -451,9 +535,7 @@ class _GroupChatPageState extends State<GroupChatPage>
           message: message,
           isMe: isMe,
           showSenderInfo: showSenderInfo,
-          onDelete: isMe
-              ? () => _confirmDelete(message)
-              : null,
+          onDelete: isMe ? () => _confirmDelete(message) : null,
         );
       },
     );
@@ -479,7 +561,7 @@ class _GroupChatPageState extends State<GroupChatPage>
   void _confirmDelete(GroupMessage message) {
     // Capture the bloc before showing dialog to ensure it's accessible
     final bloc = context.read<GroupChatBloc>();
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -610,7 +692,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Avatar for other users
@@ -641,7 +724,8 @@ class _MessageBubble extends StatelessWidget {
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.75,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: isMe
                       ? theme.colorScheme.primaryContainer
@@ -694,11 +778,9 @@ class _MessageBubble extends StatelessWidget {
                                 _formatTime(message.sentAt),
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: isMe
-                                      ? theme.colorScheme
-                                          .onPrimaryContainer
+                                      ? theme.colorScheme.onPrimaryContainer
                                           .withValues(alpha: 0.5)
-                                      : theme.colorScheme
-                                          .onSurface
+                                      : theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
                                   fontSize: 11,
                                 ),

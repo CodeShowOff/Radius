@@ -50,6 +50,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<WatchPendingRequests>(_onWatchPendingRequests);
     on<ApproveJoinRequest>(_onApproveJoinRequest);
     on<RejectJoinRequest>(_onRejectJoinRequest);
+    on<ApproveAllJoinRequests>(_onApproveAllJoinRequests);
     on<RemoveRandomGroupMember>(_onRemoveRandomGroupMember);
     on<PromoteToAdmin>(_onPromoteToAdmin);
     on<LeaveRandomGroup>(_onLeaveRandomGroup);
@@ -75,12 +76,13 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     await _activeGroupsSubscription?.cancel();
 
-    emit(state.copyWith(status: RandomGroupBlocStatus.loading, clearError: true));
+    emit(state.copyWith(
+        status: RandomGroupBlocStatus.loading, clearError: true));
 
     _activeGroupsSubscription = _groupService.watchActiveGroups().listen(
-      (groups) => add(_ActiveGroupsReceived(groups)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+          (groups) => add(_ActiveGroupsReceived(groups)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onWatchUserRandomGroups(
@@ -91,11 +93,12 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     await _userGroupsSubscription?.cancel();
 
-    _userGroupsSubscription =
-        _groupService.watchUserMemberships(event.userId).listen(
-      (groups) => add(_UserGroupsReceived(groups)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+    _userGroupsSubscription = _groupService
+        .watchUserMemberships(event.userId)
+        .listen(
+          (groups) => add(_UserGroupsReceived(groups)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onWatchUserCreatedRandomGroups(
@@ -106,11 +109,12 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     await _userCreatedGroupsSubscription?.cancel();
 
-    _userCreatedGroupsSubscription =
-        _groupService.watchUserCreatedGroups(event.userId).listen(
-      (groups) => add(_UserCreatedGroupsReceived(groups)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+    _userCreatedGroupsSubscription = _groupService
+        .watchUserCreatedGroups(event.userId)
+        .listen(
+          (groups) => add(_UserCreatedGroupsReceived(groups)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onCreateRandomGroup(
@@ -158,13 +162,13 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     await _groupDetailsSubscription?.cancel();
 
-    emit(state.copyWith(status: RandomGroupBlocStatus.loading, clearError: true));
+    emit(state.copyWith(
+        status: RandomGroupBlocStatus.loading, clearError: true));
 
-    _groupDetailsSubscription =
-        _groupService.watchGroup(event.groupId).listen(
-      (group) => add(_GroupDetailsReceived(group)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+    _groupDetailsSubscription = _groupService.watchGroup(event.groupId).listen(
+          (group) => add(_GroupDetailsReceived(group)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onRequestToJoinRandomGroup(
@@ -211,11 +215,12 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     await _pendingRequestsSubscription?.cancel();
 
-    _pendingRequestsSubscription =
-        _groupService.watchPendingRequests(event.groupId).listen(
-      (requests) => add(_PendingRequestsReceived(requests)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+    _pendingRequestsSubscription = _groupService
+        .watchPendingRequests(event.groupId)
+        .listen(
+          (requests) => add(_PendingRequestsReceived(requests)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onApproveJoinRequest(
@@ -241,7 +246,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
             delayBeforeSend: true,
           );
         }
-        // State will update via stream
+      // State will update via stream
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to approve request: $msg');
@@ -267,7 +272,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Rejected request: ${event.requestId}');
-        // State will update via stream
+      // State will update via stream
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to reject request: $msg');
@@ -276,6 +281,40 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
           errorMessage: msg,
         ));
     }
+  }
+
+  Future<void> _onApproveAllJoinRequests(
+    ApproveAllJoinRequests event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Approving all pending requests for group: ${event.groupId}');
+
+    final requests = List<JoinRequest>.from(state.pendingRequests);
+    for (final request in requests) {
+      final result = await _groupService.approveRequest(
+        groupId: event.groupId,
+        requestId: request.id,
+        adminId: event.adminId,
+      );
+
+      switch (result) {
+        case RandomGroupSuccess():
+          _logger.i('Approved request: ${request.id}');
+          // Send system message for join notification
+          if (_chatService != null) {
+            _chatService.sendSystemMessage(
+              groupId: event.groupId,
+              text:
+                  '${request.requesterDisplayName ?? request.requesterUsername} joined the group',
+              delayBeforeSend: true,
+            );
+          }
+
+        case RandomGroupFailure(message: final msg):
+          _logger.w('Failed to approve request ${request.id}: $msg');
+      }
+    }
+    // State will update via stream
   }
 
   Future<void> _onRemoveRandomGroupMember(
@@ -300,7 +339,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
             text: '${event.memberUsername} was removed from the group',
           );
         }
-        // State will update via stream
+      // State will update via stream
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to remove member: $msg');
@@ -326,7 +365,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Promoted member: ${event.memberId}');
-        // State will update via stream
+      // State will update via stream
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to promote member: $msg');
@@ -445,9 +484,9 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     await _membersSubscription?.cancel();
 
     _membersSubscription = _groupService.watchMembers(event.groupId).listen(
-      (members) => add(_MembersReceived(members)),
-      onError: (error) => add(_RandomGroupStreamError(error.toString())),
-    );
+          (members) => add(_MembersReceived(members)),
+          onError: (error) => add(_RandomGroupStreamError(error.toString())),
+        );
   }
 
   Future<void> _onCheckMembershipStatus(
@@ -457,13 +496,12 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     _logger.d('Checking membership status for: ${event.userId}');
 
     // Check if user is a member
-    final isMember =
-        await _groupService.isMember(event.groupId, event.userId);
+    final isMember = await _groupService.isMember(event.groupId, event.userId);
 
     if (isMember) {
       // User is a member, start watching members now that we have permission
       add(WatchRandomGroupMembers(event.groupId));
-      
+
       // Check if admin or creator
       final group = await _groupService.getGroup(event.groupId);
       if (group != null) {
@@ -511,7 +549,8 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Clearing chat for group: ${event.groupId}');
 
-    emit(state.copyWith(status: RandomGroupBlocStatus.loading, clearError: true));
+    emit(state.copyWith(
+        status: RandomGroupBlocStatus.loading, clearError: true));
 
     final result = await _groupService.clearGroupMessages(
       groupId: event.groupId,

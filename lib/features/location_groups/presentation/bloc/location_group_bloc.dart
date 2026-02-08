@@ -64,6 +64,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<LoadJoinRequests>(_onLoadJoinRequests);
     on<ApproveJoinRequest>(_onApproveJoinRequest);
     on<RejectJoinRequest>(_onRejectJoinRequest);
+    on<ApproveAllJoinRequests>(_onApproveAllJoinRequests);
     on<RemoveMember>(_onRemoveMember);
     on<PromoteToAdmin>(_onPromoteToAdmin);
     on<UpdateGroupSettings>(_onUpdateGroupSettings);
@@ -95,7 +96,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         for (final membership in event.memberships)
           membership.groupId: membership.unreadCount,
       };
-      
+
       emit(state.copyWith(userGroupUnreadCounts: unreadMap));
     });
 
@@ -114,14 +115,15 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
       // immediately in the UI without requiring a page reload.
       GroupMembership? updatedMembership = state.currentMembership;
       bool shouldClearMembership = false;
-      
+
       if (state.currentGroupUserId != null) {
         // Find the current user's membership in the updated members list
-        final userMembership = event.members.cast<GroupMembership?>().firstWhere(
-          (m) => m?.userId == state.currentGroupUserId,
-          orElse: () => null,
-        );
-        
+        final userMembership =
+            event.members.cast<GroupMembership?>().firstWhere(
+                  (m) => m?.userId == state.currentGroupUserId,
+                  orElse: () => null,
+                );
+
         if (userMembership != null) {
           // User is still a member - update with latest role/status
           updatedMembership = userMembership;
@@ -132,7 +134,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
           updatedMembership = null;
         }
       }
-      
+
       emit(state.copyWith(
         groupMembers: event.members,
         currentMembership: updatedMembership,
@@ -183,27 +185,27 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     _groupsSubscription = _groupService
         .streamGroupsForLocation(
-          countryCode: event.countryCode,
-          stateCode: event.stateCode,
-          sortBy: event.sortBy,
-        )
+      countryCode: event.countryCode,
+      stateCode: event.stateCode,
+      sortBy: event.sortBy,
+    )
         .listen(
-          (groups) {
-            if (!isClosed) add(_GroupsUpdated(groups));
-          },
-          onError: (error) {
-            _logger.e('Error loading groups for location', error: error);
-            // On error, keep existing data and show error only if we have no data
-            if (!isClosed) {
-              if (state.locationGroups.isEmpty) {
-                add(_GroupsError(error.toString()));
-              } else {
-                // Log but don't update state - preserve existing data
-                _logger.w('Preserving cached data after stream error');
-              }
-            }
-          },
-        );
+      (groups) {
+        if (!isClosed) add(_GroupsUpdated(groups));
+      },
+      onError: (error) {
+        _logger.e('Error loading groups for location', error: error);
+        // On error, keep existing data and show error only if we have no data
+        if (!isClosed) {
+          if (state.locationGroups.isEmpty) {
+            add(_GroupsError(error.toString()));
+          } else {
+            // Log but don't update state - preserve existing data
+            _logger.w('Preserving cached data after stream error');
+          }
+        }
+      },
+    );
   }
 
   Future<void> _onLoadUserGroups(
@@ -211,9 +213,9 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     Emitter<LocationGroupState> emit,
   ) async {
     // Handle user switching - if different user, force reload
-    final isDifferentUser = state.userGroupsUserId != null && 
+    final isDifferentUser = state.userGroupsUserId != null &&
         state.userGroupsUserId != event.userId;
-    
+
     // If already loading or loaded for the same user, don't reload.
     // This prevents redundant loads when navigating between pages.
     // NOTE: The Firestore streams remain active and continue to emit
@@ -221,15 +223,18 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     if (!isDifferentUser &&
         state.userGroupsUserId == event.userId &&
         (state.status == GroupBlocStatus.loading ||
-         state.status == GroupBlocStatus.loaded)) {
-      _logger.i('User groups already loaded/loading for user ${event.userId}, skipping reload');
-      _logger.i('Real-time streams remain active - new group updates will appear automatically');
+            state.status == GroupBlocStatus.loaded)) {
+      _logger.i(
+          'User groups already loaded/loading for user ${event.userId}, skipping reload');
+      _logger.i(
+          'Real-time streams remain active - new group updates will appear automatically');
       return;
     }
 
     // If switching users, cancel existing subscriptions first and clear old data
     if (isDifferentUser) {
-      _logger.i('User changed from ${state.userGroupsUserId} to ${event.userId}, reloading');
+      _logger.i(
+          'User changed from ${state.userGroupsUserId} to ${event.userId}, reloading');
       await _userGroupsSubscription?.cancel();
       await _userGroupMembershipsSubscription?.cancel();
       _userGroupsSubscription = null;
@@ -258,15 +263,16 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     // Streams now handle errors internally and never emit error events
     // Empty results are a valid state (user has no groups)
-    _userGroupsSubscription = _groupService.streamUserGroups(event.userId).listen(
-          (groups) {
-            if (!isClosed) add(_UserGroupsUpdated(groups));
-          },
-          onError: (error) {
-            _logger.e('Error in user groups stream', error: error);
-            // Don't emit error state - show empty list instead for better UX
-          },
-        );
+    _userGroupsSubscription =
+        _groupService.streamUserGroups(event.userId).listen(
+      (groups) {
+        if (!isClosed) add(_UserGroupsUpdated(groups));
+      },
+      onError: (error) {
+        _logger.e('Error in user groups stream', error: error);
+        // Don't emit error state - show empty list instead for better UX
+      },
+    );
 
     _userGroupMembershipsSubscription =
         _groupService.streamUserMemberships(event.userId).listen(
@@ -434,58 +440,65 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     await _userPendingRequestSubscription?.cancel();
 
     _currentGroupSubscription = _groupService.streamGroup(event.groupId).listen(
-          (group) async {
-            if (isClosed) return;
-            if (group != null) {
-              GroupMembership? membership;
-              bool hasPendingRequest = false;
+      (group) async {
+        if (isClosed) return;
+        if (group != null) {
+          GroupMembership? membership;
+          bool hasPendingRequest = false;
 
-              if (event.currentUserId != null) {
-                // CRITICAL: Keep loading state while checking membership
-                // This prevents UI from showing wrong buttons during async check
-                membership = await _groupService.getMembershipStatus(
-                  event.groupId,
-                  event.currentUserId!,
-                );
+          if (event.currentUserId != null) {
+            // CRITICAL: Keep loading state while checking membership
+            // This prevents UI from showing wrong buttons during async check
+            membership = await _groupService.getMembershipStatus(
+              event.groupId,
+              event.currentUserId!,
+            );
 
-                // Check for pending request if not a member
-                if (membership == null || !membership.isActive) {
-                  final requests = await _groupService.getJoinRequests(event.groupId);
-                  hasPendingRequest = requests.any(
-                    (r) => r.userId == event.currentUserId,
-                  );
-                }
-              }
-
-              // NOW emit the loaded state with complete data
-              if (!isClosed) add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
+            // Check for pending request if not a member
+            if (membership == null || !membership.isActive) {
+              final requests =
+                  await _groupService.getJoinRequests(event.groupId);
+              hasPendingRequest = requests.any(
+                (r) => r.userId == event.currentUserId,
+              );
             }
-          },
-          onError: (error) {
-            _logger.e('Error streaming group', error: error);
-            if (!isClosed) {
-              add(_GroupsError('Failed to load group details'));
-            }
-          },
-        );
+          }
 
-    _membersSubscription = _groupService.streamGroupMembers(event.groupId).listen(
-          (members) {
-            if (!isClosed) add(_MembersUpdated(members));
-          },
-          onError: (error) {
-            _logger.e('Error streaming members', error: error);
-          },
-        );
+          // NOW emit the loaded state with complete data
+          if (!isClosed) {
+            add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
+          }
+        }
+      },
+      onError: (error) {
+        _logger.e('Error streaming group', error: error);
+        if (!isClosed) {
+          add(_GroupsError('Failed to load group details'));
+        }
+      },
+    );
+
+    _membersSubscription =
+        _groupService.streamGroupMembers(event.groupId).listen(
+      (members) {
+        if (!isClosed) add(_MembersUpdated(members));
+      },
+      onError: (error) {
+        _logger.e('Error streaming members', error: error);
+      },
+    );
 
     // Stream pending request status for current user in real-time
     if (event.currentUserId != null) {
-      _userPendingRequestSubscription = _groupService.streamJoinRequests(event.groupId).listen(
+      _userPendingRequestSubscription =
+          _groupService.streamJoinRequests(event.groupId).listen(
         (requests) {
           if (!isClosed) {
-            final hasPending = requests.any((r) => r.userId == event.currentUserId);
+            final hasPending =
+                requests.any((r) => r.userId == event.currentUserId);
             // Only update if membership is null or not active (to avoid overriding member state)
-            if (state.currentMembership == null || !state.currentMembership!.isActive) {
+            if (state.currentMembership == null ||
+                !state.currentMembership!.isActive) {
               if (state.hasPendingRequest != hasPending) {
                 add(_PendingRequestUpdated(hasPending));
               }
@@ -505,14 +518,15 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   ) async {
     await _requestsSubscription?.cancel();
 
-    _requestsSubscription = _groupService.streamJoinRequests(event.groupId).listen(
-          (requests) {
-            if (!isClosed) add(_JoinRequestsUpdated(requests));
-          },
-          onError: (error) {
-            _logger.e('Error streaming join requests', error: error);
-          },
-        );
+    _requestsSubscription =
+        _groupService.streamJoinRequests(event.groupId).listen(
+      (requests) {
+        if (!isClosed) add(_JoinRequestsUpdated(requests));
+      },
+      onError: (error) {
+        _logger.e('Error streaming join requests', error: error);
+      },
+    );
   }
 
   Future<void> _onApproveJoinRequest(
@@ -548,6 +562,24 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         status: GroupBlocStatus.error,
         errorMessage: result.message,
       ));
+    }
+  }
+
+  Future<void> _onApproveAllJoinRequests(
+    ApproveAllJoinRequests event,
+    Emitter<LocationGroupState> emit,
+  ) async {
+    final requests = List<GroupJoinRequest>.from(state.joinRequests);
+    for (final request in requests) {
+      final result = await _groupService.approveJoinRequest(
+        groupId: event.groupId,
+        requestUserId: request.userId,
+        adminUserId: event.adminUserId,
+      );
+      if (result is GroupFailure<GroupMembership>) {
+        _logger.w(
+            'Failed to approve request for ${request.userId}: ${result.message}');
+      }
     }
   }
 
@@ -747,7 +779,8 @@ class _GroupDetailsUpdated extends LocationGroupEvent {
   final LocationGroup group;
   final GroupMembership? membership;
   final bool hasPendingRequest;
-  const _GroupDetailsUpdated(this.group, this.membership, this.hasPendingRequest);
+  const _GroupDetailsUpdated(
+      this.group, this.membership, this.hasPendingRequest);
 }
 
 class _MembersUpdated extends LocationGroupEvent {

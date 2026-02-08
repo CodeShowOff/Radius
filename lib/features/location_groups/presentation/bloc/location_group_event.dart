@@ -182,6 +182,20 @@ class RejectJoinRequest extends LocationGroupEvent {
   List<Object?> get props => [groupId, requestUserId, adminUserId];
 }
 
+/// Approve all pending join requests (admin).
+class ApproveAllJoinRequests extends LocationGroupEvent {
+  final String groupId;
+  final String adminUserId;
+
+  const ApproveAllJoinRequests({
+    required this.groupId,
+    required this.adminUserId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, adminUserId];
+}
+
 /// Remove a member from group (admin).
 class RemoveMember extends LocationGroupEvent {
   final String groupId;

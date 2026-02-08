@@ -6,6 +6,7 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
+import '../../../../core/widgets/pending_requests_sheet.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/random_group_message.dart';
 import '../bloc/random_group_bloc.dart';
@@ -168,7 +169,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   void _confirmClearChat() {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
-    
+
     // Capture the blocs before showing dialog to ensure they're accessible
     final randomGroupBloc = context.read<RandomGroupBloc>();
     final chatBloc = context.read<RandomGroupChatBloc>();
@@ -186,16 +187,16 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              
+
               // Clear messages from UI immediately for instant feedback
               chatBloc.add(const ClearRandomGroupChatMessages());
-              
+
               // Clear messages from backend (will also trigger stream update)
               randomGroupBloc.add(ClearRandomGroupChat(
-                    groupId: widget.groupId,
-                    adminUserId: authState.user.id,
-                  ));
-              
+                groupId: widget.groupId,
+                adminUserId: authState.user.id,
+              ));
+
               // Show confirmation message
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -214,6 +215,66 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
     );
   }
 
+  void _showPendingRequestsSheet(
+      BuildContext context, RandomGroupState groupState) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    final bloc = context.read<RandomGroupBloc>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (modalContext) => BlocProvider.value(
+        value: bloc,
+        child: BlocBuilder<RandomGroupBloc, RandomGroupState>(
+          builder: (builderContext, state) {
+            final updatedRequests = state.pendingRequests
+                .map((r) => PendingRequestItem(
+                      id: r.id,
+                      userId: r.requesterId,
+                      displayName:
+                          r.requesterDisplayName ?? r.requesterUsername,
+                      username: r.requesterUsername,
+                      photoUrl: r.requesterPhotoUrl,
+                      message: r.message,
+                      requestedAt: r.requestedAt,
+                    ))
+                .toList();
+
+            return PendingRequestsSheet(
+              requests: updatedRequests,
+              onApprove: (request) {
+                builderContext.read<RandomGroupBloc>().add(ApproveJoinRequest(
+                      groupId: widget.groupId,
+                      requestId: request.id,
+                      adminId: authState.user.id,
+                      requesterUsername: request.displayName,
+                    ));
+              },
+              onReject: (request) {
+                builderContext.read<RandomGroupBloc>().add(RejectJoinRequest(
+                      groupId: widget.groupId,
+                      requestId: request.id,
+                      adminId: authState.user.id,
+                    ));
+              },
+              onAcceptAll: () {
+                builderContext
+                    .read<RandomGroupBloc>()
+                    .add(ApproveAllJoinRequests(
+                      groupId: widget.groupId,
+                      adminId: authState.user.id,
+                    ));
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -222,16 +283,23 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
       builder: (context, groupState) {
         final group = groupState.selectedGroup;
         final groupName = group?.name ?? 'Group Chat';
-        final isAdmin = groupState.membershipStatus == UserMembershipStatus.admin ||
-            groupState.membershipStatus == UserMembershipStatus.creator;
-        final pendingRequestCount = groupState.pendingRequests.length;
+        final isAdmin =
+            groupState.membershipStatus == UserMembershipStatus.admin ||
+                groupState.membershipStatus == UserMembershipStatus.creator;
+        final hasPendingRequests = groupState.pendingRequests.isNotEmpty;
 
         return Scaffold(
           appBar: AppBar(
             title: InkWell(
-              onTap: () => context.push(
-                Routes.randomGroupDetailWith(widget.groupId),
-              ),
+              onTap: () {
+                if (isAdmin && hasPendingRequests) {
+                  _showPendingRequestsSheet(context, groupState);
+                } else {
+                  context.push(
+                    Routes.randomGroupDetailWith(widget.groupId),
+                  );
+                }
+              },
               borderRadius: BorderRadius.circular(24),
               child: Row(
                 children: [
@@ -269,18 +337,17 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               ),
             ),
             actions: [
-              // Show badge for pending requests (admin only)
-              if (isAdmin && pendingRequestCount > 0)
+              // Show dot badge for pending requests (admin only)
+              if (isAdmin && hasPendingRequests)
                 IconButton(
-                  onPressed: () => context.push(
-                    Routes.randomGroupSettingsWith(widget.groupId),
-                  ),
+                  onPressed: () =>
+                      _showPendingRequestsSheet(context, groupState),
                   icon: Badge(
-                    label: Text('$pendingRequestCount'),
                     backgroundColor: theme.colorScheme.error,
-                    child: const Icon(Icons.notifications_active),
+                    smallSize: 10,
+                    child: const Icon(Icons.person_add),
                   ),
-                  tooltip: '$pendingRequestCount pending request${pendingRequestCount == 1 ? '' : 's'}',
+                  tooltip: 'Pending join requests',
                 ),
               IconButton(
                 onPressed: () => context.push(
@@ -314,7 +381,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               }
 
               // Handle access denial - navigate away with error
-              if (state.status == RandomGroupChatStatus.error && 
+              if (state.status == RandomGroupChatStatus.error &&
                   !state.membershipVerified) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -333,7 +400,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               }
 
               // Show other errors
-              if (state.status == RandomGroupChatStatus.error && 
+              if (state.status == RandomGroupChatStatus.error &&
                   state.errorMessage != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -367,7 +434,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               }
 
               // SECURITY: Show access denied state for non-members
-              if (state.status == RandomGroupChatStatus.error && 
+              if (state.status == RandomGroupChatStatus.error &&
                   !state.membershipVerified) {
                 return Center(
                   child: Column(
@@ -387,7 +454,8 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        state.errorMessage ?? 'You must be an approved member to access this chat.',
+                        state.errorMessage ??
+                            'You must be an approved member to access this chat.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
@@ -411,7 +479,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               }
 
               // Only show loading spinner during initial load
-              if (state.status == RandomGroupChatStatus.loading && 
+              if (state.status == RandomGroupChatStatus.loading &&
                   state.messages.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -425,7 +493,8 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                   Expanded(
                     child: state.messages.isEmpty
                         ? (isLoading
-                            ? const SizedBox.shrink() // Don't show empty state while loading
+                            ? const SizedBox
+                                .shrink() // Don't show empty state while loading
                             : _buildEmptyState(theme))
                         : _buildMessagesList(state),
                   ),
@@ -558,7 +627,9 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: state.status == RandomGroupChatStatus.sending ? null : _sendMessage,
+              onPressed: state.status == RandomGroupChatStatus.sending
+                  ? null
+                  : _sendMessage,
               icon: state.status == RandomGroupChatStatus.sending
                   ? const SizedBox(
                       width: 20,
@@ -618,7 +689,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Avatar for other users
@@ -657,11 +729,16 @@ class _MessageBubble extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Sender name for other users
-                  if (!isMe && showSenderInfo && (message.senderName != null || message.senderUsername != null))
+                  if (!isMe &&
+                      showSenderInfo &&
+                      (message.senderName != null ||
+                          message.senderUsername != null))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        message.senderName ?? message.senderUsername ?? 'Unknown',
+                        message.senderName ??
+                            message.senderUsername ??
+                            'Unknown',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w600,
@@ -693,11 +770,9 @@ class _MessageBubble extends StatelessWidget {
                               _formatTime(message.sentAt),
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: isMe
-                                    ? theme.colorScheme
-                                        .onPrimaryContainer
+                                    ? theme.colorScheme.onPrimaryContainer
                                         .withValues(alpha: 0.5)
-                                    : theme.colorScheme
-                                        .onSurface
+                                    : theme.colorScheme.onSurface
                                         .withValues(alpha: 0.5),
                                 fontSize: 11,
                               ),

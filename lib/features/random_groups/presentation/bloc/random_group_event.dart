@@ -148,6 +148,20 @@ class RejectJoinRequest extends RandomGroupEvent {
   List<Object?> get props => [groupId, requestId, adminId];
 }
 
+/// Approve all pending join requests (admin only).
+class ApproveAllJoinRequests extends RandomGroupEvent {
+  final String groupId;
+  final String adminId;
+
+  const ApproveAllJoinRequests({
+    required this.groupId,
+    required this.adminId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, adminId];
+}
+
 /// Remove a member from a group (admin only).
 class RemoveRandomGroupMember extends RandomGroupEvent {
   final String groupId;
