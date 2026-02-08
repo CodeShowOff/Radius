@@ -791,37 +791,30 @@ exports.onGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("loc
         ? `${requesterName}: ${message}`
         : `${requesterName} wants to join`;
     const payload = {
-        notification: {
-            title: `${groupName} - Join Request`,
-            body: body,
-        },
         data: {
             groupId: groupId,
             requestId: event.params.requestId,
             requesterId: requesterId,
             type: "group_join_request",
+            title: `${groupName} - Join Request`,
+            body: body,
         },
     };
     // Send to all admins' devices
+    // NOTE: Silent data-only message - no push notification banner for join requests
+    // Only updates badge count to avoid notification overload from many join requests
     try {
         const response = await admin.messaging().sendEachForMulticast({
             tokens: allTokens,
-            notification: payload.notification,
             data: payload.data,
             android: {
                 priority: "high",
-                notification: {
-                    channelId: "radius_messages",
-                    priority: "high",
-                    sound: "default",
-                    defaultSound: true,
-                },
             },
             apns: {
                 payload: {
                     aps: {
-                        sound: "default",
                         badge: 1,
+                        contentAvailable: true,
                     },
                 },
             },
@@ -922,37 +915,30 @@ exports.onRandomGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated
         ? `${requesterName}: ${message}`
         : `${requesterName} wants to join`;
     const payload = {
-        notification: {
-            title: `${groupName} - Join Request`,
-            body: body,
-        },
         data: {
             groupId: groupId,
             requestId: event.params.requestId,
             requesterId: requesterId,
             type: "random_group_join_request",
+            title: `${groupName} - Join Request`,
+            body: body,
         },
     };
     // Send to all admins' devices
+    // NOTE: Silent data-only message - no push notification banner for join requests
+    // Only updates badge count to avoid notification overload from many join requests
     try {
         const response = await admin.messaging().sendEachForMulticast({
             tokens: allTokens,
-            notification: payload.notification,
             data: payload.data,
             android: {
                 priority: "high",
-                notification: {
-                    channelId: "radius_messages",
-                    priority: "high",
-                    sound: "default",
-                    defaultSound: true,
-                },
             },
             apns: {
                 payload: {
                     aps: {
-                        sound: "default",
                         badge: 1,
+                        contentAvailable: true,
                     },
                 },
             },
