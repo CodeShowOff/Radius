@@ -29,6 +29,8 @@ import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.da
 import '../../features/nearby_help/data/nearby_help_service.dart';
 import '../../features/nearby_help/data/user_location_service.dart';
 import '../../features/nearby_help/presentation/bloc/nearby_help_bloc.dart';
+import '../../features/random_chat/data/random_chat_service.dart';
+import '../../features/random_chat/presentation/bloc/random_chat_bloc.dart';
 import '../../features/random_groups/data/random_group_chat_cache_service.dart';
 import '../../features/random_groups/data/random_group_chat_service.dart';
 import '../../features/random_groups/data/random_group_service.dart';
@@ -269,6 +271,19 @@ Future<void> configureDependencies() {
       () => NearbyHelpBloc(
         helpService: getIt<NearbyHelpService>(),
         locationService: getIt<UserLocationService>(),
+      ),
+    );
+  }
+
+  // Random Chat feature - daily random user discovery & chat
+  if (!getIt.isRegistered<RandomChatService>()) {
+    getIt.registerLazySingleton<RandomChatService>(() => RandomChatService());
+  }
+
+  if (!getIt.isRegistered<RandomChatBloc>()) {
+    getIt.registerLazySingleton<RandomChatBloc>(
+      () => RandomChatBloc(
+        service: getIt<RandomChatService>(),
       ),
     );
   }

@@ -941,5 +941,118 @@ service cloud.firestore {
       // RULE: Only seeker can delete their own request (soft delete via status change preferred)
       allow delete: if isSeeker();
     }
+
+    // ============================================================
+    // RANDOM CHAT - Daily rotating random chat system
+    // ============================================================
+    
+    // Daily container document
+    match /random_chat_daily/{dateKey} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions manage the container
+      
+      // Suggestions - each user's daily suggested user list
+      match /suggestions/{userId} {
+        // RULE: Users can read their own suggestions
+        allow read: if isOwner(userId);
+        
+        // RULE: Users can create/update their own suggestions (generated client-side)
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['suggestedUserIds', 'generatedAt']);
+        
+        allow delete: if false; // Only Cloud Functions cleanup
+      }
+      
+      // Requests - chat requests between users
+      match /requests/{requestId} {
+        // RULE: Sender and receiver can read the request
+        allow read: if isAuthenticated()
+          && (resource.data.senderId == request.auth.uid
+              || resource.data.receiverId == request.auth.uid);
+        
+        // RULE: Authenticated users can create requests
+        // Sender must be the current user
+        allow create: if isAuthenticated()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasAll(['senderId', 'receiverId', 'status', 'dateKey'])
+          && request.resource.data.status == 'pending'
+          && request.resource.data.dateKey == dateKey;
+        
+        // RULE: Receiver can accept/reject/expire; sender can expire
+        allow update: if isAuthenticated()
+          && resource.data.status == 'pending'
+          // Cannot change sender/receiver
+          && request.resource.data.senderId == resource.data.senderId
+          && request.resource.data.receiverId == resource.data.receiverId
+          && (
+            // Receiver can accept, reject, or expire
+            (resource.data.receiverId == request.auth.uid
+              && request.resource.data.status in ['accepted', 'rejected', 'expired'])
+            // Sender can only expire their own sent requests
+            // (used for cleanup after they get a connection elsewhere)
+            || (resource.data.senderId == request.auth.uid
+              && request.resource.data.status == 'expired')
+          );
+        
+        allow delete: if false; // Only Cloud Functions cleanup
+      }
+      
+      // Connections - active random chat connections
+      match /connections/{connectionId} {
+        // RULE: Participants can read their connection
+        allow read: if isAuthenticated()
+          && request.auth.uid in resource.data.participantIds;
+        
+        // RULE: Only transactions (from request acceptance) create connections
+        allow create: if isAuthenticated()
+          && request.auth.uid in request.resource.data.participantIds
+          && request.resource.data.keys().hasAll(['user1Id', 'user2Id', 'participantIds', 'dateKey']);
+        
+        allow update, delete: if false; // Only Cloud Functions cleanup
+      }
+      
+      // User stats - daily request counts and connection status
+      match /user_stats/{userId} {
+        // RULE: Any authenticated user can read stats (needed for eligibility checks)
+        allow read: if isAuthenticated();
+        
+        // RULE: Only the stats owner can create/update their own stats.
+        // Cross-user stats updates (e.g. incrementing receiver's count when
+        // sender sends a request) are handled inside Firestore transactions
+        // that the client initiates — the transaction writes to the receiver's
+        // stats doc but only within an atomic request-creation flow, so the
+        // rule ensures only the auth user can touch their own doc. 
+        // Note: For the receiver-side increment during sendRequest, the
+        // sender's client needs permission. We allow writes when the user is
+        // authenticated AND is either:
+        //   a) The stats doc owner, OR
+        //   b) Modifying only specific fields in cross-user transaction flows:
+        //      - receivedRequestCount + lastUpdated (sendRequest: sender increments receiver's count)
+        //      - hasActiveConnection + lastUpdated  (acceptRequest: receiver marks sender as connected)
+        allow create: if isAuthenticated()
+          && (
+            // Owner can create their own stats
+            isOwner(userId)
+            // Non-owners can create with only specific fields
+            // (covers sendRequest incrementing receiver's count for the first time)
+            || request.resource.data.keys()
+                .hasOnly(['receivedRequestCount', 'hasActiveConnection', 'lastUpdated', 'sentRequestCount'])
+          );
+        allow update: if isAuthenticated()
+          && (
+            // Owner can update their own stats freely
+            isOwner(userId)
+            // Non-owners can ONLY modify these specific field combinations
+            // (covers sendRequest and acceptRequest cross-user writes)
+            || (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['receivedRequestCount', 'hasActiveConnection', 'lastUpdated'])
+            )
+          );
+        
+        allow delete: if false; // Only Cloud Functions cleanup
+      }
+    }
+
   }
 }

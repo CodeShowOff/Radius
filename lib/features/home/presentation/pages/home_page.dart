@@ -267,15 +267,33 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
-                // Quick action button - Nearby
-                _AnimatedSquareCard(
-                  onTap: () => context.push(Routes.nearby),
-                  label: 'Nearby',
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.secondaryContainer,
-                  isSquare: true,
-                  animationType: _CardAnimationType.wave,
+                // Quick action buttons - Nearby & Random Chat
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.nearby),
+                        label: 'Nearby',
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.secondaryContainer,
+                        isSquare: true,
+                        animationType: _CardAnimationType.wave,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.randomChat),
+                        label: 'Random\nChat',
+                        color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.tertiaryContainer,
+                        isSquare: true,
+                        animationType: _CardAnimationType.personCycle,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 

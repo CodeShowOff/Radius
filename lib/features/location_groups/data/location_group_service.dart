@@ -80,11 +80,13 @@ class LocationGroupService {
   bool _canAccessUserScopedData(String userId) {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      _logger.w('Skipped user-scoped group query because no authenticated user');
+      _logger
+          .w('Skipped user-scoped group query because no authenticated user');
       return false;
     }
     if (currentUserId != userId) {
-      _logger.w('Skipped user-scoped group query for mismatched userId (requested: $userId, auth: $currentUserId)');
+      _logger.w(
+          'Skipped user-scoped group query for mismatched userId (requested: $userId, auth: $currentUserId)');
       return false;
     }
     return true;
@@ -110,8 +112,17 @@ class LocationGroupService {
     required GroupVisibility visibility,
   }) async {
     try {
+      // Validate location codes to prevent Firestore invalid_query errors
+      if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+        return const GroupFailure(
+          'Invalid location: country and state codes are required',
+          GroupErrorType.invalidData,
+        );
+      }
+
       // Validate and sanitize name
-      final trimmedName = name.trim().replaceAll(RegExp(r'\s+'), ' '); // Normalize whitespace
+      final trimmedName =
+          name.trim().replaceAll(RegExp(r'\s+'), ' '); // Normalize whitespace
       if (trimmedName.isEmpty || trimmedName.length < 3) {
         return const GroupFailure(
           'Group name must be at least 3 characters',
@@ -124,7 +135,7 @@ class LocationGroupService {
           GroupErrorType.invalidData,
         );
       }
-      
+
       // Validate name doesn't consist only of special characters
       if (!RegExp(r'[a-zA-Z0-9]').hasMatch(trimmedName)) {
         return const GroupFailure(
@@ -171,12 +182,14 @@ class LocationGroupService {
       // Create group document
       final groupId = _uuid.v4();
       final now = DateTime.now();
-      
+
       // Sanitize description
-      final sanitizedDescription = description?.trim().replaceAll(RegExp(r'\s+'), ' ');
-      final finalDescription = (sanitizedDescription == null || sanitizedDescription.isEmpty) 
-          ? null 
-          : sanitizedDescription;
+      final sanitizedDescription =
+          description?.trim().replaceAll(RegExp(r'\s+'), ' ');
+      final finalDescription =
+          (sanitizedDescription == null || sanitizedDescription.isEmpty)
+              ? null
+              : sanitizedDescription;
 
       final group = LocationGroupModel(
         id: groupId,
@@ -216,8 +229,11 @@ class LocationGroupService {
       );
       // Inverse index for fast user groups query
       batch.set(
-        _firestore.collection('users').doc(creatorUserId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(creatorUserId)
+            .collection('group_memberships')
+            .doc(groupId),
         {
           'groupId': groupId,
           'userId': creatorUserId,
@@ -258,6 +274,13 @@ class LocationGroupService {
     GroupSortOption sortBy = GroupSortOption.mostActive,
     int limit = 50,
   }) async {
+    // Validate inputs to prevent Firestore invalid_query errors
+    if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+      _logger
+          .w('getGroupsForLocation called with empty countryCode or stateCode');
+      return [];
+    }
+
     try {
       Query<Map<String, dynamic>> query = _groupsRef
           .where('countryCode', isEqualTo: countryCode)
@@ -289,10 +312,10 @@ class LocationGroupService {
   }
 
   /// Streams groups for a location with real-time updates.
-  /// 
+  ///
   /// Note: This query requires a composite Firestore index on:
   /// (countryCode, stateCode, status, lastActivityAt/createdAt/memberCount)
-  /// 
+  ///
   /// If the index doesn't exist, the stream will emit an error.
   /// The error is logged but NOT converted to an empty list, so that
   /// the BLoC can preserve any previously loaded data.
@@ -302,6 +325,13 @@ class LocationGroupService {
     GroupSortOption sortBy = GroupSortOption.mostActive,
     int limit = 50,
   }) {
+    // Validate inputs to prevent Firestore invalid_query errors
+    if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+      _logger.w(
+          'streamGroupsForLocation called with empty countryCode or stateCode');
+      return Stream.value([]);
+    }
+
     Query<Map<String, dynamic>> query = _groupsRef
         .where('countryCode', isEqualTo: countryCode)
         .where('stateCode', isEqualTo: stateCode)
@@ -352,7 +382,7 @@ class LocationGroupService {
   }
 
   /// Streams a single group with real-time updates.
-  /// 
+  ///
   /// Errors are logged but re-thrown to let the BLoC preserve existing data.
   Stream<LocationGroup?> streamGroup(String groupId) {
     return _groupsRef.doc(groupId).snapshots().map((doc) {
@@ -365,7 +395,7 @@ class LocationGroupService {
   }
 
   /// Gets groups the user is a member of.
-  /// 
+  ///
   /// PERFORMANCE: Uses inverse index users/{userId}/group_memberships
   /// instead of slow collection group query.
   Future<List<LocationGroup>> getUserGroups(String userId) async {
@@ -413,7 +443,7 @@ class LocationGroupService {
   }
 
   /// Waits for the auth token to be available and valid.
-  /// 
+  ///
   /// This prevents race conditions where Firestore queries are executed
   /// before the auth token has propagated to the Firebase SDK.
   Future<bool> _waitForAuthToken(String userId, {int maxRetries = 3}) async {
@@ -451,7 +481,8 @@ class LocationGroupService {
     // Validate auth synchronously first
     final currentUser = _auth.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
-      _logger.w('streamUserGroups: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
+      _logger.w(
+          'streamUserGroups: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
       return Stream.value(<LocationGroup>[]);
     }
 
@@ -466,7 +497,8 @@ class LocationGroupService {
       final isAuthReady = await _waitForAuthToken(userId);
       if (!isAuthReady || isDisposed) {
         if (!isDisposed) {
-          _logger.w('streamUserGroups: Auth token not ready, emitting empty list');
+          _logger
+              .w('streamUserGroups: Auth token not ready, emitting empty list');
           controller.add(<LocationGroup>[]);
           await controller.close();
         }
@@ -483,7 +515,7 @@ class LocationGroupService {
           .listen(
         (snapshot) async {
           if (isDisposed) return;
-          
+
           try {
             // Re-validate auth on each emission
             final user = _auth.currentUser;
@@ -557,7 +589,8 @@ class LocationGroupService {
     // Validate auth synchronously first
     final currentUser = _auth.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
-      _logger.w('streamUserMemberships: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
+      _logger.w(
+          'streamUserMemberships: No auth or userId mismatch (auth: ${currentUser?.uid}, requested: $userId)');
       return Stream.value(<GroupMembership>[]);
     }
 
@@ -572,7 +605,8 @@ class LocationGroupService {
       final isAuthReady = await _waitForAuthToken(userId);
       if (!isAuthReady || isDisposed) {
         if (!isDisposed) {
-          _logger.w('streamUserMemberships: Auth token not ready, emitting empty list');
+          _logger.w(
+              'streamUserMemberships: Auth token not ready, emitting empty list');
           controller.add(<GroupMembership>[]);
           await controller.close();
         }
@@ -589,12 +623,13 @@ class LocationGroupService {
           .listen(
         (snapshot) async {
           if (isDisposed) return;
-          
+
           try {
             // Re-validate auth on each emission
             final user = _auth.currentUser;
             if (user == null || user.uid != userId) {
-              _logger.w('streamUserMemberships: Auth invalidated during stream');
+              _logger
+                  .w('streamUserMemberships: Auth invalidated during stream');
               controller.add(<GroupMembership>[]);
               return;
             }
@@ -604,7 +639,7 @@ class LocationGroupService {
             for (final doc in snapshot.docs) {
               final data = doc.data();
               final groupId = data['groupId'] as String;
-              
+
               // Get full membership from group's members subcollection
               final membership = await _getMembership(groupId, userId);
               if (membership != null) {
@@ -616,7 +651,8 @@ class LocationGroupService {
               controller.add(memberships);
             }
           } catch (e) {
-            _logger.e('Error processing streamUserMemberships snapshot', error: e);
+            _logger.e('Error processing streamUserMemberships snapshot',
+                error: e);
             if (!isDisposed) {
               controller.add(<GroupMembership>[]);
             }
@@ -711,8 +747,11 @@ class LocationGroupService {
       });
       // Inverse index for fast user groups query
       batch.set(
-        _firestore.collection('users').doc(userId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('group_memberships')
+            .doc(groupId),
         {
           'groupId': groupId,
           'userId': userId,
@@ -722,7 +761,7 @@ class LocationGroupService {
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );
-      
+
       try {
         await batch.commit();
         _logger.i('User $userId joined group $groupId');
@@ -731,7 +770,7 @@ class LocationGroupService {
         // Batch is atomic - if it fails, no partial writes occurred
         rethrow;
       }
-      
+
       // CRITICAL FIX: Send system message with delay to allow Firestore replication
       // This prevents permission-denied errors when user tries to send first message
       try {
@@ -745,15 +784,15 @@ class LocationGroupService {
         _logger.w('Failed to send join system message', error: e);
         // Don't fail the join operation if system message fails
       }
-      
+
       return GroupSuccess(membership);
     } on FirebaseException catch (e) {
       _logger.e('Firebase error joining group', error: e);
-      
+
       // Provide more specific error messages based on Firebase error codes
       String errorMessage = 'Failed to join group';
       GroupErrorType errorType = GroupErrorType.networkError;
-      
+
       switch (e.code) {
         case 'permission-denied':
           errorMessage = 'You don\'t have permission to join this group';
@@ -764,14 +803,15 @@ class LocationGroupService {
           errorType = GroupErrorType.notFound;
           break;
         case 'unavailable':
-          errorMessage = 'Network error. Please check your connection and try again';
+          errorMessage =
+              'Network error. Please check your connection and try again';
           errorType = GroupErrorType.networkError;
           break;
         default:
           errorMessage = 'Failed to join group: ${e.message ?? e.code}';
           errorType = GroupErrorType.networkError;
       }
-      
+
       return GroupFailure(errorMessage, errorType);
     } catch (e) {
       _logger.e('Error joining group', error: e);
@@ -799,7 +839,7 @@ class LocationGroupService {
           GroupErrorType.invalidData,
         );
       }
-      
+
       // Verify group exists and requires approval
       final group = await getGroupById(groupId);
       if (group == null) {
@@ -870,14 +910,15 @@ class LocationGroupService {
       return GroupSuccess(request);
     } on FirebaseException catch (e) {
       _logger.e('Firebase error requesting to join', error: e);
-      
+
       // Provide more specific error messages
       String errorMessage = 'Failed to send request';
       GroupErrorType errorType = GroupErrorType.networkError;
-      
+
       switch (e.code) {
         case 'permission-denied':
-          errorMessage = 'You don\'t have permission to request to join this group';
+          errorMessage =
+              'You don\'t have permission to request to join this group';
           errorType = GroupErrorType.notAuthorized;
           break;
         case 'not-found':
@@ -885,14 +926,15 @@ class LocationGroupService {
           errorType = GroupErrorType.notFound;
           break;
         case 'unavailable':
-          errorMessage = 'Network error. Please check your connection and try again';
+          errorMessage =
+              'Network error. Please check your connection and try again';
           errorType = GroupErrorType.networkError;
           break;
         default:
           errorMessage = 'Failed to send request: ${e.message ?? e.code}';
           errorType = GroupErrorType.networkError;
       }
-      
+
       return GroupFailure(errorMessage, errorType);
     } catch (e) {
       _logger.e('Error requesting to join', error: e);
@@ -962,8 +1004,11 @@ class LocationGroupService {
       });
       // Inverse index for fast user groups query
       batch.set(
-        _firestore.collection('users').doc(requestUserId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(requestUserId)
+            .collection('group_memberships')
+            .doc(groupId),
         {
           'groupId': groupId,
           'userId': requestUserId,
@@ -973,12 +1018,13 @@ class LocationGroupService {
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );
-      
+
       try {
         await batch.commit();
       } catch (batchError) {
-        _logger.e('Batch commit failed for approveJoinRequest', error: batchError);
-        
+        _logger.e('Batch commit failed for approveJoinRequest',
+            error: batchError);
+
         // Check for permission errors specifically
         if (batchError is FirebaseException) {
           if (batchError.code == 'permission-denied') {
@@ -988,13 +1034,14 @@ class LocationGroupService {
             );
           }
         }
-        
+
         // Atomic rollback - request not deleted if membership creation failed
         rethrow;
       }
 
-      _logger.i('Admin $adminUserId approved $requestUserId for group $groupId');
-      
+      _logger
+          .i('Admin $adminUserId approved $requestUserId for group $groupId');
+
       // Send system message with delay for replication
       try {
         final displayName = requestData['userName'] as String? ?? 'Someone';
@@ -1006,7 +1053,7 @@ class LocationGroupService {
       } catch (e) {
         _logger.w('Failed to send join system message', error: e);
       }
-      
+
       return GroupSuccess(membership);
     } catch (e) {
       _logger.e('Error approving join request', error: e);
@@ -1039,7 +1086,8 @@ class LocationGroupService {
           .doc(requestUserId)
           .delete();
 
-      _logger.i('Admin $adminUserId rejected $requestUserId for group $groupId');
+      _logger
+          .i('Admin $adminUserId rejected $requestUserId for group $groupId');
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error rejecting join request', error: e);
@@ -1087,7 +1135,8 @@ class LocationGroupService {
     }).transform(StreamTransformer.fromHandlers(
       handleError: (error, stackTrace, sink) {
         // On error, emit empty list to ensure UI receives data
-        _logger.e('Error in streamJoinRequests, emitting empty list', error: error);
+        _logger.e('Error in streamJoinRequests, emitting empty list',
+            error: error);
         sink.add(<GroupJoinRequest>[]);
       },
     ));
@@ -1140,10 +1189,13 @@ class LocationGroupService {
       });
       // Remove from inverse index
       batch.delete(
-        _firestore.collection('users').doc(userId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('group_memberships')
+            .doc(groupId),
       );
-      
+
       try {
         await batch.commit();
         _logger.i('User $userId left group $groupId');
@@ -1155,7 +1207,7 @@ class LocationGroupService {
           GroupErrorType.unknown,
         );
       }
-      
+
       // Send system message
       try {
         final displayName = membership.userName ?? 'Someone';
@@ -1166,7 +1218,7 @@ class LocationGroupService {
       } catch (e) {
         _logger.w('Failed to send leave system message', error: e);
       }
-      
+
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error leaving group', error: e);
@@ -1224,7 +1276,8 @@ class LocationGroupService {
     }).transform(StreamTransformer.fromHandlers(
       handleError: (error, stackTrace, sink) {
         // On error, emit empty list to ensure UI receives data
-        _logger.e('Error in streamGroupMembers, emitting empty list', error: error);
+        _logger.e('Error in streamGroupMembers, emitting empty list',
+            error: error);
         sink.add(<GroupMembership>[]);
       },
     ));
@@ -1268,8 +1321,11 @@ class LocationGroupService {
       );
       // Update inverse index
       batch.update(
-        _firestore.collection('users').doc(targetUserId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(targetUserId)
+            .collection('group_memberships')
+            .doc(groupId),
         {
           'role': 'admin',
           'updatedAt': FieldValue.serverTimestamp(),
@@ -1278,7 +1334,7 @@ class LocationGroupService {
       await batch.commit();
 
       _logger.i('User $targetUserId promoted to admin in group $groupId');
-      
+
       // Send system message
       try {
         final displayName = targetMembership.userName ?? 'Someone';
@@ -1289,7 +1345,7 @@ class LocationGroupService {
       } catch (e) {
         _logger.w('Failed to send promotion system message', error: e);
       }
-      
+
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error promoting member', error: e);
@@ -1353,13 +1409,17 @@ class LocationGroupService {
       });
       // Remove from inverse index (whether banned or removed)
       batch.delete(
-        _firestore.collection('users').doc(targetUserId)
-          .collection('group_memberships').doc(groupId),
+        _firestore
+            .collection('users')
+            .doc(targetUserId)
+            .collection('group_memberships')
+            .doc(groupId),
       );
-      
+
       try {
         await batch.commit();
-        _logger.i('User $targetUserId ${ban ? "banned from" : "removed from"} group $groupId');
+        _logger.i(
+            'User $targetUserId ${ban ? "banned from" : "removed from"} group $groupId');
       } catch (batchError) {
         _logger.e('Batch commit failed for removeMember', error: batchError);
         return GroupFailure(
@@ -1367,7 +1427,7 @@ class LocationGroupService {
           GroupErrorType.unknown,
         );
       }
-      
+
       // Send system message
       try {
         final targetMembership = await _getMembership(groupId, targetUserId);
@@ -1379,7 +1439,7 @@ class LocationGroupService {
       } catch (e) {
         _logger.w('Failed to send removal system message', error: e);
       }
-      
+
       return const GroupSuccess(null);
     } catch (e) {
       _logger.e('Error removing member', error: e);
@@ -1419,17 +1479,28 @@ class LocationGroupService {
             GroupErrorType.invalidData,
           );
         }
-        
+
         if (!RegExp(r'[a-zA-Z0-9]').hasMatch(trimmedName)) {
           return const GroupFailure(
             'Group name must contain letters or numbers',
             GroupErrorType.invalidData,
           );
         }
-        
+
         // Check for duplicate name in same location
         final group = await getGroupById(groupId);
         if (group != null) {
+          // Validate location codes are present (defensive check)
+          if (group.countryCode.trim().isEmpty ||
+              group.stateCode.trim().isEmpty) {
+            _logger.e(
+                'Group $groupId has invalid location codes, cannot check for duplicates');
+            return const GroupFailure(
+              'Group has invalid location data',
+              GroupErrorType.invalidData,
+            );
+          }
+
           // First try with nameLowercase index
           final duplicateCheck = await _groupsRef
               .where('countryCode', isEqualTo: group.countryCode)
@@ -1444,7 +1515,7 @@ class LocationGroupService {
               GroupErrorType.duplicateName,
             );
           }
-          
+
           // Fallback: Check for groups without nameLowercase field (legacy data)
           final legacyCheck = await _groupsRef
               .where('countryCode', isEqualTo: group.countryCode)
@@ -1569,7 +1640,11 @@ class LocationGroupService {
 
       // Finally delete the admin membership doc.
       // This is allowed because the admin is deleting their own member doc.
-      await _groupsRef.doc(groupId).collection('members').doc(adminUserId).delete();
+      await _groupsRef
+          .doc(groupId)
+          .collection('members')
+          .doc(adminUserId)
+          .delete();
 
       _logger.i('Group $groupId deleted by admin $adminUserId');
       return const GroupSuccess(null);
@@ -1616,7 +1691,7 @@ class LocationGroupService {
   // ==================== HELPER METHODS ====================
 
   /// Sends a system message to the group (e.g., "X joined the group").
-  /// 
+  ///
   /// IMPORTANT: Use delayBeforeSend=true when calling immediately after
   /// membership changes to allow Firestore replication.
   Future<void> sendSystemMessage({
@@ -1627,7 +1702,8 @@ class LocationGroupService {
     try {
       // CRITICAL: Add delay if requested (e.g., after join to allow replication)
       if (delayBeforeSend) {
-        _logger.d('Waiting 1s for Firestore replication before sending system message');
+        _logger.d(
+            'Waiting 1s for Firestore replication before sending system message');
         await Future.delayed(const Duration(milliseconds: 1000));
       }
 
@@ -1658,7 +1734,7 @@ class LocationGroupService {
   // ==================== RISK MITIGATION METHODS ====================
 
   /// Updates denormalized user data across all group memberships.
-  /// 
+  ///
   /// RISK MITIGATION: Prevents stale user names/avatars in group member lists.
   /// Call this when user updates their profile.
   Future<void> updateMemberProfileData({
@@ -1696,11 +1772,9 @@ class LocationGroupService {
       if (userPhotoUrl != null) updateData['userPhotoUrl'] = userPhotoUrl;
 
       for (final groupId in groupIds) {
-        final memberRef = _groupsRef
-            .doc(groupId)
-            .collection('members')
-            .doc(userId);
-        
+        final memberRef =
+            _groupsRef.doc(groupId).collection('members').doc(userId);
+
         currentBatch.update(memberRef, updateData);
         operationCount++;
 
@@ -1720,7 +1794,8 @@ class LocationGroupService {
         await batch.commit();
       }
 
-      _logger.i('Updated denormalized profile data for user $userId across ${groupIds.length} groups');
+      _logger.i(
+          'Updated denormalized profile data for user $userId across ${groupIds.length} groups');
     } catch (e) {
       _logger.e('Error updating member profile data', error: e);
       // Don't throw - this is a background operation
@@ -1728,7 +1803,7 @@ class LocationGroupService {
   }
 
   /// Recalculates and fixes member count for a group.
-  /// 
+  ///
   /// RISK MITIGATION: Repairs member count desync caused by failed transactions.
   /// Run this as a background job or admin tool if counts appear incorrect.
   Future<void> repairMemberCount(String groupId) async {
@@ -1761,7 +1836,8 @@ class LocationGroupService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
-        _logger.i('Repaired member count for group $groupId: $currentCount -> $actualCount');
+        _logger.i(
+            'Repaired member count for group $groupId: $currentCount -> $actualCount');
       } else {
         _logger.d('Member count correct for group $groupId: $actualCount');
       }
@@ -1772,11 +1848,8 @@ class LocationGroupService {
 
   Future<GroupMembership?> _getMembership(String groupId, String userId) async {
     try {
-      final doc = await _groupsRef
-          .doc(groupId)
-          .collection('members')
-          .doc(userId)
-          .get();
+      final doc =
+          await _groupsRef.doc(groupId).collection('members').doc(userId).get();
 
       if (!doc.exists) return null;
       return GroupMembershipModel.fromFirestore(doc, groupId);
@@ -1787,7 +1860,8 @@ class LocationGroupService {
   }
 
   /// Updates last activity timestamp for a group (called when messages are sent).
-  Future<void> updateLastActivity(String groupId, String? messagePreview) async {
+  Future<void> updateLastActivity(
+      String groupId, String? messagePreview) async {
     try {
       await _groupsRef.doc(groupId).update({
         'lastActivityAt': FieldValue.serverTimestamp(),
@@ -1810,7 +1884,8 @@ class LocationGroupService {
       final snapshot = await collectionRef.limit(batchSize).get();
       if (snapshot.docs.isEmpty) break;
 
-      final docsToDelete = snapshot.docs.where((d) => !skipDocIds.contains(d.id)).toList();
+      final docsToDelete =
+          snapshot.docs.where((d) => !skipDocIds.contains(d.id)).toList();
       if (docsToDelete.isEmpty) break;
 
       final batch = _firestore.batch();

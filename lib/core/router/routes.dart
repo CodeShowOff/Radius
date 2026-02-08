@@ -98,6 +98,9 @@ abstract class Routes {
   static const String nearbyHelpRequestDetail = '/nearby-help/request/:requestId';
   static const String nearbyHelpHelperNavigation = '/nearby-help/navigate/:requestId';
 
+  // Random Chat routes (daily random user discovery & chat)
+  static const String randomChat = '/random-chat';
+
   /// Helper to build a help request detail route with request ID.
   static String nearbyHelpRequestDetailWith(String requestId) =>
       '/nearby-help/request/$requestId';
