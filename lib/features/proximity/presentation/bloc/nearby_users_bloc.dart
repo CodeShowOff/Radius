@@ -103,7 +103,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   }
 
   /// Start a scan for nearby users.
-  /// [duration] can be specified for custom scan lengths (e.g., 7 seconds for GuessMe).
+  /// [duration] can be specified for custom scan lengths.
   Future<void> _onStartScan(
     NearbyUsersStartScan event,
     Emitter<NearbyUsersState> emit,

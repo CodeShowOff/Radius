@@ -4,7 +4,7 @@ import '../../domain/entities/message.dart';
 import '../../domain/entities/chat_config.dart';
 import 'message_bubble.dart';
 
-/// Shared messages list widget that works for both Connections and Guess Me.
+/// Shared messages list widget for chat conversations.
 /// 
 /// Displays messages with appropriate styling based on [config].
 class SharedMessagesList extends StatelessWidget {
@@ -288,7 +288,7 @@ class SharedMessagesList extends StatelessWidget {
     final isAnonymous = config.displayMode == ChatDisplayMode.anonymous;
     
     // Handle system messages (centered, special styling)
-    if (message.senderId == 'system' || message.senderId == 'guesscheck_system') {
+    if (message.senderId == 'system') {
       return _buildSystemMessage(context, message);
     }
 
@@ -305,10 +305,9 @@ class SharedMessagesList extends StatelessWidget {
     return _buildAnonymousMessageBubble(context, message, isMe, showTail);
   }
 
-  /// Builds a system message (game events, guess checks, etc.)
+  /// Builds a system message
   Widget _buildSystemMessage(BuildContext context, Message message) {
     final theme = Theme.of(context);
-    final isGuessCheck = message.senderId == 'guesscheck_system';
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -316,31 +315,16 @@ class SharedMessagesList extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isGuessCheck
-                ? Colors.orange.withValues(alpha: 0.2)
-                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(16),
-            border: isGuessCheck ? Border.all(color: Colors.orange, width: 1.5) : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isGuessCheck) ...[
-                const Icon(Icons.psychology, color: Colors.orange, size: 18),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  message.text,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: isGuessCheck ? FontWeight.bold : FontWeight.normal,
-                    fontStyle: isGuessCheck ? FontStyle.normal : FontStyle.italic,
-                    color: isGuessCheck ? Colors.orange.shade900 : theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
+          child: Text(
+            message.text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontStyle: FontStyle.italic,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),

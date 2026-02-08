@@ -15,7 +15,6 @@ export 'data/models/conversation_model.dart';
 // Services
 export 'data/chat_service.dart';
 export 'data/media_upload_service.dart';
-export 'data/adapters/guessme_message_adapter.dart';
 
 // BLoC
 export 'presentation/bloc/chat_bloc.dart';

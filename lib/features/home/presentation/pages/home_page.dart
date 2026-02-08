@@ -267,33 +267,15 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
-                // Quick action buttons row - Nearby and Guess Me
-                Row(
-                  children: [
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.nearby),
-                        label: 'Nearby',
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.secondaryContainer,
-                        isSquare: true,
-                        animationType: _CardAnimationType.wave,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.guessme),
-                        label: 'Guess Me',
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.secondaryContainer,
-                        isSquare: true,
-                        animationType: _CardAnimationType.personCycle,
-                      ),
-                    ),
-                  ],
+                // Quick action button - Nearby
+                _AnimatedSquareCard(
+                  onTap: () => context.push(Routes.nearby),
+                  label: 'Nearby',
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.secondaryContainer,
+                  isSquare: true,
+                  animationType: _CardAnimationType.wave,
                 ),
                 const SizedBox(height: 16),
 

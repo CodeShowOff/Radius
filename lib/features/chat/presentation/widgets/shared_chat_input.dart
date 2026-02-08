@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/chat_config.dart';
 import 'chat_input.dart';
 
-/// Shared chat input widget that works for both Connections and Guess Me.
+/// Shared chat input widget for chat conversations.
 /// 
 /// Provides appropriate input controls based on [config].
 class SharedChatInput extends StatefulWidget {
@@ -93,7 +93,7 @@ class _SharedChatInputState extends State<SharedChatInput> {
       );
     }
 
-    // For Guess Me or text-only chat, use simplified input
+    // For text-only chat, use simplified input
     return _buildSimpleInput(context);
   }
 

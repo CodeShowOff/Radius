@@ -14,7 +14,6 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/chat/presentation/bloc/conversations_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
-import 'features/guess_me/presentation/bloc/guess_me_bloc.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
@@ -56,11 +55,6 @@ class RadiusApp extends StatelessWidget {
           // Nearby Users BLoC for BLE advertising (app-wide)
           BlocProvider<NearbyUsersBloc>(
             create: (_) => getIt<NearbyUsersBloc>(),
-          ),
-
-          // Guess Me BLoC (used by both lobby and game pages)
-          BlocProvider<GuessmeBloc>(
-            create: (_) => getIt<GuessmeBloc>(),
           ),
 
           // Location Groups BLoC (app-wide for preloading)

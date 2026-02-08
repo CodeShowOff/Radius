@@ -136,10 +136,7 @@ service cloud.firestore {
         && request.resource.data.userId == userId;
       
       // RULE: Only owner can update their profile
-      allow update: if isOwner(userId)
-        || (isAuthenticated() 
-            && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['isInGuessMeGame', 'guessMeSessionId', 'guessMeJoinedAt', 'isSearchingGuessMeGame', 'guessMeSearchStartedAt']));
+      allow update: if isOwner(userId);
       
       // RULE: Only owner can delete their profile
       allow delete: if isOwner(userId);
@@ -214,7 +211,6 @@ service cloud.firestore {
       allow list: if isAuthenticated() && isInUsersArray();
       
       // RULE: Participants can create connections
-      // This supports both manual connections and GuessMe conversions
       allow create: if isAuthenticated() 
         && willBeParticipant()
         && request.resource.data.keys().hasAll(['userId1', 'userId2', 'status', 'connectedAt', 'updatedAt', 'initiatedBy', 'canMessage', 'shareLocation'])
@@ -297,8 +293,7 @@ service cloud.firestore {
       allow read: if isChatParticipant();
       
       // RULE: Create requires participant and exactly 2 users
-      // For GuessMe conversions: connection may be created simultaneously
-      // For manual chats: connection should exist (enforced by app logic)
+      // Connection should exist or be created simultaneously (enforced by app logic)
       allow create: if willBeChatParticipant()
         && request.resource.data.participantIds.size() == 2
         && request.resource.data.participantIds[0] != request.resource.data.participantIds[1]
@@ -391,164 +386,6 @@ service cloud.firestore {
       
       // RULE: No user updates or deletes - admin only
       allow update, delete: if false;
-    }
-    
-    // ============================================================
-    // GUESS ME - Anonymous Game-Based Chat
-    // ============================================================
-    
-    // GuessMe matchmaking queue
-    match /guess_me_queue/{queueId} {
-      // RULE: Users can read to find matches
-      allow read: if isAuthenticated();
-      
-      // RULE: Users can only create their own queue entry
-      allow create: if isAuthenticated()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasAll(['userId', 'joinedAt', 'nearbyUserIds']);
-      
-      // RULE: Users can update their own entry (extend timeout)
-      allow update: if isAuthenticated()
-        && resource.data.userId == request.auth.uid;
-      
-      // RULE: Users can delete their own queue entry
-      // Allow delete if queueId matches user's ID (even if doc doesn't exist)
-      allow delete: if isAuthenticated()
-        && (queueId == request.auth.uid 
-            || (resource != null && resource.data.userId == request.auth.uid));
-    }
-
-    // GuessMe connection requests (for pending matchmaking)
-    match /guessme_connection_requests/{requestId} {
-      // RULE: Users can read their own requests
-      allow read: if isAuthenticated() 
-        && (resource.data.senderId == request.auth.uid 
-            || resource.data.receiverId == request.auth.uid);
-      
-      // RULE: Users can create connection requests
-      allow create: if isAuthenticated()
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.keys().hasAll(['senderId', 'receiverId', 'expiresAt']);
-      
-      // RULE: Users can update their own requests
-      allow update: if isAuthenticated() 
-        && (resource.data.senderId == request.auth.uid 
-            || resource.data.receiverId == request.auth.uid);
-      
-      // RULE: Users can delete their own requests
-      allow delete: if isAuthenticated()
-        && (resource.data.senderId == request.auth.uid 
-            || resource.data.receiverId == request.auth.uid);
-    }
-    
-    // GuessMe game sessions
-    match /guess_me_sessions/{sessionId} {
-      /// Helper function to check if authenticated user is a participant
-      function isSessionParticipant() {
-        return request.auth.uid == resource.data.player1Id 
-          || request.auth.uid == resource.data.player2Id;
-      }
-      
-      /// Helper function to check if authenticated user will be a participant (for creates)
-      function willBeSessionParticipant() {
-        return request.auth.uid == request.resource.data.player1Id 
-          || request.auth.uid == request.resource.data.player2Id;
-      }
-      
-      // RULE: Participants can read individual session documents
-      allow get: if isAuthenticated() && isSessionParticipant();
-      
-      // RULE: Users can list/query ONLY their own sessions using where('players', 'array-contains', uid)
-      // The query filter ensures users only see sessions they're part of
-      allow list: if isAuthenticated()
-        && request.query.limit <= 100; // Prevent excessive reads
-      
-      // RULE: Authenticated users can create sessions (matchmaking service)
-      // Both players must exist and be different
-      allow create: if isAuthenticated()
-        && request.resource.data.keys().hasAll(['id', 'players', 'player1Id', 'player2Id', 'status', 'createdAt', 'expiresAt'])
-        && willBeSessionParticipant()
-        && request.resource.data.player1Id != request.resource.data.player2Id
-        && request.resource.data.players.size() == 2
-        && request.resource.data.players.hasAll([request.resource.data.player1Id, request.resource.data.player2Id])
-        && request.resource.data.status in ['active', 'waiting'];
-      
-      // RULE: Only participants can update session (guess checks, status changes)
-      // Cannot change immutable fields (player IDs, creation time)
-      allow update: if isAuthenticated() 
-        && isSessionParticipant()
-        && request.resource.data.player1Id == resource.data.player1Id
-        && request.resource.data.player2Id == resource.data.player2Id
-        && request.resource.data.players == resource.data.players
-        && request.resource.data.createdAt == resource.data.createdAt;
-      
-      // RULE: No deletes - sessions expire naturally or are cleaned up by admin
-      allow delete: if false;
-      
-      // GuessMe messages within a session (subcollection)
-      match /messages/{messageId} {
-        /// Check if user is participant in the parent session
-        /// CRITICAL: Uses exists() check first to handle non-existent sessions gracefully
-        function isSessionParticipant() {
-          let sessionPath = /databases/$(database)/documents/guess_me_sessions/$(sessionId);
-          return exists(sessionPath) 
-            && (
-              request.auth.uid == get(sessionPath).data.player1Id 
-              || request.auth.uid == get(sessionPath).data.player2Id
-            );
-        }
-        
-        // RULE: Only session participants can read messages
-        // This allows reading ALL messages in the session, including system messages
-        allow read: if isAuthenticated() && isSessionParticipant();
-        
-        // RULE: Only session participants can send messages
-        // System messages (senderId == 'system') can be sent by any participant
-        // User messages must have senderId matching the authenticated user
-        allow create: if isAuthenticated()
-          && isSessionParticipant()
-          && (request.resource.data.senderId == request.auth.uid 
-              || request.resource.data.senderId == 'system')
-          && request.resource.data.keys().hasAll(['id', 'sessionId', 'senderId', 'text', 'sentAt', 'type'])
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 5000;
-        
-        // RULE: No updates or deletes - messages are immutable
-        allow update, delete: if false;
-      }
-    }
-    
-    // GuessMe messages are now stored as subcollections under guess_me_sessions/{sessionId}/messages
-    // This provides better permission handling and matches the pattern used by conversations
-    // Legacy top-level collection (deprecated - messages now in subcollection)
-    match /guess_me_messages/{messageId} {
-      // Deny all access - messages should be in subcollection
-      allow read, write: if false;
-    }
-    
-    // GuessMe user stats - stored under profiles/{userId}/stats/guessme for privacy
-    // Access is controlled by the profiles/{userId}/stats/** rule
-
-    // GuessMe sessions (alternative structure using players array)
-    match /guessme_sessions/{sessionId} {
-      // RULE: Only participants can read their session
-      allow read: if isAuthenticated() 
-        && request.auth != null
-        && request.auth.uid in resource.data.players;
-      
-      // RULE: Only participants can create sessions
-      allow create: if isAuthenticated()
-        && request.auth != null
-        && request.auth.uid in request.resource.data.players
-        && request.resource.data.keys().hasAll(['players', 'status', 'createdAt']);
-      
-      // RULE: Only participants can update session
-      allow update: if isAuthenticated()
-        && request.auth.uid in resource.data.players;
-      
-      // RULE: No deletes - sessions expire naturally
-      allow delete: if false;
     }
     
     // ============================================================

@@ -39,8 +39,6 @@ import '../../features/profile/domain/repositories/i_profile_repository.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../features/proximity/proximity_service.dart';
-import '../../features/guess_me/data/guess_me_service.dart';
-import '../../features/guess_me/presentation/bloc/guess_me_bloc.dart';
 import '../settings/app_settings_store.dart';
 import '../theme/theme_cubit.dart';
 
@@ -123,17 +121,6 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<ThemeCubit>()) {
     getIt.registerLazySingleton<ThemeCubit>(
       () => ThemeCubit(settings: getIt<AppSettingsStore>()),
-    );
-  }
-
-  // Guess Me feature
-  if (!getIt.isRegistered<GuessmeService>()) {
-    getIt.registerLazySingleton<GuessmeService>(() => GuessmeService());
-  }
-
-  if (!getIt.isRegistered<GuessmeBloc>()) {
-    getIt.registerFactory<GuessmeBloc>(
-      () => GuessmeBloc(service: getIt<GuessmeService>()),
     );
   }
 

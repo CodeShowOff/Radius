@@ -1,8 +1,6 @@
 /// Configuration for shared chat UI components.
 /// 
-/// This allows the same chat widget to be used for both:
-/// - Connections (persistent, shows profiles)
-/// - Guess Me (temporary, anonymous)
+/// This allows the same chat widget to be used for different types of chats.
 class ChatConfig {
   /// Display mode for the chat.
   final ChatDisplayMode displayMode;
@@ -46,19 +44,6 @@ class ChatConfig {
     );
   }
 
-  /// Create config for Guess Me chat (temporary, anonymous).
-  factory ChatConfig.guessMe({DateTime? expiresAt}) {
-    return ChatConfig(
-      displayMode: ChatDisplayMode.anonymous,
-      enableMediaAttachments: false,
-      showTypingIndicator: false,
-      showReadReceipts: false,
-      inputPlaceholder: 'Type a message...',
-      isTimeLimited: true,
-      expiresAt: expiresAt,
-    );
-  }
-
   ChatConfig copyWith({
     ChatDisplayMode? displayMode,
     bool? enableMediaAttachments,
@@ -85,6 +70,6 @@ enum ChatDisplayMode {
   /// Show real names and profile photos (Connections).
   identified,
 
-  /// Hide names and photos, show anonymous avatars (Guess Me).
+  /// Hide names and photos, show anonymous avatars.
   anonymous,
 }

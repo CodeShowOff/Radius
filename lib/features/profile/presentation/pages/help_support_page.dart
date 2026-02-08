@@ -821,13 +821,6 @@ class _FAQsPage extends StatelessWidget {
                 'Go to Privacy Settings → Manage Blocked Users to view your blocked list.',
           ),
           _FAQItem(
-            question: 'What is GuessMe?',
-            answer:
-                'GuessMe is an anonymous chat game where you chat with a nearby user and try to guess their identity. '
-                'Both users remain anonymous until someone makes a correct guess. '
-                'It\'s a fun way to break the ice with people around you!',
-          ),
-          _FAQItem(
             question: 'What are Random Group Chatrooms?',
             answer:
                 'Random Group Chatrooms are internet-based groups organized by topics and interests. '
@@ -1245,8 +1238,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• You can stop being discoverable by closing the app or adjusting privacy settings\n'
                 '• Only users you accept as connections can message you\n\n'
                 'Bluetooth is also used for:\n\n'
-                '• Nearby Groups: Auto-detecting and adding members within Bluetooth range\n'
-                '• GuessMe: Anonymous matching with nearby users for the game',
+                '• Nearby Groups: Auto-detecting and adding members within Bluetooth range',
           ),
           const _PolicySection(
             title: '5. Location-Based Features',
@@ -1259,7 +1251,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Your approximate city is derived from IP address for help request radius calculations\n'
                 '• We do NOT track or store your location history\n'
                 '• Location permissions can be revoked anytime in device settings\n\n'
-                'All other features (Nearby users, Nearby Groups, GuessMe, Random Groups) use only Bluetooth and do NOT access GPS.',
+                'All other features (Nearby users, Nearby Groups, Random Groups) use only Bluetooth and do NOT access GPS.',
           ),
           const _PolicySection(
             title: '6. Group Features & Data',

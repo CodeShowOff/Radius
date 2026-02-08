@@ -30,19 +30,14 @@ This project now includes 6 Firebase Cloud Functions to handle notifications and
 - **Purpose**: Notify the original sender when their connection request is accepted
 - **Data**: Includes accepter name, user IDs
 
-### 6. **cleanupExpiredGuessMeSessions** (Scheduled Cleanup) ✨ NEW
-- **Schedule**: Daily at 2:00 AM UTC (`0 2 * * *`)
-- **Purpose**: Delete GuessMe sessions older than 7 days
-- **Collection**: `guess_me_sessions`
-
-### 7. **cleanupOldConnectionRequests** (Scheduled Cleanup) ✨ NEW
+### 6. **cleanupOldConnectionRequests** (Scheduled Cleanup) ✨ NEW
 - **Schedule**: Daily at 2:30 AM UTC (`30 2 * * *`)
 - **Purpose**: 
   - Delete rejected/cancelled connection requests older than 30 days
   - Delete pending connection requests older than 90 days
 - **Collection**: `connection_requests`
 
-### 8. **cleanupOldGroupJoinRequests** (Scheduled Cleanup) ✨ NEW
+### 7. **cleanupOldGroupJoinRequests** (Scheduled Cleanup) ✨ NEW
 - **Schedule**: Daily at 3:00 AM UTC (`0 3 * * *`)
 - **Purpose**:
   - Delete rejected join requests older than 30 days
@@ -69,7 +64,7 @@ firebase deploy --only functions
 firebase deploy --only functions:onGroupJoinRequestNotification,functions:onConnectionRequestAccepted
 
 # Deploy only cleanup functions
-firebase deploy --only functions:cleanupExpiredGuessMeSessions,functions:cleanupOldConnectionRequests,functions:cleanupOldGroupJoinRequests
+firebase deploy --only functions:cleanupOldConnectionRequests,functions:cleanupOldGroupJoinRequests
 ```
 
 ### Verify Current Project

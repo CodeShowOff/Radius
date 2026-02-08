@@ -45,14 +45,6 @@ abstract class Routes {
   static const String privacySettings = '/settings/privacy';
   static const String helpSupport = '/help-support';
 
-  // GuessMe routes
-  static const String guessme = '/guessme';
-  static const String guessmeGame = '/guessme/game';
-
-  /// Helper to build a GuessMe game route with session ID.
-  static String guessmeGameWith(String sessionId) =>
-      '/guessme/game?sessionId=$sessionId';
-
   // Location Groups routes
   static const String locationGroups = '/location-groups';
   static const String myGroups = '/my-groups';
