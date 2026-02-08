@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
+exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const admin = __importStar(require("firebase-admin"));
@@ -1778,6 +1778,272 @@ exports.expireOldHelpRequests = (0, scheduler_1.onSchedule)("every 10 minutes", 
     }
     catch (error) {
         firebase_functions_1.logger.error("Error expiring help requests:", error);
+    }
+});
+// =============================================================================
+// RANDOM CHAT - Daily Reset & Cleanup
+// =============================================================================
+/**
+ * Scheduled function that runs at midnight every day to clean up
+ * yesterday's random chat data.
+ *
+ * This ensures:
+ * - All active connections are removed
+ * - All pending requests are expired
+ * - Daily received/sent request counts are reset
+ * - Suggested user lists are cleared
+ *
+ * We keep old date data for 2 days as a safety buffer, then delete.
+ */
+exports.randomChatDailyReset = (0, scheduler_1.onSchedule)({
+    schedule: "0 0 * * *", // Every day at midnight (UTC)
+    timeZone: "UTC",
+    retryCount: 3,
+}, async () => {
+    firebase_functions_1.logger.log("Running Random Chat daily reset...");
+    const db = admin.firestore();
+    try {
+        // Calculate date keys
+        const now = new Date();
+        // Clean up data from 2 days ago (keep yesterday for safety)
+        const twoDaysAgo = new Date(now);
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        const oldDateKey = `${twoDaysAgo.getFullYear()}-` +
+            `${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-` +
+            `${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
+        firebase_functions_1.logger.log(`Cleaning up random chat data for date: ${oldDateKey}`);
+        const dailyDocRef = db.collection("random_chat_daily").doc(oldDateKey);
+        // Delete all subcollections
+        const subcollections = ["suggestions", "requests", "connections", "user_stats"];
+        for (const subcol of subcollections) {
+            const colRef = dailyDocRef.collection(subcol);
+            let deleted = 0;
+            // Delete in batches of 500
+            let snapshot = await colRef.limit(500).get();
+            while (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                deleted += snapshot.size;
+                snapshot = await colRef.limit(500).get();
+            }
+            firebase_functions_1.logger.log(`Deleted ${deleted} docs from ${subcol} for ${oldDateKey}`);
+        }
+        // Also expire any pending requests from yesterday that weren't handled
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayKey = `${yesterday.getFullYear()}-` +
+            `${String(yesterday.getMonth() + 1).padStart(2, "0")}-` +
+            `${String(yesterday.getDate()).padStart(2, "0")}`;
+        const yesterdayRequests = await db
+            .collection("random_chat_daily")
+            .doc(yesterdayKey)
+            .collection("requests")
+            .where("status", "==", "pending")
+            .get();
+        if (!yesterdayRequests.empty) {
+            // Chunk into batches of 500 (Firestore batch limit)
+            const docs = yesterdayRequests.docs;
+            for (let i = 0; i < docs.length; i += 500) {
+                const chunk = docs.slice(i, i + 500);
+                const batch = db.batch();
+                chunk.forEach((doc) => {
+                    batch.update(doc.ref, { status: "expired" });
+                });
+                await batch.commit();
+            }
+            firebase_functions_1.logger.log(`Expired ${yesterdayRequests.size} pending requests from ${yesterdayKey}`);
+        }
+        firebase_functions_1.logger.log("Random Chat daily reset complete");
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error in Random Chat daily reset:", error);
+    }
+});
+/**
+ * Cloud Function triggered when a random chat request is created.
+ * Sends a push notification to the receiver.
+ */
+exports.onRandomChatRequestCreated = (0, firestore_1.onDocumentCreated)("random_chat_daily/{dateKey}/requests/{requestId}", async (event) => {
+    const request = event.data?.data();
+    if (!request)
+        return;
+    const receiverId = request.receiverId;
+    const senderName = request.senderDisplayName || "Someone";
+    try {
+        // Get receiver's FCM tokens
+        const userDoc = await admin
+            .firestore()
+            .collection("users")
+            .doc(receiverId)
+            .get();
+        if (!userDoc.exists)
+            return;
+        const userData = userDoc.data();
+        const fcmTokens = userData?.fcmTokens || {};
+        const tokens = Object.keys(fcmTokens);
+        if (tokens.length === 0)
+            return;
+        await admin.messaging().sendEachForMulticast({
+            tokens: tokens,
+            notification: {
+                title: "New Random Chat Request",
+                body: `${senderName} wants to chat with you!`,
+            },
+            data: {
+                type: "random_chat_request",
+                requestId: event.params.requestId,
+                senderId: request.senderId,
+            },
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "radius_random_chat",
+                    priority: "high",
+                    sound: "default",
+                    tag: `random_chat_${request.senderId}`,
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: 1,
+                    },
+                },
+            },
+        });
+        firebase_functions_1.logger.log(`Sent random chat request notification to ${receiverId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error sending random chat notification:", error);
+    }
+});
+/**
+ * Cloud Function triggered when a random chat request is accepted.
+ * Notifies the sender that their request was accepted.
+ */
+exports.onRandomChatRequestAccepted = (0, firestore_1.onDocumentUpdated)("random_chat_daily/{dateKey}/requests/{requestId}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after)
+        return;
+    // Only trigger on status change to 'accepted'
+    if (before.status === after.status || after.status !== "accepted")
+        return;
+    const senderId = after.senderId;
+    const receiverName = after.receiverDisplayName || "Someone";
+    try {
+        const userDoc = await admin
+            .firestore()
+            .collection("users")
+            .doc(senderId)
+            .get();
+        if (!userDoc.exists)
+            return;
+        const userData = userDoc.data();
+        const fcmTokens = userData?.fcmTokens || {};
+        const tokens = Object.keys(fcmTokens);
+        if (tokens.length === 0)
+            return;
+        await admin.messaging().sendEachForMulticast({
+            tokens: tokens,
+            notification: {
+                title: "Request Accepted! 🎉",
+                body: `${receiverName} accepted your Random Chat request!`,
+            },
+            data: {
+                type: "random_chat_accepted",
+                requestId: event.params.requestId,
+                receiverId: after.receiverId,
+            },
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "radius_random_chat",
+                    priority: "high",
+                    sound: "default",
+                    tag: `random_chat_accepted_${after.receiverId}`,
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: 1,
+                    },
+                },
+            },
+        });
+        firebase_functions_1.logger.log(`Sent random chat acceptance notification to ${senderId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error sending acceptance notification:", error);
+    }
+});
+/**
+ * Cloud Function triggered when a random chat connection is created.
+ *
+ * Expires ALL other pending requests involving either connected user.
+ * This is the authoritative server-side cleanup — the client can only
+ * expire its own requests (Firestore rules), so this function handles
+ * the other user's pending requests as well.
+ */
+exports.onRandomChatConnectionCreated = (0, firestore_1.onDocumentCreated)("random_chat_daily/{dateKey}/connections/{connectionId}", async (event) => {
+    const connection = event.data?.data();
+    if (!connection)
+        return;
+    const dateKey = event.params.dateKey;
+    const user1Id = connection.user1Id;
+    const user2Id = connection.user2Id;
+    const db = admin.firestore();
+    try {
+        for (const userId of [user1Id, user2Id]) {
+            // Expire pending requests TO this user
+            const toSnap = await db
+                .collection("random_chat_daily")
+                .doc(dateKey)
+                .collection("requests")
+                .where("receiverId", "==", userId)
+                .where("status", "==", "pending")
+                .get();
+            for (let i = 0; i < toSnap.docs.length; i += 500) {
+                const chunk = toSnap.docs.slice(i, i + 500);
+                const batch = db.batch();
+                chunk.forEach((doc) => {
+                    batch.update(doc.ref, {
+                        status: "expired",
+                        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                });
+                await batch.commit();
+            }
+            // Expire pending requests FROM this user
+            const fromSnap = await db
+                .collection("random_chat_daily")
+                .doc(dateKey)
+                .collection("requests")
+                .where("senderId", "==", userId)
+                .where("status", "==", "pending")
+                .get();
+            for (let i = 0; i < fromSnap.docs.length; i += 500) {
+                const chunk = fromSnap.docs.slice(i, i + 500);
+                const batch = db.batch();
+                chunk.forEach((doc) => {
+                    batch.update(doc.ref, {
+                        status: "expired",
+                        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                });
+                await batch.commit();
+            }
+        }
+        firebase_functions_1.logger.log(`Expired pending requests for connected users ${user1Id} & ${user2Id}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error expiring requests after connection created:", error);
     }
 });
 //# sourceMappingURL=index.js.map
