@@ -1283,6 +1283,157 @@ export const cleanupExpiredGuessMeSessions = onSchedule(
 );
 
 /**
+ * Scheduled function to clean up expired GuessMe queue entries.
+ * Runs every hour to remove stale queue entries.
+ * Deletes queue entries that have expired (older than expiresAt timestamp).
+ */
+export const cleanupExpiredGuessMeQueue = onSchedule(
+  {
+    schedule: "0 * * * *", // Every hour at minute 0
+    timeZone: "UTC",
+  },
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+
+    try {
+      // Find expired queue entries
+      const expiredEntries = await admin
+        .firestore()
+        .collection("guess_me_queue")
+        .where("expiresAt", "<", now)
+        .get();
+
+      if (expiredEntries.empty) {
+        logger.log("No expired GuessMe queue entries to clean up");
+        return;
+      }
+
+      // Delete in batches
+      const batchSize = 500;
+      let batch = admin.firestore().batch();
+      let count = 0;
+      let totalDeleted = 0;
+
+      for (const doc of expiredEntries.docs) {
+        batch.delete(doc.ref);
+        count++;
+        totalDeleted++;
+
+        if (count === batchSize) {
+          await batch.commit();
+          batch = admin.firestore().batch();
+          count = 0;
+        }
+      }
+
+      // Commit remaining
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      logger.log(
+        `Cleaned up ${totalDeleted} expired GuessMe queue entries`
+      );
+    } catch (error) {
+      logger.error("Error cleaning up GuessMe queue:", error);
+    }
+  }
+);
+
+/**
+ * Scheduled function to expire connection confirmations that have timed out.
+ * Runs every 5 minutes to check for sessions awaiting connection confirmation
+ * that have exceeded the 5-minute timeout.
+ */
+export const expireStuckConnectionConfirmations = onSchedule(
+  {
+    schedule: "*/5 * * * *", // Every 5 minutes
+    timeZone: "UTC",
+  },
+  async () => {
+    const fiveMinutesAgo = new Date();
+    fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+    const fiveMinutesAgoTimestamp = admin.firestore.Timestamp.fromDate(fiveMinutesAgo);
+
+    try {
+      // Find sessions awaiting connection confirmation that started > 5 minutes ago
+      const stuckSessions = await admin
+        .firestore()
+        .collection("guess_me_sessions")
+        .where("awaitingConnectionConfirmations", "==", true)
+        .where("status", "==", "active")
+        .where("connectionConfirmationStartedAt", "<", fiveMinutesAgoTimestamp)
+        .get();
+
+      if (stuckSessions.empty) {
+        logger.log("No stuck connection confirmations to expire");
+        return;
+      }
+
+      let totalExpired = 0;
+
+      for (const doc of stuckSessions.docs) {
+        const sessionData = doc.data();
+        const sessionId = doc.id;
+
+        // Update session to completed with no mutual connection
+        await doc.ref.update({
+          status: "completed",
+          endedAt: admin.firestore.FieldValue.serverTimestamp(),
+          awaitingConnectionConfirmations: false,
+          mutualConnectionSuccess: false,
+        });
+
+        // Add system message
+        await admin
+          .firestore()
+          .collection("guess_me_sessions")
+          .doc(sessionId)
+          .collection("messages")
+          .add({
+            id: `${Date.now()}_timeout`,
+            sessionId: sessionId,
+            senderId: "system",
+            text: "⏰ Connection confirmation time expired. Game ended.",
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            type: "system",
+          });
+
+        // Clear game status for both players
+        const players = sessionData.players as string[];
+        if (players && players.length >= 2) {
+          const clearPromises = players.map((playerId) =>
+            admin
+              .firestore()
+              .collection("profiles")
+              .doc(playerId)
+              .update({
+                isInGuessMeGame: false,
+                guessMeSessionId: admin.firestore.FieldValue.delete(),
+                guessMeJoinedAt: admin.firestore.FieldValue.delete(),
+                isSearchingGuessMeGame: false,
+                guessMeSearchStartedAt: admin.firestore.FieldValue.delete(),
+              })
+              .catch((error) => {
+                logger.warn(`Failed to clear status for ${playerId}:`, error);
+              })
+          );
+          await Promise.all(clearPromises);
+        }
+
+        totalExpired++;
+      }
+
+      logger.log(
+        `Expired ${totalExpired} stuck connection confirmations`
+      );
+    } catch (error) {
+      logger.error("Error expiring stuck connection confirmations:", error);
+    }
+  }
+);
+
+/**
  * Scheduled function to clean up old connection requests.
  * Runs daily at 2:30 AM UTC.
  * Deletes rejected/cancelled requests older than 30 days.
