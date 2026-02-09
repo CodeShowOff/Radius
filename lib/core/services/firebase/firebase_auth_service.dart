@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:injectable/injectable.dart';
+import 'package:flutter/services.dart';
 
 import '../../error/exceptions.dart';
 
@@ -156,8 +157,32 @@ class FirebaseAuthService {
       return user;
     } on firebase.FirebaseAuthException catch (e) {
       throw _mapFirebaseAuthException(e);
+    } on PlatformException catch (e) {
+      // Handle specific Google Sign-In exceptions
+      if (e.code == 'sign_in_canceled' ||
+          e.message?.contains('canceled') == true) {
+        throw const AuthException(
+          message:
+              'Sign in was cancelled. Please try again if you want to sign in.',
+          code: 'sign-in-cancelled',
+        );
+      }
+      throw AuthException(
+        message: 'Google sign in failed: ${e.message ?? e.toString()}',
+        code: e.code,
+        originalError: e,
+      );
     } catch (e) {
       if (e is AuthException) rethrow;
+      // Check if it's a cancellation error in any other form
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('cancel') || errorString.contains('cancelled')) {
+        throw const AuthException(
+          message:
+              'Sign in was cancelled. Please try again if you want to sign in.',
+          code: 'sign-in-cancelled',
+        );
+      }
       throw AuthException(
         message: 'Google sign in failed: ${e.toString()}',
         code: 'unknown',
