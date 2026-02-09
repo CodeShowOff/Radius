@@ -83,9 +83,10 @@
             android:value="2" />
 
         <!-- Google Maps API Key for Nearby Help feature -->
+        <!-- The actual key is stored in local.properties (not committed to git) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="YOUR_ANDROID_API_KEY_HERE"/>
+            android:value="${MAPS_API_KEY}"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

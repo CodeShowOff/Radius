@@ -32,3 +32,6 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# API Keys - DO NOT COMMIT
+Flutter/Keys.xcconfig

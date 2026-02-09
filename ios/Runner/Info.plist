@@ -73,5 +73,9 @@
 	<string>Radius needs your location to help you request assistance from nearby users and to help others find you when you need help.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Radius needs your location to notify you when someone nearby needs help, even when the app is in the background.</string>
+	
+	<!-- Google Maps API Key for iOS - injected from Keys.xcconfig -->
+	<key>MAPS_API_KEY_IOS</key>
+	<string>$(MAPS_API_KEY_IOS)</string>
 </dict>
 </plist>

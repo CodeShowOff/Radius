@@ -18,6 +18,16 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Load local properties including Maps API key
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+// Get Maps API key from local.properties
+val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: ""
+
 android {
     namespace = "com.codeshowoff.radius"
     compileSdk = flutter.compileSdkVersion
@@ -52,6 +62,9 @@ android {
         // In CI: set an env var and pass it through as a --dart-define.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Expose Maps API key to AndroidManifest.xml
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     // Signing configurations

@@ -14,7 +14,10 @@ import GoogleMaps
     FirebaseApp.configure()
 
     // Configure Google Maps for Nearby Help feature
-    GMSServices.provideAPIKey("YOUR_IOS_API_KEY_HERE")
+    // API key is stored securely in Keys.xcconfig (not committed to git)
+    if let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "MAPS_API_KEY_IOS") as? String {
+      GMSServices.provideAPIKey(mapsApiKey)
+    }
 
     // Configure notifications
     if #available(iOS 10.0, *) {
