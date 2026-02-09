@@ -35,7 +35,8 @@ class RandomChatSendRequest extends RandomChatEvent {
   });
 
   @override
-  List<Object?> get props => [receiverId, receiverDisplayName, receiverPhotoUrl];
+  List<Object?> get props =>
+      [receiverId, receiverDisplayName, receiverPhotoUrl];
 }
 
 /// Accept an incoming chat request.
@@ -96,4 +97,9 @@ class _ActiveConnectionUpdated extends RandomChatEvent {
 /// Check if the date has changed (midnight reset).
 class RandomChatCheckDateChange extends RandomChatEvent {
   const RandomChatCheckDateChange();
+}
+
+/// Reset the Random Chat state (e.g., when switching accounts).
+class ResetRandomChatState extends RandomChatEvent {
+  const ResetRandomChatState();
 }

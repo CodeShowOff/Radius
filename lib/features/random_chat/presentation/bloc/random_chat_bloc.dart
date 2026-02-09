@@ -51,6 +51,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     on<_SentRequestsUpdated>(_onSentRequestsUpdated);
     on<_ActiveConnectionUpdated>(_onActiveConnectionUpdated);
     on<RandomChatCheckDateChange>(_onCheckDateChange);
+    on<ResetRandomChatState>(_onResetRandomChatState);
   }
 
   /// Set current user metadata for requests.
@@ -128,6 +129,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
         sentRequests: sentRequests,
         activeConnection: activeConnection,
         dateKey: dateKey,
+        loadedUserId: event.userId,
       ));
 
       // Start real-time listeners
@@ -183,7 +185,10 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
           processingUserIds: updatedProcessing,
         ));
 
-      case RandomChatFailure<RandomChatRequest>(message: final message, type: final type):
+      case RandomChatFailure<RandomChatRequest>(
+          message: final message,
+          type: final type
+        ):
         _logger.w('Send request failed: $message ($type)');
 
         // If the receiver hit their daily limit, update suggestion locally
@@ -362,6 +367,31 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     }
   }
 
+  void _onResetRandomChatState(
+    ResetRandomChatState event,
+    Emitter<RandomChatState> emit,
+  ) {
+    _logger.i('Resetting Random Chat state (account switch)');
+    _cleanupAllSubscriptions();
+    _loadedDateKey = '';
+    _loadedUserId = '';
+    _currentUserId = '';
+    _currentUserDisplayName = '';
+    _currentUserPhotoUrl = null;
+    _currentUserGender = null;
+    emit(const RandomChatInitial());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cleanup
+  // ---------------------------------------------------------------------------
+
+  void _cleanupAllSubscriptions() {
+    _cancelListeners();
+    _midnightTimer?.cancel();
+    _midnightTimer = null;
+  }
+
   // ---------------------------------------------------------------------------
   // Real-time listeners
   // ---------------------------------------------------------------------------
@@ -370,19 +400,19 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     _cancelListeners();
 
     _incomingRequestsSub = _service.watchIncomingRequests(userId).listen(
-      (requests) => add(_IncomingRequestsUpdated(requests)),
-      onError: (e) => _logger.w('Incoming requests stream error', error: e),
-    );
+          (requests) => add(_IncomingRequestsUpdated(requests)),
+          onError: (e) => _logger.w('Incoming requests stream error', error: e),
+        );
 
     _sentRequestsSub = _service.watchSentRequests(userId).listen(
-      (requests) => add(_SentRequestsUpdated(requests)),
-      onError: (e) => _logger.w('Sent requests stream error', error: e),
-    );
+          (requests) => add(_SentRequestsUpdated(requests)),
+          onError: (e) => _logger.w('Sent requests stream error', error: e),
+        );
 
     _connectionSub = _service.watchActiveConnection(userId).listen(
-      (connection) => add(_ActiveConnectionUpdated(connection)),
-      onError: (e) => _logger.w('Connection stream error', error: e),
-    );
+          (connection) => add(_ActiveConnectionUpdated(connection)),
+          onError: (e) => _logger.w('Connection stream error', error: e),
+        );
   }
 
   void _cancelListeners() {
@@ -432,8 +462,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
   @override
   Future<void> close() {
-    _cancelListeners();
-    _midnightTimer?.cancel();
+    _cleanupAllSubscriptions();
     return super.close();
   }
 }

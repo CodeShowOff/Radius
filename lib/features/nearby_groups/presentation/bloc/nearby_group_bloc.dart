@@ -67,6 +67,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     on<StopGroupScanning>(_onStopGroupScanning);
     on<LoadNearbyGroupDetails>(_onLoadNearbyGroupDetails);
     on<LoadUserActiveGroup>(_onLoadUserActiveGroup);
+    on<ResetNearbyGroupState>(_onResetNearbyGroupState);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
     on<_UserGroupsReceived>(_onUserGroupsReceived);
     on<_GroupMembersReceived>(_onGroupMembersReceived);
@@ -81,14 +82,27 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   ) async {
     _logger.d('Starting to watch active nearby groups');
 
+    // Cancel existing subscription
     await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
 
     emit(state.copyWith(status: NearbyGroupBlocStatus.loading, clearError: true));
 
-    _activeGroupsSubscription = _groupService.watchActiveGroups().listen(
-      (groups) => add(_ActiveGroupsReceived(groups)),
-      onError: (error) => add(_NearbyGroupStreamError(error.toString())),
-    );
+    try {
+      _activeGroupsSubscription = _groupService.watchActiveGroups().listen(
+        (groups) => add(_ActiveGroupsReceived(groups)),
+        onError: (error) {
+          _logger.e('Active groups stream error: $error');
+          add(_NearbyGroupStreamError(error.toString()));
+        },
+      );
+    } catch (e) {
+      _logger.e('Failed to start watching active groups: $e');
+      emit(state.copyWith(
+        status: NearbyGroupBlocStatus.error,
+        errorMessage: 'Failed to load groups. Please try again.',
+      ));
+    }
   }
 
   Future<void> _onWatchUserNearbyGroups(
@@ -97,13 +111,33 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   ) async {
     _logger.d('Starting to watch user nearby groups for: ${event.userId}');
 
+    // Cancel existing subscription and clear state
     await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
 
-    _userGroupsSubscription =
-        _groupService.watchUserMemberships(event.userId).listen(
-      (groups) => add(_UserGroupsReceived(groups)),
-      onError: (error) => add(_NearbyGroupStreamError(error.toString())),
-    );
+    // Clear previous user's groups to prevent showing stale data
+    emit(state.copyWith(
+      userGroups: const [],
+      status: NearbyGroupBlocStatus.loading,
+      clearError: true,
+    ));
+
+    try {
+      _userGroupsSubscription =
+          _groupService.watchUserMemberships(event.userId).listen(
+        (groups) => add(_UserGroupsReceived(groups)),
+        onError: (error) {
+          _logger.e('User groups stream error: $error');
+          add(_NearbyGroupStreamError(error.toString()));
+        },
+      );
+    } catch (e) {
+      _logger.e('Failed to start watching user groups: $e');
+      emit(state.copyWith(
+        status: NearbyGroupBlocStatus.error,
+        errorMessage: 'Failed to load your groups. Please try again.',
+      ));
+    }
   }
 
   Future<void> _onCreateNearbyGroup(
@@ -417,7 +451,10 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     Emitter<NearbyGroupState> emit,
   ) {
     _logger.d('Received ${event.groups.length} user nearby groups');
-    emit(state.copyWith(userGroups: event.groups));
+    emit(state.copyWith(
+      userGroups: event.groups,
+      status: NearbyGroupBlocStatus.loaded,
+    ));
   }
 
   void _onGroupMembersReceived(
@@ -455,15 +492,54 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     ));
   }
 
+  /// Handler for resetting the BLoC state when switching accounts.
+  /// Cancels all subscriptions and clears state to prevent permission errors.
+  Future<void> _onResetNearbyGroupState(
+    ResetNearbyGroupState event,
+    Emitter<NearbyGroupState> emit,
+  ) async {
+    _logger.d('Resetting nearby group state (account switch or cleanup)');
+
+    // Cancel all active subscriptions
+    await _cleanupAllSubscriptions();
+
+    // Reset state to initial empty state
+    emit(const NearbyGroupState());
+  }
+
+  /// Clean up all active subscriptions and timers.
+  Future<void> _cleanupAllSubscriptions() async {
+    // Cancel timers
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _scanCycleTimer?.cancel();
+    _scanCycleTimer = null;
+
+    // Cancel stream subscriptions
+    await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
+    
+    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
+    
+    await _membersSubscription?.cancel();
+    _membersSubscription = null;
+    
+    await _nearbyUsersSubscription?.cancel();
+    _nearbyUsersSubscription = null;
+    
+    await _proximityStateSubscription?.cancel();
+    _proximityStateSubscription = null;
+
+    // Clear scanning state
+    _isScanningPhase = false;
+    _currentGroupId = null;
+    _currentCreatorId = null;
+  }
+
   @override
   Future<void> close() {
-    _heartbeatTimer?.cancel();
-    _scanCycleTimer?.cancel();
-    _activeGroupsSubscription?.cancel();
-    _userGroupsSubscription?.cancel();
-    _membersSubscription?.cancel();
-    _nearbyUsersSubscription?.cancel();
-    _proximityStateSubscription?.cancel();
+    _cleanupAllSubscriptions();
     return super.close();
   }
 }

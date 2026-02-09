@@ -349,3 +349,9 @@ class _RandomGroupStreamError extends RandomGroupEvent {
   @override
   List<Object?> get props => [message];
 }
+
+/// Reset the BLoC state and cancel all subscriptions.
+/// This should be called when switching accounts to prevent stale data.
+class ResetRandomGroupState extends RandomGroupEvent {
+  const ResetRandomGroupState();
+}

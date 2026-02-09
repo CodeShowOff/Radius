@@ -163,3 +163,9 @@ class _NearbyGroupStreamError extends NearbyGroupEvent {
 class _ScanCycleComplete extends NearbyGroupEvent {
   const _ScanCycleComplete();
 }
+
+/// Reset the BLoC state and cancel all subscriptions.
+/// This should be called when switching accounts to prevent stale data.
+class ResetNearbyGroupState extends NearbyGroupEvent {
+  const ResetNearbyGroupState();
+}

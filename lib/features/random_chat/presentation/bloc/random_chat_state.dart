@@ -25,6 +25,7 @@ class RandomChatLoaded extends RandomChatState {
   final List<RandomChatRequest> sentRequests;
   final RandomChatConnection? activeConnection;
   final String dateKey;
+  final String loadedUserId; // Track which user's data is currently loaded
   final Set<String> processingUserIds; // users being sent requests
 
   const RandomChatLoaded({
@@ -33,6 +34,7 @@ class RandomChatLoaded extends RandomChatState {
     required this.sentRequests,
     this.activeConnection,
     required this.dateKey,
+    required this.loadedUserId,
     this.processingUserIds = const {},
   });
 
@@ -50,15 +52,18 @@ class RandomChatLoaded extends RandomChatState {
     RandomChatConnection? activeConnection,
     bool clearActiveConnection = false,
     String? dateKey,
+    String? loadedUserId,
     Set<String>? processingUserIds,
   }) {
     return RandomChatLoaded(
       suggestions: suggestions ?? this.suggestions,
       incomingRequests: incomingRequests ?? this.incomingRequests,
       sentRequests: sentRequests ?? this.sentRequests,
-      activeConnection:
-          clearActiveConnection ? null : (activeConnection ?? this.activeConnection),
+      activeConnection: clearActiveConnection
+          ? null
+          : (activeConnection ?? this.activeConnection),
       dateKey: dateKey ?? this.dateKey,
+      loadedUserId: loadedUserId ?? this.loadedUserId,
       processingUserIds: processingUserIds ?? this.processingUserIds,
     );
   }
@@ -70,6 +75,7 @@ class RandomChatLoaded extends RandomChatState {
         sentRequests,
         activeConnection,
         dateKey,
+        loadedUserId,
         processingUserIds,
       ];
 }

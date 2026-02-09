@@ -15,8 +15,10 @@ import 'features/chat/presentation/bloc/conversations_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
+import 'features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
+import 'features/random_chat/presentation/bloc/random_chat_bloc.dart';
 import 'features/random_groups/presentation/bloc/random_group_bloc.dart';
 
 /// Root widget of the Radius application.
@@ -115,7 +117,8 @@ class _AuthAwareApp extends StatefulWidget {
   State<_AuthAwareApp> createState() => _AuthAwareAppState();
 }
 
-class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserver {
+class _AuthAwareAppState extends State<_AuthAwareApp>
+    with WidgetsBindingObserver {
   String? _currentUserId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -123,7 +126,7 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
   @override
   void initState() {
     super.initState();
-    
+
     // Listen for app lifecycle changes (background/foreground)
     WidgetsBinding.instance.addObserver(this);
 
@@ -144,10 +147,10 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     debugPrint('[RadiusApp] App lifecycle changed to: $state');
     debugPrint('[RadiusApp] User authenticated: ${_currentUserId != null}');
-    
+
     // When app resumes (user returns from home screen after turning on Bluetooth)
     // restart advertising if user is authenticated
     if (state == AppLifecycleState.resumed && _currentUserId != null) {
@@ -159,7 +162,8 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
         debugPrint('[RadiusApp] ✗ Failed to restart advertising: $e');
       }
     } else if (state == AppLifecycleState.paused) {
-      debugPrint('[RadiusApp] 📱 App PAUSED (backgrounded) - advertising continues in background');
+      debugPrint(
+          '[RadiusApp] 📱 App PAUSED (backgrounded) - advertising continues in background');
     } else if (state == AppLifecycleState.inactive) {
       debugPrint('[RadiusApp] ⏸️ App INACTIVE');
     } else if (state == AppLifecycleState.detached) {
@@ -258,11 +262,14 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
             userId: newUserId,
             username: state.user.username,
           ));
-          debugPrint('[RadiusApp] ✓ BLE advertising initialization started for ${state.user.username}');
+          debugPrint(
+              '[RadiusApp] ✓ BLE advertising initialization started for ${state.user.username}');
         } catch (e) {
           // This should never happen since NearbyUsersBloc is provided globally
-          debugPrint('[RadiusApp] ✗✗✗ CRITICAL: Failed to initialize BLE advertising: $e');
-          debugPrint('[RadiusApp] This means the user will NOT be discoverable!');
+          debugPrint(
+              '[RadiusApp] ✗✗✗ CRITICAL: Failed to initialize BLE advertising: $e');
+          debugPrint(
+              '[RadiusApp] This means the user will NOT be discoverable!');
         }
 
         // Initialize push notifications
@@ -284,6 +291,27 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
         // Ignore if manager isn't available.
       }
 
+      // Clean up nearby groups BLoC to prevent stale subscriptions on account switch
+      try {
+        getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState());
+      } catch (_) {
+        // Ignore if BLoC isn't available.
+      }
+
+      // Clean up random groups BLoC to prevent stale subscriptions on account switch
+      try {
+        getIt<RandomGroupBloc>().add(const ResetRandomGroupState());
+      } catch (_) {
+        // Ignore if BLoC isn't available.
+      }
+
+      // Clean up random chat BLoC to prevent stale subscriptions on account switch
+      try {
+        getIt<RandomChatBloc>().add(const ResetRandomChatState());
+      } catch (_) {
+        // Ignore if BLoC isn't available.
+      }
+
       // Clean up notifications on sign out
       try {
         getIt<NotificationService>().removeToken();
@@ -295,32 +323,33 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
   }
 
   /// Fallback method for manual BLoC initialization if RealTimeDataManager fails.
-  /// 
+  ///
   /// This method waits for auth token validation before starting Firestore streams
   /// to prevent PERMISSION_DENIED race conditions.
-  Future<void> _initializeBlocsManually(BuildContext context, String userId, AuthAuthenticated state) async {
+  Future<void> _initializeBlocsManually(
+      BuildContext context, String userId, AuthAuthenticated state) async {
     // Capture bloc references BEFORE any async operation to avoid context issues
     ProfileBloc? profileBloc;
     ConnectionBloc? connectionBloc;
     ConversationsBloc? conversationsBloc;
     LocationGroupBloc? locationGroupBloc;
-    
+
     try {
       profileBloc = context.read<ProfileBloc>();
     } catch (_) {}
-    
+
     try {
       connectionBloc = context.read<ConnectionBloc>();
     } catch (_) {}
-    
+
     try {
       conversationsBloc = context.read<ConversationsBloc>();
     } catch (_) {}
-    
+
     try {
       locationGroupBloc = context.read<LocationGroupBloc>();
     } catch (_) {}
-    
+
     // CRITICAL: Wait for auth token to be ready before starting Firestore streams
     // This prevents race conditions where streams start before token propagation
     final isAuthReady = await _waitForAuthToken(userId);
@@ -328,10 +357,10 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
       // Auth token not ready - don't start streams yet
       return;
     }
-    
+
     // Now use the captured bloc references (no context needed)
     profileBloc?.add(ProfileLoadRequested(userId));
-    
+
     if (connectionBloc != null) {
       final capturedConnectionBloc = connectionBloc; // Capture for closure
       capturedConnectionBloc.add(ConnectionLoadAll(userId));
@@ -345,15 +374,15 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
         }
       });
     }
-    
+
     conversationsBloc?.add(ConversationsLoad(userId: userId));
     locationGroupBloc?.add(LoadUserGroups(userId: userId));
   }
-  
+
   /// Waits for the Firebase auth token to be available and valid.
   Future<bool> _waitForAuthToken(String userId, {int maxRetries = 5}) async {
     final auth = FirebaseAuth.instance;
-    
+
     for (int i = 0; i < maxRetries; i++) {
       final currentUser = auth.currentUser;
       if (currentUser != null && currentUser.uid == userId) {
@@ -364,12 +393,12 @@ class _AuthAwareAppState extends State<_AuthAwareApp> with WidgetsBindingObserve
           }
         } catch (_) {}
       }
-      
+
       if (i < maxRetries - 1) {
         await Future.delayed(Duration(milliseconds: 100 * (i + 1)));
       }
     }
-    
+
     return false;
   }
 

@@ -59,6 +59,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<WatchRandomGroupMembers>(_onWatchRandomGroupMembers);
     on<CheckMembershipStatus>(_onCheckMembershipStatus);
     on<ClearRandomGroupChat>(_onClearRandomGroupChat);
+    on<ResetRandomGroupState>(_onResetRandomGroupState);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
     on<_UserGroupsReceived>(_onUserGroupsReceived);
     on<_UserCreatedGroupsReceived>(_onUserCreatedGroupsReceived);
@@ -74,15 +75,28 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Starting to watch active random groups');
 
+    // Cancel existing subscription
     await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
 
     emit(state.copyWith(
         status: RandomGroupBlocStatus.loading, clearError: true));
 
-    _activeGroupsSubscription = _groupService.watchActiveGroups().listen(
-          (groups) => add(_ActiveGroupsReceived(groups)),
-          onError: (error) => add(_RandomGroupStreamError(error.toString())),
-        );
+    try {
+      _activeGroupsSubscription = _groupService.watchActiveGroups().listen(
+            (groups) => add(_ActiveGroupsReceived(groups)),
+            onError: (error) {
+              _logger.e('Active groups stream error: $error');
+              add(_RandomGroupStreamError(error.toString()));
+            },
+          );
+    } catch (e) {
+      _logger.e('Failed to start watching active groups: $e');
+      emit(state.copyWith(
+        status: RandomGroupBlocStatus.error,
+        errorMessage: 'Failed to load groups. Please try again.',
+      ));
+    }
   }
 
   Future<void> _onWatchUserRandomGroups(
@@ -91,14 +105,35 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Starting to watch user random groups for: ${event.userId}');
 
+    // Cancel existing subscription and clear state
     await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
 
-    _userGroupsSubscription = _groupService
-        .watchUserMemberships(event.userId)
-        .listen(
-          (groups) => add(_UserGroupsReceived(groups)),
-          onError: (error) => add(_RandomGroupStreamError(error.toString())),
-        );
+    // Clear previous user's groups to prevent showing stale data
+    emit(state.copyWith(
+      userGroups: const [],
+      userGroupsUserId: event.userId,
+      status: RandomGroupBlocStatus.loading,
+      clearError: true,
+    ));
+
+    try {
+      _userGroupsSubscription = _groupService
+          .watchUserMemberships(event.userId)
+          .listen(
+            (groups) => add(_UserGroupsReceived(groups)),
+            onError: (error) {
+              _logger.e('User groups stream error: $error');
+              add(_RandomGroupStreamError(error.toString()));
+            },
+          );
+    } catch (e) {
+      _logger.e('Failed to start watching user groups: $e');
+      emit(state.copyWith(
+        status: RandomGroupBlocStatus.error,
+        errorMessage: 'Failed to load your groups. Please try again.',
+      ));
+    }
   }
 
   Future<void> _onWatchUserCreatedRandomGroups(
@@ -587,6 +622,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) {
     emit(state.copyWith(
       userGroups: event.groups,
+      status: RandomGroupBlocStatus.loaded,
     ));
   }
 
@@ -638,14 +674,45 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     ));
   }
 
+  /// Handler for resetting the BLoC state when switching accounts.
+  /// Cancels all subscriptions and clears state to prevent permission errors.
+  Future<void> _onResetRandomGroupState(
+    ResetRandomGroupState event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Resetting random group state (account switch or cleanup)');
+
+    // Cancel all active subscriptions
+    await _cleanupAllSubscriptions();
+
+    // Reset state to initial empty state
+    emit(const RandomGroupState());
+  }
+
+  /// Clean up all active subscriptions.
+  Future<void> _cleanupAllSubscriptions() async {
+    await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
+    
+    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
+    
+    await _userCreatedGroupsSubscription?.cancel();
+    _userCreatedGroupsSubscription = null;
+    
+    await _groupDetailsSubscription?.cancel();
+    _groupDetailsSubscription = null;
+    
+    await _pendingRequestsSubscription?.cancel();
+    _pendingRequestsSubscription = null;
+    
+    await _membersSubscription?.cancel();
+    _membersSubscription = null;
+  }
+
   @override
   Future<void> close() async {
-    await _activeGroupsSubscription?.cancel();
-    await _userGroupsSubscription?.cancel();
-    await _userCreatedGroupsSubscription?.cancel();
-    await _groupDetailsSubscription?.cancel();
-    await _pendingRequestsSubscription?.cancel();
-    await _membersSubscription?.cancel();
+    await _cleanupAllSubscriptions();
     return super.close();
   }
 }

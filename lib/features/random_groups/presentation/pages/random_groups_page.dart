@@ -22,13 +22,29 @@ class RandomGroupsPage extends StatefulWidget {
 
 class _RandomGroupsPageState extends State<RandomGroupsPage> {
   bool _initialized = false;
+  String? _lastUserId;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_initialized) {
-      _initialized = true;
-      _loadGroups();
+    
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      final currentUserId = authState.user.id;
+      
+      // Check if user has changed (account switch)
+      if (_lastUserId != null && _lastUserId != currentUserId) {
+        // User changed - reset the BLoC to clean up old subscriptions
+        context.read<RandomGroupBloc>().add(const ResetRandomGroupState());
+        _initialized = false;
+      }
+      
+      _lastUserId = currentUserId;
+      
+      if (!_initialized) {
+        _initialized = true;
+        _loadGroups();
+      }
     }
   }
 
