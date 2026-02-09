@@ -573,8 +573,10 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /// Returns today's date key in 'yyyy-MM-dd' format (UTC).
+  /// MUST use UTC to match server-side Cloud Function timezone.
   String get _todayKey {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 

@@ -76,9 +76,10 @@ class RandomChatService {
   // Date helpers
   // ---------------------------------------------------------------------------
 
-  /// Returns today's date key in 'yyyy-MM-dd' format (local time).
+  /// Returns today's date key in 'yyyy-MM-dd' format (UTC).
+  /// MUST use UTC to match server-side Cloud Function timezone.
   String get _todayKey {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
@@ -230,6 +231,7 @@ class RandomChatService {
         final snapshot = await _firestore
             .collection('profiles')
             .where(FieldPath.documentId, whereIn: batch)
+            .limit(30)
             .get();
 
         for (final doc in snapshot.docs) {
