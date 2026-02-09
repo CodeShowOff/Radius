@@ -42,17 +42,23 @@ class ProfileService {
       'userId': userId,
     };
 
+    // For users collection, exclude immutable fields (createdAt, email) to avoid security rule violations  
+    // These fields are already set during user creation and cannot be changed per security rules
+    final dataForUsers = Map<String, dynamic>.from(dataWithUserId)
+      ..remove('createdAt')
+      ..remove('email');
+
     if (isCreate) {
       // For initial profile creation:
       // - The users doc is already created by auth flow with required fields (email, createdAt)
       // - Only update users doc with merge to add profile fields without overwriting auth fields
       // - Create profiles doc fresh (it doesn't exist yet)
-      batch.set(userDoc, dataWithUserId, SetOptions(merge: true));
+      batch.set(userDoc, dataForUsers, SetOptions(merge: true));
       batch.set(profileDoc, dataWithUserId);
     } else {
       // Use merge for updates to preserve existing fields
       // Include userId in case profiles doc doesn't exist yet (migration scenario)
-      batch.set(userDoc, dataWithUserId, SetOptions(merge: true));
+      batch.set(userDoc, dataForUsers, SetOptions(merge: true));
       batch.set(profileDoc, dataWithUserId, SetOptions(merge: true));
     }
 
