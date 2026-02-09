@@ -1,6 +1,8 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dartz/dartz.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:radius/core/error/failures.dart';
 import 'package:radius/features/auth/domain/entities/user.dart';
@@ -10,8 +12,30 @@ import 'package:radius/features/auth/presentation/bloc/auth_bloc.dart';
 class MockAuthRepository extends Mock implements IAuthRepository {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  
   late AuthBloc authBloc;
   late MockAuthRepository mockAuthRepository;
+
+  setUpAll(() async {
+    // Initialize Hive for tests
+    Hive.init('./test/hive_test');
+    
+    // Mock path_provider channel for AppDataClearer
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'getTemporaryDirectory') {
+          return '/tmp';
+        }
+        if (methodCall.method == 'getApplicationDocumentsDirectory') {
+          return '/tmp/docs';
+        }
+        return null;
+      },
+    );
+  });
 
   setUp(() {
     mockAuthRepository = MockAuthRepository();
@@ -106,6 +130,7 @@ void main() {
         return authBloc;
       },
       act: (bloc) => bloc.add(const AuthSignOutRequested()),
+      wait: const Duration(seconds: 2),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthUnauthenticated>(),
@@ -120,6 +145,7 @@ void main() {
         return authBloc;
       },
       act: (bloc) => bloc.add(const AuthSignOutRequested()),
+      wait: const Duration(seconds: 2),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthError>().having((s) => s.message, 'message', 'Sign out failed'),

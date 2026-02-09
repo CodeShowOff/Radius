@@ -189,77 +189,69 @@ class _RandomChatPageState extends State<RandomChatPage>
     RandomChatLoaded state,
     ThemeData theme,
   ) {
-    // If there's an active connection, use Stack to pin it at bottom
+    // If there's an active connection, use Column with Spacer to pin it at bottom
     if (state.hasActiveConnection) {
-      return Stack(
+      return Column(
         children: [
-          // Scrollable content with bottom padding for the pinned card
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: 200, // Space for the pinned connection card
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Incoming requests section
-                if (state.incomingRequests.isNotEmpty) ...[
+          // Scrollable content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Incoming requests section
+                  if (state.incomingRequests.isNotEmpty) ...[
+                    _buildSectionHeader(
+                      theme,
+                      'Incoming Requests',
+                      Icons.mail,
+                      badge: state.incomingRequests.length.toString(),
+                    ),
+                    const SizedBox(height: 8),
+                    ...state.incomingRequests.map(
+                        (r) => _buildIncomingRequestCard(context, r, state, theme)),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Daily suggestions
                   _buildSectionHeader(
                     theme,
-                    'Incoming Requests',
-                    Icons.mail,
-                    badge: state.incomingRequests.length.toString(),
+                    'Today\'s Suggestions',
+                    Icons.people_alt,
+                    subtitle: state.suggestions.isEmpty
+                        ? 'No users available right now'
+                        : '${state.suggestions.length} users discovered',
                   ),
                   const SizedBox(height: 8),
-                  ...state.incomingRequests.map(
-                      (r) => _buildIncomingRequestCard(context, r, state, theme)),
-                  const SizedBox(height: 20),
+
+                  if (state.suggestions.isEmpty)
+                    _buildEmptyState(theme)
+                  else
+                    ...state.suggestions.map(
+                      (user) => _buildSuggestionCard(context, user, state, theme),
+                    ),
                 ],
-
-                // Daily suggestions
-                _buildSectionHeader(
-                  theme,
-                  'Today\'s Suggestions',
-                  Icons.people_alt,
-                  subtitle: state.suggestions.isEmpty
-                      ? 'No users available right now'
-                      : '${state.suggestions.length} users discovered',
-                ),
-                const SizedBox(height: 8),
-
-                if (state.suggestions.isEmpty)
-                  _buildEmptyState(theme)
-                else
-                  ...state.suggestions.map(
-                    (user) => _buildSuggestionCard(context, user, state, theme),
-                  ),
-              ],
+              ),
             ),
           ),
 
           // Pinned active connection card at bottom
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    theme.colorScheme.surface.withValues(alpha: 0.0),
-                    theme.colorScheme.surface.withValues(alpha: 0.95),
-                    theme.colorScheme.surface,
-                  ],
-                  stops: const [0.0, 0.3, 0.5],
-                ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.surface.withValues(alpha: 0.0),
+                  theme.colorScheme.surface.withValues(alpha: 0.95),
+                  theme.colorScheme.surface,
+                ],
+                stops: const [0.0, 0.3, 0.5],
               ),
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-              child: _buildActiveConnectionCard(context, state, theme),
             ),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+            child: _buildActiveConnectionCard(context, state, theme),
           ),
         ],
       );

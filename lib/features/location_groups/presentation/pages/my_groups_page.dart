@@ -144,6 +144,12 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                       ),
                       const SizedBox(height: 32),
                       FilledButton.icon(
+                        onPressed: () => context.push(Routes.createLocationGroup),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Group'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
                         onPressed: () => context.push(Routes.locationGroups),
                         icon: const Icon(Icons.search),
                         label: const Text('Find Groups'),

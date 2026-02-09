@@ -11,6 +11,7 @@ import '../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
 import '../../features/random_groups/data/random_group_chat_cache_service.dart';
 import '../services/notifications/notification_service.dart';
+import 'logging/device_log.dart';
 
 /// Clears ALL local app data — the programmatic equivalent of
 /// Android Settings → Apps → Radius → Storage → Clear Data.
@@ -28,7 +29,10 @@ class AppDataClearer {
       _clearImageCache(),
       _clearFileCacheManager(),
       _clearTempDirectory(),
+      _clearApplicationDocumentsDirectory(),
+      _clearApplicationSupportDirectory(),
       _clearNotifications(),
+      _clearDeviceLogs(),
     ]);
   }
 
@@ -53,18 +57,24 @@ class AppDataClearer {
 
   static Future<void> _clearHiveBoxes() async {
     try {
-      // Clear every box that is currently open.
-      // This covers 'radius_settings', 'random_chat_cache', and any future
-      // boxes without needing to hard-code names.
+      // Clear all explicitly known boxes
       for (final boxName in _knownBoxNames) {
         try {
           if (Hive.isBoxOpen(boxName)) {
             final box = Hive.box(boxName);
             await box.clear();
+            await box.close();
           }
         } catch (_) {
           // Individual box failure shouldn't block the rest.
         }
+      }
+      
+      // Also try to delete all box files from disk
+      try {
+        await Hive.deleteFromDisk();
+      } catch (_) {
+        // Ignore if Hive isn't initialized or files are locked
       }
     } catch (_) {
       // Ignore Hive errors during cleanup.
@@ -116,12 +126,77 @@ class AppDataClearer {
     } catch (_) {}
   }
 
+  // ── Application Documents Directory ───────────────────────────────────────
+
+  static Future<void> _clearApplicationDocumentsDirectory() async {
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      if (docsDir.existsSync()) {
+        // Delete all contents except system files
+        await for (final entity in docsDir.list()) {
+          try {
+            // Skip system/hidden files
+            if (entity.path.contains('/.') || entity.path.contains('\\.')) {
+              continue;
+            }
+            
+            if (entity is File) {
+              await entity.delete();
+            } else if (entity is Directory) {
+              await entity.delete(recursive: true);
+            }
+          } catch (_) {
+            // Skip files that are locked / in use.
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── Application Support Directory ─────────────────────────────────────────
+
+  static Future<void> _clearApplicationSupportDirectory() async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      if (supportDir.existsSync()) {
+        // Delete all contents except system files
+        await for (final entity in supportDir.list()) {
+          try {
+            // Skip system/hidden files
+            if (entity.path.contains('/.') || entity.path.contains('\\.')) {
+              continue;
+            }
+            
+            if (entity is File) {
+              await entity.delete();
+            } else if (entity is Directory) {
+              await entity.delete(recursive: true);
+            }
+          } catch (_) {
+            // Skip files that are locked / in use.
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   // ── Notifications ─────────────────────────────────────────────────────────
 
   static Future<void> _clearNotifications() async {
     try {
       if (getIt.isRegistered<NotificationService>()) {
         await getIt<NotificationService>().clearAllNotifications();
+      }
+    } catch (_) {}
+  }
+
+  // ── Device logs ───────────────────────────────────────────────────────────
+
+  static Future<void> _clearDeviceLogs() async {
+    try {
+      // Only clear if DeviceLog has been initialized
+      if (DeviceLog.instance.isInitialized) {
+        await DeviceLog.instance.clearAll();
       }
     } catch (_) {}
   }

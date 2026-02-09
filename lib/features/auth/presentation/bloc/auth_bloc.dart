@@ -171,7 +171,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // Clear ALL local app data (equivalent to Android's "Clear Data").
       // This wipes Hive boxes, in-memory caches, image cache, temp files,
       // and notifications so the next session starts completely fresh.
-      await AppDataClearer.clearAllAppData();
+      try {
+        await AppDataClearer.clearAllAppData();
+      } catch (_) {
+        // Data clearing is best-effort; don't block sign-out if it fails.
+      }
 
       final result = await _authRepository.signOut();
 
