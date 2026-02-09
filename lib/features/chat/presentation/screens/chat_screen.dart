@@ -826,6 +826,10 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     if (presenceState?.isOnline == true) {
       return Colors.green;
     }
+    // For last seen in dark mode, use white color
+    if (theme.brightness == Brightness.dark) {
+      return Colors.white;
+    }
     final baseColor = theme.textTheme.bodySmall?.color;
     return baseColor != null
         ? Color.fromRGBO(baseColor.r.toInt(), baseColor.g.toInt(), baseColor.b.toInt(), 0.7)

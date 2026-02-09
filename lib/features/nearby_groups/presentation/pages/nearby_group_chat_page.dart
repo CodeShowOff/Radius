@@ -566,7 +566,9 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                           : Text(
                               'Last seen ${_formatLastSeen(member.lastSeenAt)}',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                     )),

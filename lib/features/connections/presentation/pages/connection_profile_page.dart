@@ -280,7 +280,9 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: isOnline
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.outline,
+                    : (theme.brightness == Brightness.dark
+                        ? Colors.white
+                        : theme.colorScheme.outline),
                 fontWeight: isOnline ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
