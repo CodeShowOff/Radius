@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
+import '../../data/random_chat_cache_service.dart';
 import '../../data/random_chat_service.dart';
 import '../../domain/entities/random_chat_connection.dart';
 import '../../domain/entities/random_chat_request.dart';
@@ -16,8 +17,12 @@ part 'random_chat_state.dart';
 ///
 /// Handles daily user discovery, sending/receiving requests,
 /// and managing connections with real-time updates.
+///
+/// Uses persistent caching to show data immediately when app reopens,
+/// while fetching fresh data in background.
 class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   final RandomChatService _service;
+  final RandomChatCacheService _cacheService;
   final Logger _logger;
 
   // Current user info (set externally)
@@ -38,8 +43,10 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
   RandomChatBloc({
     required RandomChatService service,
+    required RandomChatCacheService cacheService,
     Logger? logger,
   })  : _service = service,
+        _cacheService = cacheService,
         _logger = logger ?? Logger(),
         super(const RandomChatInitial()) {
     on<RandomChatLoadRequested>(_onLoadRequested);
@@ -52,6 +59,9 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     on<_ActiveConnectionUpdated>(_onActiveConnectionUpdated);
     on<RandomChatCheckDateChange>(_onCheckDateChange);
     on<ResetRandomChatState>(_onResetRandomChatState);
+    
+    // Initialize cache
+    _cacheService.init();
   }
 
   /// Set current user metadata for requests.
@@ -96,6 +106,40 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
       return;
     }
 
+    // Try to load from cache first - if successful, skip loading state entirely
+    final cachedData = await _cacheService.getCachedData(
+      userId: event.userId,
+      dateKey: dateKey,
+    );
+
+    if (cachedData != null && cachedData.suggestions.isNotEmpty) {
+      // Emit cached data immediately (no loading state!)
+      _logger.d('Loaded ${cachedData.suggestions.length} suggestions from cache');
+      
+      _loadedDateKey = dateKey;
+      _loadedUserId = event.userId;
+      
+      emit(RandomChatLoaded(
+        suggestions: cachedData.suggestions,
+        incomingRequests: cachedData.incomingRequests
+            .where((r) => r.status == RandomChatRequestStatus.pending)
+            .toList(),
+        sentRequests: cachedData.sentRequests,
+        activeConnection: cachedData.activeConnection,
+        dateKey: dateKey,
+        loadedUserId: event.userId,
+      ));
+
+      // Start real-time listeners immediately
+      _startListeners(event.userId);
+      _setupMidnightTimer();
+
+      // Fetch fresh data in background to update cache
+      _fetchFreshDataInBackground(event.userId, event.userGender, dateKey);
+      return;
+    }
+
+    // No cache or cache is empty - show loading state
     emit(const RandomChatLoading());
 
     try {
@@ -119,6 +163,16 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
       if (suggestions.isNotEmpty) {
         _loadedDateKey = dateKey;
         _loadedUserId = event.userId;
+        
+        // Save to cache
+        await _cacheService.saveCache(
+          userId: event.userId,
+          dateKey: dateKey,
+          suggestions: suggestions,
+          incomingRequests: incomingRequests,
+          sentRequests: sentRequests,
+          activeConnection: activeConnection,
+        );
       }
 
       emit(RandomChatLoaded(
@@ -128,7 +182,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
             .toList(),
         sentRequests: sentRequests,
         activeConnection: activeConnection,
-        dateKey: dateKey,
+        dateKey:dateKey,
         loadedUserId: event.userId,
       ));
 
@@ -141,6 +195,52 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
       _logger.e('Error loading Random Chat', error: e, stackTrace: stack);
       emit(RandomChatError('Failed to load Random Chat: ${e.toString()}'));
     }
+  }
+
+  /// Fetches fresh data in background while cached data is displayed.
+  /// Updates both state and cache if data has changed.
+  void _fetchFreshDataInBackground(
+    String userId,
+    String? userGender,
+    String dateKey,
+  ) {
+    Future(() async {
+      try {
+        _logger.d('Fetching fresh data in background...');
+        
+        // Fetch all data
+        final suggestions = await _service.getDailySuggestions(
+          currentUserId: userId,
+          currentUserGender: userGender,
+        );
+        final incomingRequests = await _service.getIncomingRequests(userId);
+        final sentRequests = await _service.getSentRequests(userId);
+        final activeConnection = await _service.getActiveConnection(userId);
+
+        // Update cache
+        await _cacheService.saveCache(
+          userId: userId,
+          dateKey: dateKey,
+          suggestions: suggestions,
+          incomingRequests: incomingRequests,
+          sentRequests: sentRequests,
+          activeConnection: activeConnection,
+        );
+
+        // Update state if still on the same page (check if not closed)
+        if (!isClosed && state is RandomChatLoaded) {
+          final currentState = state as RandomChatLoaded;
+          if (currentState.dateKey == dateKey && currentState.loadedUserId == userId) {
+            add(const RandomChatRefreshSuggestions());
+          }
+        }
+        
+        _logger.d('Background refresh complete');
+      } catch (e) {
+        _logger.w('Background refresh failed', error: e);
+        // Don't emit error - user is already seeing cached data
+      }
+    });
   }
 
   Future<void> _onSendRequest(
@@ -312,6 +412,9 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     if (currentState.hasActiveConnection) return;
 
     emit(currentState.copyWith(incomingRequests: event.requests));
+    
+    // Update cache
+    _cacheService.updateIncomingRequests(event.requests);
   }
 
   void _onSentRequestsUpdated(
@@ -322,6 +425,9 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     if (currentState is! RandomChatLoaded) return;
 
     emit(currentState.copyWith(sentRequests: event.requests));
+    
+    // Update cache
+    _cacheService.updateSentRequests(event.requests);
   }
 
   void _onActiveConnectionUpdated(
@@ -340,8 +446,15 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
         activeConnection: event.connection,
         incomingRequests: const [],
       ));
+      
+      // Update cache
+      _cacheService.updateActiveConnection(event.connection);
+      _cacheService.updateIncomingRequests(const []);
     } else {
       emit(currentState.copyWith(clearActiveConnection: true));
+      
+      // Update cache
+      _cacheService.updateActiveConnection(null);
     }
   }
 
@@ -353,6 +466,9 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
     if (currentState is RandomChatLoaded && !_isToday(currentState.dateKey)) {
       _logger.i('Midnight reset detected — reloading Random Chat');
+
+      // Clear cache (different day)
+      _cacheService.clearCache();
 
       // Cancel streams
       _cancelListeners();
@@ -372,6 +488,10 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     Emitter<RandomChatState> emit,
   ) {
     _logger.i('Resetting Random Chat state (account switch)');
+    
+    // Clear cache (user changed)
+    _cacheService.clearCache();
+    
     _cleanupAllSubscriptions();
     _loadedDateKey = '';
     _loadedUserId = '';
@@ -463,6 +583,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   @override
   Future<void> close() {
     _cleanupAllSubscriptions();
+    _cacheService.close();
     return super.close();
   }
 }

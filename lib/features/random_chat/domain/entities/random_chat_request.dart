@@ -64,6 +64,45 @@ class RandomChatRequest extends Equatable {
     );
   }
 
+  /// Convert to JSON for caching.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'senderId': senderId,
+      'receiverId': receiverId,
+      'senderDisplayName': senderDisplayName,
+      'senderPhotoUrl': senderPhotoUrl,
+      'receiverDisplayName': receiverDisplayName,
+      'receiverPhotoUrl': receiverPhotoUrl,
+      'status': status.name,
+      'dateKey': dateKey,
+      'createdAt': createdAt.toIso8601String(),
+      'respondedAt': respondedAt?.toIso8601String(),
+    };
+  }
+
+  /// Create from JSON.
+  factory RandomChatRequest.fromJson(Map<String, dynamic> json) {
+    return RandomChatRequest(
+      id: json['id'] as String,
+      senderId: json['senderId'] as String,
+      receiverId: json['receiverId'] as String,
+      senderDisplayName: json['senderDisplayName'] as String,
+      senderPhotoUrl: json['senderPhotoUrl'] as String?,
+      receiverDisplayName: json['receiverDisplayName'] as String,
+      receiverPhotoUrl: json['receiverPhotoUrl'] as String?,
+      status: RandomChatRequestStatus.values.firstWhere(
+        (e) => e.name == json['status'],
+        orElse: () => RandomChatRequestStatus.pending,
+      ),
+      dateKey: json['dateKey'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      respondedAt: json['respondedAt'] != null
+          ? DateTime.parse(json['respondedAt'] as String)
+          : null,
+    );
+  }
+
   @override
   List<Object?> get props => [
         id,

@@ -44,6 +44,32 @@ class RandomChatUser extends Equatable {
     );
   }
 
+  /// Convert to JSON for caching.
+  Map<String, dynamic> toJson() {
+    return {
+      'userId': userId,
+      'displayName': displayName,
+      'photoUrl': photoUrl,
+      'gender': gender,
+      'mood': mood,
+      'bio': bio,
+      'receivedRequestCount': receivedRequestCount,
+    };
+  }
+
+  /// Create from JSON.
+  factory RandomChatUser.fromJson(Map<String, dynamic> json) {
+    return RandomChatUser(
+      userId: json['userId'] as String,
+      displayName: json['displayName'] as String,
+      photoUrl: json['photoUrl'] as String?,
+      gender: json['gender'] as String?,
+      mood: json['mood'] as String?,
+      bio: json['bio'] as String?,
+      receivedRequestCount: (json['receivedRequestCount'] as int?) ?? 0,
+    );
+  }
+
   @override
   List<Object?> get props => [
         userId,
