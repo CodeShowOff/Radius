@@ -37,6 +37,9 @@ class NearbyGroupState extends Equatable {
   /// Error message if any
   final String? errorMessage;
 
+  /// User ID for tracked groups (to detect account switches)
+  final String? userGroupsUserId;
+
   const NearbyGroupState({
     this.status = NearbyGroupBlocStatus.initial,
     this.activeGroups = const [],
@@ -46,6 +49,7 @@ class NearbyGroupState extends Equatable {
     this.groupMembers = const [],
     this.isScanning = false,
     this.errorMessage,
+    this.userGroupsUserId,
   });
 
   /// Whether currently loading
@@ -68,6 +72,7 @@ class NearbyGroupState extends Equatable {
     bool? isScanning,
     String? errorMessage,
     bool clearError = false,
+    String? userGroupsUserId,
   }) {
     return NearbyGroupState(
       status: status ?? this.status,
@@ -80,6 +85,7 @@ class NearbyGroupState extends Equatable {
       groupMembers: groupMembers ?? this.groupMembers,
       isScanning: isScanning ?? this.isScanning,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      userGroupsUserId: userGroupsUserId ?? this.userGroupsUserId,
     );
   }
 
@@ -93,5 +99,6 @@ class NearbyGroupState extends Equatable {
         groupMembers,
         isScanning,
         errorMessage,
+        userGroupsUserId,
       ];
 }

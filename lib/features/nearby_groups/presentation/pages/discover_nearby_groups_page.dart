@@ -51,10 +51,21 @@ class _DiscoverNearbyGroupsPageState extends State<DiscoverNearbyGroupsPage> {
   void _loadGroups() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // These are now idempotent - they skip if already watching same user
       context.read<NearbyGroupBloc>()
         ..add(const WatchActiveNearbyGroups())
         ..add(WatchUserNearbyGroups(authState.user.id))
         ..add(LoadUserActiveGroup(authState.user.id));
+    }
+  }
+
+  void _refreshGroups() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      // Force refresh cancels existing subscriptions and re-subscribes
+      context.read<NearbyGroupBloc>().add(
+        ForceRefreshNearbyGroups(userId: authState.user.id),
+      );
     }
   }
 
@@ -71,7 +82,7 @@ class _DiscoverNearbyGroupsPageState extends State<DiscoverNearbyGroupsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadGroups,
+            onPressed: _refreshGroups,
             tooltip: 'Refresh',
           ),
         ],
@@ -110,7 +121,7 @@ class _DiscoverNearbyGroupsPageState extends State<DiscoverNearbyGroupsPage> {
           }
 
           return RefreshIndicator(
-            onRefresh: () async => _loadGroups(),
+            onRefresh: () async => _refreshGroups(),
             child: CustomScrollView(
               slivers: [
                 // Header

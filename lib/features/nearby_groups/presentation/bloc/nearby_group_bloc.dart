@@ -61,6 +61,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
         super(const NearbyGroupState()) {
     on<WatchActiveNearbyGroups>(_onWatchActiveNearbyGroups);
     on<WatchUserNearbyGroups>(_onWatchUserNearbyGroups);
+    on<ForceRefreshNearbyGroups>(_onForceRefreshNearbyGroups);
     on<CreateNearbyGroup>(_onCreateNearbyGroup);
     on<CloseNearbyGroup>(_onCloseNearbyGroup);
     on<StartGroupScanning>(_onStartGroupScanning);
@@ -80,11 +81,14 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     WatchActiveNearbyGroups event,
     Emitter<NearbyGroupState> emit,
   ) async {
-    _logger.d('Starting to watch active nearby groups');
+    // If we already have an active subscription, skip re-subscribing.
+    // The existing stream keeps the data fresh in real-time.
+    if (_activeGroupsSubscription != null) {
+      _logger.d('Already watching active nearby groups, skipping');
+      return;
+    }
 
-    // Cancel existing subscription
-    await _activeGroupsSubscription?.cancel();
-    _activeGroupsSubscription = null;
+    _logger.d('Starting to watch active nearby groups');
 
     emit(state.copyWith(status: NearbyGroupBlocStatus.loading, clearError: true));
 
@@ -109,16 +113,31 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     WatchUserNearbyGroups event,
     Emitter<NearbyGroupState> emit,
   ) async {
+    // If we're already watching the same user's groups, skip re-subscribing.
+    // The existing stream keeps the data fresh in real-time.
+    if (_userGroupsSubscription != null &&
+        state.userGroupsUserId == event.userId) {
+      _logger.d(
+          'Already watching user nearby groups for ${event.userId}, skipping');
+      return;
+    }
+
     _logger.d('Starting to watch user nearby groups for: ${event.userId}');
 
-    // Cancel existing subscription and clear state
+    // Cancel existing subscription (different user or first time)
     await _userGroupsSubscription?.cancel();
     _userGroupsSubscription = null;
 
-    // Clear previous user's groups to prevent showing stale data
+    // Only clear groups if the user actually changed, to prevent flash of empty state
+    final userChanged = state.userGroupsUserId != null &&
+        state.userGroupsUserId != event.userId;
+
     emit(state.copyWith(
-      userGroups: const [],
-      status: NearbyGroupBlocStatus.loading,
+      userGroups: userChanged ? const [] : state.userGroups,
+      userGroupsUserId: event.userId,
+      status: state.userGroups.isEmpty || userChanged
+          ? NearbyGroupBlocStatus.loading
+          : state.status,
       clearError: true,
     ));
 
@@ -505,6 +524,29 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
 
     // Reset state to initial empty state
     emit(const NearbyGroupState());
+  }
+
+  Future<void> _onForceRefreshNearbyGroups(
+    ForceRefreshNearbyGroups event,
+    Emitter<NearbyGroupState> emit,
+  ) async {
+    _logger.d('Force refreshing nearby groups');
+
+    // Cancel existing subscriptions to force re-subscribe
+    await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
+
+    if (event.userId != null) {
+      await _userGroupsSubscription?.cancel();
+      _userGroupsSubscription = null;
+    }
+
+    // Re-dispatch watch events which will now start fresh subscriptions
+    add(const WatchActiveNearbyGroups());
+    if (event.userId != null) {
+      add(WatchUserNearbyGroups(event.userId!));
+      add(LoadUserActiveGroup(event.userId!));
+    }
   }
 
   /// Clean up all active subscriptions and timers.

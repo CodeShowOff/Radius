@@ -13,6 +13,17 @@ class WatchActiveRandomGroups extends RandomGroupEvent {
   const WatchActiveRandomGroups();
 }
 
+/// Force refresh random groups by cancelling existing subscriptions and re-subscribing.
+/// Use this for explicit user actions (pull-to-refresh, refresh button).
+class ForceRefreshRandomGroups extends RandomGroupEvent {
+  final String? userId;
+
+  const ForceRefreshRandomGroups({this.userId});
+
+  @override
+  List<Object?> get props => [userId];
+}
+
 /// Watch groups the user is a member of.
 class WatchUserRandomGroups extends RandomGroupEvent {
   final String userId;

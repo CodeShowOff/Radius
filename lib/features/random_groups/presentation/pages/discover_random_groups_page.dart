@@ -54,9 +54,20 @@ class _DiscoverRandomGroupsPageState extends State<DiscoverRandomGroupsPage> {
   void _loadGroups() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      // These are now idempotent - they skip if already watching same user
       context.read<RandomGroupBloc>()
         ..add(const WatchActiveRandomGroups())
         ..add(WatchUserRandomGroups(authState.user.id));
+    }
+  }
+
+  void _refreshGroups() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      // Force refresh cancels existing subscriptions and re-subscribes
+      context.read<RandomGroupBloc>().add(
+        ForceRefreshRandomGroups(userId: authState.user.id),
+      );
     }
   }
 
@@ -75,7 +86,7 @@ class _DiscoverRandomGroupsPageState extends State<DiscoverRandomGroupsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadGroups,
+            onPressed: _refreshGroups,
             tooltip: 'Refresh',
           ),
         ],
@@ -114,7 +125,7 @@ class _DiscoverRandomGroupsPageState extends State<DiscoverRandomGroupsPage> {
           }
 
           return RefreshIndicator(
-            onRefresh: () async => _loadGroups(),
+            onRefresh: () async => _refreshGroups(),
             child: CustomScrollView(
               slivers: [
                 // Header

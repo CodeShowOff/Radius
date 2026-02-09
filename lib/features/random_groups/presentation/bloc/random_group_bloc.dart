@@ -43,6 +43,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
         super(const RandomGroupState()) {
     on<WatchActiveRandomGroups>(_onWatchActiveRandomGroups);
     on<WatchUserRandomGroups>(_onWatchUserRandomGroups);
+    on<ForceRefreshRandomGroups>(_onForceRefreshRandomGroups);
     on<WatchUserCreatedRandomGroups>(_onWatchUserCreatedRandomGroups);
     on<CreateRandomGroup>(_onCreateRandomGroup);
     on<LoadRandomGroupDetails>(_onLoadRandomGroupDetails);
@@ -73,11 +74,14 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     WatchActiveRandomGroups event,
     Emitter<RandomGroupState> emit,
   ) async {
-    _logger.d('Starting to watch active random groups');
+    // If we already have an active subscription, skip re-subscribing.
+    // The existing stream keeps the data fresh in real-time.
+    if (_activeGroupsSubscription != null) {
+      _logger.d('Already watching active random groups, skipping');
+      return;
+    }
 
-    // Cancel existing subscription
-    await _activeGroupsSubscription?.cancel();
-    _activeGroupsSubscription = null;
+    _logger.d('Starting to watch active random groups');
 
     emit(state.copyWith(
         status: RandomGroupBlocStatus.loading, clearError: true));
@@ -103,17 +107,31 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     WatchUserRandomGroups event,
     Emitter<RandomGroupState> emit,
   ) async {
+    // If we're already watching the same user's groups, skip re-subscribing.
+    // The existing stream keeps the data fresh in real-time.
+    if (_userGroupsSubscription != null &&
+        state.userGroupsUserId == event.userId) {
+      _logger.d(
+          'Already watching user random groups for ${event.userId}, skipping');
+      return;
+    }
+
     _logger.d('Starting to watch user random groups for: ${event.userId}');
 
-    // Cancel existing subscription and clear state
+    // Cancel existing subscription (different user or first time)
     await _userGroupsSubscription?.cancel();
     _userGroupsSubscription = null;
 
-    // Clear previous user's groups to prevent showing stale data
+    // Only clear groups if the user actually changed, to prevent flash of empty state
+    final userChanged = state.userGroupsUserId != null &&
+        state.userGroupsUserId != event.userId;
+
     emit(state.copyWith(
-      userGroups: const [],
+      userGroups: userChanged ? const [] : state.userGroups,
       userGroupsUserId: event.userId,
-      status: RandomGroupBlocStatus.loading,
+      status: state.userGroups.isEmpty || userChanged
+          ? RandomGroupBlocStatus.loading
+          : state.status,
       clearError: true,
     ));
 
@@ -687,6 +705,28 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
     // Reset state to initial empty state
     emit(const RandomGroupState());
+  }
+
+  Future<void> _onForceRefreshRandomGroups(
+    ForceRefreshRandomGroups event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Force refreshing random groups');
+
+    // Cancel existing subscriptions to force re-subscribe
+    await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription = null;
+
+    if (event.userId != null) {
+      await _userGroupsSubscription?.cancel();
+      _userGroupsSubscription = null;
+    }
+
+    // Re-dispatch watch events which will now start fresh subscriptions
+    add(const WatchActiveRandomGroups());
+    if (event.userId != null) {
+      add(WatchUserRandomGroups(event.userId!));
+    }
   }
 
   /// Clean up all active subscriptions.

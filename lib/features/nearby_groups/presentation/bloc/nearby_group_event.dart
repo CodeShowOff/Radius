@@ -23,6 +23,17 @@ class WatchUserNearbyGroups extends NearbyGroupEvent {
   List<Object?> get props => [userId];
 }
 
+/// Force refresh nearby groups by cancelling existing subscriptions and re-subscribing.
+/// Use this for explicit user actions (pull-to-refresh, refresh button).
+class ForceRefreshNearbyGroups extends NearbyGroupEvent {
+  final String? userId;
+
+  const ForceRefreshNearbyGroups({this.userId});
+
+  @override
+  List<Object?> get props => [userId];
+}
+
 /// Create a new nearby group.
 class CreateNearbyGroup extends NearbyGroupEvent {
   final String name;
