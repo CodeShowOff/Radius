@@ -22,7 +22,6 @@ class NearbyGroupsPage extends StatefulWidget {
 
 class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
   bool _initialized = false;
-  String? _lastUserId;
 
   @override
   void didChangeDependencies() {
@@ -30,17 +29,6 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
     
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      final currentUserId = authState.user.id;
-      
-      // Check if user has changed (account switch)
-      if (_lastUserId != null && _lastUserId != currentUserId) {
-        // User changed - reset the BLoC to clean up old subscriptions
-        context.read<NearbyGroupBloc>().add(const ResetNearbyGroupState());
-        _initialized = false;
-      }
-      
-      _lastUserId = currentUserId;
-      
       if (!_initialized) {
         _initialized = true;
         _loadGroups();

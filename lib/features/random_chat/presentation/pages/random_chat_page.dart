@@ -24,7 +24,6 @@ class _RandomChatPageState extends State<RandomChatPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  String? _lastUserId;
 
   @override
   void initState() {
@@ -47,20 +46,8 @@ class _RandomChatPageState extends State<RandomChatPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return;
-
-    final currentUserId = authState.user.id;
-
-    // Check if user has changed
-    if (_lastUserId != null && _lastUserId != currentUserId) {
-      // User changed - reset the BLoC
-      context.read<RandomChatBloc>().add(const ResetRandomChatState());
-      _loadData();
-    }
-
-    _lastUserId = currentUserId;
+    // No account-switch detection needed here — full app data is cleared
+    // on sign-out via AppDataClearer, so stale data cannot exist.
   }
 
   @override

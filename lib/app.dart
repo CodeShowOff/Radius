@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
+import 'core/services/app_data_clearer.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/services/notifications/notification_service.dart';
 import 'core/services/realtime/realtime_data_manager.dart';
@@ -284,6 +285,10 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
 
     // Signed out or unauthenticated.
     if (_currentUserId != null) {
+      // Clear ALL local app data (equivalent to Android's "Clear Data")
+      // so no stale data from the previous account remains.
+      AppDataClearer.clearAllAppData();
+
       // Clean up real-time data manager
       try {
         getIt<RealTimeDataManager>().signOut();

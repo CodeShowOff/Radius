@@ -487,10 +487,10 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     ResetRandomChatState event,
     Emitter<RandomChatState> emit,
   ) {
-    _logger.i('Resetting Random Chat state (account switch)');
+    _logger.i('Resetting Random Chat state (sign-out cleanup)');
     
-    // Clear cache (user changed)
-    _cacheService.clearCache();
+    // No need to clear cache here — AppDataClearer already wiped all
+    // Hive boxes and in-memory caches before sign-out.
     
     _cleanupAllSubscriptions();
     _loadedDateKey = '';
