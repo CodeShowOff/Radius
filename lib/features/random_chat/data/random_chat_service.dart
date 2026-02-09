@@ -123,9 +123,11 @@ class RandomChatService {
         final suggestedIds = List<String>.from(data['suggestedUserIds'] ?? []);
 
         if (suggestedIds.isNotEmpty) {
+          _logger.d('Returning ${suggestedIds.length} cached suggestions for $dateKey');
           // Fetch user details for suggested IDs
           return _fetchUserDetails(suggestedIds, dateKey);
         }
+        _logger.d('Cached suggestions exist but are empty — regenerating');
       }
 
       // Generate new suggestions
@@ -136,7 +138,8 @@ class RandomChatService {
       );
     } catch (e, stack) {
       _logger.e('Error fetching daily suggestions', error: e, stackTrace: stack);
-      return [];
+      // Rethrow so the BLoC can show a meaningful error to the user
+      rethrow;
     }
   }
 
@@ -147,17 +150,31 @@ class RandomChatService {
     required String dateKey,
   }) async {
     try {
-      // Get all eligible users (visible, not banned)
+      // Get all profiles - we'll filter by visibility in Dart code
+      // This is necessary because isVisible may not exist on all documents,
+      // and Firestore queries don't support default values like Dart does
       final usersSnapshot = await _firestore
           .collection('profiles')
-          .where('isVisible', isEqualTo: true)
           .get();
 
+      _logger.d('Profiles query returned ${usersSnapshot.docs.length} documents');
+
       final allUsers = usersSnapshot.docs
-          .where((doc) => doc.id != currentUserId)
+          .where((doc) {
+            if (doc.id == currentUserId) return false;
+            
+            // Apply isVisible filter with default value of true
+            // If the field doesn't exist, treat as visible
+            final data = doc.data();
+            final isVisible = data['isVisible'] as bool? ?? true;
+            return isVisible;
+          })
           .toList();
 
+      _logger.d('After filtering self & invisible: ${allUsers.length} eligible profiles');
+
       if (allUsers.isEmpty) {
+        _logger.w('No visible profiles found (total docs: ${usersSnapshot.docs.length}, currentUserId: $currentUserId)');
         return [];
       }
 
@@ -174,7 +191,11 @@ class RandomChatService {
           .where((doc) => !excludeIds.contains(doc.id))
           .toList();
 
+      _logger.d('Saturated: ${saturatedUserIds.length}, Connected: ${connectedUserIds.length}, '
+          'Eligible after exclusions: ${eligibleUsers.length}');
+
       if (eligibleUsers.isEmpty) {
+        _logger.w('All users filtered out (saturated=${saturatedUserIds.length}, connected=${connectedUserIds.length})');
         // Store empty suggestions
         await _suggestionsCol(dateKey).doc(currentUserId).set({
           'suggestedUserIds': <String>[],
@@ -228,6 +249,8 @@ class RandomChatService {
 
       final suggestedIds = selectedDocs.map((doc) => doc.id).toList();
 
+      _logger.d('Generated ${suggestedIds.length} suggestions for $dateKey: $suggestedIds');
+
       // Store suggestions in Firestore
       await _suggestionsCol(dateKey).doc(currentUserId).set({
         'suggestedUserIds': suggestedIds,
@@ -238,7 +261,7 @@ class RandomChatService {
       return _docsToRandomChatUsers(selectedDocs, dateKey);
     } catch (e, stack) {
       _logger.e('Error generating daily suggestions', error: e, stackTrace: stack);
-      return [];
+      rethrow;
     }
   }
 

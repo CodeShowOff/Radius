@@ -176,19 +176,32 @@ class ProfileService {
     DocumentSnapshot? startAfter,
   }) async {
     try {
+      // Note: We can't use .where('isVisible', isEqualTo: true) because
+      // Firestore queries don't support default values. Documents without
+      // the isVisible field won't match even though our Dart code defaults it to true.
+      // So we fetch all profiles and filter in Dart code.
       Query<Map<String, dynamic>> query = _usersRef
-          .where('isVisible', isEqualTo: true)
-          .orderBy('updatedAt', descending: true)
-          .limit(limit);
+          .orderBy('updatedAt', descending: true);
 
       if (startAfter != null) {
         query = query.startAfterDocument(startAfter);
       }
 
       final snapshot = await query.get();
-      return snapshot.docs
+      
+      // Filter by visibility in Dart where we can apply default values
+      final visibleProfiles = snapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            // Default to true if field doesn't exist
+            final isVisible = data['isVisible'] as bool? ?? true;
+            return isVisible;
+          })
+          .take(limit)
           .map((doc) => ProfileModel.fromFirestore(doc))
           .toList();
+      
+      return visibleProfiles;
     } catch (e) {
       throw ProfileServiceException('Failed to get visible profiles: $e');
     }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../chat/domain/entities/conversation.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/random_chat_request.dart';
 import '../../domain/entities/random_chat_user.dart';
@@ -20,16 +21,31 @@ class RandomChatPage extends StatefulWidget {
 }
 
 class _RandomChatPageState extends State<RandomChatPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Set up pulse animation for loading state
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    
     _loadData();
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -98,10 +114,16 @@ class _RandomChatPageState extends State<RandomChatPage>
             );
           }
         },
-        buildWhen: (previous, current) => current is! RandomChatError,
+        buildWhen: (previous, current) {
+          // Always rebuild for non-error states
+          if (current is! RandomChatError) return true;
+          // For errors during initial load: show error UI with Retry button
+          // For errors during actions (send/accept): keep Loaded state, error via snackbar
+          return previous is RandomChatLoading || previous is RandomChatInitial;
+        },
         builder: (context, state) {
           if (state is RandomChatLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return _buildLoadingState(theme);
           }
 
           if (state is RandomChatLoaded) {
@@ -130,7 +152,7 @@ class _RandomChatPageState extends State<RandomChatPage>
             );
           }
 
-          return const Center(child: CircularProgressIndicator());
+          return _buildLoadingState(theme);
         },
       ),
     );
@@ -196,6 +218,68 @@ class _RandomChatPageState extends State<RandomChatPage>
             _buildInfoCard(theme),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Animated pulsing icon
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _pulseAnimation.value,
+                child: Opacity(
+                  opacity: 1.0 - ((_pulseAnimation.value - 0.8) / 0.4 * 0.4),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.3),
+                    ),
+                    child: Icon(
+                      Icons.people_alt_rounded,
+                      size: 56,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          // Rotating dots indicator
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Fetching users...',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Finding people to connect with',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -289,7 +373,7 @@ class _RandomChatPageState extends State<RandomChatPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '🎉 Connected with $otherName!',
+                        'Connected with $otherName!',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onPrimaryContainer,
@@ -308,21 +392,45 @@ class _RandomChatPageState extends State<RandomChatPage>
               ],
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  context.push(
-                    Routes.userProfileWith(otherUserId),
-                    extra: {
-                      'displayName': otherName,
-                      'photoUrl': otherPhoto,
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      final conversationId =
+                          Conversation.createConversationId(
+                              currentUserId, otherUserId);
+                      context.push(
+                        Routes.chatWith(conversationId),
+                        extra: {
+                          'currentUserId': currentUserId,
+                          'otherUserId': otherUserId,
+                          'otherUserName': otherName,
+                          'otherUserPhotoUrl': otherPhoto,
+                        },
+                      );
                     },
-                  );
-                },
-                icon: const Icon(Icons.chat),
-                label: const Text('View Profile'),
-              ),
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Start Chat'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.push(
+                        Routes.userProfileWith(otherUserId),
+                        extra: {
+                          'displayName': otherName,
+                          'photoUrl': otherPhoto,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.person),
+                    label: const Text('Profile'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -585,13 +693,13 @@ class _RandomChatPageState extends State<RandomChatPage>
               ],
             ),
             const SizedBox(height: 8),
-            _infoRow(theme, '🎲',
+            _infoRow(theme, '',
                 'You get up to 10 new random users each day'),
-            _infoRow(theme, '💬',
+            _infoRow(theme, '',
                 'Send requests to start a conversation'),
-            _infoRow(theme, '📬',
+            _infoRow(theme, '',
                 'You can receive up to 10 requests per day'),
-            _infoRow(theme, '🔄',
+            _infoRow(theme, '',
                 'Everything resets at midnight'),
           ],
         ),

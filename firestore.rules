@@ -125,9 +125,12 @@ service cloud.firestore {
     
     // Public profiles (denormalized for faster reads)
     match /profiles/{userId} {
-      // Anyone authenticated can read public profiles (if not blocked)
-      allow read: if isAuthenticated() 
+      // Individual profile reads: block check enforced
+      allow get: if isAuthenticated() 
         && !hasBlockRelationship(request.auth.uid, userId);
+      // Collection list queries (e.g. random chat discovery): auth-only
+      // Block filtering is handled client-side for list operations
+      allow list: if isAuthenticated();
       
       // RULE: Allow authenticated users to create their own profile
       // This is critical for first-time sign-up/sign-in flows
@@ -965,8 +968,14 @@ service cloud.firestore {
       
       // Requests - chat requests between users
       match /requests/{requestId} {
-        // RULE: Sender and receiver can read the request
-        allow read: if isAuthenticated()
+        // RULE: Any authenticated user can get a specific request by ID.
+        // Needed for transaction existence checks (sendRequest reads a
+        // potentially non-existent doc). Doc IDs are deterministic
+        // ({senderId}_{receiverId}) so this doesn't leak data.
+        allow get: if isAuthenticated();
+        
+        // RULE: List queries restricted to sender & receiver only
+        allow list: if isAuthenticated()
           && (resource.data.senderId == request.auth.uid
               || resource.data.receiverId == request.auth.uid);
         

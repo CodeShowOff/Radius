@@ -273,7 +273,7 @@ class _HomePageState extends State<HomePage>
                     Expanded(
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.nearby),
-                        label: 'Nearby',
+                        label: 'Find\nNearby',
                         color: Theme.of(context).colorScheme.onSecondaryContainer,
                         backgroundColor:
                             Theme.of(context).colorScheme.secondaryContainer,

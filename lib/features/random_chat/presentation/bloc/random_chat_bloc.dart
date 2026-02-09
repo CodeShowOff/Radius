@@ -86,10 +86,12 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
     final dateKey = _todayKey;
 
-    // If already loaded for today for the same user, skip reload
+    // If already loaded for today for the same user WITH suggestions, skip reload.
+    // If suggestions were empty, allow a retry so transient errors self-heal.
     if (state is RandomChatLoaded &&
         _loadedDateKey == dateKey &&
-        _loadedUserId == event.userId) {
+        _loadedUserId == event.userId &&
+        (state as RandomChatLoaded).suggestions.isNotEmpty) {
       return;
     }
 
@@ -111,8 +113,12 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
       // Fetch active connection
       final activeConnection = await _service.getActiveConnection(event.userId);
 
-      _loadedDateKey = dateKey;
-      _loadedUserId = event.userId;
+      // Only cache the loaded state if we got suggestions.
+      // When empty, leave _loadedDateKey/UserId unset so next visit retries.
+      if (suggestions.isNotEmpty) {
+        _loadedDateKey = dateKey;
+        _loadedUserId = event.userId;
+      }
 
       emit(RandomChatLoaded(
         suggestions: suggestions,

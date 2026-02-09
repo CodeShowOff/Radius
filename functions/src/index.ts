@@ -2260,7 +2260,7 @@ export const onRandomChatRequestAccepted = onDocumentUpdated(
       await admin.messaging().sendEachForMulticast({
         tokens: tokens,
         notification: {
-          title: "Request Accepted! 🎉",
+          title: "Request Accepted!",
           body: `${receiverName} accepted your Random Chat request!`,
         },
         data: {
