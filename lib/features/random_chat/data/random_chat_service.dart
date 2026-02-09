@@ -107,7 +107,9 @@ class RandomChatService {
   /// Fetches or generates the daily list of up to 10 random users for [currentUserId].
   ///
   /// Uses gender priority logic: if user has gender set, prioritize opposite gender.
-  /// Results are cached in Firestore so reopening the page shows the same list.
+  /// Results are cached in the user's profile document so they persist for the
+  /// entire day and never change on refresh. A new date automatically triggers
+  /// regeneration (midnight reset without cloud functions).
   Future<List<RandomChatUser>> getDailySuggestions({
     required String currentUserId,
     String? currentUserGender,
@@ -115,19 +117,32 @@ class RandomChatService {
     final dateKey = _todayKey;
 
     try {
-      // Check if suggestions already generated for today
-      final existingDoc = await _suggestionsCol(dateKey).doc(currentUserId).get();
+      // Check the user's profile for cached suggestions first
+      final profileDoc = await _firestore
+          .collection('profiles')
+          .doc(currentUserId)
+          .get();
 
-      if (existingDoc.exists) {
-        final data = existingDoc.data()!;
-        final suggestedIds = List<String>.from(data['suggestedUserIds'] ?? []);
+      if (profileDoc.exists) {
+        final profileData = profileDoc.data()!;
+        final cachedDate =
+            profileData['randomChatSuggestionsDate'] as String?;
+        final cachedIds =
+            (profileData['randomChatSuggestionIds'] as List<dynamic>?)
+                    ?.cast<String>() ??
+                [];
 
-        if (suggestedIds.isNotEmpty) {
-          _logger.d('Returning ${suggestedIds.length} cached suggestions for $dateKey');
-          // Fetch user details for suggested IDs
-          return _fetchUserDetails(suggestedIds, dateKey);
+        if (cachedDate == dateKey && cachedIds.isNotEmpty) {
+          _logger.d(
+              'Returning ${cachedIds.length} profile-cached suggestions for $dateKey');
+          return _fetchUserDetails(cachedIds, dateKey);
         }
-        _logger.d('Cached suggestions exist but are empty — regenerating');
+
+        if (cachedDate == dateKey && cachedIds.isEmpty) {
+          _logger.d('Profile-cached suggestions are empty — regenerating');
+        } else {
+          _logger.d('Cached date ($cachedDate) != today ($dateKey) — regenerating');
+        }
       }
 
       // Generate new suggestions
@@ -196,7 +211,12 @@ class RandomChatService {
 
       if (eligibleUsers.isEmpty) {
         _logger.w('All users filtered out (saturated=${saturatedUserIds.length}, connected=${connectedUserIds.length})');
-        // Store empty suggestions
+        // Store empty suggestions in profile
+        await _firestore.collection('profiles').doc(currentUserId).update({
+          'randomChatSuggestionIds': <String>[],
+          'randomChatSuggestionsDate': dateKey,
+        });
+        // Also store in daily subcollection
         await _suggestionsCol(dateKey).doc(currentUserId).set({
           'suggestedUserIds': <String>[],
           'generatedAt': FieldValue.serverTimestamp(),
@@ -251,7 +271,15 @@ class RandomChatService {
 
       _logger.d('Generated ${suggestedIds.length} suggestions for $dateKey: $suggestedIds');
 
-      // Store suggestions in Firestore
+      // Store suggestions in user's profile for persistent daily caching.
+      // This ensures the list never changes on refresh and auto-resets when
+      // the date no longer matches (midnight reset without cloud functions).
+      await _firestore.collection('profiles').doc(currentUserId).update({
+        'randomChatSuggestionIds': suggestedIds,
+        'randomChatSuggestionsDate': dateKey,
+      });
+
+      // Also store in daily subcollection for backward compatibility
       await _suggestionsCol(dateKey).doc(currentUserId).set({
         'suggestedUserIds': suggestedIds,
         'generatedAt': FieldValue.serverTimestamp(),
@@ -571,14 +599,32 @@ class RandomChatService {
             );
           }
 
-          // 5. Accept request
+          // 5. Defense-in-depth: read the deterministic connection doc.
+          //    Even though Firestore transaction isolation on user_stats
+          //    already prevents double-connections (both transactions
+          //    read/write user_stats for the sender, causing one to retry
+          //    and fail), a deterministic ID + transactional read ensures
+          //    that even in edge cases, two connections for the same user
+          //    pair cannot coexist within the same day.
+          final connDocId = _deterministicConnectionId(
+              request.senderId, request.receiverId);
+          final connRef = _connectionsCol(dateKey).doc(connDocId);
+          final existingConn = await transaction.get(connRef);
+
+          if (existingConn.exists) {
+            return const RandomChatFailure(
+              'A connection already exists between these users today',
+              RandomChatErrorType.alreadyConnected,
+            );
+          }
+
+          // 6. Accept request
           transaction.update(requestRef, {
             'status': 'accepted',
             'respondedAt': FieldValue.serverTimestamp(),
           });
 
-          // 6. Create connection
-          final connRef = _connectionsCol(dateKey).doc();
+          // 7. Create connection (deterministic ID prevents duplicates)
           final connection = RandomChatConnectionModel(
             id: connRef.id,
             user1Id: request.senderId,
@@ -594,7 +640,7 @@ class RandomChatService {
           transaction.set(
               connRef, connection.toFirestore(useServerTimestamp: true));
 
-          // 7. Mark both users as having an active connection
+          // 8. Mark both users as having an active connection
           transaction.set(
             senderStatsRef,
             {'hasActiveConnection': true, 'lastUpdated': FieldValue.serverTimestamp()},
@@ -830,6 +876,13 @@ class RandomChatService {
       _logger.w('Error fetching connected user IDs', error: e);
       return {};
     }
+  }
+
+  /// Generates a deterministic connection ID from two user IDs.
+  /// Sorting ensures the same ID regardless of who is user1/user2.
+  String _deterministicConnectionId(String userId1, String userId2) {
+    final sorted = [userId1, userId2]..sort();
+    return '${sorted[0]}_${sorted[1]}';
   }
 
   /// Returns the opposite gender string.

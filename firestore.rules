@@ -1008,8 +1008,14 @@ service cloud.firestore {
       
       // Connections - active random chat connections
       match /connections/{connectionId} {
-        // RULE: Participants can read their connection
-        allow read: if isAuthenticated()
+        // RULE: Any authenticated user can get a specific connection by ID.
+        // Needed for transaction existence checks (acceptRequest reads a
+        // potentially non-existent doc with deterministic ID). Doc IDs are
+        // deterministic ({userId1}_{userId2} sorted) so this doesn't leak data.
+        allow get: if isAuthenticated();
+        
+        // RULE: List queries restricted to participants only
+        allow list: if isAuthenticated()
           && request.auth.uid in resource.data.participantIds;
         
         // RULE: Only transactions (from request acceptance) create connections

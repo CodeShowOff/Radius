@@ -229,14 +229,13 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
     switch (result) {
       case RandomChatSuccess<RandomChatConnection>(data: final connection):
-        // Remove accepted request from incoming
-        final updatedIncoming = latestState.incomingRequests
-            .where((r) => r.id != event.requestId)
-            .toList();
-
+        // Clear ALL incoming requests — with an active connection,
+        // the user can no longer accept any. This also closes the brief
+        // window where expired requests may still appear before the
+        // Cloud Function runs to expire them server-side.
         emit(latestState.copyWith(
           activeConnection: connection,
-          incomingRequests: updatedIncoming,
+          incomingRequests: const [],
         ));
 
       case RandomChatFailure<RandomChatConnection>(message: final message):
@@ -285,10 +284,9 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   ) async {
     if (_currentUserId.isEmpty) return;
 
-    // Force-reload: clear cached dateKey/userId so _onLoadRequested runs fully
-    _loadedDateKey = '';
-    _loadedUserId = '';
-
+    // Only reload data (incoming requests, connections, stats).
+    // Suggestions are pinned for the day in the user's profile and
+    // will NOT change — getDailySuggestions() returns the cached list.
     add(RandomChatLoadRequested(
       userId: _currentUserId,
       userGender: _currentUserGender,
@@ -301,6 +299,12 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   ) {
     final currentState = state;
     if (currentState is! RandomChatLoaded) return;
+
+    // If user already has an active connection, ignore incoming request updates.
+    // The Cloud Function will expire them server-side shortly. Suppressing
+    // stream updates here prevents stale pending requests from briefly
+    // re-appearing in the UI after we cleared them on connection detection.
+    if (currentState.hasActiveConnection) return;
 
     emit(currentState.copyWith(incomingRequests: event.requests));
   }
@@ -323,7 +327,14 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     if (currentState is! RandomChatLoaded) return;
 
     if (event.connection != null) {
-      emit(currentState.copyWith(activeConnection: event.connection));
+      // Clear incoming requests immediately when connection is detected.
+      // With an active connection, the user can no longer accept any requests.
+      // This closes the brief window where stale pending requests appear
+      // before the Cloud Function expires them server-side.
+      emit(currentState.copyWith(
+        activeConnection: event.connection,
+        incomingRequests: const [],
+      ));
     } else {
       emit(currentState.copyWith(clearActiveConnection: true));
     }
@@ -390,14 +401,21 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   void _setupMidnightTimer() {
     _midnightTimer?.cancel();
 
-    final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day + 1);
-    final duration = midnight.difference(now) + const Duration(seconds: 2);
-
-    _midnightTimer = Timer(duration, () {
-      // Cancel stale streams immediately — they point to yesterday's collection
-      _cancelListeners();
-      add(const RandomChatCheckDateChange());
+    // Use a periodic timer that checks the date every 60 seconds instead of
+    // trying to precisely hit midnight with a one-shot timer.
+    // This approach is resilient to:
+    // - Local device clock being wrong or drifting
+    // - Timezone / DST changes while the app is open
+    // - Device sleep/wake cycles that skip the exact midnight moment
+    // The check is lightweight (string comparison) so 60s polling is negligible.
+    // Note: didChangeAppLifecycleState in the page also checks on app resume,
+    // so this periodic timer is a complementary safety net for foreground use.
+    _midnightTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      final currentState = state;
+      if (currentState is RandomChatLoaded && !_isToday(currentState.dateKey)) {
+        _cancelListeners();
+        add(const RandomChatCheckDateChange());
+      }
     });
   }
 

@@ -271,40 +271,26 @@ class _HomePageState extends State<HomePage>
                 Row(
                   children: [
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        padding: const EdgeInsets.all(3),
-                        child: _AnimatedSquareCard(
-                          onTap: () => context.push(Routes.nearby),
-                          label: 'Find\nNearby',
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.secondaryContainer,
-                          isSquare: true,
-                          animationType: _CardAnimationType.wave,
-                        ),
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.nearby),
+                        label: 'Find\nNearby',
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.secondaryContainer,
+                        isSquare: true,
+                        animationType: _CardAnimationType.wave,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        padding: const EdgeInsets.all(3),
-                        child: _AnimatedSquareCard(
-                          onTap: () => context.push(Routes.randomChat),
-                          label: 'Random\nChat',
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.secondaryContainer,
-                          isSquare: true,
-                          animationType: _CardAnimationType.personCycle,
-                        ),
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.randomChat),
+                        label: 'Random\nChat',
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.secondaryContainer,
+                        isSquare: true,
+                        animationType: _CardAnimationType.personCycle,
                       ),
                     ),
                   ],
@@ -324,48 +310,27 @@ class _HomePageState extends State<HomePage>
                 const SizedBox(height: 16),
 
                 // Location Based Groups section - Simple card design
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.all(3),
-                  child: _SimpleGroupCard(
-                    onTap: () => context.push(Routes.locationGroups),
-                    title: 'Location Based Groups',
-                    subtitle: 'Connect with people in your area',
-                    icon: Icons.location_on,
-                  ),
+                _SimpleGroupCard(
+                  onTap: () => context.push(Routes.locationGroups),
+                  title: 'Location Based Groups',
+                  subtitle: 'Connect with people in your area',
+                  icon: Icons.location_on,
                 ),
                 const SizedBox(height: 16),
 
                 // Discover Groups - Simple card design
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.all(3),
-                  child: _SimpleGroupCard(
-                    onTap: () => context.push(Routes.discoverRandomGroups),
-                    title: 'Discover Random Groups',
-                    subtitle: 'Join global communities worldwide',
-                    icon: Icons.public,
-                  ),
+                _SimpleGroupCard(
+                  onTap: () => context.push(Routes.discoverRandomGroups),
+                  title: 'Discover Random Groups',
+                  subtitle: 'Join global communities worldwide',
+                  icon: Icons.public,
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.all(3),
-                  child: _SimpleGroupCard(
-                    onTap: () => context.push(Routes.discoverNearbyGroups),
-                    title: 'Discover Nearby Groups',
-                    subtitle: 'Find local communities around you',
-                    icon: Icons.all_inclusive,
-                  ),
+                _SimpleGroupCard(
+                  onTap: () => context.push(Routes.discoverNearbyGroups),
+                  title: 'Discover Nearby Groups',
+                  subtitle: 'Find local communities around you',
+                  icon: Icons.all_inclusive,
                 ),
               ],
             ),
