@@ -72,7 +72,7 @@ class ConversationModel extends Conversation {
     // Parse unread counts
     final unreadCountsData = data['unreadCounts'] as Map<String, dynamic>? ?? {};
     final unreadCounts = unreadCountsData.map(
-      (key, value) => MapEntry(key, value as int),
+      (key, value) => MapEntry(key, (value as num).toInt()),
     );
 
     // Parse last read timestamps
@@ -210,6 +210,8 @@ class ConversationModel extends Conversation {
       mutedBy: mutedBy,
       participantInfo: participantInfo,
       archivedBy: archivedBy,
+      unreadCounts: unreadCounts,
+      lastReadAt: lastReadAt,
     );
   }
 }

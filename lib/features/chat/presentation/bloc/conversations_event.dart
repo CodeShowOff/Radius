@@ -81,6 +81,19 @@ final class ConversationsMuteToggle extends ConversationsEvent {
   List<Object?> get props => [conversationId, mute];
 }
 
+/// Set the currently active (open) chat conversation.
+/// Used to exclude the active chat from the total unread badge count,
+/// preventing badge flashing when messages arrive while the user is
+/// viewing the chat.
+final class ConversationsSetActiveChat extends ConversationsEvent {
+  final String? conversationId;
+
+  const ConversationsSetActiveChat({this.conversationId});
+
+  @override
+  List<Object?> get props => [conversationId];
+}
+
 /// Internal event: Conversations updated from stream.
 final class _ConversationsUpdated extends ConversationsEvent {
   final List<Conversation> conversations;

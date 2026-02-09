@@ -50,6 +50,10 @@ class ChatState extends Equatable {
   /// ID of the first unread message (for showing unread divider).
   final String? firstUnreadMessageId;
 
+  /// Number of unread messages at the time the chat was opened.
+  /// Frozen at open time so it doesn't inflate as new messages arrive.
+  final int unreadCountAtOpen;
+
   const ChatState({
     this.status = ChatStatus.initial,
     this.conversationId,
@@ -64,6 +68,7 @@ class ChatState extends Equatable {
     this.errorMessage,
     this.pendingMessages = const {},
     this.firstUnreadMessageId,
+    this.unreadCountAtOpen = 0,
   });
 
   /// Gets all messages including pending ones, merged and deduplicated.
@@ -122,6 +127,7 @@ class ChatState extends Equatable {
     Map<String, Message>? pendingMessages,
     String? firstUnreadMessageId,
     bool clearFirstUnreadMessageId = false,
+    int? unreadCountAtOpen,
   }) {
     return ChatState(
       status: status ?? this.status,
@@ -139,6 +145,9 @@ class ChatState extends Equatable {
       firstUnreadMessageId: clearFirstUnreadMessageId
           ? null
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
+      unreadCountAtOpen: clearFirstUnreadMessageId
+          ? 0
+          : (unreadCountAtOpen ?? this.unreadCountAtOpen),
     );
   }
 
@@ -157,5 +166,6 @@ class ChatState extends Equatable {
         errorMessage,
         pendingMessages,
         firstUnreadMessageId,
+        unreadCountAtOpen,
       ];
 }

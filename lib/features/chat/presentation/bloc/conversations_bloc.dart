@@ -28,6 +28,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     on<ConversationsLoad>(_onLoad);
     on<ConversationsRefresh>(_onRefresh);
     on<ConversationsMarkAsRead>(_onMarkAsRead);
+    on<ConversationsSetActiveChat>(_onSetActiveChat);
     on<ConversationsArchive>(_onArchive);
     on<ConversationsDelete>(_onDelete);
     on<ConversationsClear>(_onClear);
@@ -137,16 +138,40 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
             )
             .toList();
 
-    // Calculate total unread count across all conversations
     final userId = state.currentUserId ?? '';
-    final totalUnread = filtered.fold<int>(
+
+    // CRITICAL FIX: Optimistically zero-out the unread count for the
+    // conversation the user is currently viewing. Without this, a race
+    // between the sender's FieldValue.increment(1) and the viewer's
+    // markConversationAsRead can leave a stale unread count in the list.
+    // When the user later leaves the chat (SetActiveChat(null)), the
+    // recalculated totalUnreadCount would briefly flash the stale value.
+    final processed = (state.activeConversationId != null && userId.isNotEmpty)
+        ? filtered.map((conversation) {
+            if (conversation.id == state.activeConversationId &&
+                conversation.getUnreadCount(userId) > 0) {
+              final updated =
+                  Map<String, int>.from(conversation.unreadCounts);
+              updated[userId] = 0;
+              return conversation.copyWith(unreadCounts: updated);
+            }
+            return conversation;
+          }).toList()
+        : filtered;
+
+    // Calculate total unread count across all conversations,
+    // excluding the conversation the user is currently viewing.
+    final totalUnread = processed.fold<int>(
       0,
-      (sum, conversation) => sum + conversation.getUnreadCount(userId),
+      (sum, conversation) {
+        if (conversation.id == state.activeConversationId) return sum;
+        return sum + conversation.getUnreadCount(userId);
+      },
     );
 
     emit(state.copyWith(
       status: ConversationsStatus.success,
-      conversations: filtered,
+      conversations: processed,
       totalUnreadCount: totalUnread,
     ));
   }
@@ -168,10 +193,13 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
       return conversation;
     }).toList();
 
-    // Recalculate total unread count
+    // Recalculate total unread count, excluding active chat
     final totalUnread = updatedConversations.fold<int>(
       0,
-      (sum, conversation) => sum + conversation.getUnreadCount(state.currentUserId!),
+      (sum, conversation) {
+        if (conversation.id == state.activeConversationId) return sum;
+        return sum + conversation.getUnreadCount(state.currentUserId!);
+      },
     );
 
     // Emit optimistic update immediately
@@ -191,6 +219,58 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
       _logger.w('Failed to mark conversation as read: $e');
       // Non-critical error - the stream may still update from server
     }
+  }
+
+  /// Sets the currently viewed conversation.
+  /// While a conversation is active, its unread count is excluded from
+  /// totalUnreadCount so the nav badge doesn't flash as messages arrive.
+  void _onSetActiveChat(
+    ConversationsSetActiveChat event,
+    Emitter<ConversationsState> emit,
+  ) {
+    final bool clearing = event.conversationId == null;
+    final userId = state.currentUserId ?? '';
+
+    // CRITICAL FIX: When opening a chat, optimistically reset the unread
+    // count for that conversation. This prevents a badge flash when the user
+    // quickly navigates back before markConversationAsRead propagates to
+    // Firestore. The stream will later confirm the reset.
+    List<Conversation> updatedConversations;
+    if (!clearing && userId.isNotEmpty) {
+      updatedConversations = state.conversations.map((conversation) {
+        if (conversation.id == event.conversationId &&
+            conversation.getUnreadCount(userId) > 0) {
+          final updated =
+              Map<String, int>.from(conversation.unreadCounts);
+          updated[userId] = 0;
+          return conversation.copyWith(unreadCounts: updated);
+        }
+        return conversation;
+      }).toList();
+    } else {
+      updatedConversations = state.conversations;
+    }
+
+    // Recalculate total unread count with the new active chat
+    final totalUnread = updatedConversations.fold<int>(
+      0,
+      (sum, conversation) {
+        if (!clearing && conversation.id == event.conversationId) return sum;
+        return sum + conversation.getUnreadCount(userId);
+      },
+    );
+
+    emit(clearing
+        ? state.copyWith(
+            clearActiveConversationId: true,
+            totalUnreadCount: totalUnread,
+            conversations: updatedConversations,
+          )
+        : state.copyWith(
+            activeConversationId: event.conversationId,
+            totalUnreadCount: totalUnread,
+            conversations: updatedConversations,
+          ));
   }
 
   Future<void> _onArchive(

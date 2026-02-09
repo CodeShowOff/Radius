@@ -18,6 +18,7 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   String? _selectedTopic;
+  bool _isSubmitting = false;
 
   static const _topics = [
     'Technology',
@@ -43,6 +44,9 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
 
   void _createGroup() {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Prevent double submission
+    if (_isSubmitting) return;
 
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
@@ -51,6 +55,10 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
       );
       return;
     }
+
+    setState(() {
+      _isSubmitting = true;
+    });
 
     final user = authState.user;
 
@@ -79,6 +87,9 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
           );
           context.pop();
         } else if (state.status == RandomGroupBlocStatus.error) {
+          setState(() {
+            _isSubmitting = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.errorMessage ?? 'Failed to create group'),
@@ -96,7 +107,7 @@ class _CreateRandomGroupPageState extends State<CreateRandomGroupPage> {
         ),
         body: BlocBuilder<RandomGroupBloc, RandomGroupState>(
           builder: (context, state) {
-            final isCreating = state.status == RandomGroupBlocStatus.creating;
+            final isCreating = state.status == RandomGroupBlocStatus.creating || _isSubmitting;
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),

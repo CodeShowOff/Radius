@@ -20,6 +20,7 @@ import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../data/chat_service.dart';
 import '../../domain/entities/message.dart';
 import '../bloc/chat_bloc.dart';
+import '../bloc/conversations_bloc.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/message_bubble.dart';
 
@@ -56,6 +57,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   String? _currentUserName;
   String? _currentUserPhotoUrl;
+
+  /// Whether we've already scrolled to the first unread message.
+  /// Prevents repeated scrolling on stream updates.
+  bool _hasScrolledToUnread = false;
 
   // Presence tracking
   PresenceState? _otherUserPresence;
@@ -107,6 +112,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           otherUserName: widget.otherUserName,
           otherUserPhotoUrl: widget.otherUserPhotoUrl,
         ));
+
+    // Tell ConversationsBloc which chat is active so it can exclude it
+    // from the total unread badge count (prevents badge flash on incoming
+    // messages while the user is viewing the chat).
+    context.read<ConversationsBloc>().add(
+          ConversationsSetActiveChat(conversationId: widget.conversationId),
+        );
   }
 
   /// Initialize presence tracking for the other user.
@@ -236,6 +248,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // Ignore if service not available
     }
 
+    // Clear active chat so its unread count is included in badge again.
+    // By this time, markConversationAsRead has already reset the count to 0.
+    try {
+      context.read<ConversationsBloc>().add(
+            const ConversationsSetActiveChat(conversationId: null),
+          );
+    } catch (_) {
+      // ConversationsBloc may not be accessible after dispose
+    }
+
     // Use cached reference to avoid context access after disposal
     _chatBloc?.add(const ChatClose());
     super.dispose();
@@ -293,6 +315,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  /// Scrolls to the first unread message position.
+  /// Uses estimated offset based on message index in the reversed list.
+  void _scrollToFirstUnread(ChatState state) {
+    final messages = state.allMessages;
+    final firstUnreadIndex = messages.indexWhere(
+      (m) => m.id == state.firstUnreadMessageId,
+    );
+
+    // If unread message is near the bottom (within first 3 items), no scroll needed
+    if (firstUnreadIndex <= 2) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      if (maxExtent <= 0) return;
+
+      // Estimate offset: index * average message height (70px)
+      // Subtract a bit to show the divider near the top of the viewport
+      final estimatedOffset = (firstUnreadIndex - 1) * 70.0;
+      _scrollController.jumpTo(estimatedOffset.clamp(0.0, maxExtent));
     });
   }
 
@@ -429,10 +474,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Expanded(
               child: BlocConsumer<ChatBloc, ChatState>(
                 listenWhen: (previous, current) =>
-                    previous.status != current.status,
+                    previous.status != current.status ||
+                    (current.firstUnreadMessageId != null &&
+                        previous.firstUnreadMessageId == null),
                 listener: (context, state) {
                   if (state.status != ChatStatus.loading) {
                     _isLoadingMore = false;
+                  }
+
+                  // Scroll to first unread message on initial load
+                  if (!_hasScrolledToUnread &&
+                      state.firstUnreadMessageId != null) {
+                    _hasScrolledToUnread = true;
+                    _scrollToFirstUnread(state);
                   }
                 },
                 builder: (context, state) {
@@ -487,6 +541,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     scrollController: _scrollController,
                     // Pass loading state so list can show subtle indicator
                     isLoading: state.status == ChatStatus.loading,
+                    firstUnreadMessageId: state.firstUnreadMessageId,
+                    unreadCount: state.unreadCountAtOpen,
                   );
                 },
               ),
@@ -963,6 +1019,8 @@ class _MessagesList extends StatelessWidget {
   final bool hasMore;
   final ScrollController scrollController;
   final bool isLoading;
+  final String? firstUnreadMessageId;
+  final int unreadCount;
 
   const _MessagesList({
     required this.messages,
@@ -971,6 +1029,8 @@ class _MessagesList extends StatelessWidget {
     required this.hasMore,
     required this.scrollController,
     this.isLoading = false,
+    this.firstUnreadMessageId,
+    this.unreadCount = 0,
   });
 
   @override
@@ -1045,9 +1105,15 @@ class _MessagesList extends StatelessWidget {
         // Check if we should show date separator
         final showDate = _shouldShowDate(adjustedIndex);
 
+        // Check if this message is the first unread message
+        final isFirstUnread = firstUnreadMessageId != null &&
+            message.id == firstUnreadMessageId;
+
         return Column(
           children: [
             if (showDate) DateSeparator(date: message.sentAt),
+            if (isFirstUnread)
+              _UnreadDivider(count: unreadCount),
             MessageBubble(
               message: message,
               isMe: isMe,
@@ -1093,5 +1159,52 @@ class _MessagesList extends StatelessWidget {
     );
 
     return currentDate != nextDate;
+  }
+}
+
+/// Divider shown above the first unread message, similar to WhatsApp.
+class _UnreadDivider extends StatelessWidget {
+  final int count;
+
+  const _UnreadDivider({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label =
+        count == 1 ? '1 unread message' : '$count unread messages';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

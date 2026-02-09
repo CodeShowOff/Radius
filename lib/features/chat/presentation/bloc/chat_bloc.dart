@@ -41,6 +41,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   /// This prevents the bug where state.status == loaded but subscriptions are null.
   bool _hasActiveSubscriptions = false;
 
+  /// The user's lastReadAt timestamp captured BEFORE marking conversation as read.
+  /// Used to compute firstUnreadMessageId client-side.
+  DateTime? _lastReadBeforeOpen;
+
+  /// Whether we've already computed firstUnreadMessageId for the current session.
+  /// Prevents recomputation on subsequent stream updates.
+  bool _firstUnreadComputed = false;
+
   ChatBloc({
     required ChatService chatService,
     required MediaUploadService mediaUploadService,
@@ -283,9 +291,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // IMPORTANT: Don't clear the state here!
     // Preserve messages in cache so that reopening the same chat is instant.
     // The state will be refreshed when ChatOpen is called for the same or different conversation.
-    // Only clear typing status to prevent stale indicators.
+    // Only clear typing status and unread divider to prevent stale indicators.
     emit(state.copyWith(
       isOtherUserTyping: false,
+      clearFirstUnreadMessageId: true,
     ));
   }
 
@@ -779,13 +788,100 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
 
-    // Ensure status is loaded when messages are received
+    // ========================================================================
+    // Compute first unread message ID on initial message arrival.
+    // This enables the "unread messages" divider and scroll-to-unread.
+    // Only computed once per chat session (before markConversationAsRead fires).
+    // ========================================================================
+    String? computedFirstUnreadId;
+    int computedUnreadCount = 0;
+    if (!_firstUnreadComputed &&
+        state.currentUserId != null &&
+        event.messages.isNotEmpty) {
+      _firstUnreadComputed = true;
+
+      if (_lastReadBeforeOpen != null) {
+        // Find oldest message from other user sent after lastReadAt.
+        // Messages are sorted descending (newest first), so iterate from end.
+        for (int i = event.messages.length - 1; i >= 0; i--) {
+          final msg = event.messages[i];
+          if (msg.senderId != state.currentUserId &&
+              msg.sentAt.isAfter(_lastReadBeforeOpen!)) {
+            computedFirstUnreadId = msg.id;
+            break;
+          }
+        }
+        // Count all unread messages from other user after lastReadAt
+        if (computedFirstUnreadId != null) {
+          for (final msg in event.messages) {
+            if (msg.senderId != state.currentUserId &&
+                msg.sentAt.isAfter(_lastReadBeforeOpen!)) {
+              computedUnreadCount++;
+            }
+          }
+        }
+      } else {
+        // No lastReadAt means user never read this chat.
+        // Find oldest message from the other user (all are unread).
+        for (int i = event.messages.length - 1; i >= 0; i--) {
+          final msg = event.messages[i];
+          if (msg.senderId != state.currentUserId) {
+            computedFirstUnreadId = msg.id;
+            break;
+          }
+        }
+        // Count all messages from other user
+        if (computedFirstUnreadId != null) {
+          for (final msg in event.messages) {
+            if (msg.senderId != state.currentUserId) {
+              computedUnreadCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // Ensure status is loaded when messages are received.
+    // computedFirstUnreadId is null on subsequent calls, which preserves
+    // the existing firstUnreadMessageId via copyWith semantics.
+    final previousLatestId =
+        state.messages.isNotEmpty ? state.messages.first.id : null;
+    final conversationId = state.conversationId;
+    final currentUserId = state.currentUserId;
+
     emit(state.copyWith(
       status: ChatStatus.loaded,
       messages: event.messages,
       hasMore: event.messages.length >= pageSize,
       pendingMessages: pending,
+      firstUnreadMessageId: computedFirstUnreadId,
+      unreadCountAtOpen: computedFirstUnreadId != null ? computedUnreadCount : null,
     ));
+
+    // ========================================================================
+    // CRITICAL FIX: Re-mark conversation as read when new messages arrive
+    // from the other user while the chat is open.
+    //
+    // sendMessage() does FieldValue.increment(1) on unreadCounts.$recipientId.
+    // Without this, the ConversationsBloc stream picks up the increment and
+    // the nav badge incorrectly shows unread for the conversation being viewed.
+    // This resets unreadCounts to 0 in Firestore so the stream corrects itself.
+    // The write is idempotent (sets to 0) so redundant calls are harmless.
+    // ========================================================================
+    if (conversationId != null &&
+        currentUserId != null &&
+        event.messages.isNotEmpty) {
+      final newLatest = event.messages.first;
+      final isNewMessage = newLatest.id != previousLatestId;
+      final isFromOtherUser = newLatest.senderId != currentUserId;
+
+      if (isNewMessage && isFromOtherUser) {
+        _chatService.markConversationAsRead(
+          conversationId: conversationId,
+          userId: currentUserId,
+        );
+      }
+    }
   }
 
   void _onConversationUpdated(
@@ -866,9 +962,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   /// Subscribes to Firestore streams for the current conversation.
   /// This is extracted to allow resubscription without full state reset.
-  Future<void> _subscribeToStreams(ChatOpen event) async {
+  /// [isResync] skips fetching lastReadAt to avoid recomputing the unread divider
+  /// on app resume / network reconnect.
+  Future<void> _subscribeToStreams(ChatOpen event, {bool isResync = false}) async {
     // Cancel any existing subscriptions first
     await _cancelSubscriptions();
+
+    // Fetch lastReadAt BEFORE subscribing to streams and marking as read.
+    // This is needed to compute the first unread message ID client-side.
+    // Skip on resync since the user is already in the chat.
+    if (!isResync) {
+      _firstUnreadComputed = false;
+      try {
+        final conv = await _chatService.getConversation(event.conversationId);
+        _lastReadBeforeOpen = conv?.getLastReadAt(event.currentUserId);
+      } catch (_) {
+        _lastReadBeforeOpen = null;
+      }
+    }
 
     // Subscribe to messages stream with better error handling
     _messagesSubscription =
@@ -963,8 +1074,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       otherUserPhotoUrl: state.otherUserPhotoUrl,
     );
 
-    // Cancel existing and resubscribe
-    await _subscribeToStreams(openEvent);
+    // Cancel existing and resubscribe (skip unread computation on resync)
+    await _subscribeToStreams(openEvent, isResync: true);
   }
 
   @override

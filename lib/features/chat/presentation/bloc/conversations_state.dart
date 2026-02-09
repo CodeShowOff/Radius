@@ -17,6 +17,11 @@ final class ConversationsState extends Equatable {
   final String? errorMessage;
   final int totalUnreadCount;
 
+  /// The conversation ID of the chat the user is currently viewing.
+  /// Used to exclude it from totalUnreadCount so the badge doesn't flash
+  /// when messages arrive while the user is reading them.
+  final String? activeConversationId;
+
   const ConversationsState({
     this.status = ConversationsStatus.initial,
     this.currentUserId,
@@ -24,6 +29,7 @@ final class ConversationsState extends Equatable {
     this.showArchived = false,
     this.errorMessage,
     this.totalUnreadCount = 0,
+    this.activeConversationId,
   });
 
   ConversationsState copyWith({
@@ -33,6 +39,8 @@ final class ConversationsState extends Equatable {
     bool? showArchived,
     String? errorMessage,
     int? totalUnreadCount,
+    String? activeConversationId,
+    bool clearActiveConversationId = false,
   }) {
     return ConversationsState(
       status: status ?? this.status,
@@ -41,6 +49,9 @@ final class ConversationsState extends Equatable {
       showArchived: showArchived ?? this.showArchived,
       errorMessage: errorMessage ?? this.errorMessage,
       totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
+      activeConversationId: clearActiveConversationId
+          ? null
+          : (activeConversationId ?? this.activeConversationId),
     );
   }
 
@@ -52,5 +63,6 @@ final class ConversationsState extends Equatable {
         showArchived,
         errorMessage,
         totalUnreadCount,
+        activeConversationId,
       ];
 }
