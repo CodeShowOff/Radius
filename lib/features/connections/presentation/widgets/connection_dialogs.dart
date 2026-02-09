@@ -147,7 +147,10 @@ class ConnectionRequestsBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
       builder: (context, state) {
-        final count = state.receivedRequests.length;
+        // Count only connection requests received from nearby
+        final count = state.receivedRequests
+            .where((req) => req.source == 'nearby')
+            .length;
 
         return Badge(
           isLabelVisible: count > 0,
@@ -174,7 +177,10 @@ class PendingRequestsBanner extends StatelessWidget {
 
     return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
       builder: (context, state) {
-        final count = state.receivedRequests.length;
+        // Count only connection requests received from nearby
+        final count = state.receivedRequests
+            .where((req) => req.source == 'nearby')
+            .length;
 
         if (count == 0) return const SizedBox.shrink();
 

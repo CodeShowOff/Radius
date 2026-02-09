@@ -278,15 +278,26 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   }
 }
 
-/// Badge showing pending connection requests count.
+/// Badge showing pending connection requests count from nearby.
 class _RequestsBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-      buildWhen: (prev, curr) =>
-          prev.receivedRequests.length != curr.receivedRequests.length,
+      buildWhen: (prev, curr) {
+        // Rebuild when the count of nearby requests changes
+        final prevNearbyCount = prev.receivedRequests
+            .where((req) => req.source == 'nearby')
+            .length;
+        final currNearbyCount = curr.receivedRequests
+            .where((req) => req.source == 'nearby')
+            .length;
+        return prevNearbyCount != currNearbyCount;
+      },
       builder: (context, state) {
-        final pendingCount = state.receivedRequests.length;
+        // Count only connection requests received from nearby
+        final nearbyRequestsCount = state.receivedRequests
+            .where((req) => req.source == 'nearby')
+            .length;
 
         return Stack(
           children: [
@@ -295,7 +306,7 @@ class _RequestsBadge extends StatelessWidget {
               onPressed: () => context.push(Routes.connectionRequests),
               tooltip: 'Requests',
             ),
-            if (pendingCount > 0)
+            if (nearbyRequestsCount > 0)
               Positioned(
                 right: 6,
                 top: 6,
@@ -310,7 +321,7 @@ class _RequestsBadge extends StatelessWidget {
                     minHeight: 18,
                   ),
                   child: Text(
-                    pendingCount > 99 ? '99+' : pendingCount.toString(),
+                    nearbyRequestsCount > 99 ? '99+' : nearbyRequestsCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,

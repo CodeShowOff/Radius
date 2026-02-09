@@ -49,7 +49,10 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
         actions: [
           BlocBuilder<ConnectionBloc, ConnectionBlocState>(
             builder: (context, state) {
-              final pendingCount = state.receivedRequests.length;
+              // Count only connection requests received from nearby
+              final nearbyRequestsCount = state.receivedRequests
+                  .where((req) => req.source == 'nearby')
+                  .length;
               return Stack(
                 children: [
                   IconButton(
@@ -59,7 +62,7 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
                     },
                     tooltip: 'Requests',
                   ),
-                  if (pendingCount > 0)
+                  if (nearbyRequestsCount > 0)
                     Positioned(
                       right: 8,
                       top: 8,
@@ -74,7 +77,7 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
                           minHeight: 16,
                         ),
                         child: Text(
-                          pendingCount > 9 ? '9+' : pendingCount.toString(),
+                          nearbyRequestsCount > 9 ? '9+' : nearbyRequestsCount.toString(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
