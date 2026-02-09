@@ -1,9 +1,17 @@
 # Firebase Cloud Functions Deployment Guide
 
 ## Overview
-This project now includes 6 Firebase Cloud Functions to handle notifications and automated cleanup tasks.
+This project now includes Firebase Cloud Functions to handle notifications, automated cleanup tasks, and server-side operations.
 
 ## Functions Summary
+
+### 0. **generateRandomChatSuggestions** (Callable - Server-Side Suggestion Generation)
+- **Type**: `onCall` (HTTPS Callable)
+- **Purpose**: Generates daily random chat suggestions server-side to prevent profile scraping
+- **Auth**: Requires Firebase Authentication
+- **Logic**: Batched profile fetching, gender priority, exclusion of saturated/connected users
+- **Returns**: `{suggestedIds: string[], dateKey: string}`
+- **Caching**: Stores results in user's profile doc and daily subcollection
 
 ### 1. **onMessageSent** (1-to-1 Chat Notifications)
 - **Trigger**: When a new message is created in `chats/{chatId}/messages/{messageId}`
@@ -169,4 +177,4 @@ firebase functions:delete <function-name>
 5. ✅ Monitor Firebase usage/costs
 
 ---
-**Last Updated**: Functions deployed with 6 cloud functions (3 notifications + 3 scheduled cleanups)
+**Last Updated**: Functions deployed with cloud functions (callable, notifications, scheduled cleanups, random chat lifecycle)

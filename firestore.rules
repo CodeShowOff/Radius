@@ -128,9 +128,12 @@ service cloud.firestore {
       // Individual profile reads: block check enforced
       allow get: if isAuthenticated() 
         && !hasBlockRelationship(request.auth.uid, userId);
-      // Collection list queries (e.g. random chat discovery): auth-only
-      // Block filtering is handled client-side for list operations
-      allow list: if isAuthenticated();
+      // Collection list queries: auth-only, limited to 30 docs max.
+      // Suggestion generation is server-side (Cloud Function), so clients
+      // only use list for targeted whereIn queries (fetching known IDs).
+      // The limit prevents mass scraping of the profiles collection.
+      allow list: if isAuthenticated()
+        && request.query.limit <= 30;
       
       // RULE: Allow authenticated users to create their own profile
       // This is critical for first-time sign-up/sign-in flows

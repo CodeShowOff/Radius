@@ -1,9 +1,223 @@
 import {onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import {logger} from "firebase-functions";
 
 admin.initializeApp();
+
+// =============================================================================
+// RANDOM CHAT - Server-Side Suggestion Generation
+// =============================================================================
+
+/**
+ * Callable Cloud Function that generates daily random chat suggestions.
+ *
+ * Moves suggestion generation server-side for:
+ * - Security: clients can't scrape the entire profiles collection
+ * - Performance: Admin SDK has no billing per-read overhead for batch reads
+ * - Integrity: selection logic can't be manipulated by modified clients
+ *
+ * The function:
+ * 1. Checks for cached suggestions in the user's profile (returns early if valid)
+ * 2. Queries visible profiles in batches (limit 100 per batch, up to 5 batches)
+ * 3. Filters out ineligible users (self, saturated, already connected)
+ * 4. Applies gender priority logic (opposite gender first)
+ * 5. Selects up to 10 users and caches the result
+ * 6. Returns the selected user IDs
+ *
+ * @param data.gender - Optional gender of the calling user for priority matching
+ * @returns {suggestedIds: string[], dateKey: string}
+ */
+export const generateRandomChatSuggestions = onCall(
+  {
+    // Enforce authentication
+    enforceAppCheck: false, // Set to true if App Check is enforced
+  },
+  async (request) => {
+    // 1. Auth check
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const currentUserId = request.auth.uid;
+    const currentUserGender = (request.data?.gender as string) || null;
+    const db = admin.firestore();
+
+    const MAX_DAILY_USERS = 10;
+    const BATCH_SIZE = 100;
+    const MAX_BATCHES = 5;
+    const TARGET_ELIGIBLE = 20;
+    const MAX_DAILY_RECEIVED_REQUESTS = 10;
+
+    // Date key in yyyy-MM-dd format (UTC)
+    const now = new Date();
+    const dateKey = `${now.getFullYear()}-` +
+      `${String(now.getMonth() + 1).padStart(2, "0")}-` +
+      `${String(now.getDate()).padStart(2, "0")}`;
+
+    try {
+      // 2. Check for cached suggestions in user's profile
+      const profileDoc = await db.collection("profiles").doc(currentUserId).get();
+
+      if (profileDoc.exists) {
+        const profileData = profileDoc.data()!;
+        const cachedDate = profileData.randomChatSuggestionsDate as string | undefined;
+        const cachedIds = (profileData.randomChatSuggestionIds as string[]) || [];
+
+        if (cachedDate === dateKey && cachedIds.length > 0) {
+          logger.log(`Returning ${cachedIds.length} cached suggestions for ${currentUserId}`);
+          return {suggestedIds: cachedIds, dateKey};
+        }
+      }
+
+      // 3. Fetch ineligible user IDs (small, targeted queries)
+      const dailyDocPath = `random_chat_daily/${dateKey}`;
+
+      const [saturatedSnapshot, connectedSnapshot] = await Promise.all([
+        db.collection(`${dailyDocPath}/user_stats`)
+          .where("receivedRequestCount", ">=", MAX_DAILY_RECEIVED_REQUESTS)
+          .get(),
+        db.collection(`${dailyDocPath}/user_stats`)
+          .where("hasActiveConnection", "==", true)
+          .get(),
+      ]);
+
+      const excludeIds = new Set<string>();
+      excludeIds.add(currentUserId);
+      saturatedSnapshot.docs.forEach((doc) => excludeIds.add(doc.id));
+      connectedSnapshot.docs.forEach((doc) => excludeIds.add(doc.id));
+
+      logger.log(`Exclude set: ${excludeIds.size} IDs ` +
+        `(saturated=${saturatedSnapshot.size}, connected=${connectedSnapshot.size})`);
+
+      // 4. Batched profile fetching with isVisible=true and pagination
+      interface EligibleUser {
+        id: string;
+        gender?: string;
+      }
+
+      const eligibleUsers: EligibleUser[] = [];
+      let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
+      let totalFetched = 0;
+
+      for (let batch = 0; batch < MAX_BATCHES; batch++) {
+        let query: admin.firestore.Query = db.collection("profiles")
+          .where("isVisible", "==", true)
+          .limit(BATCH_SIZE);
+
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.get();
+        totalFetched += snapshot.size;
+
+        for (const doc of snapshot.docs) {
+          if (!excludeIds.has(doc.id)) {
+            eligibleUsers.push({
+              id: doc.id,
+              gender: doc.data().gender as string | undefined,
+            });
+          }
+        }
+
+        logger.log(`Batch ${batch + 1}: fetched ${snapshot.size}, ` +
+          `total eligible ${eligibleUsers.length}`);
+
+        if (eligibleUsers.length >= TARGET_ELIGIBLE || snapshot.size < BATCH_SIZE) {
+          break;
+        }
+
+        lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      }
+
+      logger.log(`Batched fetch complete: ${totalFetched} docs read, ` +
+        `${eligibleUsers.length} eligible profiles`);
+
+      if (eligibleUsers.length === 0) {
+        // Cache empty result
+        await db.collection("profiles").doc(currentUserId).update({
+          randomChatSuggestionIds: [],
+          randomChatSuggestionsDate: dateKey,
+        });
+        await db.collection(`${dailyDocPath}/suggestions`).doc(currentUserId).set({
+          suggestedUserIds: [],
+          generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return {suggestedIds: [], dateKey};
+      }
+
+      // 5. Apply gender priority logic
+      let selectedUsers: EligibleUser[];
+
+      if (currentUserGender) {
+        const oppositeGender = getOppositeGender(currentUserGender);
+
+        const oppositeGenderUsers = eligibleUsers.filter((u) =>
+          u.gender?.toLowerCase() === oppositeGender.toLowerCase()
+        );
+        const otherUsers = eligibleUsers.filter((u) =>
+          !u.gender || u.gender.toLowerCase() !== oppositeGender.toLowerCase()
+        );
+
+        // Shuffle both arrays
+        shuffleArray(oppositeGenderUsers);
+        shuffleArray(otherUsers);
+
+        // Take opposite gender first, fill remaining with others
+        selectedUsers = oppositeGenderUsers.slice(0, MAX_DAILY_USERS);
+        if (selectedUsers.length < MAX_DAILY_USERS) {
+          const remaining = MAX_DAILY_USERS - selectedUsers.length;
+          selectedUsers.push(...otherUsers.slice(0, remaining));
+        }
+      } else {
+        // No gender set - random selection
+        shuffleArray(eligibleUsers);
+        selectedUsers = eligibleUsers.slice(0, MAX_DAILY_USERS);
+      }
+
+      const suggestedIds = selectedUsers.map((u) => u.id);
+
+      logger.log(`Generated ${suggestedIds.length} suggestions for ${currentUserId}: ` +
+        `${suggestedIds.join(", ")}`);
+
+      // 6. Cache in user's profile and daily subcollection
+      await Promise.all([
+        db.collection("profiles").doc(currentUserId).update({
+          randomChatSuggestionIds: suggestedIds,
+          randomChatSuggestionsDate: dateKey,
+        }),
+        db.collection(`${dailyDocPath}/suggestions`).doc(currentUserId).set({
+          suggestedUserIds: suggestedIds,
+          generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }),
+      ]);
+
+      return {suggestedIds, dateKey};
+    } catch (error) {
+      logger.error("Error generating random chat suggestions:", error);
+      throw new HttpsError("internal", "Failed to generate suggestions");
+    }
+  }
+);
+
+/** Fisher-Yates shuffle (in-place). */
+function shuffleArray<T>(array: T[]): void {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+/** Returns the opposite gender string. */
+function getOppositeGender(gender: string): string {
+  switch (gender.toLowerCase()) {
+  case "male": return "female";
+  case "female": return "male";
+  default: return ""; // non-binary or other - no priority
+  }
+}
 
 /**
  * Send push notification when a new message is sent.

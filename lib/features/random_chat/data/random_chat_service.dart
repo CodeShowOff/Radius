@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:logger/logger.dart';
 
 import '../domain/entities/random_chat_connection.dart';
@@ -58,18 +58,19 @@ enum RandomChatErrorType {
 /// ```
 class RandomChatService {
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   final Logger _logger;
-  final Random _random;
 
   static const int maxDailyUsers = 10;
   static const int maxDailyReceivedRequests = 10;
 
   RandomChatService({
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
     Logger? logger,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _logger = logger ?? Logger(),
-        _random = Random();
+        _functions = functions ?? FirebaseFunctions.instance,
+        _logger = logger ?? Logger();
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -87,9 +88,6 @@ class RandomChatService {
   /// Reference to today's daily collection.
   DocumentReference _dailyDoc(String dateKey) =>
       _firestore.collection('random_chat_daily').doc(dateKey);
-
-  CollectionReference<Map<String, dynamic>> _suggestionsCol(String dateKey) =>
-      _dailyDoc(dateKey).collection('suggestions');
 
   CollectionReference<Map<String, dynamic>> _requestsCol(String dateKey) =>
       _dailyDoc(dateKey).collection('requests');
@@ -158,157 +156,56 @@ class RandomChatService {
     }
   }
 
-  /// Generates a fresh list of random users and stores them.
+  /// Generates a fresh list of random users by calling the server-side
+  /// Cloud Function `generateRandomChatSuggestions`.
   ///
-  /// Uses a batched fetching strategy to avoid reading the entire profiles
-  /// collection. Fetches up to [_maxBatches] batches of [_batchSize] visible
-  /// profiles, filtering out ineligible users (self, saturated, connected)
-  /// in memory after each batch. Terminates early once enough eligible
-  /// candidates are found (at least [_targetEligible]).
+  /// Moving generation server-side provides:
+  /// - **Security**: Clients never query the full profiles collection.
+  ///   A modified client cannot scrape or manipulate the selection.
+  /// - **Performance**: The Admin SDK on the server has no per-document
+  ///   billing overhead for batch reads.
+  /// - **Integrity**: Gender-priority logic, exclusion sets, and caching
+  ///   are all enforced server-side.
   ///
-  /// Performance: reads at most ~500 documents instead of the entire
-  /// collection, reducing Firestore costs by 90-99% for large databases.
-  static const int _batchSize = 100;
-  static const int _maxBatches = 5;
-  static const int _targetEligible = 20; // collect more than we need for good shuffle diversity
-
+  /// The Cloud Function returns `{suggestedIds: [...], dateKey: "..."}`.
+  /// The client then fetches only those specific profiles (allowed by
+  /// Firestore `get` rules on individual docs).
   Future<List<RandomChatUser>> _generateDailySuggestions({
     required String currentUserId,
     String? currentUserGender,
     required String dateKey,
   }) async {
     try {
-      // 1. Fetch ineligible user IDs first (small, targeted queries)
-      final saturatedUserIds = await _getSaturatedUserIds(dateKey);
-      final connectedUserIds = await _getConnectedUserIds(dateKey);
-      final excludeIds = {...saturatedUserIds, ...connectedUserIds, currentUserId};
+      _logger.d('Calling generateRandomChatSuggestions Cloud Function');
 
-      _logger.d('Exclude set: ${excludeIds.length} IDs '
-          '(saturated=${saturatedUserIds.length}, connected=${connectedUserIds.length})');
+      final callable = _functions.httpsCallable(
+        'generateRandomChatSuggestions',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
 
-      // 2. Batched profile fetching with isVisible=true and pagination
-      final List<QueryDocumentSnapshot<Map<String, dynamic>>> eligibleUsers = [];
-      DocumentSnapshot? lastDoc;
-      int totalFetched = 0;
+      final result = await callable.call<Map<String, dynamic>>({
+        if (currentUserGender != null && currentUserGender.isNotEmpty)
+          'gender': currentUserGender,
+      });
 
-      for (int batch = 0; batch < _maxBatches; batch++) {
-        Query<Map<String, dynamic>> query = _firestore
-            .collection('profiles')
-            .where('isVisible', isEqualTo: true)
-            .limit(_batchSize);
+      final data = result.data;
+      final suggestedIds = (data['suggestedIds'] as List<dynamic>?)
+              ?.cast<String>() ??
+          [];
+      final serverDateKey = data['dateKey'] as String? ?? dateKey;
 
-        // Paginate using startAfterDocument for subsequent batches
-        if (lastDoc != null) {
-          query = query.startAfterDocument(lastDoc);
-        }
+      _logger.d('Cloud Function returned ${suggestedIds.length} suggestions '
+          'for $serverDateKey');
 
-        final snapshot = await query.get();
-        totalFetched += snapshot.docs.length;
-
-        // Filter out excluded users from this batch
-        final batchEligible = snapshot.docs
-            .where((doc) => !excludeIds.contains(doc.id))
-            .toList();
-
-        eligibleUsers.addAll(batchEligible);
-
-        _logger.d('Batch ${batch + 1}: fetched ${snapshot.docs.length}, '
-            'eligible ${batchEligible.length}, total eligible ${eligibleUsers.length}');
-
-        // Early termination: enough eligible users found or no more docs
-        if (eligibleUsers.length >= _targetEligible ||
-            snapshot.docs.length < _batchSize) {
-          break;
-        }
-
-        // Track last document for pagination cursor
-        lastDoc = snapshot.docs.last;
-      }
-
-      _logger.d('Batched fetch complete: $totalFetched docs read, '
-          '${eligibleUsers.length} eligible profiles');
-
-      if (eligibleUsers.isEmpty) {
-        _logger.w('No eligible profiles found after batched fetch '
-            '(totalFetched=$totalFetched, excludeIds=${excludeIds.length})');
-        // Store empty suggestions in profile
-        await _firestore.collection('profiles').doc(currentUserId).update({
-          'randomChatSuggestionIds': <String>[],
-          'randomChatSuggestionsDate': dateKey,
-        });
-        // Also store in daily subcollection
-        await _suggestionsCol(dateKey).doc(currentUserId).set({
-          'suggestedUserIds': <String>[],
-          'generatedAt': FieldValue.serverTimestamp(),
-        });
+      if (suggestedIds.isEmpty) {
         return [];
       }
 
-      // 3. Apply gender priority logic
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> selectedDocs;
-
-      if (currentUserGender != null && currentUserGender.isNotEmpty) {
-        final oppositeGender = _getOppositeGender(currentUserGender);
-
-        final oppositeGenderUsers = eligibleUsers
-            .where((doc) {
-              final data = doc.data();
-              final gender = data['gender'] as String?;
-              return gender != null &&
-                  gender.toLowerCase() == oppositeGender.toLowerCase();
-            })
-            .toList();
-
-        final otherUsers = eligibleUsers
-            .where((doc) {
-              final data = doc.data();
-              final gender = data['gender'] as String?;
-              return gender == null ||
-                  gender.toLowerCase() != oppositeGender.toLowerCase();
-            })
-            .toList();
-
-        // Shuffle both lists
-        oppositeGenderUsers.shuffle(_random);
-        otherUsers.shuffle(_random);
-
-        // Take opposite gender first, fill remaining with others
-        selectedDocs = [
-          ...oppositeGenderUsers.take(maxDailyUsers),
-        ];
-
-        if (selectedDocs.length < maxDailyUsers) {
-          final remaining = maxDailyUsers - selectedDocs.length;
-          selectedDocs.addAll(otherUsers.take(remaining));
-        }
-      } else {
-        // No gender set - random selection
-        eligibleUsers.shuffle(_random);
-        selectedDocs = eligibleUsers.take(maxDailyUsers).toList();
-      }
-
-      final suggestedIds = selectedDocs.map((doc) => doc.id).toList();
-
-      _logger.d('Generated ${suggestedIds.length} suggestions for $dateKey: $suggestedIds');
-
-      // 4. Store suggestions in user's profile for persistent daily caching.
-      // This ensures the list never changes on refresh and auto-resets when
-      // the date no longer matches (midnight reset without cloud functions).
-      await _firestore.collection('profiles').doc(currentUserId).update({
-        'randomChatSuggestionIds': suggestedIds,
-        'randomChatSuggestionsDate': dateKey,
-      });
-
-      // Also store in daily subcollection for backward compatibility
-      await _suggestionsCol(dateKey).doc(currentUserId).set({
-        'suggestedUserIds': suggestedIds,
-        'generatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // 5. Convert to RandomChatUser entities
-      return _docsToRandomChatUsers(selectedDocs, dateKey);
+      // Fetch full profile details for the returned IDs
+      return _fetchUserDetails(suggestedIds, serverDateKey);
     } catch (e, stack) {
-      _logger.e('Error generating daily suggestions', error: e, stackTrace: stack);
+      _logger.e('Error calling generateRandomChatSuggestions',
+          error: e, stackTrace: stack);
       rethrow;
     }
   }
@@ -383,45 +280,6 @@ class RandomChatService {
       _logger.e('Error fetching user details', error: e, stackTrace: stack);
       return [];
     }
-  }
-
-  Future<List<RandomChatUser>> _docsToRandomChatUsers(
-    List<DocumentSnapshot> docs,
-    String dateKey,
-  ) async {
-    // Batch-read all stats in parallel instead of N sequential reads
-    final statsFutures = docs.map(
-      (doc) => _userStatsCol(dateKey).doc(doc.id).get(),
-    );
-    final statsDocs = await Future.wait(statsFutures);
-
-    final statsMap = <String, int>{};
-    for (final statsDoc in statsDocs) {
-      if (statsDoc.exists) {
-        statsMap[statsDoc.id] =
-            (statsDoc.data()?['receivedRequestCount'] as int?) ?? 0;
-      }
-    }
-
-    final result = <RandomChatUser>[];
-
-    for (final doc in docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final receivedCount = statsMap[doc.id] ?? 0;
-
-      result.add(RandomChatUser(
-        userId: doc.id,
-        displayName:
-            data['displayName'] as String? ?? data['name'] as String? ?? 'Unknown',
-        photoUrl: data['photoUrl'] as String?,
-        gender: data['gender'] as String?,
-        mood: data['mood'] as String?,
-        bio: data['bio'] as String?,
-        receivedRequestCount: receivedCount,
-      ));
-    }
-
-    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -870,51 +728,11 @@ class RandomChatService {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  /// Gets IDs of users who have received 10+ requests today.
-  Future<Set<String>> _getSaturatedUserIds(String dateKey) async {
-    try {
-      final snapshot = await _userStatsCol(dateKey)
-          .where('receivedRequestCount', isGreaterThanOrEqualTo: maxDailyReceivedRequests)
-          .get();
-
-      return snapshot.docs.map((doc) => doc.id).toSet();
-    } catch (e) {
-      _logger.w('Error fetching saturated user IDs', error: e);
-      return {};
-    }
-  }
-
-  /// Gets IDs of users who have an active connection today.
-  Future<Set<String>> _getConnectedUserIds(String dateKey) async {
-    try {
-      final snapshot = await _userStatsCol(dateKey)
-          .where('hasActiveConnection', isEqualTo: true)
-          .get();
-
-      return snapshot.docs.map((doc) => doc.id).toSet();
-    } catch (e) {
-      _logger.w('Error fetching connected user IDs', error: e);
-      return {};
-    }
-  }
-
   /// Generates a deterministic connection ID from two user IDs.
   /// Sorting ensures the same ID regardless of who is user1/user2.
   String _deterministicConnectionId(String userId1, String userId2) {
     final sorted = [userId1, userId2]..sort();
     return '${sorted[0]}_${sorted[1]}';
-  }
-
-  /// Returns the opposite gender string.
-  String _getOppositeGender(String gender) {
-    switch (gender.toLowerCase()) {
-      case 'male':
-        return 'female';
-      case 'female':
-        return 'male';
-      default:
-        return ''; // non-binary or other - no priority
-    }
   }
 
   /// Best-effort cleanup: expires all other pending requests involving
