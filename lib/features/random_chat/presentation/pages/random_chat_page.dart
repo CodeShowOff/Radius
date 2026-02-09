@@ -449,8 +449,9 @@ class _RandomChatPageState extends State<RandomChatPage>
     ThemeData theme,
   ) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () {
           context.push(
@@ -461,68 +462,88 @@ class _RandomChatPageState extends State<RandomChatPage>
             },
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
+              // Avatar
               CachedAvatar(
                 imageUrl: request.senderPhotoUrl,
                 name: request.senderDisplayName,
-                radius: 24,
+                radius: 28,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
+              // User info - takes available space
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       request.senderDisplayName,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       'Wants to chat with you',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color:
                             theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        fontSize: 13,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Accept button
-              IconButton.filled(
-                onPressed: state.hasActiveConnection
-                    ? null
-                    : () {
-                        context.read<RandomChatBloc>().add(
-                              RandomChatAcceptRequest(requestId: request.id),
-                            );
-                      },
-                icon: const Icon(Icons.check, size: 20),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                ),
-                tooltip: 'Accept',
-              ),
-              const SizedBox(width: 4),
-              // Reject button
-              IconButton.outlined(
-                onPressed: () {
-                  context.read<RandomChatBloc>().add(
-                        RandomChatRejectRequest(requestId: request.id),
-                      );
-                },
-                icon: const Icon(Icons.close, size: 20),
-                style: IconButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
-                  side: BorderSide(
-                      color: theme.colorScheme.error.withValues(alpha: 0.5)),
-                ),
-                tooltip: 'Reject',
+              const SizedBox(width: 12),
+              // Action buttons
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Accept button
+                  IconButton.filled(
+                    onPressed: state.hasActiveConnection
+                        ? null
+                        : () {
+                            context.read<RandomChatBloc>().add(
+                                  RandomChatAcceptRequest(
+                                      requestId: request.id),
+                                );
+                          },
+                    icon: const Icon(Icons.check, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      padding: const EdgeInsets.all(10),
+                    ),
+                    tooltip: 'Accept',
+                  ),
+                  const SizedBox(width: 8),
+                  // Reject button
+                  IconButton.outlined(
+                    onPressed: () {
+                      context.read<RandomChatBloc>().add(
+                            RandomChatRejectRequest(requestId: request.id),
+                          );
+                    },
+                    icon: const Icon(Icons.close, size: 20),
+                    style: IconButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(
+                          color:
+                              theme.colorScheme.error.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.all(10),
+                    ),
+                    tooltip: 'Reject',
+                  ),
+                ],
               ),
             ],
           ),
@@ -546,8 +567,9 @@ class _RandomChatPageState extends State<RandomChatPage>
         user.canReceiveRequests;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () {
           context.push(
@@ -558,118 +580,144 @@ class _RandomChatPageState extends State<RandomChatPage>
             },
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              // User info row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CachedAvatar(
-                    imageUrl: user.photoUrl,
-                    name: user.displayName,
-                    radius: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.displayName,
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (user.mood != null && user.mood!.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            user.mood!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.7),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        if (user.bio != null && user.bio!.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            user.bio!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.55),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+              // Avatar
+              CachedAvatar(
+                imageUrl: user.photoUrl,
+                name: user.displayName,
+                radius: 28,
               ),
-              const SizedBox(height: 10),
-              // Action button row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (alreadySent)
-                    Chip(
-                      label: const Text('Sent'),
-                      labelStyle: theme.textTheme.labelSmall?.copyWith(
+              const SizedBox(width: 14),
+              // User info - takes available space
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      user.displayName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (user.mood != null && user.mood!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        user.mood!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.7),
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (user.bio != null && user.bio!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        user.bio!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.55),
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Action button - fixed width
+              if (alreadySent)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 16,
                         color: theme.colorScheme.primary,
                       ),
-                      side: BorderSide(
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.3)),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    )
-                  else if (!user.canReceiveRequests)
-                    Chip(
-                      label: const Text('Limit Reached'),
-                      labelStyle: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                      const SizedBox(width: 6),
+                      Text(
+                        'Sent',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      side: BorderSide(
-                          color:
-                              theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    )
-                  else
-                    FilledButton.tonalIcon(
-                      onPressed: canSend
-                          ? () {
-                              context.read<RandomChatBloc>().add(
-                                    RandomChatSendRequest(
-                                      receiverId: user.userId,
-                                      receiverDisplayName: user.displayName,
-                                      receiverPhotoUrl: user.photoUrl,
-                                    ),
-                                  );
-                            }
-                          : null,
-                      icon: isProcessing
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: theme.colorScheme.primary,
-                              ),
-                            )
-                          : const Icon(Icons.send, size: 18),
-                      label: const Text('Send Request'),
+                    ],
+                  ),
+                )
+              else if (!user.canReceiveRequests)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Full',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                      fontWeight: FontWeight.w500,
                     ),
-                ],
-              ),
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: canSend
+                      ? () {
+                          context.read<RandomChatBloc>().add(
+                                RandomChatSendRequest(
+                                  receiverId: user.userId,
+                                  receiverDisplayName: user.displayName,
+                                  receiverPhotoUrl: user.photoUrl,
+                                ),
+                              );
+                        }
+                      : null,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  icon: isProcessing
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.send, size: 16),
+                  label: Text(
+                    'Send',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
