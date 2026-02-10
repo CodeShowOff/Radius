@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/router/routes.dart';
+import 'chat/domain/entities/conversation.dart';
 import 'chat/presentation/bloc/conversations_bloc.dart';
+import 'random_chat/presentation/bloc/random_chat_bloc.dart';
 
 /// Main scaffold with bottom navigation for the app.
 class MainScaffold extends StatefulWidget {
@@ -104,17 +106,51 @@ class _ConnectionsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConversationsBloc, ConversationsState>(
-      buildWhen: (previous, current) => previous.totalUnreadCount != current.totalUnreadCount,
-      builder: (context, state) {
-        final unreadCount = state.totalUnreadCount;
-        
-        if (unreadCount == 0) {
-          return Icon(selected ? Icons.people : Icons.people_outlined);
-        }
-        
-        return Badge(
-          label: Text(unreadCount > 99 ? '99+' : unreadCount.toString()),
-          child: Icon(selected ? Icons.people : Icons.people_outlined),
+      buildWhen: (previous, current) {
+        // Rebuild when conversations list changes or current user changes
+        return previous.conversations != current.conversations ||
+            previous.currentUserId != current.currentUserId;
+      },
+      builder: (context, conversationsState) {
+        return BlocBuilder<RandomChatBloc, RandomChatState>(
+          buildWhen: (previous, current) {
+            // Rebuild when active connection changes
+            if (previous is RandomChatLoaded && current is RandomChatLoaded) {
+              return previous.activeConnection != current.activeConnection;
+            }
+            return previous.runtimeType != current.runtimeType;
+          },
+          builder: (context, randomChatState) {
+            // Get random chat conversation ID to exclude
+            String? randomChatConversationId;
+            if (randomChatState is RandomChatLoaded &&
+                randomChatState.activeConnection != null &&
+                conversationsState.currentUserId != null) {
+              final connection = randomChatState.activeConnection!;
+              final currentUserId = conversationsState.currentUserId!;
+              final otherUserId = connection.getOtherUserId(currentUserId);
+              randomChatConversationId =
+                  Conversation.createConversationId(currentUserId, otherUserId);
+            }
+
+            // Count the number of connection chats with unread messages
+            // (excluding random chat)
+            final userId = conversationsState.currentUserId ?? '';
+            final chatsWithUnread = conversationsState.conversations
+                .where((conversation) =>
+                    conversation.id != randomChatConversationId &&
+                    conversation.getUnreadCount(userId) > 0)
+                .length;
+
+            if (chatsWithUnread == 0) {
+              return Icon(selected ? Icons.people : Icons.people_outlined);
+            }
+
+            return Badge(
+              label: Text(chatsWithUnread > 99 ? '99+' : chatsWithUnread.toString()),
+              child: Icon(selected ? Icons.people : Icons.people_outlined),
+            );
+          },
         );
       },
     );
