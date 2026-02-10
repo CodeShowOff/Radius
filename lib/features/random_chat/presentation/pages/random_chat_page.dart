@@ -237,21 +237,24 @@ class _RandomChatPageState extends State<RandomChatPage>
           ),
 
           // Pinned active connection card at bottom
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  theme.colorScheme.surface.withValues(alpha: 0.0),
-                  theme.colorScheme.surface.withValues(alpha: 0.95),
-                  theme.colorScheme.surface,
-                ],
-                stops: const [0.0, 0.3, 0.5],
+          SafeArea(
+            top: false,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.surface.withValues(alpha: 0.0),
+                    theme.colorScheme.surface.withValues(alpha: 0.95),
+                    theme.colorScheme.surface,
+                  ],
+                  stops: const [0.0, 0.3, 0.5],
+                ),
               ),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+              child: _buildActiveConnectionCard(context, state, theme),
             ),
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-            child: _buildActiveConnectionCard(context, state, theme),
           ),
         ],
       );

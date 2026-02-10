@@ -142,18 +142,6 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 32),
-                      FilledButton.icon(
-                        onPressed: () => context.push(Routes.createLocationGroup),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create Group'),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () => context.push(Routes.locationGroups),
-                        icon: const Icon(Icons.search),
-                        label: const Text('Find Groups'),
-                      ),
                     ],
                   ),
                 ),
@@ -195,10 +183,23 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(Routes.locationGroups),
-        icon: const Icon(Icons.search),
-        label: const Text('Find Groups'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            onPressed: () => context.push(Routes.createLocationGroup),
+            icon: const Icon(Icons.add),
+            label: const Text('Create Group'),
+            heroTag: 'createGroup',
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            onPressed: () => context.push(Routes.locationGroups),
+            icon: const Icon(Icons.search),
+            label: const Text('Find Groups'),
+            heroTag: 'findGroups',
+          ),
+        ],
       ),
     );
   }
