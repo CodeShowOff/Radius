@@ -51,6 +51,10 @@ class RadiusApp extends StatelessWidget {
           BlocProvider<ConversationsBloc>(
             create: (_) => getIt<ConversationsBloc>(),
           ),
+          // Random Chat BLoC for managing random chat connections (app-wide)
+          BlocProvider<RandomChatBloc>(
+            create: (_) => getIt<RandomChatBloc>(),
+          ),
           // Profile BLoC for managing user profile app-wide
           BlocProvider<ProfileBloc>(
             create: (_) => getIt<ProfileBloc>(),
