@@ -195,13 +195,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   ChatBloc? _chatBloc;
+  ConversationsBloc? _conversationsBloc;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Cache the BLoC reference for safe disposal. Assign only once to avoid
+    // Cache the BLoC references for safe disposal. Assign only once to avoid
     // LateInitializationError when dependencies change multiple times.
+    // CRITICAL: context.read() is unreliable in dispose() because the element
+    // may already be deactivated. Caching here ensures we can always dispatch
+    // events during teardown.
     _chatBloc ??= context.read<ChatBloc>();
+    _conversationsBloc ??= context.read<ConversationsBloc>();
   }
 
   /// CRITICAL: Handle app lifecycle changes for reliable message delivery.
@@ -250,13 +255,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     // Clear active chat so its unread count is included in badge again.
     // By this time, markConversationAsRead has already reset the count to 0.
-    try {
-      context.read<ConversationsBloc>().add(
-            const ConversationsSetActiveChat(conversationId: null),
-          );
-    } catch (_) {
-      // ConversationsBloc may not be accessible after dispose
-    }
+    // CRITICAL: Use cached reference instead of context.read() which is
+    // unreliable in dispose() — the element may already be deactivated,
+    // causing activeConversationId to remain stuck and permanently zeroing
+    // out that conversation's unread count on every stream update.
+    _conversationsBloc?.add(
+      const ConversationsSetActiveChat(conversationId: null),
+    );
 
     // Use cached reference to avoid context access after disposal
     _chatBloc?.add(const ChatClose());

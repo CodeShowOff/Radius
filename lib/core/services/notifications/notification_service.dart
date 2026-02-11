@@ -32,6 +32,10 @@ class NotificationService {
   /// Track which group chat the user is currently viewing
   String? _currentGroupId;
 
+  /// Track active notification IDs per conversation/group so we can cancel them.
+  /// Key: conversationId or groupId, Value: set of notification IDs shown.
+  final Map<String, Set<int>> _activeNotificationIds = {};
+
   /// Callback for showing in-app notifications (e.g., SnackBar)
   void Function(String title, String body, Map<String, dynamic> data)?
       onInAppNotification;
@@ -264,10 +268,28 @@ class NotificationService {
           ? 'Notifications for nearby help requests'
           : 'Notifications for new messages and connection requests';
 
+      // Generate a deterministic notification ID from the conversation/group ID
+      // so that multiple messages from the same sender replace each other
+      // instead of cluttering the notification panel.
+      final String? sourceId = messageConversationId ?? messageGroupId;
+      final int notificationId = sourceId != null
+          ? sourceId.hashCode & 0x7FFFFFFF // ensure positive int
+          : notification.hashCode;
+
+      // Determine Android groupKey for visual notification grouping
+      final String? groupKey = sourceId != null ? 'radius_$sourceId' : null;
+
+      // Track the notification ID for later cancellation
+      if (sourceId != null) {
+        _activeNotificationIds
+            .putIfAbsent(sourceId, () => {})
+            .add(notificationId);
+      }
+
       // Also show system notification banner
       // Using Importance.max and Priority.max for heads-up notifications
       await _localNotifications.show(
-        notification.hashCode,
+        notificationId,
         notification.title,
         notification.body,
         NotificationDetails(
@@ -281,6 +303,8 @@ class NotificationService {
             playSound: true,
             enableVibration: true,
             showWhen: true,
+            // Group notifications from the same conversation/sender
+            groupKey: groupKey,
             // Additional settings for heads-up notification
             fullScreenIntent: false,
             category: AndroidNotificationCategory.message,
@@ -366,9 +390,13 @@ class NotificationService {
   }
 
   /// Set the current conversation the user is viewing.
-  /// This prevents showing notifications for messages in this conversation.
+  /// This prevents showing notifications for messages in this conversation
+  /// and clears any existing notifications for it from the device panel.
   void setCurrentConversation(String? conversationId) {
     _currentConversationId = conversationId;
+    if (conversationId != null) {
+      _cancelNotificationsForSource(conversationId);
+    }
     _logger.d('Current conversation set to: $conversationId');
   }
 
@@ -379,9 +407,13 @@ class NotificationService {
   }
 
   /// Set the current group the user is viewing.
-  /// This prevents showing notifications for messages in this group.
+  /// This prevents showing notifications for messages in this group
+  /// and clears any existing notifications for it from the device panel.
   void setCurrentGroup(String? groupId) {
     _currentGroupId = groupId;
+    if (groupId != null) {
+      _cancelNotificationsForSource(groupId);
+    }
     _logger.d('Current group set to: $groupId');
   }
 
@@ -389,6 +421,20 @@ class NotificationService {
   void clearCurrentGroup() {
     _currentGroupId = null;
     _logger.d('Current group cleared');
+  }
+
+  /// Cancel all device notifications for a given conversation or group ID.
+  Future<void> _cancelNotificationsForSource(String sourceId) async {
+    final ids = _activeNotificationIds.remove(sourceId);
+    if (ids != null && ids.isNotEmpty) {
+      for (final id in ids) {
+        await _localNotifications.cancel(id);
+      }
+      _logger.d('Cancelled ${ids.length} notification(s) for source: $sourceId');
+    }
+    // Also cancel by deterministic ID in case tracked set was lost (e.g. app restart)
+    final deterministicId = sourceId.hashCode & 0x7FFFFFFF;
+    await _localNotifications.cancel(deterministicId);
   }
 
   /// Remove FCM token on sign out.

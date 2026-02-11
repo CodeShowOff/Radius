@@ -107,9 +107,13 @@ class _ConnectionsIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ConversationsBloc, ConversationsState>(
       buildWhen: (previous, current) {
-        // Rebuild when conversations list changes or current user changes
+        // Rebuild when conversations list changes, current user changes,
+        // or activeConversationId changes. The latter is critical because
+        // when a user leaves a chat, activeConversationId is cleared and
+        // the badge must recalculate to include that conversation's unreads.
         return previous.conversations != current.conversations ||
-            previous.currentUserId != current.currentUserId;
+            previous.currentUserId != current.currentUserId ||
+            previous.activeConversationId != current.activeConversationId;
       },
       builder: (context, conversationsState) {
         return BlocBuilder<RandomChatBloc, RandomChatState>(
