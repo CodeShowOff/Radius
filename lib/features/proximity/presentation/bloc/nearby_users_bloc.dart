@@ -214,6 +214,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
   }
 
   /// Handle app going to background - stop scanning.
+  /// Advertising continues via foreground service.
   Future<void> _onAppBackgrounded(
     NearbyUsersAppBackgrounded event,
     Emitter<NearbyUsersState> emit,
@@ -222,7 +223,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     if (state.isScanning) {
       await _proximityService.stopScan();
     }
-    // Note: Advertising continues for receiving requests
+    // Advertising continues via the foreground service — no action needed.
   }
 
   /// Handle app resuming.
@@ -230,8 +231,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     NearbyUsersAppResumed event,
     Emitter<NearbyUsersState> emit,
   ) async {
-    // Restart advertising if needed
-    await _proximityService.restartAdvertising();
+    // Advertising is already running via foreground service — just sync state.
     emit(state.copyWith(isAdvertising: _proximityService.isAdvertising));
   }
 

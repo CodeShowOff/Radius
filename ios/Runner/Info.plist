@@ -46,15 +46,22 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
+	<!-- Background modes for persistent BLE advertising & scanning -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-peripheral</string>
+		<string>bluetooth-central</string>
+	</array>
+	
 	<!-- Firebase Configuration -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	
 	<!-- Bluetooth Usage Descriptions (required for BLE) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Radius uses Bluetooth to discover nearby users and share an anonymous, rotating identifier. Nearby discovery works only while the app is open (foreground).</string>
+	<string>Radius uses Bluetooth to discover nearby users and let them discover you, even when the app is in the background.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Radius uses Bluetooth to broadcast an anonymous, rotating identifier so nearby users can discover you while the app is open (foreground).</string>
+	<string>Radius uses Bluetooth to broadcast your presence so nearby users can discover you.</string>
 	
 	<!-- Camera permission for taking photos -->
 	<key>NSCameraUsageDescription</key>

@@ -79,6 +79,9 @@ class BluetoothService {
   /// The current username being advertised.
   String? get currentUsername => _currentUsername;
 
+  /// Whether the foreground service is running.
+  bool get isForegroundServiceRunning => _advertiser.isForegroundServiceRunning;
+
   /// Last error message.
   String? get lastError => _lastError;
 
@@ -157,8 +160,10 @@ class BluetoothService {
       }
     } else {
       _setState(BluetoothServiceState.bluetoothOff);
-      // Stop scanning and advertising if Bluetooth is turned off
-      stopDiscovery();
+      // Stop scanning when Bluetooth is turned off.
+      // Do NOT stop foreground advertising — the native service handles
+      // BT state changes itself and will auto-restart when BT comes back.
+      stopScanning();
     }
   }
 
@@ -236,6 +241,54 @@ class BluetoothService {
     _currentUsername = null;
 
     // Only go back to ready if we're not scanning
+    if (!_scanner.isScanning && _state == BluetoothServiceState.active) {
+      _setState(BluetoothServiceState.ready);
+    }
+  }
+
+  // ============== Foreground Service Advertising ==============
+
+  /// Starts BLE advertising via a foreground service.
+  ///
+  /// This keeps advertising alive even when the app is backgrounded or
+  /// swiped away. A persistent notification is shown.
+  ///
+  /// [username] must be exactly 7 characters (ASCII a-z, A-Z, 0-9).
+  Future<bool> startForegroundAdvertising(String username) async {
+    // Ensure initialized
+    if (_state == BluetoothServiceState.uninitialized) {
+      final initialized = await initialize();
+      if (!initialized) return false;
+    }
+
+    // Check Bluetooth state
+    if (_state == BluetoothServiceState.bluetoothOff) {
+      _setError('Bluetooth is turned off');
+      return false;
+    }
+
+    // Check permissions
+    final hasPermissions = await checkAndRequestPermissions();
+    if (!hasPermissions) return false;
+
+    _currentUsername = username;
+
+    final started = await _advertiser.startForegroundService(username);
+    if (!started) {
+      _setError(
+          'Failed to start foreground advertising: ${_advertiser.lastError}');
+      return false;
+    }
+
+    _setState(BluetoothServiceState.active);
+    return true;
+  }
+
+  /// Stops the foreground service advertising.
+  Future<void> stopForegroundAdvertising() async {
+    await _advertiser.stopForegroundService();
+    _currentUsername = null;
+
     if (!_scanner.isScanning && _state == BluetoothServiceState.active) {
       _setState(BluetoothServiceState.ready);
     }
@@ -333,6 +386,7 @@ class BluetoothService {
   /// Disposes resources.
   Future<void> dispose() async {
     await stopDiscovery();
+    await stopForegroundAdvertising();
     await _adapterStateSubscription?.cancel();
     _adapterStateSubscription = null;
     await _stateController.close();

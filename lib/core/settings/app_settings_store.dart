@@ -7,11 +7,28 @@ import 'package:hive/hive.dart';
 /// it falls back to an in-memory map.
 class AppSettingsStore {
   static const String themeModeKey = 'theme_mode';
+  static const String backgroundAdvertisingKey = 'background_ble_advertising';
 
   final Box<dynamic>? _box;
   final Map<String, Object?> _memory = <String, Object?>{};
 
   AppSettingsStore({Box<dynamic>? box}) : _box = box;
+
+  // ============== Background BLE Advertising ==============
+
+  /// Whether BLE advertising should persist when the app is
+  /// backgrounded / closed. Defaults to true.
+  bool getBackgroundAdvertising() {
+    final raw = _read(backgroundAdvertisingKey);
+    if (raw is bool) return raw;
+    return true;
+  }
+
+  Future<void> setBackgroundAdvertising(bool enabled) async {
+    await _write(backgroundAdvertisingKey, enabled);
+  }
+
+  // ============== Theme ==============
 
   ThemeMode getThemeMode({ThemeMode fallback = ThemeMode.system}) {
     final raw = _read(themeModeKey);

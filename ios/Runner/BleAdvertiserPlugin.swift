@@ -4,12 +4,20 @@ import UIKit
 
 /**
  * Native iOS BLE Advertiser Plugin
- * 
- * Simplified BLE advertising using Service Data.
- * Broadcasts Service UUID (0xBEEF) with username in Service Data.
- * 
- * Note: iOS has limitations on BLE advertising in the background.
- * Advertising will stop when the app is backgrounded.
+ *
+ * Broadcasts Service UUID (0xBEEF) with username via local name.
+ *
+ * Background advertising:
+ *  - Uses the `bluetooth-peripheral` UIBackgroundMode so CoreBluetooth
+ *    continues advertising when the app is suspended.
+ *  - Uses state-restoration (`CBPeripheralManagerOptionRestoreIdentifierKey`)
+ *    so iOS can re-launch the app if it is killed and re-start advertising.
+ *  - When backgrounded iOS moves the service UUID into an "overflow area"
+ *    visible only to devices explicitly scanning for that UUID.
+ *
+ * `startForegroundService` / `stopForegroundService` are accepted on the
+ * MethodChannel for API parity with Android; they map to the same
+ * persistent-advertising behaviour since iOS has no foreground-service concept.
  */
 class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate {
     private var channel: FlutterMethodChannel?
@@ -18,13 +26,32 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     private var currentServiceUUID: CBUUID?
     private var pendingServiceData: Data?
     private var pendingResult: FlutterResult?
-    
+
+    /// Whether persistent (background) advertising was requested.
+    private var persistentAdvertisingRequested = false {
+        didSet { UserDefaults.standard.set(persistentAdvertisingRequested, forKey: "ble_adv_persistent") }
+    }
+
+    /// Saved advertising parameters for restore / BT-toggle restart.
+    /// Persisted in UserDefaults so state-restoration after kill works.
+    private var savedServiceUuid16: String?
+    private var savedUsername: String?
+
     private static let channelName = "com.codeshowoff.radius/ble_advertiser"
+    private static let restoreIdentifier = "com.codeshowoff.radius.blePeripheral"
 
     override init() {
+        // Restore saved parameters from UserDefaults (survives app kill).
+        let defaults = UserDefaults.standard
+        savedServiceUuid16 = defaults.string(forKey: "ble_adv_uuid16")
+        savedUsername = defaults.string(forKey: "ble_adv_username")
+        // Must read before super.init sets didSet
+        let wasPersistent = defaults.bool(forKey: "ble_adv_persistent")
+
         super.init()
-        // Keep advertising even when app is backgrounded so other devices can discover us.
-        // Only stop advertising when app is terminated.
+
+        persistentAdvertisingRequested = wasPersistent
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appWillTerminate),
@@ -37,7 +64,7 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
         NotificationCenter.default.removeObserver(self)
         stopAdvertising()
     }
-    
+
     static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
             name: channelName,
@@ -48,130 +75,149 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
-    // Only stop advertising when app is terminated, not when backgrounded.
-    // This allows other devices to discover us while app is in recents.
     @objc private func appWillTerminate() {
-        stopAdvertising()
+        // If persistent advertising is on, do NOT stop — iOS state-restoration
+        // will re-launch the app and resume advertising.
+        if !persistentAdvertisingRequested {
+            stopAdvertising()
+        }
     }
-    
+
+    // MARK: - MethodChannel handler
+
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
+
         case "startAdvertising":
             guard let args = call.arguments as? [String: Any],
                   let serviceUuid16 = args["serviceUuid16"] as? String,
                   let serviceDataArray = args["serviceData"] as? FlutterStandardTypedData else {
-                result(FlutterError(
-                    code: "INVALID_ARGUMENT",
-                    message: "serviceUuid16 and serviceData are required",
-                    details: nil
-                ))
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "serviceUuid16 and serviceData are required",
+                                    details: nil))
                 return
             }
-
             if serviceUuid16.count != 4 {
-                result(FlutterError(
-                    code: "INVALID_ARGUMENT",
-                    message: "serviceUuid16 must be 4 hex chars (e.g., BEEF)",
-                    details: nil
-                ))
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "serviceUuid16 must be 4 hex chars",
+                                    details: nil))
                 return
             }
-            
-            startAdvertising(
-                serviceUuid16: serviceUuid16,
-                serviceData: serviceDataArray.data,
-                result: result
-            )
-            
+            startAdvertising(serviceUuid16: serviceUuid16,
+                             serviceData: serviceDataArray.data,
+                             persistent: false,
+                             result: result)
+
         case "stopAdvertising":
+            persistentAdvertisingRequested = false
             stopAdvertising()
+            clearSavedParameters()
             result(true)
-            
+
         case "isAdvertising":
             result(isAdvertising)
-            
+
         case "getCapabilities":
             result([
                 "isAdvertisingSupported": true,
                 "isMultipleAdvertisementSupported": false,
                 "isBluetoothEnabled": peripheralManager?.state == .poweredOn
             ])
-            
+
+        // ── Foreground-service parity with Android ────────────────────
+        case "startForegroundService":
+            guard let args = call.arguments as? [String: Any],
+                  let serviceUuid16 = args["serviceUuid16"] as? String,
+                  let serviceDataArray = args["serviceData"] as? FlutterStandardTypedData else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                    message: "serviceUuid16 and serviceData are required",
+                                    details: nil))
+                return
+            }
+            startAdvertising(serviceUuid16: serviceUuid16,
+                             serviceData: serviceDataArray.data,
+                             persistent: true,
+                             result: result)
+
+        case "stopForegroundService":
+            persistentAdvertisingRequested = false
+            stopAdvertising()
+            clearSavedParameters()
+            result(true)
+
         default:
             result(FlutterMethodNotImplemented)
         }
     }
-    
-    private func startAdvertising(
-        serviceUuid16: String,
-        serviceData: Data,
-        result: @escaping FlutterResult
-    ) {
+
+    // MARK: - Advertising
+
+    private func startAdvertising(serviceUuid16: String,
+                                  serviceData: Data,
+                                  persistent: Bool,
+                                  result: @escaping FlutterResult) {
         if isAdvertising {
+            if persistent { persistentAdvertisingRequested = true }
             result(true)
             return
         }
-        
-        // Store for later use
-        // Use 16-bit UUID on-air.
+
         currentServiceUUID = CBUUID(string: serviceUuid16)
         pendingServiceData = serviceData
         pendingResult = result
-        
-        // Initialize peripheral manager if needed
+
+        savedServiceUuid16 = serviceUuid16
+        savedUsername = String(data: serviceData, encoding: .ascii)
+
+        // Persist to UserDefaults so state-restoration after app kill works.
+        let defaults = UserDefaults.standard
+        defaults.set(serviceUuid16, forKey: "ble_adv_uuid16")
+        defaults.set(savedUsername, forKey: "ble_adv_username")
+
+        if persistent { persistentAdvertisingRequested = true }
+
+        // Create (or re-use) the peripheral manager with state-restoration.
         if peripheralManager == nil {
             peripheralManager = CBPeripheralManager(
                 delegate: self,
                 queue: nil,
-                options: [CBPeripheralManagerOptionShowPowerAlertKey: true]
+                options: [
+                    CBPeripheralManagerOptionShowPowerAlertKey: true,
+                    CBPeripheralManagerOptionRestoreIdentifierKey: BleAdvertiserPlugin.restoreIdentifier
+                ]
             )
         }
-        
-        // Check if ready to advertise
+
         if peripheralManager?.state == .poweredOn {
             performAdvertising()
         }
-        // Otherwise, wait for peripheralManagerDidUpdateState
+        // Otherwise wait for peripheralManagerDidUpdateState
     }
-    
+
     private func performAdvertising() {
         guard let serviceUUID = currentServiceUUID,
               let serviceData = pendingServiceData else {
-            pendingResult?(FlutterError(
-                code: "INVALID_STATE",
-                message: "No service data available",
-                details: nil
-            ))
+            pendingResult?(FlutterError(code: "INVALID_STATE",
+                                        message: "No service data available",
+                                        details: nil))
             pendingResult = nil
             return
         }
 
-        // iOS CoreBluetooth doesn't directly support Service Data in advertisements
-        // like Android does. We use CBAdvertisementDataLocalNameKey and
-        // CBAdvertisementDataServiceUUIDsKey as alternatives.
-        //
-        // For inter-device discovery, we'll advertise the Service UUID and use
-        // the local name to encode the username (7 chars fits in the name field).
         let username = String(data: serviceData, encoding: .ascii) ?? ""
-        
-        // Configure advertisement data
-        // Note: iOS advertising data has size limits. Keep it minimal.
+
         var advertisementData: [String: Any] = [
             CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
         ]
-        
-        // Use local name to carry the username (iOS limitation)
-        // This is visible to scanning devices
         if !username.isEmpty {
             advertisementData[CBAdvertisementDataLocalNameKey] = username
         }
-        
-        NSLog("BleAdvertiser: Starting advertising with UUID: \(serviceUUID.uuidString), username: \(username)")
-        
-        // Start advertising
+
+        NSLog("BleAdvertiser: Starting advertising UUID: \(serviceUUID.uuidString), user: \(username), persistent: \(persistentAdvertisingRequested)")
+
         peripheralManager?.startAdvertising(advertisementData)
     }
-    
+
     private func stopAdvertising() {
         if isAdvertising {
             peripheralManager?.stopAdvertising()
@@ -180,64 +226,103 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
         }
         pendingResult = nil
     }
-    
+
+    /// Clears persisted parameters from UserDefaults.
+    private func clearSavedParameters() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "ble_adv_uuid16")
+        defaults.removeObject(forKey: "ble_adv_username")
+        defaults.removeObject(forKey: "ble_adv_persistent")
+        savedServiceUuid16 = nil
+        savedUsername = nil
+    }
+
+    /// Re-start advertising from saved parameters (BT toggle or state restore).
+    private func restartAdvertisingIfNeeded() {
+        guard persistentAdvertisingRequested,
+              let uuid16 = savedServiceUuid16,
+              let username = savedUsername else { return }
+
+        let data = Data(username.utf8)
+        currentServiceUUID = CBUUID(string: uuid16)
+        pendingServiceData = data
+        performAdvertising()
+    }
+
     // MARK: - CBPeripheralManagerDelegate
-    
+
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         switch peripheral.state {
         case .poweredOn:
             NSLog("BleAdvertiser: Bluetooth powered on")
-            // If we have pending advertising request, start it
             if pendingServiceData != nil {
                 performAdvertising()
+            } else {
+                // BT was toggled off→on — restart if persistent mode active
+                restartAdvertisingIfNeeded()
             }
+
         case .poweredOff:
             isAdvertising = false
-            pendingResult?(FlutterError(
-                code: "BLE_OFF",
-                message: "Bluetooth is powered off",
-                details: nil
-            ))
+            pendingResult?(FlutterError(code: "BLE_OFF",
+                                        message: "Bluetooth is powered off",
+                                        details: nil))
             pendingResult = nil
-            channel?.invokeMethod("onAdvertisingError", arguments: "Bluetooth is powered off")
+            channel?.invokeMethod("onAdvertisingError",
+                                  arguments: "Bluetooth is powered off")
+
         case .unauthorized:
             isAdvertising = false
-            pendingResult?(FlutterError(
-                code: "BLE_UNAUTHORIZED",
-                message: "Bluetooth permission denied",
-                details: nil
-            ))
+            pendingResult?(FlutterError(code: "BLE_UNAUTHORIZED",
+                                        message: "Bluetooth permission denied",
+                                        details: nil))
             pendingResult = nil
-            channel?.invokeMethod("onAdvertisingError", arguments: "Bluetooth permission denied")
+            channel?.invokeMethod("onAdvertisingError",
+                                  arguments: "Bluetooth permission denied")
+
         case .unsupported:
             isAdvertising = false
-            pendingResult?(FlutterError(
-                code: "BLE_UNSUPPORTED",
-                message: "Bluetooth not supported",
-                details: nil
-            ))
+            pendingResult?(FlutterError(code: "BLE_UNSUPPORTED",
+                                        message: "Bluetooth not supported",
+                                        details: nil))
             pendingResult = nil
-            channel?.invokeMethod("onAdvertisingError", arguments: "Bluetooth not supported on this device")
+            channel?.invokeMethod("onAdvertisingError",
+                                  arguments: "Bluetooth not supported on this device")
+
         default:
             break
         }
     }
-    
-    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager,
+                                              error: Error?) {
         if let error = error {
             isAdvertising = false
-            NSLog("BleAdvertiser: Failed to start advertising: \(error.localizedDescription)")
-            pendingResult?(FlutterError(
-                code: "ADVERTISING_FAILED",
-                message: error.localizedDescription,
-                details: nil
-            ))
-            channel?.invokeMethod("onAdvertisingError", arguments: error.localizedDescription)
+            NSLog("BleAdvertiser: Failed: \(error.localizedDescription)")
+            pendingResult?(FlutterError(code: "ADVERTISING_FAILED",
+                                        message: error.localizedDescription,
+                                        details: nil))
+            channel?.invokeMethod("onAdvertisingError",
+                                  arguments: error.localizedDescription)
         } else {
             isAdvertising = true
             NSLog("BleAdvertiser: Advertising started successfully")
             pendingResult?(true)
         }
         pendingResult = nil
+    }
+
+    // MARK: - State Restoration
+
+    /// Called by iOS when the app is re-launched after being killed while a
+    /// CBPeripheralManager with a restore-identifier was active.
+    func peripheralManager(_ peripheral: CBPeripheralManager,
+                           willRestoreState dict: [String: Any]) {
+        NSLog("BleAdvertiser: State restored by iOS")
+        // Re-flag persistent mode and let peripheralManagerDidUpdateState
+        // trigger restartAdvertisingIfNeeded once BT is .poweredOn.
+        if savedServiceUuid16 != nil {
+            persistentAdvertisingRequested = true
+        }
     }
 }

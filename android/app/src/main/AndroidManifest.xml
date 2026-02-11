@@ -14,11 +14,9 @@
         android:name="android.permission.BLUETOOTH_CONNECT"
         tools:targetApi="31" />
 
-    <!-- Foreground-only nearby: no location permissions are requested. -->
-
-    <!-- Foreground-only nearby: no background scanning/FGS.
-         Do NOT add any <service> or <receiver> entries for BLE background delivery
-         unless background mode is intentionally reintroduced. -->
+    <!-- Foreground service permissions for persistent BLE advertising -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     
     <!-- Internet permission for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -73,9 +71,22 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            
+            <!-- Deep link support for notification taps -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="radius"/>
+            </intent-filter>
         </activity>
 
-        <!-- Background BLE components removed for foreground-only discovery. -->
+        <!-- Foreground service for persistent BLE advertising -->
+        <service
+            android:name=".BleForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

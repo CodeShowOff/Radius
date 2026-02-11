@@ -80,6 +80,7 @@ Future<void> configureDependencies() {
       () => ProximityService(
         bluetoothService: getIt<BluetoothService>(),
         usernameService: getIt<UsernameService>(),
+        settingsStore: getIt<AppSettingsStore>(),
       ),
     );
   }

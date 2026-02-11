@@ -7,10 +7,8 @@ import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.app.Application
-import android.os.Bundle
 import android.content.Context
-import android.content.ComponentCallbacks2
-import android.content.res.Configuration
+import android.content.Intent
 import android.os.ParcelUuid
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -29,8 +27,6 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var advertiser: BluetoothLeAdvertiser? = null
     private var isAdvertising = false
-    private var componentCallbacks: ComponentCallbacks2? = null
-    private var activityLifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
     companion object {
         private const val CHANNEL_NAME = "com.codeshowoff.radius/ble_advertiser"
@@ -44,74 +40,10 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
         advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
-
-        // Keep advertising even when UI is hidden to allow discovery.
-        // Only stop on low memory conditions.
-        val callbacks = object : ComponentCallbacks2 {
-            override fun onTrimMemory(level: Int) {
-                // Only stop advertising if memory is critically low
-                if (level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
-                    stopAdvertising()
-                }
-            }
-
-            override fun onConfigurationChanged(newConfig: Configuration) {
-                // No-op
-            }
-
-            override fun onLowMemory() {
-                stopAdvertising()
-            }
-        }
-        context.registerComponentCallbacks(callbacks)
-        componentCallbacks = callbacks
-
-        // Only stop advertising when app is DESTROYED, not when backgrounded.
-        // This allows advertising to continue while app is in recents/background
-        // so other devices can discover us.
-        val app = context.applicationContext as? Application
-        if (app != null) {
-            val lifecycle = object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: Bundle?) {}
-                override fun onActivityStarted(activity: android.app.Activity) {}
-                override fun onActivityResumed(activity: android.app.Activity) {}
-                override fun onActivityPaused(activity: android.app.Activity) {}
-                override fun onActivityStopped(activity: android.app.Activity) {}
-                override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: Bundle) {}
-                
-                override fun onActivityDestroyed(activity: android.app.Activity) {
-                    // Only stop when activity is fully destroyed
-                    if (activity.isFinishing) {
-                        stopAdvertising()
-                    }
-                }
-            }
-            app.registerActivityLifecycleCallbacks(lifecycle)
-            activityLifecycleCallbacks = lifecycle
-        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
-        componentCallbacks?.let {
-            try {
-                context.unregisterComponentCallbacks(it)
-            } catch (_: Exception) {
-                // Ignore unregister failures
-            }
-        }
-        componentCallbacks = null
-
-        val app = context.applicationContext as? Application
-        activityLifecycleCallbacks?.let {
-            try {
-                app?.unregisterActivityLifecycleCallbacks(it)
-            } catch (_: Exception) {
-                // Ignore unregister failures
-            }
-        }
-        activityLifecycleCallbacks = null
-
         stopAdvertising()
     }
 
@@ -160,6 +92,30 @@ class BleAdvertiserPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         "isBluetoothEnabled" to (adapter?.isEnabled ?: false)
                     )
                 )
+            }
+            "startForegroundService" -> {
+                val serviceUuid16 = call.argument<String>("serviceUuid16")
+                val serviceData = call.argument<ByteArray>("serviceData")
+
+                if (serviceUuid16 == null || serviceData == null) {
+                    result.error("INVALID_ARGUMENT", "serviceUuid16 and serviceData are required", null)
+                    return
+                }
+
+                val intent = Intent(context, BleForegroundService::class.java).apply {
+                    action = BleForegroundService.ACTION_START
+                    putExtra(BleForegroundService.EXTRA_SERVICE_UUID16, serviceUuid16)
+                    putExtra(BleForegroundService.EXTRA_SERVICE_DATA, serviceData)
+                }
+                context.startForegroundService(intent)
+                result.success(true)
+            }
+            "stopForegroundService" -> {
+                val intent = Intent(context, BleForegroundService::class.java).apply {
+                    action = BleForegroundService.ACTION_STOP
+                }
+                context.startService(intent)
+                result.success(true)
             }
             else -> {
                 result.notImplemented()

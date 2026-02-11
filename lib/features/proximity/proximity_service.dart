@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/services/bluetooth/ble_device.dart';
 import '../../core/services/bluetooth/bluetooth_service.dart';
 import '../../core/services/firebase/username_service.dart';
+import '../../core/settings/app_settings_store.dart';
 import 'domain/entities/nearby_user.dart';
 
 void _log(String message) {
@@ -28,11 +29,12 @@ enum ProximityServiceState {
 /// Uses username directly from BLE Service Data.
 /// Looks up user profiles from Firestore via UsernameService.
 ///
-/// Advertising runs continuously while app is open.
-/// Scanning runs for 15 seconds when user taps Scan button.
+/// Advertising runs via a foreground service so it persists even when the
+/// app is backgrounded or closed. Scanning runs for 10 seconds on demand.
 class ProximityService {
   final BluetoothService _bluetoothService;
   final UsernameService _usernameService;
+  final AppSettingsStore _settingsStore;
 
   final _stateController = StreamController<ProximityServiceState>.broadcast();
   final _nearbyUsersController = StreamController<List<NearbyUser>>.broadcast();
@@ -49,6 +51,7 @@ class ProximityService {
 
   String? _currentUsername;
   bool _isAdvertising = false;
+  bool _isTogglingAdvertising = false;
 
   final Map<String, NearbyUser> _nearbyUsers = {};
 
@@ -57,8 +60,10 @@ class ProximityService {
 
   ProximityService({
     required BluetoothService bluetoothService,
+    required AppSettingsStore settingsStore,
     UsernameService? usernameService,
   })  : _bluetoothService = bluetoothService,
+        _settingsStore = settingsStore,
         _usernameService = usernameService ?? UsernameService() {
     // CRITICAL: Set up Bluetooth state listener IMMEDIATELY on construction
     // This ensures advertising can auto-start whenever Bluetooth turns on,
@@ -135,9 +140,17 @@ class ProximityService {
       return true; // Return true as initialization succeeded, just waiting for Bluetooth
     }
 
-    // Start advertising now (runs while app is open)
+    // Start advertising (foreground service if background advertising is enabled)
     _log('[ProximityService] Bluetooth is ON, starting advertising...');
-    final advStarted = await _bluetoothService.startAdvertising(username);
+    final useBackground = _settingsStore.getBackgroundAdvertising();
+    _log('[ProximityService]   Background advertising enabled: $useBackground');
+
+    bool advStarted;
+    if (useBackground) {
+      advStarted = await _bluetoothService.startForegroundAdvertising(username);
+    } else {
+      advStarted = await _bluetoothService.startAdvertising(username);
+    }
     _isAdvertising = advStarted;
     
     if (advStarted) {
@@ -164,14 +177,21 @@ class ProximityService {
       _setError(_bluetoothService.lastError ?? 'Bluetooth error');
     } else if (bleState == BluetoothServiceState.bluetoothOff) {
       _log('[ProximityService] ⚠️ Bluetooth turned OFF - advertising stopped');
-      _setError('Bluetooth is turned off');
+      // Don't show error to user - BT off is a normal state, not an error
       _isAdvertising = false;
     } else if (bleState == BluetoothServiceState.ready ||
         bleState == BluetoothServiceState.active) {
       // Bluetooth is back on - restart advertising if we have a username
       if (_currentUsername != null && !_isAdvertising) {
         _log('[ProximityService] ✅ Bluetooth is ON! Restarting advertising for $_currentUsername');
-        _bluetoothService.startAdvertising(_currentUsername!).then((started) {
+        final useBackground = _settingsStore.getBackgroundAdvertising();
+        Future<bool> advertiseFuture;
+        if (useBackground) {
+          advertiseFuture = _bluetoothService.startForegroundAdvertising(_currentUsername!);
+        } else {
+          advertiseFuture = _bluetoothService.startAdvertising(_currentUsername!);
+        }
+        advertiseFuture.then((started) {
           _isAdvertising = started;
           if (started) {
             _log('[ProximityService] ✓✓✓ Advertising SUCCESSFULLY restarted!');
@@ -393,6 +413,7 @@ class ProximityService {
     _scanTimer?.cancel();
     _scanTimer = null;
     await _bluetoothService.stopScanning();
+    await _bluetoothService.stopForegroundAdvertising();
     await _bluetoothService.stopAdvertising();
     _isAdvertising = false;
     _currentUsername = null;
@@ -402,38 +423,36 @@ class ProximityService {
     _log('[ProximityService] Service stopped');
   }
 
-  /// Stops advertising (call when app goes to background).
-  Future<void> stopAdvertisingOnly() async {
-    await _bluetoothService.stopAdvertising();
-    _isAdvertising = false;
-  }
+  /// Switches between background (foreground-service) and foreground-only
+  /// advertising based on [enabled]. Called when the user flips the toggle.
+  /// Protected with mutex to prevent overlapping operations from rapid toggles.
+  Future<void> setBackgroundAdvertising(bool enabled) async {
+    if (_isTogglingAdvertising) {
+      _log('[ProximityService] Already toggling advertising, ignoring duplicate request');
+      return;
+    }
 
-  /// Restarts advertising (call when app comes to foreground).
-  /// This is called by NearbyUsersBloc when app lifecycle changes to resumed.
-  Future<void> restartAdvertising() async {
-    _log('[ProximityService] ========================================');
-    _log('[ProximityService] restartAdvertising() called from app lifecycle');
-    _log('[ProximityService]   Current username: $_currentUsername');
-    _log('[ProximityService]   Is advertising: $_isAdvertising');
-    _log('[ProximityService] ========================================');
-    
-    if (_currentUsername != null && !_isAdvertising) {
-      _log('[ProximityService] ⚡ Starting advertising for $_currentUsername...');
-      final started =
-          await _bluetoothService.startAdvertising(_currentUsername!);
-      _isAdvertising = started;
-      
-      if (started) {
-        _log('[ProximityService] ✓✓✓ Advertising SUCCESSFULLY restarted!');
+    _isTogglingAdvertising = true;
+    try {
+      await _settingsStore.setBackgroundAdvertising(enabled);
+      _log('[ProximityService] Background advertising set to: $enabled');
+
+      if (_currentUsername == null || !_isAdvertising) return;
+
+      // Tear down the current advertising mode and start the new one.
+      if (enabled) {
+        // Switch from plain advertising → foreground service.
+        await _bluetoothService.stopAdvertising();
+        final started = await _bluetoothService.startForegroundAdvertising(_currentUsername!);
+        _isAdvertising = started;
       } else {
-        _log('[ProximityService] ✗✗✗ FAILED to restart advertising: ${_bluetoothService.lastError}');
+        // Switch from foreground service → plain advertising.
+        await _bluetoothService.stopForegroundAdvertising();
+        final started = await _bluetoothService.startAdvertising(_currentUsername!);
+        _isAdvertising = started;
       }
-    } else {
-      if (_currentUsername == null) {
-        _log('[ProximityService] ⏳ Cannot restart - no username set yet');
-      } else {
-        _log('[ProximityService] ✓ Already advertising, no need to restart');
-      }
+    } finally {
+      _isTogglingAdvertising = false;
     }
   }
 
@@ -442,7 +461,7 @@ class ProximityService {
     _scanTimer?.cancel();
     _scanTimer = null;
     await _bluetoothService.stopScanning();
-    await _bluetoothService.stopAdvertising();
+    // Note: we do NOT stop foreground advertising on dispose, so it persists.
     await _bleDevicesSubscription?.cancel();
     await _bleStateSubscription?.cancel();
     _bleDevicesSubscription = null;

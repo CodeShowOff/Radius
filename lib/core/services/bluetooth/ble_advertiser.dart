@@ -16,11 +16,14 @@ void _log(String message) {
 /// Handles BLE advertising to broadcast presence to nearby devices.
 ///
 /// Advertises Service UUID (0xBEEF) + 7-byte username in Service Data.
+/// Supports a foreground service mode that keeps advertising alive
+/// even when the app is backgrounded or closed.
 class BleAdvertiser {
   static const MethodChannel _channel =
   MethodChannel('com.codeshowoff.radius/ble_advertiser');
 
   bool _isAdvertising = false;
+  bool _isForegroundServiceRunning = false;
   String? _lastError;
   String? _currentUsername;
   DateTime? _lastAdvertiseTime;
@@ -43,6 +46,9 @@ class BleAdvertiser {
 
   /// Last time advertising was started.
   DateTime? get lastAdvertiseTime => _lastAdvertiseTime;
+
+  /// Whether the foreground service is running.
+  bool get isForegroundServiceRunning => _isForegroundServiceRunning;
 
   /// Starts BLE advertising with the given username.
   /// Username must be exactly 7 bytes (ASCII a-z, A-Z, 0-9).
@@ -135,8 +141,85 @@ class BleAdvertiser {
     }
   }
 
+  // ============== Foreground Service ==============
+
+  /// Starts the foreground service for persistent BLE advertising.
+  ///
+  /// The service keeps advertising even when the app is backgrounded or
+  /// swiped away. It also automatically restarts advertising when Bluetooth
+  /// is toggled off and back on.
+  Future<bool> startForegroundService(String username) async {
+    if (_isForegroundServiceRunning && _currentUsername == username) {
+      return true;
+    }
+
+    // Validate username
+    if (username.length != BleConstants.usernameLength) {
+      _lastError =
+          'Username must be exactly ${BleConstants.usernameLength} characters';
+      _diagnostics.updateError(_lastError);
+      return false;
+    }
+
+    if (!RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(username)) {
+      _lastError = 'Username must be alphanumeric (a-z, A-Z, 0-9)';
+      _diagnostics.updateError(_lastError);
+      return false;
+    }
+
+    _currentUsername = username;
+
+    try {
+      final usernameBytes = Uint8List.fromList(username.codeUnits);
+
+      _log('[BleAdvertiser] Starting foreground service...');
+
+      final result =
+          await _channel.invokeMethod<bool>('startForegroundService', {
+        'serviceUuid16': BleConstants.radiusServiceUuid16bit,
+        'serviceData': usernameBytes,
+      });
+
+      _isForegroundServiceRunning = result ?? false;
+      if (_isForegroundServiceRunning) {
+        _isAdvertising = true;
+        _lastAdvertiseTime = DateTime.now();
+        _diagnostics.updateAdvertising(true);
+        _log('[BleAdvertiser] ✓ Foreground service started!');
+      } else {
+        _lastError = 'Failed to start foreground service';
+        _diagnostics.updateError(_lastError);
+      }
+
+      return _isForegroundServiceRunning;
+    } catch (e) {
+      _lastError = 'Failed to start foreground service: $e';
+      _diagnostics.updateError(_lastError);
+      _log('[BleAdvertiser] ✗ Foreground service failed: $e');
+      return false;
+    }
+  }
+
+  /// Stops the foreground service.
+  Future<void> stopForegroundService() async {
+    if (!_isForegroundServiceRunning) return;
+
+    try {
+      await _channel.invokeMethod('stopForegroundService');
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+
+    _isForegroundServiceRunning = false;
+    _isAdvertising = false;
+    _currentUsername = null;
+    _diagnostics.updateAdvertising(false);
+    _log('[BleAdvertiser] Foreground service stopped');
+  }
+
   /// Disposes resources.
   void dispose() {
+    stopForegroundService();
     stopAdvertising();
   }
 }

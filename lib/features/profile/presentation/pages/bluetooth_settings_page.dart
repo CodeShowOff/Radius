@@ -6,7 +6,9 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
+import '../../../../core/settings/app_settings_store.dart';
 import '../../../../core/di/injection.dart';
+import '../../../proximity/proximity_service.dart';
 
 /// Bluetooth settings page for managing BLE discovery preferences.
 class BluetoothSettingsPage extends StatefulWidget {
@@ -16,35 +18,63 @@ class BluetoothSettingsPage extends StatefulWidget {
   State<BluetoothSettingsPage> createState() => _BluetoothSettingsPageState();
 }
 
-class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
+class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
+    with WidgetsBindingObserver {
   final _bluetoothService = getIt<BluetoothService>();
+  final _settingsStore = getIt<AppSettingsStore>();
+  final _proximityService = getIt<ProximityService>();
   bool _isBluetoothEnabled = false;
   bool _hasPermissions = false;
   bool _scanPermissionGranted = false;
   bool _advertisePermissionGranted = false;
+  bool _backgroundAdvertising = false;
   bool _isLoading = true;
+  bool _permissionRevokedWarning = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Re-check permissions when app resumes to detect runtime revocation
+    if (state == AppLifecycleState.resumed) {
+      _checkStatus();
+    }
   }
 
   Future<void> _checkStatus() async {
     setState(() => _isLoading = true);
+
+    // Save previous state BEFORE checking new permissions
+    final previousAdvertiseGranted = _advertisePermissionGranted;
+    final wasBackgroundAdvOn = _backgroundAdvertising;
 
     final bluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
 
     // Android 12+ (API 31+): scan/connect/advertise are the only runtime perms.
     // iOS: Bluetooth permission only.
     bool hasBlePermissions;
+    bool scanGranted = false;
+    bool advertiseGranted = false;
+    
     if (Platform.isAndroid) {
       final bluetoothScanStatus = await Permission.bluetoothScan.status;
       final bluetoothAdvertiseStatus =
           await Permission.bluetoothAdvertise.status;
 
-      final scanGranted = bluetoothScanStatus.isGranted;
-      final advertiseGranted = bluetoothAdvertiseStatus.isGranted;
+      scanGranted = bluetoothScanStatus.isGranted;
+      advertiseGranted = bluetoothAdvertiseStatus.isGranted;
 
       _scanPermissionGranted = scanGranted;
       _advertisePermissionGranted = advertiseGranted;
@@ -54,6 +84,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
       hasBlePermissions = scanGranted;
     } else if (Platform.isIOS) {
       final granted = (await Permission.bluetooth.status).isGranted;
+      scanGranted = granted;
+      advertiseGranted = granted;
+      
       _scanPermissionGranted = granted;
       _advertisePermissionGranted = granted;
       hasBlePermissions = granted;
@@ -63,11 +96,43 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
       hasBlePermissions = false;
     }
 
+    final bgAdv = _settingsStore.getBackgroundAdvertising();
+
+    // Detect runtime permission revocation while background advertising is enabled
+    final permissionRevoked = Platform.isAndroid &&
+        previousAdvertiseGranted &&
+        !advertiseGranted &&
+        wasBackgroundAdvOn &&
+        bgAdv;
+
+    // Auto-disable background advertising if permission was revoked
+    if (permissionRevoked && !_isLoading) {
+      await _proximityService.setBackgroundAdvertising(false);
+    }
+
     setState(() {
       _isBluetoothEnabled = bluetoothEnabled;
       _hasPermissions = hasBlePermissions;
+      _backgroundAdvertising = permissionRevoked ? false : bgAdv;
+      _permissionRevokedWarning = permissionRevoked;
       _isLoading = false;
     });
+
+    // Show warning if permission was revoked
+    if (permissionRevoked && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Bluetooth Advertise permission was revoked. Background advertising has been disabled.',
+          ),
+          action: SnackBarAction(
+            label: 'Grant',
+            onPressed: _requestPermissions,
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   Future<void> _requestPermissions() async {
@@ -297,6 +362,98 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                 ),
                 const SizedBox(height: 24),
 
+                // Background Advertising Toggle Card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.broadcast_on_personal,
+                              color: _backgroundAdvertising
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Background Advertising',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    _backgroundAdvertising
+                                        ? 'Stays on when app is closed'
+                                        : 'Stops when app is closed',
+                                    style: TextStyle(
+                                      color:
+                                          Theme.of(context).colorScheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _backgroundAdvertising,
+                              onChanged: (_hasPermissions &&
+                                      _advertisePermissionGranted)
+                                  ? (value) async {
+                                      setState(
+                                          () => _backgroundAdvertising = value);
+                                      await _proximityService
+                                          .setBackgroundAdvertising(value);
+                                    }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'When enabled, your device keeps advertising your username via Bluetooth even after the app is closed or removed from recents. '
+                          'This uses a lightweight background service and minimal battery.',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.outline,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (_permissionRevokedWarning) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 16,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Permission was revoked. Background advertising disabled.',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 if (Platform.isAndroid) ...[
                   Card(
                     child: Padding(
@@ -324,7 +481,8 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Advertising runs while the app is open (foreground or in recent apps). Scanning runs for 15 seconds when you tap "Find People Nearby".',
+                            'Scanning runs for 15 seconds when you tap "Find People Nearby". '
+                            'Advertising ${_backgroundAdvertising ? 'keeps running even when the app is closed (background mode on)' : 'runs while the app is open (enable Background Advertising above to keep it running)'}.',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.outline,
                             ),
