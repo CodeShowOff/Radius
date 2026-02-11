@@ -206,14 +206,19 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
 
         let username = String(data: serviceData, encoding: .ascii) ?? ""
 
+        // iOS Background Limitation:
+        // When backgrounded, iOS strips LocalName AND Service Data, only transmitting
+        // the service UUID as a single bit in Apple's "overflow area" bitmask.
+        // There is NO way to transmit username in background on iOS - this is a platform limitation.
+        // We use both LocalName (foreground only) and Service Data (attempt, but also stripped).
         var advertisementData: [String: Any] = [
-            CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
+            CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
+            CBAdvertisementDataServiceDataKey: [serviceUUID: serviceData],  // Stripped in background
+            CBAdvertisementDataLocalNameKey: username  // Stripped in background
         ]
-        if !username.isEmpty {
-            advertisementData[CBAdvertisementDataLocalNameKey] = username
-        }
 
         NSLog("BleAdvertiser: Starting advertising UUID: \(serviceUUID.uuidString), user: \(username), persistent: \(persistentAdvertisingRequested)")
+        NSLog("BleAdvertiser: [WARNING] Username will NOT be visible when app is backgrounded (iOS limitation)")
 
         peripheralManager?.startAdvertising(advertisementData)
     }
