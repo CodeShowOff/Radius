@@ -386,14 +386,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 prev.otherUserPhotoUrl != curr.otherUserPhotoUrl ||
                 prev.conversation != curr.conversation,
             builder: (context, state) {
-              final effectiveName =
-                  (state.otherUserName?.trim().isNotEmpty == true)
-                      ? state.otherUserName!.trim()
-                      : widget.otherUserName;
-              final effectivePhotoUrl =
-                  (state.otherUserPhotoUrl?.trim().isNotEmpty == true)
-                      ? state.otherUserPhotoUrl!.trim()
-                      : widget.otherUserPhotoUrl;
+              // Guard: Use widget properties when state belongs to a different
+              // conversation (stale singleton state during chat switch).
+              final isStateMatchingConversation =
+                  state.conversationId == widget.conversationId;
+              final effectiveName = isStateMatchingConversation &&
+                      (state.otherUserName?.trim().isNotEmpty == true)
+                  ? state.otherUserName!.trim()
+                  : widget.otherUserName;
+              final effectivePhotoUrl = isStateMatchingConversation &&
+                      (state.otherUserPhotoUrl?.trim().isNotEmpty == true)
+                  ? state.otherUserPhotoUrl!.trim()
+                  : widget.otherUserPhotoUrl;
               final isMuted = state.conversation?.isMutedBy(widget.currentUserId) ?? false;
 
               return _ChatAppBar(
@@ -495,6 +499,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   }
                 },
                 builder: (context, state) {
+                  // Guard: If the bloc state belongs to a different conversation
+                  // (stale singleton state during chat switch), show loading.
+                  if (state.conversationId != null &&
+                      state.conversationId != widget.conversationId) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
                   // Show error state
                   if (state.status == ChatStatus.error) {
                     return Center(
@@ -524,13 +537,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     );
                   }
 
-                  // KEY FIX: Only show full-screen spinner on FIRST load (no cached messages).
+                  // Show full-screen spinner when:
+                  // - Status is initial (state was just reset, ChatOpen hasn't processed yet)
+                  // - Status is loading with no cached messages (first time opening this chat)
                   // If we have cached messages from a previous session, show them immediately
                   // while the stream reconnects in the background.
                   final hasMessages = state.allMessages.isNotEmpty;
-                  final isInitialLoading = state.status == ChatStatus.loading && !hasMessages;
+                  final isInitialOrLoading = 
+                      (state.status == ChatStatus.initial) ||
+                      (state.status == ChatStatus.loading && !hasMessages);
                   
-                  if (isInitialLoading) {
+                  if (isInitialOrLoading) {
                     return const Center(
                       child: CircularProgressIndicator(),
                     );

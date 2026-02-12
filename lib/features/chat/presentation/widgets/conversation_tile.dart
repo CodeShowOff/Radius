@@ -62,7 +62,7 @@ class ConversationTile extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: hasUnread 
                     ? theme.colorScheme.onSurface
-                    : theme.colorScheme.outline,
+                    : theme.colorScheme.onSurfaceVariant,
                 fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
               ),
               maxLines: 1,

@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/error/exceptions.dart';
 import '../../data/chat_cache_service.dart';
 import '../../data/chat_service.dart';
 import '../../data/media_upload_service.dart';
@@ -192,10 +191,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Ensure the conversation exists before subscribing.
     // If it doesn't exist yet (common when opening chat from Connections),
     // Firestore will deny reading a non-existent doc under our rules.
-    if (event.currentUserId.trim().isNotEmpty &&
+    //
+    // OPTIMIZATION: Skip this entirely when we have cached messages.
+    // A cache hit means the conversation was already loaded before,
+    // so the Firestore doc definitely exists. This saves ~800ms+ on
+    // every cached chat open.
+    if (!hasCache &&
+        event.currentUserId.trim().isNotEmpty &&
         event.otherUserId.trim().isNotEmpty) {
       try {
-        await _chatService.getOrCreateConversation(
+        final createdConversation = await _chatService.getOrCreateConversation(
           currentUserId: event.currentUserId,
           otherUserId: event.otherUserId,
           currentUserName: (event.currentUserName?.trim().isNotEmpty == true)
@@ -214,44 +219,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               : null,
         );
         
-        // Delay to ensure Firestore propagates the conversation write
-        // This prevents race conditions with security rules checking conversation existence
-        // Use retry logic with exponential backoff for reliability on slow networks
-        Conversation? conversation;
-        int retryCount = 0;
-        const maxRetries = 3;
-        
-        while (conversation == null && retryCount < maxRetries) {
-          if (retryCount > 0) {
-            // Exponential backoff: 300ms, 600ms, 1200ms
-            final delay = Duration(milliseconds: 300 * (1 << (retryCount - 1)));
-            _logger.d('Retrying conversation verification (attempt ${retryCount + 1}/$maxRetries) after ${delay.inMilliseconds}ms');
-            await Future.delayed(delay);
-          } else {
-            // Initial delay of 800ms for first attempt (increased from 500ms)
-            // This gives Firestore more time to propagate the write
-            await Future.delayed(const Duration(milliseconds: 800));
-          }
-          
-          try {
-            conversation = await _chatService.getConversation(event.conversationId);
-            if (conversation != null) {
-              _logger.i('Conversation verified successfully on attempt ${retryCount + 1}');
-            }
-          } catch (e) {
-            _logger.w('Failed to verify conversation (attempt ${retryCount + 1}/$maxRetries): $e');
-            if (retryCount == maxRetries - 1) {
-              rethrow; // Re-throw on final attempt
-            }
-          }
-          retryCount++;
-        }
-        
-        if (conversation == null) {
-          throw const DatabaseException(
-            message: 'Conversation not found after creation and retries',
-            code: 'conversation-not-found',
-          );
+        // getOrCreateConversation already returns the conversation object.
+        // Only add a brief propagation delay if a NEW conversation was just
+        // created (indicated by no lastMessageAt — never been used before).
+        if (createdConversation.lastMessageAt == null) {
+          _logger.d('New conversation created, brief delay for Firestore propagation');
+          await Future.delayed(const Duration(milliseconds: 300));
         }
       } catch (e) {
         _logger.e('Failed to open conversation: $e');
@@ -288,14 +261,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _cancelSubscriptions();
     _typingDebounce?.cancel();
 
-    // IMPORTANT: Don't clear the state here!
-    // Preserve messages in cache so that reopening the same chat is instant.
-    // The state will be refreshed when ChatOpen is called for the same or different conversation.
-    // Only clear typing status and unread divider to prevent stale indicators.
-    emit(state.copyWith(
-      isOtherUserTyping: false,
-      clearFirstUnreadMessageId: true,
-    ));
+    // CRITICAL FIX: Reset state to initial to prevent stale messages from
+    // the previous conversation briefly appearing when the user switches chats.
+    // ChatCacheService already handles message caching, so preserving messages
+    // in the bloc state is unnecessary and causes a visual glitch where the
+    // old user's messages flash before the new chat loads.
+    emit(const ChatState());
   }
 
   Future<void> _onSendMessage(
@@ -612,7 +583,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     final hasMore = olderMessages.length >= 50;
-    final allMessages = [...olderMessages, ...state.messages];
+    // Messages are sorted descending (newest first).
+    // Older messages must go at the END (higher indices = older).
+    final allMessages = [...state.messages, ...olderMessages];
 
     // Update the cache with paginated messages
     _cacheService.addPaginatedMessages(
@@ -789,6 +762,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // ========================================================================
+    // Preserve paginated (older) messages that aren't in the stream's range.
+    // The stream only returns the latest page (e.g., 50 messages). If the user
+    // loaded more via pagination, those older messages would be lost without
+    // this merge. We keep older messages that predate the stream's oldest.
+    // ========================================================================
+    List<Message> mergedMessages = event.messages;
+    if (state.messages.length > event.messages.length) {
+      final streamMessageIds = event.messages.map((m) => m.id).toSet();
+      final oldestInStream = event.messages.isNotEmpty
+          ? event.messages.last.sentAt
+          : DateTime.now();
+      final olderFromState = state.messages
+          .where((m) =>
+              !streamMessageIds.contains(m.id) &&
+              m.sentAt.isBefore(oldestInStream))
+          .toList();
+      if (olderFromState.isNotEmpty) {
+        mergedMessages = [...event.messages, ...olderFromState];
+      }
+    }
+
+    // ========================================================================
     // Compute first unread message ID on initial message arrival.
     // This enables the "unread messages" divider and scroll-to-unread.
     // Only computed once per chat session (before markConversationAsRead fires).
@@ -851,7 +846,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     emit(state.copyWith(
       status: ChatStatus.loaded,
-      messages: event.messages,
+      messages: mergedMessages,
       hasMore: event.messages.length >= pageSize,
       pendingMessages: pending,
       firstUnreadMessageId: computedFirstUnreadId,
