@@ -699,17 +699,26 @@ class _MessageBubble extends StatelessWidget {
           // Avatar for other users
           if (!isMe) ...[
             if (showSenderInfo)
-              CircleAvatar(
-                radius: 16,
-                backgroundImage: message.senderPhotoUrl != null
-                    ? NetworkImage(message.senderPhotoUrl!)
-                    : null,
-                child: message.senderPhotoUrl == null
-                    ? Text(
-                        (message.senderName ?? '?')[0].toUpperCase(),
-                        style: theme.textTheme.bodySmall,
-                      )
-                    : null,
+              GestureDetector(
+                onTap: () => context.push(
+                  Routes.userProfileWith(message.senderId),
+                  extra: {
+                    'displayName': message.senderName,
+                    'photoUrl': message.senderPhotoUrl,
+                  },
+                ),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundImage: message.senderPhotoUrl != null
+                      ? NetworkImage(message.senderPhotoUrl!)
+                      : null,
+                  child: message.senderPhotoUrl == null
+                      ? Text(
+                          (message.senderName ?? '?')[0].toUpperCase(),
+                          style: theme.textTheme.bodySmall,
+                        )
+                      : null,
+                ),
               )
             else
               const SizedBox(width: 32), // Placeholder for alignment

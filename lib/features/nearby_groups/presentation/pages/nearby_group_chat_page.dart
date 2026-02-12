@@ -69,8 +69,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     final groupBloc = context.read<NearbyGroupBloc>();
     final groupState = groupBloc.state;
     final authState = context.read<AuthBloc>().state;
-    
-    if (authState is AuthAuthenticated && 
+
+    if (authState is AuthAuthenticated &&
         groupState.myActiveGroup != null &&
         groupState.myActiveGroup!.id == widget.groupId &&
         groupState.myActiveGroup!.creatorId == authState.user.id) {
@@ -84,7 +84,6 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
       }
     }
   }
-
 
   @override
   void didChangeDependencies() {
@@ -242,7 +241,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                   Icons.delete_outline,
                   color: theme.colorScheme.error,
                 ),
-                onPressed: () => _showDeleteConfirmation(context, group.id, authState.user.id),
+                onPressed: () => _showDeleteConfirmation(
+                    context, group.id, authState.user.id),
                 tooltip: 'Delete group',
               );
             },
@@ -327,7 +327,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    state.errorMessage ?? 'Move closer to the group creator to join.',
+                    state.errorMessage ??
+                        'Move closer to the group creator to join.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.outline,
                     ),
@@ -351,8 +352,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
           }
 
           // Only show loading spinner during initial load (not when sending)
-          if (state.status == NearbyGroupChatStatus.loading && 
-              state.messages.isEmpty && 
+          if (state.status == NearbyGroupChatStatus.loading &&
+              state.messages.isEmpty &&
               !state.isSending) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -541,13 +542,24 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                 )
               else
                 ...state.groupMembers.map((member) => ListTile(
+                      onTap: () {
+                        Navigator.pop(ctx); // Close bottom sheet first
+                        context.push(
+                          Routes.userProfileWith(member.id),
+                          extra: {
+                            'displayName':
+                                member.displayName ?? member.username,
+                            'photoUrl': member.photoUrl,
+                          },
+                        );
+                      },
                       leading: CachedAvatar(
                         imageUrl: member.photoUrl,
                         name: member.displayName ?? member.username,
                         radius: 20,
                       ),
                       title: Text(member.displayName ?? member.username),
-                      subtitle: Text('@${member.username}'),
+                      subtitle: null,
                       trailing: member.isCurrentlyPresent
                           ? Container(
                               padding: const EdgeInsets.symmetric(
@@ -579,7 +591,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, String groupId, String userId) {
+  void _showDeleteConfirmation(
+      BuildContext context, String groupId, String userId) {
     final theme = Theme.of(context);
     // Capture the bloc before showing dialog to ensure it's accessible
     final bloc = context.read<NearbyGroupBloc>();
@@ -604,9 +617,9 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
             onPressed: () {
               Navigator.pop(dialogContext);
               bloc.add(CloseNearbyGroup(
-                    groupId: groupId,
-                    userId: userId,
-                  ));
+                groupId: groupId,
+                userId: userId,
+              ));
               // Navigate back to nearby groups list
               context.go(Routes.nearbyGroups);
             },
@@ -668,16 +681,29 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Avatar for other users
           if (!isMe) ...[
             if (showSenderInfo)
-              CachedAvatar(
-                imageUrl: message.senderPhotoUrl,
-                name: message.senderName ?? message.senderUsername ?? '?',
-                radius: 16,
+              GestureDetector(
+                onTap: message.senderId != null
+                    ? () => context.push(
+                          Routes.userProfileWith(message.senderId!),
+                          extra: {
+                            'displayName':
+                                message.senderName ?? message.senderUsername,
+                            'photoUrl': message.senderPhotoUrl,
+                          },
+                        )
+                    : null,
+                child: CachedAvatar(
+                  imageUrl: message.senderPhotoUrl,
+                  name: message.senderName ?? message.senderUsername ?? '?',
+                  radius: 16,
+                ),
               )
             else
               const SizedBox(width: 32), // Placeholder for alignment
@@ -707,11 +733,16 @@ class _MessageBubble extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Sender name for other users
-                  if (!isMe && showSenderInfo && (message.senderName != null || message.senderUsername != null))
+                  if (!isMe &&
+                      showSenderInfo &&
+                      (message.senderName != null ||
+                          message.senderUsername != null))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        message.senderName ?? message.senderUsername ?? 'Unknown',
+                        message.senderName ??
+                            message.senderUsername ??
+                            'Unknown',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w600,
@@ -743,11 +774,9 @@ class _MessageBubble extends StatelessWidget {
                               _formatTime(message.sentAt),
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: isMe
-                                    ? theme.colorScheme
-                                        .onPrimaryContainer
+                                    ? theme.colorScheme.onPrimaryContainer
                                         .withValues(alpha: 0.5)
-                                    : theme.colorScheme
-                                        .onSurface
+                                    : theme.colorScheme.onSurface
                                         .withValues(alpha: 0.5),
                                 fontSize: 11,
                               ),

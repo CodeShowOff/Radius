@@ -674,6 +674,15 @@ class _MemberTile extends StatelessWidget {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+      onTap: !isCurrentUser
+          ? () => context.push(
+                Routes.userProfileWith(member.id),
+                extra: {
+                  'displayName': member.displayName ?? member.username,
+                  'photoUrl': member.photoUrl,
+                },
+              )
+          : null,
       leading: CachedAvatar(
         imageUrl: member.photoUrl,
         name: member.displayName ?? member.username,
@@ -714,7 +723,7 @@ class _MemberTile extends StatelessWidget {
           ],
         ],
       ),
-      subtitle: Text('@${member.username}'),
+      subtitle: null,
       trailing: isAdmin && !isCurrentUser && !member.isAdmin
           ? PopupMenuButton<String>(
               onSelected: (value) {

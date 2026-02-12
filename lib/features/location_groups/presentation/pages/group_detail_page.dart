@@ -1134,6 +1134,15 @@ class _MemberTile extends StatelessWidget {
     }
 
     return ListTile(
+      onTap: !isCurrentUser
+          ? () => context.push(
+                Routes.userProfileWith(member.userId),
+                extra: {
+                  'displayName': displayName,
+                  'photoUrl': photoUrl,
+                },
+              )
+          : null,
       leading: CircleAvatar(
         backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
         child: photoUrl == null

@@ -696,10 +696,21 @@ class _MessageBubble extends StatelessWidget {
           // Avatar for other users
           if (!isMe) ...[
             if (showSenderInfo)
-              CachedAvatar(
-                imageUrl: message.senderPhotoUrl,
-                name: message.senderName ?? message.senderUsername ?? '?',
-                radius: 16,
+              GestureDetector(
+                onTap: message.senderId != null
+                    ? () => context.push(
+                          Routes.userProfileWith(message.senderId!),
+                          extra: {
+                            'displayName': message.senderName ?? message.senderUsername,
+                            'photoUrl': message.senderPhotoUrl,
+                          },
+                        )
+                    : null,
+                child: CachedAvatar(
+                  imageUrl: message.senderPhotoUrl,
+                  name: message.senderName ?? message.senderUsername ?? '?',
+                  radius: 16,
+                ),
               )
             else
               const SizedBox(width: 32), // Placeholder for alignment
