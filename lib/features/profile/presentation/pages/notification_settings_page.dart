@@ -79,11 +79,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Control which types of messages send you push notifications',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),

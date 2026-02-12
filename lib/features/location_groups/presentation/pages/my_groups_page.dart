@@ -26,12 +26,12 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
     if (groupState.hasError) {
       context.read<LocationGroupBloc>().add(const ClearGroupError());
     }
-    
+
     // Only load if not already loaded for this user
     // The BLoC will handle checking if data is already available
     // and will skip redundant loads while keeping real-time streams active
     final authState = context.read<AuthBloc>().state;
-    
+
     if (authState is AuthAuthenticated) {
       // Only trigger load if status is initial or data is for a different user
       if (groupState.status == GroupBlocStatus.initial ||
@@ -44,7 +44,9 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
   void _loadUserGroups() {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
-      context.read<LocationGroupBloc>().add(LoadUserGroups(userId: authState.user.id));
+      context
+          .read<LocationGroupBloc>()
+          .add(LoadUserGroups(userId: authState.user.id));
     }
   }
 
@@ -155,8 +157,9 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                 final group = state.userGroups[index];
                 final unreadCount = state.userGroupUnreadCounts[group.id] ?? 0;
                 final authState = context.read<AuthBloc>().state;
-                final userId = authState is AuthAuthenticated ? authState.user.id : null;
-                
+                final userId =
+                    authState is AuthAuthenticated ? authState.user.id : null;
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GroupCard(
@@ -166,16 +169,18 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                     onTap: () {
                       context.push(Routes.locationGroupChatWith(group.id));
                     },
-                    onLongPress: userId != null ? () {
-                      // Preload group chat messages into cache on long-press
-                      // This makes navigation instant even on cache miss
-                      getIt<GroupChatBloc>().add(
-                        PreloadGroupChat(
-                          groupId: group.id,
-                          userId: userId,
-                        ),
-                      );
-                    } : null,
+                    onLongPress: userId != null
+                        ? () {
+                            // Preload group chat messages into cache on long-press
+                            // This makes navigation instant even on cache miss
+                            getIt<GroupChatBloc>().add(
+                              PreloadGroupChat(
+                                groupId: group.id,
+                                userId: userId,
+                              ),
+                            );
+                          }
+                        : null,
                   ),
                 );
               },
@@ -186,18 +191,16 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton.extended(
+          FloatingActionButton(
             onPressed: () => context.push(Routes.createLocationGroup),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Group'),
             heroTag: 'createGroup',
+            child: const Icon(Icons.add),
           ),
           const SizedBox(height: 12),
-          FloatingActionButton.extended(
+          FloatingActionButton(
             onPressed: () => context.push(Routes.locationGroups),
-            icon: const Icon(Icons.search),
-            label: const Text('Find Groups'),
             heroTag: 'findGroups',
+            child: const Icon(Icons.search),
           ),
         ],
       ),

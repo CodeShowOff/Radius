@@ -167,7 +167,7 @@ class HelpSupportPage extends StatelessWidget {
                   'Developed by',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).colorScheme.outline,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -184,7 +184,7 @@ class HelpSupportPage extends StatelessWidget {
                   '\u00a9 2026 All rights reserved',
                   style: TextStyle(
                     fontSize: 11,
-                    color: Theme.of(context).colorScheme.outline,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -733,7 +733,7 @@ class _InfoRow extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -904,7 +904,7 @@ class _FAQItemState extends State<_FAQItem> {
                 Text(
                   widget.answer,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.5,
                   ),
                 ),
@@ -1173,7 +1173,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           Text(
             'Last Updated: February 2, 2026',
             style: TextStyle(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               fontSize: 13,
               fontStyle: FontStyle.italic,
             ),
@@ -1373,7 +1373,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
               '\u00a9 2026 CodeShowOff. All rights reserved.',
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -1405,7 +1405,7 @@ class _TermsOfServicePage extends StatelessWidget {
           Text(
             'Last Updated: February 2, 2026',
             style: TextStyle(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               fontSize: 13,
               fontStyle: FontStyle.italic,
             ),
@@ -1646,7 +1646,7 @@ class _TermsOfServicePage extends StatelessWidget {
               '\u00a9 2026 CodeShowOff. All rights reserved.',
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -1686,7 +1686,7 @@ class _PolicySection extends StatelessWidget {
             Text(
               content,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.outline,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1.6,
               ),
             ),

@@ -122,14 +122,14 @@ class PendingRequestsSheet extends StatelessWidget {
                           Text(
                             'No pending requests',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'All join requests have been handled',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],

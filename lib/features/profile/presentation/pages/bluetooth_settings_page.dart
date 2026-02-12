@@ -85,7 +85,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
     bool hasBlePermissions;
     bool scanGranted = false;
     bool advertiseGranted = false;
-    
+
     if (Platform.isAndroid) {
       final bluetoothScanStatus = await Permission.bluetoothScan.status;
       final bluetoothAdvertiseStatus =
@@ -104,7 +104,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
       final granted = (await Permission.bluetooth.status).isGranted;
       scanGranted = granted;
       advertiseGranted = granted;
-      
+
       _scanPermissionGranted = granted;
       _advertisePermissionGranted = granted;
       hasBlePermissions = granted;
@@ -265,8 +265,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                         ? 'Enabled'
                                         : 'Disabled',
                                     style: TextStyle(
-                                      color:
-                                          Theme.of(context).colorScheme.outline,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -318,8 +319,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                         ? 'All permissions granted'
                                         : 'Some permissions are missing',
                                     style: TextStyle(
-                                      color:
-                                          Theme.of(context).colorScheme.outline,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
@@ -330,7 +332,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
-                                            .outline,
+                                            .onSurfaceVariant,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -347,7 +349,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                           size: 16,
                                           color: Theme.of(context)
                                               .colorScheme
-                                              .outline,
+                                              .onSurfaceVariant,
                                         ),
                                         const SizedBox(width: 8),
                                         Expanded(
@@ -356,7 +358,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                             style: TextStyle(
                                               color: Theme.of(context)
                                                   .colorScheme
-                                                  .outline,
+                                                  .onSurfaceVariant,
                                               fontSize: 12,
                                             ),
                                           ),
@@ -412,8 +414,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                         ? 'Stays on when app is closed'
                                         : 'Stops when app is closed',
                                     style: TextStyle(
-                                      color:
-                                          Theme.of(context).colorScheme.outline,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -438,7 +441,8 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                           'When enabled, your device keeps advertising your username via Bluetooth even after the app is closed or removed from recents. '
                           'This uses a lightweight background service and minimal battery.',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.outline,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 13,
                           ),
                         ),
@@ -502,7 +506,9 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                             'Scanning runs for 15 seconds when you tap "Find People Nearby". '
                             'Advertising ${_backgroundAdvertising ? 'keeps running even when the app is closed (background mode on)' : 'runs while the app is open (enable Background Advertising above to keep it running)'}.',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.outline,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -547,7 +553,8 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                         Text(
                           'Stores detailed Bluetooth/Nearby logs on this device so you can share them for troubleshooting.',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.outline,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -634,7 +641,7 @@ class _InfoItem extends StatelessWidget {
                 Text(
                   description,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                   ),
                 ),

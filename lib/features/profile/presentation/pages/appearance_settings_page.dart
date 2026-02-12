@@ -47,7 +47,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                   child: Text(
                     'Tip: You can change your device theme any time when using System default.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
                 ),

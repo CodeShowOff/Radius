@@ -28,8 +28,10 @@ class NearbyHelpSettingsPage extends StatelessWidget {
       ),
       body: BlocConsumer<NearbyHelpBloc, NearbyHelpState>(
         listenWhen: (previous, current) {
-          return (previous.errorMessage == null && current.errorMessage != null) ||
-              (previous.successMessage == null && current.successMessage != null);
+          return (previous.errorMessage == null &&
+                  current.errorMessage != null) ||
+              (previous.successMessage == null &&
+                  current.successMessage != null);
         },
         listener: (context, state) {
           if (state.errorMessage != null) {
@@ -49,8 +51,9 @@ class NearbyHelpSettingsPage extends StatelessWidget {
           }
         },
         builder: (context, state) {
+          final bottomPadding = MediaQuery.of(context).padding.bottom;
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding + 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -212,7 +215,8 @@ class NearbyHelpSettingsPage extends StatelessWidget {
             const SizedBox(height: 12),
             _InfoItem(
               icon: Icons.location_off,
-              text: 'Your exact location is only shared after you accept a help request',
+              text:
+                  'Your exact location is only shared after you accept a help request',
             ),
             const SizedBox(height: 8),
             _InfoItem(
@@ -237,7 +241,8 @@ class NearbyHelpSettingsPage extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Location services are disabled. Please enable them in settings.'),
+            content: Text(
+                'Location services are disabled. Please enable them in settings.'),
           ),
         );
       }
@@ -264,7 +269,8 @@ class NearbyHelpSettingsPage extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Location permissions are permanently denied. Please enable them in settings.'),
+            content: Text(
+                'Location permissions are permanently denied. Please enable them in settings.'),
           ),
         );
       }
@@ -295,16 +301,18 @@ class NearbyHelpSettingsPage extends StatelessWidget {
         final position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.best,
-            timeLimit: Duration(seconds: 30), // Increased timeout for better accuracy
+            timeLimit:
+                Duration(seconds: 30), // Increased timeout for better accuracy
           ),
         );
-        
+
         // Log the accuracy for debugging
-        debugPrint('Got location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
+        debugPrint(
+            'Got location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
 
         if (context.mounted) {
           Navigator.of(context).pop(); // Close loading dialog
-          
+
           // Warn user if accuracy is poor for small radius scenarios
           if (position.accuracy > 50) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -343,7 +351,7 @@ class NearbyHelpSettingsPage extends StatelessWidget {
   void _confirmRemoveLocation(BuildContext context, LocationType type) {
     // Capture the bloc before showing dialog to ensure it's accessible
     final bloc = context.read<NearbyHelpBloc>();
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(

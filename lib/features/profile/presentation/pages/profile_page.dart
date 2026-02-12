@@ -122,122 +122,54 @@ class _ProfilePageState extends State<ProfilePage> {
                         const SizedBox(height: 4),
                         Text(
                           email,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                        if (bio.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              bio,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,
                                   ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
-                        if (vibe != null && vibe.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .tertiaryContainer,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Profile Info Card
+                        Card(
+                          elevation: 0,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.mood,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.tertiary,
+                                _ProfileInfoField(
+                                  icon: Icons.description_outlined,
+                                  label: 'Bio',
+                                  value: bio.isNotEmpty ? bio : null,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  vibe,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onTertiaryContainer,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                const Divider(height: 24),
+                                _ProfileInfoField(
+                                  icon: Icons.mood,
+                                  label: 'Vibe',
+                                  value: vibe,
+                                ),
+                                const Divider(height: 24),
+                                _ProfileInfoField(
+                                  icon: Icons.sentiment_satisfied_alt,
+                                  label: 'Mood',
+                                  value: mood,
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                        if (mood != null && mood.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .secondaryContainer,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.sentiment_satisfied_alt,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.secondary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  mood,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSecondaryContainer,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                         const SizedBox(height: 24),
 
                         // Stats
                         BlocBuilder<ConnectionBloc, ConnectionBlocState>(
                           builder: (context, connectionState) {
-                            final connectionsCount = connectionState.connections.length;
+                            final connectionsCount =
+                                connectionState.connections.length;
                             // Encounters would be total nearby users ever discovered
                             // For now, use 0 as placeholder until we add encounter tracking
                             return Row(
@@ -281,7 +213,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         _ProfileOption(
                           icon: Icons.notifications_outlined,
                           title: 'Notification Settings',
-                          onTap: () => context.push(Routes.notificationSettings),
+                          onTap: () =>
+                              context.push(Routes.notificationSettings),
                         ),
                         _ProfileOption(
                           icon: Icons.visibility_outlined,
@@ -296,7 +229,12 @@ class _ProfilePageState extends State<ProfilePage> {
                         const SizedBox(height: 24),
 
                         // Sign out button
-                        _SignOutButton(),
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 200),
+                            child: _SignOutButton(),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -317,27 +255,24 @@ class _SignOutButton extends StatelessWidget {
       builder: (context, state) {
         final isLoading = state is AuthLoading;
 
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: isLoading ? null : () => _showSignOutDialog(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-              side: BorderSide(color: Theme.of(context).colorScheme.error),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            icon: isLoading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  )
-                : const Icon(Icons.logout),
-            label: Text(isLoading ? 'Signing out...' : 'Sign Out'),
+        return OutlinedButton.icon(
+          onPressed: isLoading ? null : () => _showSignOutDialog(context),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+            side: BorderSide(color: Theme.of(context).colorScheme.error),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
           ),
+          icon: isLoading
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                )
+              : const Icon(Icons.logout),
+          label: Text(isLoading ? 'Signing out...' : 'Sign Out'),
         );
       },
     );
@@ -419,6 +354,60 @@ class _ProfileOption extends StatelessWidget {
       title: Text(title),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
+    );
+  }
+}
+
+class _ProfileInfoField extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? value;
+
+  const _ProfileInfoField({
+    required this.icon,
+    required this.label,
+    this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasValue = value?.isNotEmpty == true;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: theme.colorScheme.primary,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hasValue ? value! : 'Not set',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: hasValue
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

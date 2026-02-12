@@ -327,8 +327,7 @@ class _HomePageState extends State<HomePage>
                       borderRadius: BorderRadius.circular(16),
                     ),
                     padding: const EdgeInsets.all(20),
-                    child:
-                        const MoodSelector(showLabel: true, compact: false),
+                    child: const MoodSelector(showLabel: true, compact: false),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -366,7 +365,9 @@ class _HomePageState extends State<HomePage>
                                     : 'Hidden when app closed',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -390,10 +391,9 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.nearby),
                         label: 'Find\nNearby',
-                        color:
-                            Theme.of(context).colorScheme.onSecondaryContainer,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                         backgroundColor:
-                            Theme.of(context).colorScheme.secondaryContainer,
+                            Theme.of(context).colorScheme.primaryContainer,
                         isSquare: true,
                         animationType: _CardAnimationType.wave,
                       ),
@@ -403,10 +403,9 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.randomChat),
                         label: 'Random\nChat',
-                        color:
-                            Theme.of(context).colorScheme.onSecondaryContainer,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                         backgroundColor:
-                            Theme.of(context).colorScheme.secondaryContainer,
+                            Theme.of(context).colorScheme.primaryContainer,
                         isSquare: true,
                         animationType: _CardAnimationType.personCycle,
                       ),
@@ -419,7 +418,7 @@ class _HomePageState extends State<HomePage>
                 _AnimatedSquareCard(
                   onTap: () => context.push(Routes.nearbyHelp),
                   label: 'Nearby Help',
-                  color: Theme.of(context).colorScheme.error,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
                   backgroundColor: Theme.of(context).colorScheme.errorContainer,
                   isSquare: false,
                   useVerticalLayout: false,

@@ -443,7 +443,7 @@ class _InfoItem extends StatelessWidget {
                 Text(
                   description,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                   ),
                 ),

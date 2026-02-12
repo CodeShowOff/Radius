@@ -33,36 +33,27 @@ class ConversationTile extends StatelessWidget {
     final unreadCount = conversation.getUnreadCount(currentUserId);
     final hasUnread = unreadCount > 0;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
-        ),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: ListTile(
-        enabled: false, // Disable ListTile's own tap handling
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CachedAvatar(
-        imageUrl: photoUrl,
-        name: displayName,
-        radius: 24,
-      ),
-      title: Text(
-        displayName,
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+        child: ListTile(
+          enabled: false, // Disable ListTile's own tap handling
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: CachedAvatar(
+            imageUrl: photoUrl,
+            name: displayName,
+            radius: 24,
+          ),
+          title: Text(
+            displayName,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
       subtitle: Row(
         children: [
           Expanded(
@@ -115,7 +106,6 @@ class ConversationTile extends StatelessWidget {
             ),
           ],
         ],
-      ),
       ),
         ),
       ),

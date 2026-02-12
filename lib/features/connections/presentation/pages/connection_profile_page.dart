@@ -76,9 +76,8 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         final gender = (doc['gender'] as String?)?.trim();
         final isOnline = (doc['isOnline'] as bool?) ?? false;
         final lastSeenRaw = doc['lastSeen'];
-        final lastSeen = lastSeenRaw is DateTime
-          ? lastSeenRaw
-          : lastSeenRaw?.toDate();
+        final lastSeen =
+            lastSeenRaw is DateTime ? lastSeenRaw : lastSeenRaw?.toDate();
 
         normalized = {
           'id': widget.otherUserId,
@@ -180,7 +179,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Block User?'),
         content: Text(
-          'Blocking ${( _profile?['displayName'] as String?) ?? 'this user'} will prevent them from sending you messages.',
+          'Blocking ${(_profile?['displayName'] as String?) ?? 'this user'} will prevent them from sending you messages.',
         ),
         actions: [
           TextButton(
@@ -246,11 +245,14 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
             child: CircleAvatar(
               radius: 60,
               backgroundColor: theme.colorScheme.primaryContainer,
-              backgroundImage:
-                  photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
+              backgroundImage: photoUrl != null
+                  ? CachedNetworkImageProvider(photoUrl)
+                  : null,
               child: photoUrl == null
                   ? Text(
-                      displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                      displayName.isNotEmpty
+                          ? displayName[0].toUpperCase()
+                          : '?',
                       style: TextStyle(
                         color: theme.colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
@@ -280,49 +282,66 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: isOnline
                     ? theme.colorScheme.primary
-                    : (theme.brightness == Brightness.dark
-                        ? Colors.white
-                        : theme.colorScheme.outline),
+                    : theme.colorScheme.onSurfaceVariant,
                 fontWeight: isOnline ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Center(
-            child: Text(
-              bio?.isNotEmpty == true ? bio! : 'No bio set',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: bio?.isNotEmpty == true
-                    ? theme.colorScheme.outline
-                    : theme.colorScheme.outlineVariant,
-                fontStyle: bio?.isNotEmpty == true
-                    ? FontStyle.normal
-                    : FontStyle.italic,
+          if (bio?.isNotEmpty == true)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  bio!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              textAlign: TextAlign.center,
+            )
+          else
+            Center(
+              child: Text(
+                'No bio set',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _InfoChip(
-                icon: Icons.mood,
-                label: vibe?.isNotEmpty == true ? vibe! : 'Vibe not set',
-                isEmpty: vibe?.isNotEmpty != true,
+          const SizedBox(height: 32),
+          // Profile Fields
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ProfileField(
+                    icon: Icons.mood,
+                    label: 'Vibe',
+                    value: vibe,
+                  ),
+                  const Divider(height: 24),
+                  _ProfileField(
+                    icon: Icons.sentiment_satisfied_alt,
+                    label: 'Mood',
+                    value: mood,
+                  ),
+                  const Divider(height: 24),
+                  _ProfileField(
+                    icon: Icons.person_outline,
+                    label: 'Gender',
+                    value: gender,
+                  ),
+                ],
               ),
-              _InfoChip(
-                icon: Icons.sentiment_satisfied_alt,
-                label: mood?.isNotEmpty == true ? mood! : 'Mood not set',
-                isEmpty: mood?.isNotEmpty != true,
-              ),
-              _InfoChip(
-                icon: Icons.person_outline,
-                label: gender?.isNotEmpty == true ? gender! : 'Gender not set',
-                isEmpty: gender?.isNotEmpty != true,
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 32),
           Row(
@@ -367,50 +386,55 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
   }
 }
 
-class _InfoChip extends StatelessWidget {
+class _ProfileField extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool isEmpty;
+  final String? value;
 
-  const _InfoChip({
+  const _ProfileField({
     required this.icon,
     required this.label,
-    this.isEmpty = false,
+    this.value,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isEmpty
-            ? theme.colorScheme.surfaceContainerHighest
-            : theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: isEmpty
-                ? theme.colorScheme.outline
-                : theme.colorScheme.onSecondaryContainer,
+    final hasValue = value?.isNotEmpty == true;
+
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: theme.colorScheme.primary,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hasValue ? value! : 'Not set',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: hasValue
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: isEmpty
-                  ? theme.colorScheme.outline
-                  : theme.colorScheme.onSecondaryContainer,
-              fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
