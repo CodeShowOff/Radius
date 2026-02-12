@@ -21,7 +21,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin, RouteAware {
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
   bool _backgroundAdvertising = false;
@@ -52,7 +52,18 @@ class _HomePageState extends State<HomePage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute is PageRoute) {
+      getIt<RouteObserver<PageRoute>>().subscribe(this, modalRoute);
+    }
+  }
+
+  @override
   void dispose() {
+    getIt<RouteObserver<PageRoute>>().unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _blinkController.dispose();
     super.dispose();
@@ -61,9 +72,17 @@ class _HomePageState extends State<HomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Re-check Bluetooth when app comes back to foreground
+      // Re-check Bluetooth and Background Advertising when app comes back to foreground
       _checkBluetoothStatus();
+      _checkBackgroundAdvertising();
     }
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this route from another route
+    // Re-check background advertising setting to sync with Bluetooth Settings page
+    _checkBackgroundAdvertising();
   }
 
   Future<void> _checkBluetoothStatus() async {
@@ -128,7 +147,7 @@ class _HomePageState extends State<HomePage>
           title: const Text('Disable Background Advertising?'),
           content: const Text(
             'Nearby users won\'t be able to discover you when the app is closed. '
-            'Battery usage is minimal (<1% per day).',
+            'Battery usage is minimal (less than 1% per day).',
           ),
           actions: [
             TextButton(
@@ -302,17 +321,14 @@ class _HomePageState extends State<HomePage>
                     borderRadius: BorderRadius.circular(18),
                   ),
                   padding: const EdgeInsets.all(3),
-                  child: Card(
-                    elevation: 2,
-                    margin: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child:
-                          const MoodSelector(showLabel: true, compact: false),
-                    ),
+                    padding: const EdgeInsets.all(20),
+                    child:
+                        const MoodSelector(showLabel: true, compact: false),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -350,7 +366,7 @@ class _HomePageState extends State<HomePage>
                                     : 'Hidden when app closed',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Theme.of(context).colorScheme.outline,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],

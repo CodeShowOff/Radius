@@ -309,7 +309,9 @@ class _ConversationTileState extends State<_ConversationTile> {
               Expanded(
                 child: Text(
                   otherParticipant?.displayName ?? 'Unknown',
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

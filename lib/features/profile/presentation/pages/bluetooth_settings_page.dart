@@ -19,7 +19,7 @@ class BluetoothSettingsPage extends StatefulWidget {
 }
 
 class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   final _bluetoothService = getIt<BluetoothService>();
   final _settingsStore = getIt<AppSettingsStore>();
   final _proximityService = getIt<ProximityService>();
@@ -39,7 +39,18 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute is PageRoute) {
+      getIt<RouteObserver<PageRoute>>().subscribe(this, modalRoute);
+    }
+  }
+
+  @override
   void dispose() {
+    getIt<RouteObserver<PageRoute>>().unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -51,6 +62,13 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
     if (state == AppLifecycleState.resumed) {
       _checkStatus();
     }
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this route from another route
+    // Re-check status to sync with Home page
+    _checkStatus();
   }
 
   Future<void> _checkStatus() async {

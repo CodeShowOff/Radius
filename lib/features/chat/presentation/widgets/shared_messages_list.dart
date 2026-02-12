@@ -5,7 +5,7 @@ import '../../domain/entities/chat_config.dart';
 import 'message_bubble.dart';
 
 /// Shared messages list widget for chat conversations.
-/// 
+///
 /// Displays messages with appropriate styling based on [config].
 class SharedMessagesList extends StatelessWidget {
   /// Messages to display.
@@ -73,6 +73,8 @@ class SharedMessagesList extends StatelessWidget {
       reverse: true, // Most recent at bottom
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: messages.length + (hasMore ? 1 : 0) + (isTyping ? 1 : 0),
+      // Performance optimizations
+      cacheExtent: 500, // Cache more items off-screen
       itemBuilder: (context, index) {
         // Typing indicator at index 0 (bottom of reversed list)
         if (config.showTypingIndicator && isTyping && index == 0) {
@@ -80,7 +82,8 @@ class SharedMessagesList extends StatelessWidget {
         }
 
         // Adjust index for typing indicator
-        final adjustedIndex = (config.showTypingIndicator && isTyping) ? index - 1 : index;
+        final adjustedIndex =
+            (config.showTypingIndicator && isTyping) ? index - 1 : index;
 
         // Loading indicator at the top (end of reversed list)
         if (hasMore && adjustedIndex == messages.length) {
@@ -99,16 +102,19 @@ class SharedMessagesList extends StatelessWidget {
         // Check if we should show date separator
         final showDate = _shouldShowDate(adjustedIndex);
 
-        return Column(
-          children: [
-            if (showDate) _buildDateSeparator(context, message.sentAt),
-            _buildMessageBubble(
-              context,
-              message,
-              isMe,
-              showTail,
-            ),
-          ],
+        // Wrap in RepaintBoundary for better scrolling performance
+        return RepaintBoundary(
+          child: Column(
+            children: [
+              if (showDate) _buildDateSeparator(context, message.sentAt),
+              _buildMessageBubble(
+                context,
+                message,
+                isMe,
+                showTail,
+              ),
+            ],
+          ),
         );
       },
     );
@@ -156,6 +162,10 @@ class SharedMessagesList extends StatelessWidget {
     final theme = Theme.of(context);
     final isAnonymous = config.displayMode == ChatDisplayMode.anonymous;
 
+    // Pre-compute avatar background color
+    final anonymousAvatarColor = theme.colorScheme.secondary;
+    final bubbleColor = theme.colorScheme.surfaceContainerHighest;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
@@ -183,7 +193,7 @@ class SharedMessagesList extends StatelessWidget {
           if (isAnonymous) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: theme.colorScheme.secondary,
+              backgroundColor: anonymousAvatarColor,
               child: const Text(
                 '?',
                 style: TextStyle(
@@ -198,43 +208,15 @@ class SharedMessagesList extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
+              color: bubbleColor,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildTypingDot(theme, 0),
-                const SizedBox(width: 4),
-                _buildTypingDot(theme, 200),
-                const SizedBox(width: 4),
-                _buildTypingDot(theme, 400),
-              ],
+            child: _AnimatedTypingDots(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTypingDot(ThemeData theme, int delay) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOut,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: 0.3 + (0.7 * value),
-          child: Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.onSurfaceVariant,
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -251,7 +233,15 @@ class SharedMessagesList extends StatelessWidget {
       dateText = 'Yesterday';
     } else if (messageDate.isAfter(today.subtract(const Duration(days: 7)))) {
       // Within last week, show day name
-      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const days = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday'
+      ];
       dateText = days[messageDate.weekday - 1];
     } else {
       // Older than a week, show date
@@ -264,7 +254,8 @@ class SharedMessagesList extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -286,7 +277,7 @@ class SharedMessagesList extends StatelessWidget {
     bool showTail,
   ) {
     final isAnonymous = config.displayMode == ChatDisplayMode.anonymous;
-    
+
     // Handle system messages (centered, special styling)
     if (message.senderId == 'system') {
       return _buildSystemMessage(context, message);
@@ -308,14 +299,15 @@ class SharedMessagesList extends StatelessWidget {
   /// Builds a system message
   Widget _buildSystemMessage(BuildContext context, Message message) {
     final theme = Theme.of(context);
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
@@ -342,7 +334,8 @@ class SharedMessagesList extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment:
@@ -369,11 +362,12 @@ class SharedMessagesList extends StatelessWidget {
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.of(context).size.width * 0.75,
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: isMe
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.surfaceContainerHighest,
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -389,8 +383,8 @@ class SharedMessagesList extends StatelessWidget {
                         message.text,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: isMe
-                                  ? theme.colorScheme.onPrimary
-                                  : theme.colorScheme.onSurface,
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurface,
                           height: 1.3,
                         ),
                       ),
@@ -405,8 +399,10 @@ class SharedMessagesList extends StatelessWidget {
                               '${message.sentAt.hour.toString().padLeft(2, '0')}:${message.sentAt.minute.toString().padLeft(2, '0')}',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: isMe
-                                        ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                                        : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                                    ? theme.colorScheme.onPrimary
+                                        .withValues(alpha: 0.7)
+                                    : theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.5),
                                 fontSize: 11,
                               ),
                             ),
@@ -458,5 +454,76 @@ class SharedMessagesList extends StatelessWidget {
     );
 
     return currentDate != nextDate;
+  }
+}
+
+/// Optimized animated typing dots widget.
+///
+/// Uses a single AnimationController instead of multiple TweenAnimationBuilders
+/// for better performance.
+class _AnimatedTypingDots extends StatefulWidget {
+  final Color color;
+
+  const _AnimatedTypingDots({required this.color});
+
+  @override
+  State<_AnimatedTypingDots> createState() => _AnimatedTypingDotsState();
+}
+
+class _AnimatedTypingDotsState extends State<_AnimatedTypingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDot(0),
+            const SizedBox(width: 4),
+            _buildDot(0.33),
+            const SizedBox(width: 4),
+            _buildDot(0.66),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDot(double offset) {
+    final animValue = (_controller.value + offset) % 1.0;
+    final opacity = animValue < 0.5
+        ? 0.3 + (0.7 * (animValue * 2))
+        : 0.3 + (0.7 * (2 - animValue * 2));
+
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
   }
 }

@@ -203,7 +203,7 @@ class _RadarAnimationState extends State<_RadarAnimation>
               size: 32,
               color: widget.isAnimating
                   ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
+                  : theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

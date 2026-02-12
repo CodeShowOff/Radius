@@ -518,20 +518,20 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
           Icon(
             Icons.chat_bubble_outline,
             size: 64,
-            color: theme.colorScheme.outline,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 16),
           Text(
             'No messages yet',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Start the conversation!',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

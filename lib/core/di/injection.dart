@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:injectable/injectable.dart';
@@ -62,6 +63,11 @@ Future<void> configureDependencies() {
   // plain Dart classes (no @injectable annotations). Those plain classes must
   // be registered here to avoid runtime "not registered inside GetIt" errors.
   // ---------------------------------------------------------------------------
+
+  // RouteObserver for detecting route changes
+  if (!getIt.isRegistered<RouteObserver<PageRoute>>()) {
+    getIt.registerLazySingleton<RouteObserver<PageRoute>>(() => RouteObserver<PageRoute>());
+  }
 
   if (!getIt.isRegistered<ProfileService>()) {
     getIt.registerLazySingleton<ProfileService>(() => ProfileService());

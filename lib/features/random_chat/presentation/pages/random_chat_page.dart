@@ -815,14 +815,14 @@ class _RandomChatPageState extends State<RandomChatPage>
             Text(
               'No users available right now',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Check back later — new users join every day!',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline.withValues(alpha: 0.7),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),

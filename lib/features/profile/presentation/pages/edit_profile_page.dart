@@ -618,7 +618,7 @@ class _VisibilityToggle extends StatelessWidget {
                         ? 'Others can discover you nearby'
                         : 'You are hidden from discovery',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
                 ],
@@ -743,7 +743,7 @@ class _VibeSelector extends StatelessWidget {
                       Text(
                         'Let others know your current status',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.outline,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],

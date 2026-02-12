@@ -37,6 +37,26 @@ class SmartHomeCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    
+    // Pre-compute decoration to avoid rebuilding
+    final containerDecoration = gradient
+        ? BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [
+                cs.primary.withValues(alpha: isDark ? 0.25 : 0.10),
+                cs.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          )
+        : null;
+
+    // Pre-compute icon background color
+    final iconBgColor = icon != null 
+        ? cs.primary.withValues(alpha: isDark ? 0.18 : 0.10)
+        : null;
 
     return Card(
       // Card styling comes from ThemeData.cardTheme
@@ -46,19 +66,7 @@ class SmartHomeCard extends StatelessWidget {
         child: Container(
           padding: padding ??
               const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: gradient
-              ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    colors: [
-                      cs.primary.withValues(alpha: isDark ? 0.25 : 0.10),
-                      cs.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                )
-              : null,
+          decoration: containerDecoration,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -71,7 +79,7 @@ class SmartHomeCard extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+                        color: iconBgColor,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(icon, color: cs.primary, size: 22),
@@ -161,31 +169,41 @@ class PurpleButton extends StatelessWidget {
       );
     }
 
-    // Gradient wrapper
+    // Gradient wrapper - optimized to avoid expensive Theme.copyWith
     if (gradient && onPressed != null) {
+      // Pre-compute shadow color once
+      final shadowColor = theme.colorScheme.primary.withValues(alpha: 0.35);
+      
       return Container(
         decoration: BoxDecoration(
           gradient: AppTheme.primaryGradient,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.primary.withValues(alpha: 0.35),
+              color: shadowColor,
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: Theme(
-          data: theme.copyWith(
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: theme.elevatedButtonTheme.style?.copyWith(
-                backgroundColor: WidgetStateProperty.all(Colors.transparent),
-                shadowColor: WidgetStateProperty.all(Colors.transparent),
-                surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
-              ),
-            ),
+        child: ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            minimumSize: expand ? const Size(double.infinity, 52) : null,
           ),
-          child: button,
+          child: icon != null 
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                    Text(label),
+                  ],
+                )
+              : Text(label),
         ),
       );
     }
@@ -212,44 +230,76 @@ class FilterChipRow extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    
+    // Pre-compute colors once
+    final unselectedBgColor = isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F0F6);
+    final unselectedLabelColor = isDark ? Colors.white70 : Colors.black87;
+    final unselectedBorderColor = isDark ? const Color(0xFF2A2A36) : const Color(0xFFE2E2EC);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: List.generate(labels.length, (i) {
-          final selected = i == selectedIndex;
-          return Padding(
-            padding: EdgeInsets.only(right: i < labels.length - 1 ? 10 : 0),
-            child: ChoiceChip(
-              label: Text(labels[i]),
-              selected: selected,
-              onSelected: (_) => onSelected(i),
-              selectedColor: cs.primary,
-              backgroundColor:
-                  isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F0F6),
-              labelStyle: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : (isDark ? Colors.white70 : Colors.black87),
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                fontSize: 13,
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Padding(
+              padding: EdgeInsets.only(right: i < labels.length - 1 ? 10 : 0),
+              child: _FilterChip(
+                label: labels[i],
+                selected: i == selectedIndex,
+                onSelected: () => onSelected(i),
+                primaryColor: cs.primary,
+                unselectedBgColor: unselectedBgColor,
+                unselectedLabelColor: unselectedLabelColor,
+                unselectedBorderColor: unselectedBorderColor,
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              side: BorderSide(
-                color: selected
-                    ? cs.primary
-                    : (isDark
-                        ? const Color(0xFF2A2A36)
-                        : const Color(0xFFE2E2EC)),
-              ),
-              showCheckmark: false,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
-          );
-        }),
+        ],
       ),
+    );
+  }
+}
+
+/// Optimized individual filter chip to reduce rebuilds.
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+    required this.primaryColor,
+    required this.unselectedBgColor,
+    required this.unselectedLabelColor,
+    required this.unselectedBorderColor,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+  final Color primaryColor;
+  final Color unselectedBgColor;
+  final Color unselectedLabelColor;
+  final Color unselectedBorderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      selectedColor: primaryColor,
+      backgroundColor: unselectedBgColor,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : unselectedLabelColor,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        fontSize: 13,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      side: BorderSide(
+        color: selected ? primaryColor : unselectedBorderColor,
+      ),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     );
   }
 }

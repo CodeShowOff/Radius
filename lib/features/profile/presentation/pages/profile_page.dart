@@ -126,7 +126,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               .textTheme
                               .bodyMedium
                               ?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                         ),
                         if (bio.isNotEmpty) ...[
@@ -393,7 +393,7 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
       ],

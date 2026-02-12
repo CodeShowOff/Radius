@@ -21,6 +21,30 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final maxWidth = MediaQuery.sizeOf(context).width * 0.75;
+
+    // Pre-compute colors
+    final bubbleColor = isMe
+        ? theme.colorScheme.primary
+        : theme.colorScheme.surfaceContainerHighest;
+
+    // Pre-compute border radius
+    final borderRadius = BorderRadius.only(
+      topLeft: const Radius.circular(18),
+      topRight: const Radius.circular(18),
+      bottomLeft: Radius.circular(isMe && showTail ? 18 : 4),
+      bottomRight: Radius.circular(!isMe && showTail ? 18 : 4),
+    );
+
+    // Pre-compute padding
+    final contentPadding = message.isMediaMessage
+        ? const EdgeInsets.all(4)
+        : const EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 8,
+            bottom: 8,
+          );
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -41,81 +65,65 @@ class MessageBubble extends StatelessWidget {
               // Message content
               IntrinsicWidth(
                 child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  padding: contentPadding,
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: borderRadius,
                   ),
-                padding: message.isMediaMessage
-                    ? const EdgeInsets.all(4)
-                    : const EdgeInsets.only(
-                        left: 12,
-                        right: 12,
-                        top: 8,
-                        bottom: 8,
-                      ),
-                decoration: BoxDecoration(
-                  color: isMe
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe && showTail ? 18 : 4),
-                    bottomRight: Radius.circular(!isMe && showTail ? 18 : 4),
-                  ),
-                ),
-                child: message.isDeleted
-                    ? _DeletedMessage(isMe: isMe, theme: theme)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Media content
-                          if (message.isMediaMessage)
-                            MediaMessageContent(
-                              message: message,
-                              isSent: isMe,
-                            ),
-
-                          // Caption or text
-                          if (message.text.isNotEmpty &&
-                              message.type != MessageType.text)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: 10,
-                                right: 10,
-                                top: 4,
-                                bottom: 6,
-                              ),
-                              child: _MessageText(
+                  child: message.isDeleted
+                      ? _DeletedMessage(isMe: isMe, theme: theme)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Media content
+                            if (message.isMediaMessage)
+                              MediaMessageContent(
                                 message: message,
-                                isMe: isMe,
-                                theme: theme,
+                                isSent: isMe,
                               ),
-                            ),
 
-                          // Text-only message with inline time (WhatsApp style)
-                          if (!message.isMediaMessage &&
-                              message.text.isNotEmpty)
-                            _MessageTextWithTime(
-                              message: message,
-                              isMe: isMe,
-                              theme: theme,
-                            ),
-
-                          // For media messages, show time separately below
-                          if (message.isMediaMessage)
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: _MessageMeta(
+                            // Caption or text
+                            if (message.text.isNotEmpty &&
+                                message.type != MessageType.text)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 10,
+                                  right: 10,
+                                  top: 4,
+                                  bottom: 6,
+                                ),
+                                child: _MessageText(
                                   message: message,
                                   isMe: isMe,
                                   theme: theme,
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+
+                            // Text-only message with inline time (WhatsApp style)
+                            if (!message.isMediaMessage &&
+                                message.text.isNotEmpty)
+                              _MessageTextWithTime(
+                                message: message,
+                                isMe: isMe,
+                                theme: theme,
+                              ),
+
+                            // For media messages, show time separately below
+                            if (message.isMediaMessage)
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: _MessageMeta(
+                                    message: message,
+                                    isMe: isMe,
+                                    theme: theme,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                 ),
               ),
             ],
@@ -170,7 +178,9 @@ class _MessageTextWithTime extends StatelessWidget {
         Text(
           message.text,
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+            color: isMe
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurface,
             height: 1.3,
           ),
         ),

@@ -145,7 +145,7 @@ class NearbyUserCard extends StatelessWidget {
                                 : Icons.person_outline,
                             size: 14,
                             color: user.gender == null
-                                ? theme.colorScheme.outline
+                                ? theme.colorScheme.onSurfaceVariant
                                 : theme.colorScheme.primary,
                           ),
                           const SizedBox(width: 4),
@@ -153,7 +153,7 @@ class NearbyUserCard extends StatelessWidget {
                             user.gender ?? 'Gender unknown',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: user.gender == null
-                                  ? theme.colorScheme.outline
+                                  ? theme.colorScheme.onSurfaceVariant
                                   : theme.colorScheme.onPrimaryContainer,
                               fontWeight: FontWeight.w500,
                               fontStyle: user.gender == null
@@ -183,13 +183,13 @@ class NearbyUserCard extends StatelessWidget {
                         Icon(
                           Icons.straighten,
                           size: 14,
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '~${user.estimatedDistance.toStringAsFixed(1)}m',
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 12),

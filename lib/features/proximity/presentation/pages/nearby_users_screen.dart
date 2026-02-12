@@ -900,7 +900,7 @@ class _ScanningState extends StatelessWidget {
                 ? 'Looking for devices'
                 : 'Found $userCount ${userCount == 1 ? 'user' : 'users'} so far',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

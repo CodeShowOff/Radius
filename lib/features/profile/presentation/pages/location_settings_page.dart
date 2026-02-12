@@ -229,7 +229,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                                     _isLocationEnabled ? 'Enabled' : 'Disabled',
                                     style: TextStyle(
                                       color:
-                                          Theme.of(context).colorScheme.outline,
+                                          Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -282,7 +282,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                                         : 'Permission not granted',
                                     style: TextStyle(
                                       color:
-                                          Theme.of(context).colorScheme.outline,
+                                          Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -317,7 +317,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                                     : Icons.info_outline,
                                 color: _hasBackgroundPermission
                                     ? Colors.green
-                                    : Theme.of(context).colorScheme.outline,
+                                    : Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -338,7 +338,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
-                                            .outline,
+                                            .onSurfaceVariant,
                                       ),
                                     ),
                                   ],
@@ -355,7 +355,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                           Text(
                             'Background location allows helpers to navigate to you even when the app is minimized.',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.outline,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),

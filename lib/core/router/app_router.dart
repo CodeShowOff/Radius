@@ -70,8 +70,10 @@ const _publicRoutes = {
 GoRouter? _router;
 
 List<NavigatorObserver> _buildObservers() {
-  // Analytics removed - no navigation tracking
-  return const [];
+  // Include RouteObserver for route change detection
+  return [
+    getIt<RouteObserver<PageRoute>>(),
+  ];
 }
 
 /// Application router configuration using GoRouter.

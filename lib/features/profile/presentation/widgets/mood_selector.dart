@@ -72,7 +72,7 @@ class MoodSelector extends StatelessWidget {
               size: 18,
               color: currentMood != null
                   ? theme.colorScheme.secondary
-                  : theme.colorScheme.outline,
+                  : theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
             Text(
@@ -80,7 +80,7 @@ class MoodSelector extends StatelessWidget {
               style: theme.textTheme.labelMedium?.copyWith(
                 color: currentMood != null
                     ? theme.colorScheme.onSecondaryContainer
-                    : theme.colorScheme.outline,
+                    : theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -150,7 +150,7 @@ class MoodSelector extends StatelessWidget {
                       Text(
                         'Let others know how you\'re feeling',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
