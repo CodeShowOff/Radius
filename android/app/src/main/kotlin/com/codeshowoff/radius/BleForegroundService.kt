@@ -116,15 +116,19 @@ class BleForegroundService : Service() {
                 if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
                 when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                     BluetoothAdapter.STATE_ON -> {
-                        Log.d(TAG, "Bluetooth turned ON – restarting advertising")
+                        Log.d(TAG, "Bluetooth turned ON – restarting advertising and updating notification")
                         // Re-acquire in case object changed
                         advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
+                        // Update notification to show active state
+                        updateNotification(bluetoothEnabled = true)
                         startAdvertising()
                     }
                     BluetoothAdapter.STATE_OFF,
                     BluetoothAdapter.STATE_TURNING_OFF -> {
-                        Log.d(TAG, "Bluetooth turning OFF – stopping advertising")
+                        Log.d(TAG, "Bluetooth turning OFF – stopping advertising and updating notification")
                         stopAdvertising()
+                        // Update notification to show Bluetooth is off (keeps service in foreground)
+                        updateNotification(bluetoothEnabled = false)
                     }
                 }
             }
@@ -229,7 +233,7 @@ class BleForegroundService : Service() {
         nm.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(bluetoothEnabled: Boolean = true): Notification {
         // Tap opens bluetooth settings page
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             action = Intent.ACTION_VIEW
@@ -241,12 +245,24 @@ class BleForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val title = if (bluetoothEnabled) "Radius" else "Radius - Bluetooth Off"
+        val text = if (bluetoothEnabled) 
+            "Discoverable by nearby users" 
+        else 
+            "Turn on Bluetooth to be discoverable"
+
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Radius")
-            .setContentText("Discoverable by nearby users")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .build()
+    }
+
+    private fun updateNotification(bluetoothEnabled: Boolean) {
+        val notification = buildNotification(bluetoothEnabled)
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFICATION_ID, notification)
     }
 }

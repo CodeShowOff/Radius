@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
+import '../../../../core/settings/app_settings_store.dart';
+import '../../../../core/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
+import '../../../proximity/proximity_service.dart';
 
 /// Home page - main screen after authentication.
 class HomePage extends StatefulWidget {
@@ -21,6 +24,10 @@ class _HomePageState extends State<HomePage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _bluetoothEnabled = false;
   bool _checkingBluetooth = true;
+  bool _backgroundAdvertising = false;
+
+  final _proximityService = getIt<ProximityService>();
+  final _settingsStore = getIt<AppSettingsStore>();
 
   // Animation controller for Bluetooth off state (simple blinking)
   late AnimationController _blinkController;
@@ -41,6 +48,7 @@ class _HomePageState extends State<HomePage>
     );
 
     _checkBluetoothStatus();
+    _checkBackgroundAdvertising();
   }
 
   @override
@@ -102,6 +110,47 @@ class _HomePageState extends State<HomePage>
     } catch (e) {
       // Ignore errors
     }
+  }
+
+  void _checkBackgroundAdvertising() {
+    final bgAdv = _settingsStore.getBackgroundAdvertising();
+    setState(() {
+      _backgroundAdvertising = bgAdv;
+    });
+  }
+
+  Future<void> _toggleBackgroundAdvertising(bool value) async {
+    // If turning OFF, show confirmation dialog
+    if (!value) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Disable Background Advertising?'),
+          content: const Text(
+            'Nearby users won\'t be able to discover you when the app is closed. '
+            'Battery usage is minimal (<1% per day).',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Disable'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) {
+        return; // User cancelled
+      }
+    }
+
+    // Update state
+    setState(() => _backgroundAdvertising = value);
+    await _proximityService.setBackgroundAdvertising(value);
   }
 
   void _showBluetoothPrompt(BuildContext context) {
@@ -261,7 +310,58 @@ class _HomePageState extends State<HomePage>
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
-                      child: const MoodSelector(showLabel: true, compact: false),
+                      child:
+                          const MoodSelector(showLabel: true, compact: false),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Background Advertising Toggle Card
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.broadcast_on_personal,
+                          color: _backgroundAdvertising
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outline,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Background Advertising',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _backgroundAdvertising
+                                    ? 'Discoverable when app closed'
+                                    : 'Hidden when app closed',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _backgroundAdvertising,
+                          onChanged: (value) =>
+                              _toggleBackgroundAdvertising(value),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -274,7 +374,8 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.nearby),
                         label: 'Find\nNearby',
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
                         backgroundColor:
                             Theme.of(context).colorScheme.secondaryContainer,
                         isSquare: true,
@@ -286,7 +387,8 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.randomChat),
                         label: 'Random\nChat',
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
                         backgroundColor:
                             Theme.of(context).colorScheme.secondaryContainer,
                         isSquare: true,
@@ -544,7 +646,8 @@ class _SimpleGroupCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

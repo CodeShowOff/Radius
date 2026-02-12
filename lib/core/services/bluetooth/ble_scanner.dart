@@ -6,6 +6,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'ble_constants.dart';
 import 'ble_device.dart';
 import 'ble_diagnostics.dart';
+import 'ble_uuid_encoder.dart';
 
 void _log(String message) {
   if (kDebugMode) {
@@ -173,49 +174,69 @@ class BleScanner {
         );
       }
 
-      // Now check if this is a Radius device
+      // Now check if this is a Radius device and extract username
       String? username;
       bool isRadiusDevice = false;
 
-      // Check if device advertises our service UUID (0xBEEF)
-      final radius16Lower = BleConstants.radiusServiceUuid16bit.toLowerCase();
+      // Strategy 1: Try UUID encoding first (works for iOS background)
+      // Check all service UUIDs to see if any encode a username
       for (final uuid in serviceUuids) {
-        final uuidStr = uuid.toString().toLowerCase();
-        if (uuidStr.contains(radius16Lower)) {
+        final uuidStr = uuid.toString().toUpperCase();
+        if (BleUuidEncoder.isRadiusUuid(uuidStr)) {
           isRadiusDevice = true;
-          break;
+          username = BleUuidEncoder.decodeUuidToUsername(uuidStr);
+          if (username != null) {
+            _log('[BleScanner] ✓ Decoded username from UUID: $username');
+            break;
+          }
         }
       }
 
-      // Try to extract username from Service Data
-      List<int>? serviceDataBytes;
-      for (final entry in serviceData.entries) {
-        final keyStr = entry.key.toString().toLowerCase();
-        if (keyStr.contains(radius16Lower)) {
-          serviceDataBytes = entry.value;
-          isRadiusDevice = true;
-          break;
+      // Strategy 2: Try Service Data (works for Android, iOS foreground only)
+      if (username == null) {
+        final radius16Lower = BleConstants.radiusServiceUuid16bit.toLowerCase();
+        
+        // Check if device advertises base service UUID
+        for (final uuid in serviceUuids) {
+          final uuidStr = uuid.toString().toLowerCase();
+          if (uuidStr.contains(radius16Lower)) {
+            isRadiusDevice = true;
+          }
         }
-      }
 
-      if (serviceDataBytes != null &&
-          serviceDataBytes.length == BleConstants.usernameLength) {
-        try {
-          username = String.fromCharCodes(serviceDataBytes);
-          // Validate it's Base62 (alphanumeric only)
-          if (!RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(username)) {
+        // Try to extract username from Service Data
+        List<int>? serviceDataBytes;
+        for (final entry in serviceData.entries) {
+          final keyStr = entry.key.toString().toLowerCase();
+          if (keyStr.contains(radius16Lower)) {
+            serviceDataBytes = entry.value;
+            isRadiusDevice = true;
+            break;
+          }
+        }
+
+        if (serviceDataBytes != null &&
+            serviceDataBytes.length == BleConstants.usernameLength) {
+          try {
+            username = String.fromCharCodes(serviceDataBytes);
+            // Validate it's Base62 (alphanumeric only)
+            if (!RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(username)) {
+              username = null;
+            } else {
+              _log('[BleScanner] ✓ Decoded username from Service Data: $username');
+            }
+          } catch (e) {
             username = null;
           }
-        } catch (e) {
-          username = null;
         }
       }
 
-      // If no username from Service Data, try LocalName (iOS workaround)
+      // Strategy 3: Try LocalName (legacy iOS foreground workaround)
       if (username == null && localName.length == BleConstants.usernameLength) {
         // Check if it looks like a Radius username and we saw the service UUID
         if (isRadiusDevice && RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(localName)) {
           username = localName;
+          _log('[BleScanner] ✓ Decoded username from LocalName: $username');
         }
       }
 

@@ -5,15 +5,17 @@ import UIKit
 /**
  * Native iOS BLE Advertiser Plugin
  *
- * Broadcasts Service UUID (0xBEEF) with username via local name.
+ * Broadcasts username-encoded Service UUID for iOS background compatibility.
  *
  * Background advertising:
  *  - Uses the `bluetooth-peripheral` UIBackgroundMode so CoreBluetooth
  *    continues advertising when the app is suspended.
  *  - Uses state-restoration (`CBPeripheralManagerOptionRestoreIdentifierKey`)
  *    so iOS can re-launch the app if it is killed and re-start advertising.
- *  - When backgrounded iOS moves the service UUID into an "overflow area"
- *    visible only to devices explicitly scanning for that UUID.
+ *  - **ENCODES USERNAME INTO UUID** - When backgrounded, iOS preserves service UUIDs
+ *    but strips LocalName and Service Data. We encode the username into the UUID itself.
+ *
+ * UUID Format: 0000BEEF-XXXX-XXXX-8000-XXXXXXXXXXXX (username encoded in XXXX sections)
  *
  * `startForegroundService` / `stopForegroundService` are accepted on the
  * MethodChannel for API parity with Android; they map to the same
@@ -162,7 +164,7 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
             return
         }
 
-        currentServiceUUID = CBUUID(string: serviceUuid16)
+        // Note: serviceUuid16 is ignored - we encode username into UUID instead
         pendingServiceData = serviceData
         pendingResult = result
 
@@ -195,8 +197,7 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     }
 
     private func performAdvertising() {
-        guard let serviceUUID = currentServiceUUID,
-              let serviceData = pendingServiceData else {
+        guard let serviceData = pendingServiceData else {
             pendingResult?(FlutterError(code: "INVALID_STATE",
                                         message: "No service data available",
                                         details: nil))
@@ -206,19 +207,32 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
 
         let username = String(data: serviceData, encoding: .ascii) ?? ""
 
-        // iOS Background Limitation:
-        // When backgrounded, iOS strips LocalName AND Service Data, only transmitting
-        // the service UUID as a single bit in Apple's "overflow area" bitmask.
-        // There is NO way to transmit username in background on iOS - this is a platform limitation.
-        // We use both LocalName (foreground only) and Service Data (attempt, but also stripped).
-        var advertisementData: [String: Any] = [
-            CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
-            CBAdvertisementDataServiceDataKey: [serviceUUID: serviceData],  // Stripped in background
-            CBAdvertisementDataLocalNameKey: username  // Stripped in background
-        ]
+        // NEW: Encode username into UUID for iOS background compatibility
+        guard let encodedUuidString = BleUuidEncoder.encodeUsernameToUuid(username) else {
+            pendingResult?(FlutterError(code: "ENCODING_ERROR",
+                                        message: "Failed to encode username into UUID",
+                                        details: nil))
+            pendingResult = nil
+            return
+        }
+        
+        let encodedUUID = CBUUID(string: encodedUuidString)
+        currentServiceUUID = encodedUUID
 
-        NSLog("BleAdvertiser: Starting advertising UUID: \(serviceUUID.uuidString), user: \(username), persistent: \(persistentAdvertisingRequested)")
-        NSLog("BleAdvertiser: [WARNING] Username will NOT be visible when app is backgrounded (iOS limitation)")
+        // iOS Background Behavior:
+        // When backgrounded, iOS preserves the Service UUID (which now contains the username)
+        // but strips LocalName and Service Data. The encoded UUID persists!
+        var advertisementData: [String: Any] = [
+            CBAdvertisementDataServiceUUIDsKey: [encodedUUID],  // ✅ Persists in background with username encoded
+        ]
+        
+        // Optional: Add LocalName and Service Data for foreground (will be stripped in background)
+        // This provides backward compatibility with old Android scanners
+        advertisementData[CBAdvertisementDataLocalNameKey] = username
+        advertisementData[CBAdvertisementDataServiceDataKey] = [CBUUID(string: "BEEF"): serviceData]
+
+        NSLog("BleAdvertiser: Starting advertising with encoded UUID: \(encodedUuidString), user: \(username), persistent: \(persistentAdvertisingRequested)")
+        NSLog("BleAdvertiser: [NEW] Username IS encoded in UUID and will persist in background!")
 
         peripheralManager?.startAdvertising(advertisementData)
     }
@@ -245,11 +259,9 @@ class BleAdvertiserPlugin: NSObject, FlutterPlugin, CBPeripheralManagerDelegate 
     /// Re-start advertising from saved parameters (BT toggle or state restore).
     private func restartAdvertisingIfNeeded() {
         guard persistentAdvertisingRequested,
-              let uuid16 = savedServiceUuid16,
               let username = savedUsername else { return }
 
         let data = Data(username.utf8)
-        currentServiceUUID = CBUUID(string: uuid16)
         pendingServiceData = data
         performAdvertising()
     }
