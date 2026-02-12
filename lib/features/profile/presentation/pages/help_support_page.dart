@@ -81,11 +81,12 @@ class HelpSupportPage extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Contact Section
-          const Text(
+          Text(
             'Contact Us',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 12),
@@ -129,11 +130,12 @@ class HelpSupportPage extends StatelessWidget {
           const SizedBox(height: 24),
 
           // App Info
-          const Text(
+          Text(
             'App Information',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 12),
@@ -577,11 +579,14 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Radius discovers nearby users using Bluetooth Low Energy (BLE). '
                     'Advertising runs continuously while the app is open (foreground or in recent apps). '
                     'Scanning runs for 15 seconds when you tap "Find People Nearby". '
                     'For best results, keep Bluetooth enabled and grant all requested permissions.',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -632,9 +637,12 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                     future: _getAndroidDeviceSummary(),
                     builder: (context, snap) {
                       if (defaultTargetPlatform != TargetPlatform.android) {
-                        return const Text(
+                        return Text(
                           'On iOS, discovery works best when the app is open. '
                           'Keep Radius in foreground or recent apps for continuous advertising.',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
+                          ),
                         );
                       }
 
@@ -656,8 +664,20 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('• '),
-                                  Expanded(child: Text(s)),
+                                  Text(
+                                    '• ',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      s,
+                                      style: TextStyle(
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -681,12 +701,15 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Try these quick checks:\n'
                     '• Turn Bluetooth OFF then ON.\n'
                     '• Ensure Location is not required (Radius uses Android 12+ Bluetooth permissions).\n'
                     '• Keep the screen on and stay on the Nearby page during scanning.\n'
                     '• Test with another phone using nRF Connect/LightBlue to confirm advertisements are visible.',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ],
               ),
@@ -728,7 +751,10 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: theme.colorScheme.onSurface,
+            ),
           ),
           Text(
             value,
@@ -886,9 +912,10 @@ class _FAQItemState extends State<_FAQItem> {
                   Expanded(
                     child: Text(
                       widget.question,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -1094,9 +1121,10 @@ class _GuideSection extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -1134,7 +1162,7 @@ class _GuideSection extends StatelessWidget {
                         child: Text(
                           entry.value,
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.outline,
+                            color: Theme.of(context).colorScheme.onSurface,
                             height: 1.4,
                           ),
                         ),
@@ -1677,9 +1705,10 @@ class _PolicySection extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 12),

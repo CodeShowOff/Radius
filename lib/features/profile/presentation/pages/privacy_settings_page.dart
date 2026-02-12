@@ -466,7 +466,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     try {
       final Uri emailUri = Uri(
         scheme: 'mailto',
-        path: 'connectme.shubham@gmail.com',
+        path: 'support@radiusapp.tech',
         queryParameters: {
           'subject': 'Data Download Request - Radius App',
           'body': 'I would like to request a copy of my data.\n\n'
