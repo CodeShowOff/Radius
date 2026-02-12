@@ -86,7 +86,7 @@ class RealTimeDataManager {
   ///
   /// This should be called once when the user authenticates.
   /// The streams will remain active until [dispose] is called.
-  /// 
+  ///
   /// IMPORTANT: This method waits for the auth token to be ready before
   /// initializing Firestore streams to prevent PERMISSION_DENIED errors.
   Future<void> initializeForUser({
@@ -96,21 +96,26 @@ class RealTimeDataManager {
   }) async {
     // If same user and already initialized, just update user info
     if (_isInitialized && _currentUserId == userId) {
-      _logger.i('RealTimeDataManager already initialized for user $userId, updating info');
-      updateUserInfo(userId: userId, displayName: displayName, photoUrl: photoUrl);
+      _logger.i(
+          'RealTimeDataManager already initialized for user $userId, updating info');
+      updateUserInfo(
+          userId: userId, displayName: displayName, photoUrl: photoUrl);
       return;
     }
 
     // Guard: Prevent concurrent initialization
     if (_isInitializing) {
-      _logger.w('RealTimeDataManager initialization already in progress, skipping');
+      _logger.w(
+          'RealTimeDataManager initialization already in progress, skipping');
       return;
     }
     _isInitializing = true;
 
     try {
       // If switching users, clean up first
-      if (_isInitialized && _currentUserId != null && _currentUserId != userId) {
+      if (_isInitialized &&
+          _currentUserId != null &&
+          _currentUserId != userId) {
         _logger.i('User changed from $_currentUserId to $userId, cleaning up');
         await signOut();
       }
@@ -134,13 +139,14 @@ class RealTimeDataManager {
       // Subscribe to reconnection events to refresh streams if needed
       await _reconnectionSubscription?.cancel();
       _reconnectionSubscription = _connectionService.onReconnection.listen((_) {
-        _logger.i('Reconnection detected, streams will auto-refresh via Firestore');
+        _logger.i(
+            'Reconnection detected, streams will auto-refresh via Firestore');
         // Firestore streams automatically reconnect, but we can force refresh if needed
       });
 
       // Initialize all BLoCs with persistent streams
       // These calls are idempotent - they won't reload if already loaded for this user
-      
+
       // 1. Load profile first (needed for display names in other features)
       _profileBloc.add(ProfileLoadRequested(userId));
 
@@ -211,12 +217,12 @@ class RealTimeDataManager {
   }
 
   /// Waits for the Firebase auth token to be available and valid.
-  /// 
+  ///
   /// This prevents race conditions where Firestore queries are executed
   /// before the auth token has propagated to the Firebase SDK.
-  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 5}) async {
+  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 2}) async {
     final auth = FirebaseAuth.instance;
-    
+
     for (int i = 0; i < maxRetries; i++) {
       final currentUser = auth.currentUser;
       if (currentUser != null && currentUser.uid == userId) {
@@ -231,9 +237,10 @@ class RealTimeDataManager {
           _logger.w('Token validation failed on attempt ${i + 1}', error: e);
         }
       } else {
-        _logger.w('Auth user mismatch on attempt ${i + 1}: expected $userId, got ${currentUser?.uid}');
+        _logger.w(
+            'Auth user mismatch on attempt ${i + 1}: expected $userId, got ${currentUser?.uid}');
       }
-      
+
       // Wait before retry with exponential backoff
       if (i < maxRetries - 1) {
         final delay = Duration(milliseconds: 100 * (i + 1));
@@ -241,8 +248,9 @@ class RealTimeDataManager {
         await Future.delayed(delay);
       }
     }
-    
-    _logger.e('Failed to validate auth token for $userId after $maxRetries attempts');
+
+    _logger.e(
+        'Failed to validate auth token for $userId after $maxRetries attempts');
     return false;
   }
 
@@ -272,7 +280,7 @@ class RealTimeDataManager {
   /// Clean up when user signs out.
   Future<void> signOut() async {
     _logger.i('Signing out from RealTimeDataManager');
-    
+
     // Dispose presence service first (sets user offline)
     try {
       await _presenceService?.dispose();
@@ -282,7 +290,7 @@ class RealTimeDataManager {
 
     // Clear chat preload tracking
     _chatPreloadService?.clear();
-    
+
     _currentUserId = null;
     _isInitialized = false;
     await _reconnectionSubscription?.cancel();

@@ -86,7 +86,21 @@ class NotificationService {
   }
 
   /// Request notification permissions (iOS/Web).
+  /// Optimized to check current status first to avoid unnecessary permission dialogs.
   Future<bool> _requestPermissions() async {
+    // Check current permission status first (fast, no dialog)
+    final currentSettings = await _messaging.getNotificationSettings();
+
+    // If already authorized, skip the request (saves time on app boot)
+    if (currentSettings.authorizationStatus == AuthorizationStatus.authorized ||
+        currentSettings.authorizationStatus ==
+            AuthorizationStatus.provisional) {
+      _logger.i(
+          'Notification permission already granted: ${currentSettings.authorizationStatus}');
+      return true;
+    }
+
+    // Request permissions if not yet granted
     final settings = await _messaging.requestPermission(
       alert: true,
       announcement: false,
@@ -133,10 +147,10 @@ class NotificationService {
     );
 
     // Create Android channels
-    final androidPlugin = _localNotifications
-        .resolvePlatformSpecificImplementation<
+    final androidPlugin =
+        _localNotifications.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-    
+
     await androidPlugin?.createNotificationChannel(androidMessagesChannel);
     await androidPlugin?.createNotificationChannel(androidNearbyHelpChannel);
 
@@ -264,7 +278,7 @@ class NotificationService {
       final isNearbyHelp = messageType?.startsWith('nearby_help') ?? false;
       final channelId = isNearbyHelp ? 'radius_nearby_help' : 'radius_messages';
       final channelName = isNearbyHelp ? 'Nearby Help' : 'Messages';
-      final channelDescription = isNearbyHelp 
+      final channelDescription = isNearbyHelp
           ? 'Notifications for nearby help requests'
           : 'Notifications for new messages and connection requests';
 
@@ -430,7 +444,8 @@ class NotificationService {
       for (final id in ids) {
         await _localNotifications.cancel(id);
       }
-      _logger.d('Cancelled ${ids.length} notification(s) for source: $sourceId');
+      _logger
+          .d('Cancelled ${ids.length} notification(s) for source: $sourceId');
     }
     // Also cancel by deterministic ID in case tracked set was lost (e.g. app restart)
     final deterministicId = sourceId.hashCode & 0x7FFFFFFF;

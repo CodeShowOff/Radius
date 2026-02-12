@@ -54,8 +54,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 12));
 
-      final hiveFuture =
-          Hive.initFlutter().timeout(const Duration(seconds: 5));
+      final hiveFuture = Hive.initFlutter().timeout(const Duration(seconds: 5));
 
       final orientationFuture = SystemChrome.setPreferredOrientations(const [
         DeviceOrientation.portraitUp,
@@ -93,19 +92,21 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
             AppSettingsStore(box: settingsBox),
           );
         }
-        await configureDependencies().timeout(const Duration(seconds: 10));
+        await configureDependencies().timeout(const Duration(seconds: 5));
       }();
 
       final appCheckFuture = () async {
         if (kDebugMode) {
           try {
             // ignore: deprecated_member_use
-            await FirebaseAppCheck.instance.activate(
-              // ignore: deprecated_member_use
-              androidProvider: AndroidProvider.debug,
-              // ignore: deprecated_member_use
-              appleProvider: AppleProvider.debug,
-            ).timeout(const Duration(seconds: 5));
+            await FirebaseAppCheck.instance
+                .activate(
+                  // ignore: deprecated_member_use
+                  androidProvider: AndroidProvider.debug,
+                  // ignore: deprecated_member_use
+                  appleProvider: AppleProvider.debug,
+                )
+                .timeout(const Duration(seconds: 5));
           } catch (e, st) {
             debugPrint('[Bootstrap] App Check activation failed: $e');
             debugPrintStack(stackTrace: st);
@@ -115,9 +116,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
       final crashFuture = () async {
         if (AppConfig.enableCrashReporting) {
-          await CrashService()
-              .initialize()
-              .timeout(const Duration(seconds: 5));
+          await CrashService().initialize().timeout(const Duration(seconds: 5));
         }
       }();
 
