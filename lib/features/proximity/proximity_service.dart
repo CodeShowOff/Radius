@@ -437,20 +437,35 @@ class ProximityService {
       await _settingsStore.setBackgroundAdvertising(enabled);
       _log('[ProximityService] Background advertising set to: $enabled');
 
-      if (_currentUsername == null || !_isAdvertising) return;
-
-      // Tear down the current advertising mode and start the new one.
-      if (enabled) {
-        // Switch from plain advertising → foreground service.
-        await _bluetoothService.stopAdvertising();
-        final started = await _bluetoothService.startForegroundAdvertising(_currentUsername!);
-        _isAdvertising = started;
-      } else {
-        // Switch from foreground service → plain advertising.
-        await _bluetoothService.stopForegroundAdvertising();
-        final started = await _bluetoothService.startAdvertising(_currentUsername!);
-        _isAdvertising = started;
+      // When DISABLING background advertising, always stop the foreground service
+      // if it's running, even if _isAdvertising is false (e.g., Bluetooth is off).
+      // This ensures the notification is removed and the service is properly stopped.
+      if (!enabled) {
+        if (_bluetoothService.isForegroundServiceRunning) {
+          _log('[ProximityService] Stopping foreground service...');
+          await _bluetoothService.stopForegroundAdvertising();
+        }
+        
+        // If Bluetooth is on and we're advertising, restart with plain advertising
+        if (_currentUsername != null && _isAdvertising) {
+          _log('[ProximityService] Restarting with plain advertising...');
+          final started = await _bluetoothService.startAdvertising(_currentUsername!);
+          _isAdvertising = started;
+        }
+        return;
       }
+
+      // When ENABLING background advertising, we need to be actively advertising
+      if (_currentUsername == null || !_isAdvertising) {
+        _log('[ProximityService] Not currently advertising, skipping switch to foreground service');
+        return;
+      }
+
+      // Switch from plain advertising → foreground service
+      _log('[ProximityService] Switching to foreground service...');
+      await _bluetoothService.stopAdvertising();
+      final started = await _bluetoothService.startForegroundAdvertising(_currentUsername!);
+      _isAdvertising = started;
     } finally {
       _isTogglingAdvertising = false;
     }
