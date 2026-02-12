@@ -150,9 +150,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
             if (_profileImageUrl != null)
               ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text('Remove Photo',
-                    style: TextStyle(color: Colors.red)),
+                leading: Icon(Icons.delete,
+                    color: Theme.of(context).colorScheme.error),
+                title: Text('Remove Photo',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error)),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -241,7 +243,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 content: Text('Profile saved successfully'),
                 duration: Duration(seconds: 3),
                 behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.green,
               ),
             );
             setState(() => _hasChanges = false);
@@ -481,13 +482,17 @@ class _ProfilePhotoSection extends StatelessWidget {
           if (isUploading)
             Positioned.fill(
               child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .scrim
+                      .withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
+                child: Center(
                   child: CircularProgressIndicator(
-                    color: Colors.white,
+                    color:
+                        Theme.of(context).colorScheme.onPrimary,
                   ),
                 ),
               ),

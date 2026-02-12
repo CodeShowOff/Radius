@@ -299,8 +299,8 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                   ? Icons.check_circle
                                   : Icons.warning_amber_rounded,
                               color: _hasPermissions
-                                  ? Colors.green
-                                  : Colors.orange,
+                                  ? Theme.of(context).colorScheme.tertiary
+                                  : Theme.of(context).colorScheme.error,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -454,14 +454,16 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                               Icon(
                                 Icons.warning_amber_rounded,
                                 size: 16,
-                                color: Colors.orange,
+                                color: Theme.of(context).colorScheme.error,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'Permission was revoked. Background advertising disabled.',
                                   style: TextStyle(
-                                    color: Colors.orange,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .error,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),

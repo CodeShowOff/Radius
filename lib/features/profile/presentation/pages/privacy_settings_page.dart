@@ -229,11 +229,12 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading:
-                        const Icon(Icons.delete_forever, color: Colors.red),
-                    title: const Text(
+                    leading: Icon(Icons.delete_forever,
+                        color: Theme.of(context).colorScheme.error),
+                    title: Text(
                       'Delete my account',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error),
                     ),
                     subtitle: const Text('Permanently delete your account'),
                     trailing: const Icon(Icons.chevron_right),
@@ -337,29 +338,29 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
             const Divider(height: 1),
             Expanded(
               child: _blockedUserIds.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.block,
                             size: 64,
-                            color: Colors.grey,
+                            color: Theme.of(context).colorScheme.outline,
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text(
                             'No blocked users',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
                             'Users you block will appear here',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -372,8 +373,11 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                         final blockedId = _blockedUserIds[index];
                         return ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: Colors.grey[300],
-                            child: const Icon(Icons.person, color: Colors.grey),
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            child: Icon(Icons.person,
+                                color: Theme.of(context).colorScheme.outline),
                           ),
                           title: Text('User ${blockedId.substring(0, 8)}...'),
                           trailing: TextButton(
@@ -587,7 +591,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                 style: FilledButton.styleFrom(
                   backgroundColor: isConfirmEnabled
                       ? Theme.of(dialogContext).colorScheme.error
-                      : Colors.grey,
+                      : Theme.of(dialogContext).colorScheme.surfaceContainerHighest,
                 ),
                 onPressed: isConfirmEnabled
                     ? () async {

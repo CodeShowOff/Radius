@@ -261,8 +261,9 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                               _hasPermission
                                   ? Icons.check_circle
                                   : Icons.warning_amber_rounded,
-                              color:
-                                  _hasPermission ? Colors.green : Colors.orange,
+                              color: _hasPermission
+                                  ? Theme.of(context).colorScheme.tertiary
+                                  : Theme.of(context).colorScheme.error,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -316,7 +317,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                                     ? Icons.check_circle
                                     : Icons.info_outline,
                                 color: _hasBackgroundPermission
-                                    ? Colors.green
+                                    ? Theme.of(context).colorScheme.tertiary
                                     : Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(width: 12),
