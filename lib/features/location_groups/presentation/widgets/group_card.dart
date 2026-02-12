@@ -156,7 +156,7 @@ class GroupCard extends StatelessWidget {
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: unreadCount > 0
                                   ? theme.colorScheme.primary
-                                  : theme.colorScheme.outline,
+                                  : theme.colorScheme.onSurface,
                               fontWeight: unreadCount > 0
                                   ? FontWeight.w600
                                   : FontWeight.normal,

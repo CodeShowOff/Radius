@@ -1344,7 +1344,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Portability: Export your data in a machine-readable format\n'
                 '• Objection: Opt-out of certain data processing activities\n'
                 '• Revocation: Withdraw consent at any time\n\n'
-                'To exercise these rights, contact us at connectme.shubham@gmail.com. We will respond within 30 days.',
+                'To exercise these rights, contact us at support@radiusapp.tech. We will respond within 30 days.',
           ),
           const _PolicySection(
             title: '11. Data Retention',
@@ -1361,7 +1361,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
             content:
                 'Radius is not intended for users under the age of 13 (or 16 in the European Union). '
                 'We do not knowingly collect personal information from children. If we become aware that a child has provided us with personal information, '
-                'we will take steps to delete such information immediately. If you believe a child has provided information to us, please contact us at connectme.shubham@gmail.com.',
+                'we will take steps to delete such information immediately. If you believe a child has provided information to us, please contact us at support@radiusapp.tech.',
           ),
           const _PolicySection(
             title: '13. International Data Transfers',
@@ -1391,7 +1391,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
             title: '16. Contact Us',
             content:
                 'If you have any questions, concerns, or requests regarding this Privacy Policy or your personal information, please contact us:\n\n'
-                'Email: connectme.shubham@gmail.com\n'
+                'Email: support@radiusapp.tech\n'
                 'Developer: CodeShowOff\n\n'
                 'We will respond to your inquiry within 30 business days.',
           ),
@@ -1635,7 +1635,7 @@ class _TermsOfServicePage extends StatelessWidget {
             title: '17. Dispute Resolution',
             content:
                 'Any disputes arising out of or relating to these Terms or your use of the App shall be resolved through:\n\n'
-                '1. Informal Negotiation: Contact us at connectme.shubham@gmail.com to attempt to resolve the issue informally\n'
+                '1. Informal Negotiation: Contact us at support@radiusapp.tech to attempt to resolve the issue informally\n'
                 '2. Arbitration: If informal resolution fails, disputes shall be resolved through binding arbitration in accordance with the rules of a mutually agreed arbitration body\n'
                 '3. Governing Law: These Terms are governed by the laws of [Your Jurisdiction], without regard to conflict of law principles\n\n'
                 'You agree to waive your right to participate in class action lawsuits or class-wide arbitration.',
@@ -1664,7 +1664,7 @@ class _TermsOfServicePage extends StatelessWidget {
             title: '21. Contact Information',
             content:
                 'If you have any questions, concerns, or feedback regarding these Terms of Service, please contact us:\n\n'
-                'Email: connectme.shubham@gmail.com\n'
+                'Email: support@radiusapp.tech\n'
                 'Developer: CodeShowOff\n\n'
                 'We will respond to your inquiry within 30 business days.',
           ),

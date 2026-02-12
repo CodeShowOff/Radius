@@ -81,7 +81,7 @@ class ConversationTile extends StatelessWidget {
               style: theme.textTheme.labelSmall?.copyWith(
                 color: hasUnread 
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.outline,
+                    : theme.colorScheme.onSurface,
                 fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
               ),
             ),

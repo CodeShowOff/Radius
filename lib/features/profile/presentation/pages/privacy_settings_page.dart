@@ -496,7 +496,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Please email connectme.shubham@gmail.com to request your data download.'),
+                  'Please email support@radiusapp.tech to request your data download.'),
               duration: Duration(seconds: 4),
             ),
           );
