@@ -45,10 +45,6 @@ class RandomGroupChatBloc
 
   StreamSubscription<List<RandomGroupMessage>>? _messagesSubscription;
 
-  /// CRITICAL: Track if subscriptions are actually active.
-  /// This prevents the bug where state.status == loaded but subscriptions are null.
-  bool _hasActiveSubscriptions = false;
-
   /// Cache for verified memberships: Map<"userId:groupId", DateTime>
   /// This prevents repeated Firestore calls when navigating between groups.
   /// TTL: 5 minutes - balances performance with security (catching removals).
@@ -68,7 +64,6 @@ class RandomGroupChatBloc
     on<SendRandomGroupMessage>(_onSendRandomGroupMessage);
     on<LoadMoreRandomGroupMessages>(_onLoadMoreRandomGroupMessages);
     on<ResyncRandomGroupChat>(_onResyncRandomGroupChat);
-    on<PreloadRandomGroupChat>(_onPreloadRandomGroupChat);
     on<_MessagesReceived>(_onMessagesReceived);
     on<_ChatStreamError>(_onChatStreamError);
     on<DeleteRandomGroupMessage>(_onDeleteRandomGroupMessage);
@@ -97,62 +92,13 @@ class RandomGroupChatBloc
     _logger.d('Invalidated membership cache for $key');
   }
 
-  /// Whether the bloc has active Firestore subscriptions.
-  /// Used by UI to determine if resync is needed on app resume.
-  bool get hasActiveSubscriptions => _hasActiveSubscriptions;
-
   Future<void> _onOpenRandomGroupChat(
     OpenRandomGroupChat event,
     Emitter<RandomGroupChatState> emit,
   ) async {
     _logger.d('Opening random group chat: ${event.groupId}');
 
-    // ========================================================================
-    // CRITICAL FIX: Check BOTH state AND actual subscription status.
-    // Previously, this only checked state.status which could be 'loaded' even
-    // when subscriptions were cancelled by CloseRandomGroupChat. This caused messages
-    // sent while user was away to never be received.
-    // ========================================================================
-    final bool isSameGroup = state.currentGroupId == event.groupId &&
-        state.currentUserId == event.userId;
-    final bool isAlreadyLoaded = state.status == RandomGroupChatStatus.loaded ||
-        state.status == RandomGroupChatStatus.sending;
-    final bool isMembershipVerified = state.membershipVerified;
-
-    // OPTIMIZATION: Only skip full reload if we have ACTIVE subscriptions AND verified membership
-    if (isSameGroup &&
-        isAlreadyLoaded &&
-        _hasActiveSubscriptions &&
-        isMembershipVerified) {
-      _logger.i(
-          'Random group chat already loaded with active streams for ${event.groupId}, skipping reload');
-
-      // Just update user info if changed (photo/name updates)
-      if (state.currentUserName != event.userName ||
-          state.currentUserPhotoUrl != event.userPhotoUrl) {
-        emit(state.copyWith(
-          currentUserName: event.userName,
-          currentUserPhotoUrl: event.userPhotoUrl,
-        ));
-      }
-
-      return;
-    }
-
-    // CRITICAL: If same group but no active subscriptions, we need to resubscribe!
-    // This happens when user left and returned to the same chat.
-    if (isSameGroup &&
-        isAlreadyLoaded &&
-        !_hasActiveSubscriptions &&
-        isMembershipVerified) {
-      _logger.i(
-          'Same group ${event.groupId} but subscriptions inactive, resubscribing...');
-      // Don't reset state - keep cached messages visible, just resubscribe
-      await _subscribeToMessages(event.groupId);
-      return;
-    }
-
-    // Cancel any existing subscription
+    // Cancel any existing subscription (factory instance, just safety)
     await _cancelSubscriptions();
 
     // ========================================================================
@@ -314,10 +260,6 @@ class RandomGroupChatBloc
   ) async {
     _logger.d('Closing random group chat');
     await _cancelSubscriptions();
-
-    // Preserve messages for instant display on revisit
-    // Only clear the subscription, not the cached data
-    emit(state.copyWith(clearError: true));
   }
 
   Future<void> _onSendRandomGroupMessage(
@@ -601,72 +543,11 @@ class RandomGroupChatBloc
     await _subscribeToMessages(state.currentGroupId!);
   }
 
-  /// Preload group chat messages into cache without subscribing to streams.
-  /// This is triggered on long-press of a group tile to warm the cache
-  /// before navigation, making the chat open instantly even on cache miss.
-  Future<void> _onPreloadRandomGroupChat(
-    PreloadRandomGroupChat event,
-    Emitter<RandomGroupChatState> emit,
-  ) async {
-    // Skip if already cached with valid TTL
-    if (_cacheService.hasValidCache(
-      event.groupId,
-      ttl: RandomGroupChatCacheService.defaultTtl,
-    )) {
-      _logger.d('Preload skipped: ${event.groupId} already cached');
-      return;
-    }
-
-    // Skip if this is the currently open group
-    if (state.currentGroupId == event.groupId) {
-      _logger.d('Preload skipped: ${event.groupId} is currently open');
-      return;
-    }
-
-    _logger.i('Preloading messages for random group ${event.groupId}');
-
-    try {
-      // Verify membership first before preloading (security)
-      final canRead = await _chatService.isActiveMember(
-        groupId: event.groupId,
-        userId: event.userId,
-      );
-
-      if (!canRead) {
-        _logger.d('Preload skipped: user not a member of ${event.groupId}');
-        return;
-      }
-
-      // Fetch initial batch of messages (one-time read, no stream)
-      final messages = await _chatService.getMessages(
-        groupId: event.groupId,
-        limit: 50,
-      );
-
-      if (messages.isNotEmpty) {
-        // Warm the cache with these messages (mark as preload for TTL tracking)
-        _cacheService.updateCache(
-          groupId: event.groupId,
-          messages: messages,
-          hasMore: messages.length >= 50,
-          isPreload: true,
-        );
-        _logger.i(
-            'Preloaded ${messages.length} messages for random group ${event.groupId}');
-      }
-    } catch (e) {
-      // Preload failures are silent - don't affect UX
-      _logger.d('Preload failed for random group ${event.groupId}: $e');
-    }
-  }
-
   /// Cancels all Firestore stream subscriptions.
-  /// CRITICAL: Also sets _hasActiveSubscriptions = false to track state properly.
   Future<void> _cancelSubscriptions() async {
     await _messagesSubscription?.cancel();
     _messagesSubscription = null;
-    _hasActiveSubscriptions = false;
-    _logger.d('Subscriptions cancelled, _hasActiveSubscriptions = false');
+    _logger.d('Subscriptions cancelled');
   }
 
   /// Subscribes to Firestore messages stream for the current group.
@@ -685,7 +566,6 @@ class RandomGroupChatBloc
       },
       onError: (error) {
         _logger.e('Error watching messages: $error');
-        _hasActiveSubscriptions = false;
         if (isClosed) return;
 
         if (error is FirebaseException && error.code == 'permission-denied') {
@@ -698,10 +578,7 @@ class RandomGroupChatBloc
       },
     );
 
-    // CRITICAL: Mark subscriptions as active
-    _hasActiveSubscriptions = true;
-    _logger.i(
-        'Message subscription created for random group $groupId, _hasActiveSubscriptions = true');
+    _logger.i('Message subscription created for random group $groupId');
   }
 
   @override

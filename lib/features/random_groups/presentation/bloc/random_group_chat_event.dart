@@ -55,22 +55,6 @@ class ResyncRandomGroupChat extends RandomGroupChatEvent {
   const ResyncRandomGroupChat();
 }
 
-/// Preloads group chat messages into cache without subscribing to streams.
-/// This is triggered on long-press of a group tile to warm the cache
-/// before navigation, making the chat open instantly even on cache miss.
-class PreloadRandomGroupChat extends RandomGroupChatEvent {
-  final String groupId;
-  final String userId;
-
-  const PreloadRandomGroupChat({
-    required this.groupId,
-    required this.userId,
-  });
-
-  @override
-  List<Object?> get props => [groupId, userId];
-}
-
 /// Deletes a message (soft delete).
 class DeleteRandomGroupMessage extends RandomGroupChatEvent {
   final String messageId;

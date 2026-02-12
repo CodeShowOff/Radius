@@ -194,7 +194,7 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<GroupChatBloc>()) {
-    getIt.registerLazySingleton<GroupChatBloc>(
+    getIt.registerFactory<GroupChatBloc>(
       () => GroupChatBloc(
         chatService: getIt<GroupChatService>(),
         cacheService: getIt<GroupChatCacheService>(),
@@ -226,7 +226,7 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<NearbyGroupChatBloc>()) {
-    getIt.registerLazySingleton<NearbyGroupChatBloc>(
+    getIt.registerFactory<NearbyGroupChatBloc>(
       () => NearbyGroupChatBloc(
         chatService: getIt<NearbyGroupChatService>(),
         cacheService: getIt<NearbyGroupChatCacheService>(),
@@ -257,7 +257,7 @@ Future<void> configureDependencies() {
   }
 
   if (!getIt.isRegistered<RandomGroupChatBloc>()) {
-    getIt.registerLazySingleton<RandomGroupChatBloc>(
+    getIt.registerFactory<RandomGroupChatBloc>(
       () => RandomGroupChatBloc(
         chatService: getIt<RandomGroupChatService>(),
         cacheService: getIt<RandomGroupChatCacheService>(),

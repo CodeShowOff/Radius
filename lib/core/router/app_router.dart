@@ -195,7 +195,6 @@ GoRouter get appRouter {
               child: MultiBlocProvider(
                 providers: [
                   BlocProvider.value(value: getIt<NearbyGroupBloc>()),
-                  BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
                 ],
                 child: const NearbyGroupsPage(),
               ),
@@ -208,7 +207,6 @@ GoRouter get appRouter {
               child: MultiBlocProvider(
                 providers: [
                   BlocProvider.value(value: getIt<RandomGroupBloc>()),
-                  BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
                 ],
                 child: const RandomGroupsPage(),
               ),
@@ -373,10 +371,7 @@ GoRouter get appRouter {
         name: 'locationGroupDetail',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return BlocProvider.value(
-            value: getIt<GroupChatBloc>(),
-            child: GroupDetailPage(groupId: groupId),
-          );
+          return GroupDetailPage(groupId: groupId);
         },
       ),
       GoRoute(
@@ -384,8 +379,8 @@ GoRouter get appRouter {
         name: 'locationGroupChat',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return BlocProvider.value(
-            value: getIt<GroupChatBloc>(),
+          return BlocProvider(
+            create: (_) => getIt<GroupChatBloc>(),
             child: GroupChatPage(groupId: groupId),
           );
         },
@@ -399,7 +394,6 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<NearbyGroupBloc>()),
-              BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
             ],
             child: const DiscoverNearbyGroupsPage(),
           );
@@ -428,7 +422,7 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<NearbyGroupBloc>()),
-              BlocProvider.value(value: getIt<NearbyGroupChatBloc>()),
+              BlocProvider(create: (_) => getIt<NearbyGroupChatBloc>()),
             ],
             child: NearbyGroupChatPage(groupId: groupId),
           );
@@ -443,7 +437,6 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<RandomGroupBloc>()),
-              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
             ],
             child: const DiscoverRandomGroupsPage(),
           );
@@ -467,7 +460,6 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<RandomGroupBloc>()),
-              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
             ],
             child: RandomGroupDetailPage(groupId: groupId),
           );
@@ -492,7 +484,7 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<RandomGroupBloc>()),
-              BlocProvider.value(value: getIt<RandomGroupChatBloc>()),
+              BlocProvider(create: (_) => getIt<RandomGroupChatBloc>()),
             ],
             child: RandomGroupChatPage(groupId: groupId),
           );
