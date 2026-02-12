@@ -338,11 +338,10 @@ GoRouter get appRouter {
 
           final extra = state.extra as Map<String, dynamic>?;
 
-          // Use BlocProvider.value to use the existing singleton ChatBloc
-          // instead of creating a new one on each navigation.
-          // This enables instant navigation without loading spinners.
-          return BlocProvider.value(
-            value: getIt<ChatBloc>(),
+          // Create a new ChatBloc per screen — each conversation gets its own
+          // isolated instance. Auto-disposed when screen is popped.
+          return BlocProvider(
+            create: (_) => getIt<ChatBloc>(),
             child: ChatScreen(
               conversationId: conversationId,
               currentUserId: currentUserId,

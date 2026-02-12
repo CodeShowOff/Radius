@@ -4,8 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/injection.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
+import '../../data/chat_cache_service.dart';
+import '../../data/chat_service.dart';
 import '../../domain/entities/conversation.dart';
-import '../bloc/chat_bloc.dart';
 import '../bloc/conversations_bloc.dart';
 
 /// Screen showing the list of conversations for a user.
@@ -131,11 +132,22 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     currentUserId: widget.currentUserId,
                     onTap: () => widget.onConversationTap(conversation),
                     onPreload: () {
-                      // Preload chat messages into cache on long-press
-                      // This makes navigation instant even on cache miss
-                      getIt<ChatBloc>().add(
-                        ChatPreload(conversationId: conversation.id),
-                      );
+                      // Preload chat messages into cache on long-press.
+                      // Uses ChatCacheService + ChatService directly (both singletons).
+                      final cacheService = getIt<ChatCacheService>();
+                      if (cacheService.hasValidCache(conversation.id)) return;
+                      getIt<ChatService>()
+                          .getMessagesOnce(conversation.id)
+                          .then((msgs) {
+                        if (msgs.isNotEmpty) {
+                          cacheService.updateCache(
+                            conversationId: conversation.id,
+                            messages: msgs,
+                            hasMore: msgs.length >= 50,
+                            isPreload: true,
+                          );
+                        }
+                      }).catchError((_) {});
                     },
                     onDismissed: (direction) {
                       if (direction == DismissDirection.endToStart) {

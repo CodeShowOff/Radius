@@ -263,7 +263,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       const ConversationsSetActiveChat(conversationId: null),
     );
 
-    // Use cached reference to avoid context access after disposal
+    // Use cached reference to avoid context access after disposal.
     _chatBloc?.add(const ChatClose());
     super.dispose();
   }
@@ -386,18 +386,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 prev.otherUserPhotoUrl != curr.otherUserPhotoUrl ||
                 prev.conversation != curr.conversation,
             builder: (context, state) {
-              // Guard: Use widget properties when state belongs to a different
-              // conversation (stale singleton state during chat switch).
-              final isStateMatchingConversation =
-                  state.conversationId == widget.conversationId;
-              final effectiveName = isStateMatchingConversation &&
-                      (state.otherUserName?.trim().isNotEmpty == true)
-                  ? state.otherUserName!.trim()
-                  : widget.otherUserName;
-              final effectivePhotoUrl = isStateMatchingConversation &&
-                      (state.otherUserPhotoUrl?.trim().isNotEmpty == true)
-                  ? state.otherUserPhotoUrl!.trim()
-                  : widget.otherUserPhotoUrl;
+              final effectiveName =
+                  (state.otherUserName?.trim().isNotEmpty == true)
+                      ? state.otherUserName!.trim()
+                      : widget.otherUserName;
+              final effectivePhotoUrl =
+                  (state.otherUserPhotoUrl?.trim().isNotEmpty == true)
+                      ? state.otherUserPhotoUrl!.trim()
+                      : widget.otherUserPhotoUrl;
               final isMuted = state.conversation?.isMutedBy(widget.currentUserId) ?? false;
 
               return _ChatAppBar(
@@ -499,15 +495,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   }
                 },
                 builder: (context, state) {
-                  // Guard: If the bloc state belongs to a different conversation
-                  // (stale singleton state during chat switch), show loading.
-                  if (state.conversationId != null &&
-                      state.conversationId != widget.conversationId) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
                   // Show error state
                   if (state.status == ChatStatus.error) {
                     return Center(

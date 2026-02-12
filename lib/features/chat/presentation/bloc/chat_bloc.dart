@@ -18,12 +18,9 @@ part 'chat_state.dart';
 
 /// BLoC for managing a single chat conversation.
 ///
-/// CRITICAL: This is a singleton BLoC shared across navigation.
-/// Subscriptions are managed carefully to ensure messages are always received:
-/// - Subscriptions are created on ChatOpen
-/// - Subscriptions are cancelled on ChatClose (when user leaves chat)
-/// - ChatResync resubscribes without full reload (for app resume/reconnect)
-/// - _hasActiveSubscriptions tracks actual subscription state
+/// Each chat screen gets its own ChatBloc instance (factory via DI).
+/// This eliminates singleton race conditions when switching conversations.
+/// Instant display is provided by the singleton ChatCacheService.
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
   final MediaUploadService _mediaUploadService;
@@ -35,10 +32,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<bool>? _typingSubscription;
 
   Timer? _typingDebounce;
-
-  /// CRITICAL: Track if subscriptions are actually active.
-  /// This prevents the bug where state.status == loaded but subscriptions are null.
-  bool _hasActiveSubscriptions = false;
 
   /// The user's lastReadAt timestamp captured BEFORE marking conversation as read.
   /// Used to compute firstUnreadMessageId client-side.
@@ -66,7 +59,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSendDocument>(_onSendDocument);
     on<ChatSendSticker>(_onSendSticker);
     on<ChatLoadMore>(_onLoadMore);
-    on<ChatPreload>(_onPreload);
     on<ChatSetTyping>(_onSetTyping);
     on<ChatDeleteMessage>(_onDeleteMessage);
     on<ChatClear>(_onClear);
@@ -76,91 +68,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatErrorOccurred>(_onErrorOccurred);
   }
 
-  /// Whether the bloc has active Firestore subscriptions.
-  /// Used by UI to determine if resync is needed on app resume.
-  bool get hasActiveSubscriptions => _hasActiveSubscriptions;
-
   Future<void> _onOpen(
     ChatOpen event,
     Emitter<ChatState> emit,
   ) async {
-    // CRITICAL FIX: Check BOTH state AND actual subscription status.
-    // Previously, this only checked state.status which could be 'loaded' even
-    // when subscriptions were cancelled by ChatClose. This caused messages
-    // sent while user was away to never be received.
-    final bool isSameConversation = state.conversationId == event.conversationId &&
-        state.currentUserId == event.currentUserId;
-    final bool isAlreadyLoaded = state.status == ChatStatus.loaded || 
-        state.status == ChatStatus.loadingMore;
-    
-    // OPTIMIZATION: Only skip full reload if we have ACTIVE subscriptions
-    if (isSameConversation && isAlreadyLoaded && _hasActiveSubscriptions) {
-      _logger.i('Chat already loaded with active streams for ${event.conversationId}, skipping reload');
-      
-      // Just update user info if changed (photo/name updates)
-      if (state.otherUserName != event.otherUserName ||
-          state.otherUserPhotoUrl != event.otherUserPhotoUrl) {
-        emit(state.copyWith(
-          otherUserName: event.otherUserName,
-          otherUserPhotoUrl: event.otherUserPhotoUrl,
-        ));
-      }
-      
-      return;
-    }
-    
-    // CRITICAL: If same conversation but no active subscriptions, we need to resubscribe!
-    // This happens when user left and returned to the same chat.
-    if (isSameConversation && isAlreadyLoaded && !_hasActiveSubscriptions) {
-      _logger.i('Same conversation ${event.conversationId} but subscriptions inactive, resubscribing...');
-      // Don't reset state - keep cached messages visible, just resubscribe
-      await _subscribeToStreams(event);
-      return;
-    }
-    
-    // If switching conversations, immediately update user details and cancel subscriptions
-    // This prevents briefly showing the previous user's name/photo
-    if (state.conversationId != null && 
-        state.conversationId != event.conversationId) {
-      _logger.i('Switching from conversation ${state.conversationId} to ${event.conversationId}');
-      
-      // CRITICAL: Immediately update to new user details to prevent visual glitch
-      emit(state.copyWith(
-        status: ChatStatus.loading,
-        conversationId: event.conversationId,
-        currentUserId: event.currentUserId,
-        otherUserId: event.otherUserId,
-        otherUserName: event.otherUserName,
-        otherUserPhotoUrl: event.otherUserPhotoUrl,
-        messages: const [],
-        pendingMessages: const {},
-        conversation: null,
-        isOtherUserTyping: false,
-      ));
-      
-      await _cancelSubscriptions();
-    }
-
     // ========================================================================
-    // CRITICAL: Load cached messages IMMEDIATELY for instant display
-    // This is the key to WhatsApp/Telegram-level performance
+    // Load cached messages IMMEDIATELY for instant display.
+    // ChatCacheService is a singleton so cache persists across screen instances.
     // ========================================================================
     final cachedMessages = _cacheService.getMessages(event.conversationId);
     final hasCache = cachedMessages.isNotEmpty;
     final cachedEntry = _cacheService.getCache(event.conversationId);
-    
-    // Check if cache is expired (TTL-based)
-    // We still show expired cache for instant display, but will refresh via stream
-    final isExpired = _cacheService.isCacheExpired(event.conversationId);
-    if (isExpired && hasCache) {
-      _logger.d('Cache expired for ${event.conversationId}, will refresh via stream');
-    }
 
     if (hasCache) {
-      // INSTANT DISPLAY: Show cached messages immediately, no loading spinner
-      _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages (expired: $isExpired)');
+      _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages');
       emit(state.copyWith(
-        status: ChatStatus.loaded, // Already loaded from cache!
+        status: ChatStatus.loaded,
         conversationId: event.conversationId,
         currentUserId: event.currentUserId,
         otherUserId: event.otherUserId,
@@ -171,7 +94,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pendingMessages: const {},
       ));
     } else {
-      // No cache - show loading (first time opening this chat)
       _logger.i('Cache miss for ${event.conversationId}, showing loading');
       emit(state.copyWith(
         status: ChatStatus.loading,
@@ -185,17 +107,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ));
     }
 
-    // Cancel existing subscriptions (safety - may already be cancelled above)
-    await _cancelSubscriptions();
-
-    // Ensure the conversation exists before subscribing.
-    // If it doesn't exist yet (common when opening chat from Connections),
-    // Firestore will deny reading a non-existent doc under our rules.
-    //
-    // OPTIMIZATION: Skip this entirely when we have cached messages.
-    // A cache hit means the conversation was already loaded before,
-    // so the Firestore doc definitely exists. This saves ~800ms+ on
-    // every cached chat open.
+    // Ensure the conversation doc exists before subscribing.
+    // Skip when cache exists — a cache hit means the doc already exists.
     if (!hasCache &&
         event.currentUserId.trim().isNotEmpty &&
         event.otherUserId.trim().isNotEmpty) {
@@ -218,10 +131,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? event.otherUserPhotoUrl!.trim()
               : null,
         );
-        
-        // getOrCreateConversation already returns the conversation object.
-        // Only add a brief propagation delay if a NEW conversation was just
-        // created (indicated by no lastMessageAt — never been used before).
+
         if (createdConversation.lastMessageAt == null) {
           _logger.d('New conversation created, brief delay for Firestore propagation');
           await Future.delayed(const Duration(milliseconds: 300));
@@ -236,13 +146,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    // CRITICAL: Use centralized subscription method to ensure _hasActiveSubscriptions is set
+    // Subscribe to real-time streams
     await _subscribeToStreams(event);
-
-    // NOTE: Don't emit ChatStatus.loaded here!
-    // Let _onMessagesUpdated set the status to loaded when first snapshot arrives.
-    // This prevents the "No messages yet" flash before messages load.
-    _logger.i('Chat streams subscribed, waiting for first message snapshot...');
+    _logger.i('Chat streams subscribed for ${event.conversationId}');
   }
 
   Future<void> _onClose(
@@ -260,12 +166,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     await _cancelSubscriptions();
     _typingDebounce?.cancel();
-
-    // CRITICAL FIX: Reset state to initial to prevent stale messages from
-    // the previous conversation briefly appearing when the user switches chats.
-    // ChatCacheService already handles message caching, so preserving messages
-    // in the bloc state is unnecessary and causes a visual glitch where the
-    // old user's messages flash before the new chat loads.
     emit(const ChatState());
   }
 
@@ -601,50 +501,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
   }
 
-  /// Preload chat messages into cache without subscribing to streams.
-  /// This is triggered on long-press of a conversation tile to warm the cache
-  /// before navigation, making the chat open instantly even on cache miss.
-  Future<void> _onPreload(
-    ChatPreload event,
-    Emitter<ChatState> emit,
-  ) async {
-    // Skip if already cached with valid TTL
-    if (_cacheService.hasValidCache(
-      event.conversationId,
-      ttl: ChatCacheService.defaultTtl,
-    )) {
-      _logger.d('Preload skipped: ${event.conversationId} already cached');
-      return;
-    }
-
-    // Skip if this is the currently open conversation
-    if (state.conversationId == event.conversationId) {
-      _logger.d('Preload skipped: ${event.conversationId} is currently open');
-      return;
-    }
-
-    _logger.i('Preloading messages for ${event.conversationId}');
-
-    try {
-      // Fetch initial batch of messages (one-time read, no stream)
-      final snapshot = await _chatService.getMessagesOnce(event.conversationId);
-
-      if (snapshot.isNotEmpty) {
-        // Warm the cache with these messages (mark as preload for TTL tracking)
-        _cacheService.updateCache(
-          conversationId: event.conversationId,
-          messages: snapshot,
-          hasMore: snapshot.length >= 50,
-          isPreload: true,
-        );
-        _logger.i('Preloaded ${snapshot.length} messages for ${event.conversationId}');
-      }
-    } catch (e) {
-      // Preload failures are silent - don't affect UX
-      _logger.d('Preload failed for ${event.conversationId}: $e');
-    }
-  }
-
   Future<void> _onSetTyping(
     ChatSetTyping event,
     Emitter<ChatState> emit,
@@ -943,7 +799,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   /// Cancels all Firestore stream subscriptions.
-  /// CRITICAL: Also sets _hasActiveSubscriptions = false to track state properly.
   Future<void> _cancelSubscriptions() async {
     await _messagesSubscription?.cancel();
     await _conversationSubscription?.cancel();
@@ -951,8 +806,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription = null;
     _conversationSubscription = null;
     _typingSubscription = null;
-    _hasActiveSubscriptions = false;
-    _logger.d('Subscriptions cancelled, _hasActiveSubscriptions = false');
   }
 
   /// Subscribes to Firestore streams for the current conversation.
@@ -976,7 +829,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    // Subscribe to messages stream with better error handling
+    // Subscribe to messages stream
     _messagesSubscription =
         _chatService.getMessagesStream(event.conversationId).listen(
               (messages) {
@@ -986,7 +839,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               },
               onError: (error) {
                 _logger.e('Messages stream error: $error');
-                _hasActiveSubscriptions = false;
                 if (!isClosed) {
                   String errorMessage = error.toString();
                   if (errorMessage.contains('permission-denied') || 
@@ -1031,9 +883,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
     }
 
-    // CRITICAL: Mark subscriptions as active
-    _hasActiveSubscriptions = true;
-    _logger.i('Subscriptions created, _hasActiveSubscriptions = true');
+    // Mark subscriptions as active
+    _logger.i('Subscriptions created for ${event.conversationId}');
 
     // Mark conversation as read after a brief delay to ensure messages are loaded
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -1077,6 +928,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() {
     _cancelSubscriptions();
     _typingDebounce?.cancel();
+    // Clear typing indicator as a safety net
+    if (state.conversationId != null && state.currentUserId != null) {
+      _chatService.setTyping(
+        conversationId: state.conversationId!,
+        userId: state.currentUserId!,
+        isTyping: false,
+      ).catchError((_) {});
+    }
     return super.close();
   }
 }

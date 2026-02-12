@@ -21,10 +21,10 @@ abstract class ChatModule {
           FirebaseStorage storage, Logger logger) =>
       MediaUploadService(storage: storage, logger: logger);
 
-  /// ChatBloc is now a lazySingleton to maintain persistent state across navigation.
-  /// This prevents loading spinners every time user navigates to a chat.
-  /// The bloc handles conversation switching internally via ChatOpen event.
-  @lazySingleton
+  /// ChatBloc is a factory — each chat screen gets its own instance.
+  /// This eliminates race conditions when switching between conversations.
+  /// Instant display is still provided by the singleton ChatCacheService.
+  @injectable
   ChatBloc chatBloc(
           ChatService chatService, 
           MediaUploadService mediaUploadService,

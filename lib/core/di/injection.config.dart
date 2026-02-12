@@ -83,7 +83,7 @@ extension GetItInjectableX on _i174.GetIt {
         ));
     gh.lazySingleton<_i346.ConversationsBloc>(
         () => chatModule.conversationsBloc(gh<_i621.ChatService>()));
-    gh.lazySingleton<_i65.ChatBloc>(() => chatModule.chatBloc(
+    gh.factory<_i65.ChatBloc>(() => chatModule.chatBloc(
           gh<_i621.ChatService>(),
           gh<_i356.MediaUploadService>(),
           gh<_i125.ChatCacheService>(),
