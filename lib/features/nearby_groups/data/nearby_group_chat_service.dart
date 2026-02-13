@@ -193,6 +193,7 @@ class NearbyGroupChatService {
   /// Stream of messages for a group (newest first, limited for real-time).
   Stream<List<NearbyGroupMessage>> watchMessages(String groupId, {int limit = 100}) {
     return _messagesRef(groupId)
+        .where('isDeleted', isEqualTo: false)
         .orderBy('sentAt', descending: true)
         .limit(limit)
         .snapshots()
@@ -211,6 +212,7 @@ class NearbyGroupChatService {
   }) async {
     try {
       Query<Map<String, dynamic>> query = _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
           .orderBy('sentAt', descending: true)
           .limit(limit);
 
@@ -236,6 +238,7 @@ class NearbyGroupChatService {
   }) async {
     try {
       final query = await _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
           .orderBy('sentAt', descending: true)
           .startAfter([Timestamp.fromDate(beforeTimestamp)])
           .limit(limit)
@@ -270,29 +273,6 @@ class NearbyGroupChatService {
       _logger.d('Deleted message: $messageId');
     } on FirebaseException catch (e, stack) {
       _logger.e('Error deleting message', error: e, stackTrace: stack);
-    }
-  }
-
-  /// Marks a group as read for a user (updates lastReadAt).
-  Future<void> markGroupAsRead({
-    required String groupId,
-    required String userId,
-  }) async {
-    try {
-      final memberRef = _groupRef(groupId).collection('members').doc(userId);
-      final memberDoc = await memberRef.get();
-      if (!memberDoc.exists) return;
-
-      await memberRef.set(
-        {
-          'lastReadAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      _logger.d('Marked nearby group $groupId as read for user $userId');
-    } catch (e) {
-      _logger.w('Failed to mark group as read', error: e);
     }
   }
 }

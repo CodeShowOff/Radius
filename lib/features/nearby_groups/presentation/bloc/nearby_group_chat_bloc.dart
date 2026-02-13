@@ -108,12 +108,6 @@ class NearbyGroupChatBloc
 
       // Start listening to real-time messages
       await _subscribeToMessages(event.groupId);
-
-      // Mark group as read
-      await _chatService.markGroupAsRead(
-        groupId: event.groupId,
-        userId: event.currentUserId,
-      );
     } catch (e) {
       _logger.e('Error opening nearby group chat', error: e);
       emit(state.copyWith(

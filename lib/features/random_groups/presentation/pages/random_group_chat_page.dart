@@ -499,24 +499,12 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                 );
               }
 
-              // Only show loading spinner during initial load
-              if (state.status == RandomGroupChatStatus.loading &&
-                  state.messages.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              // Determine if we're truly empty or still loading
-              final isLoading = state.status == RandomGroupChatStatus.loading;
-
               return Column(
                 children: [
                   // Messages list
                   Expanded(
                     child: state.messages.isEmpty
-                        ? (isLoading
-                            ? const SizedBox
-                                .shrink() // Don't show empty state while loading
-                            : _buildEmptyState(theme))
+                        ? _buildEmptyState(theme)
                         : _buildMessagesList(state),
                   ),
 

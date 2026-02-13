@@ -74,7 +74,12 @@ class GroupChatService {
       throw ArgumentError('Message must be 5000 characters or less');
     }
 
-    final batch = _firestore.batch();
+    // ==================================================================
+    // BATCH 1: Message creation + group metadata (critical, must succeed)
+    // Separated from member unread updates to prevent a removed member's
+    // stale doc from failing the entire batch (including the message).
+    // ==================================================================
+    final messageBatch = _firestore.batch();
 
     // Create the message
     final messageRef = _messagesRef(groupId).doc();
@@ -85,56 +90,49 @@ class GroupChatService {
       senderPhotoUrl: senderPhotoUrl,
       text: sanitizedText,
     );
-    batch.set(messageRef, messageData);
+    messageBatch.set(messageRef, messageData);
 
     // Update group's lastActivityAt and preview
-    batch.update(_groupRef(groupId), {
+    messageBatch.update(_groupRef(groupId), {
       'lastActivityAt': FieldValue.serverTimestamp(),
       'lastMessagePreview': sanitizedText.length > 100 
           ? '${sanitizedText.substring(0, 100)}...' 
           : sanitizedText,
     });
 
-    // Update unread counts for all members
-    // Reset sender's unread count and increment for all other active members
-    final membersSnapshot = await _groupRef(groupId)
-        .collection('members')
-        .where('status', isEqualTo: 'active')
-        .get();
+    // Update sender's lastReadAt atomically with the message.
+    // NOTE: We intentionally do NOT set unreadCount to 0 here to avoid a
+    // race condition where a concurrent message from another user increments
+    // the sender's count between the member read and batch commit, and this
+    // hard 0 would overwrite it. The stream handler's markGroupAsRead()
+    // handles resetting the count safely.
+    final senderMemberRef = _groupRef(groupId).collection('members').doc(senderId);
+    messageBatch.set(senderMemberRef, {
+      'lastReadAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-    for (final doc in membersSnapshot.docs) {
-      final memberUserId = doc.data()['userId'] as String?;
-      if (memberUserId == null) continue;
+    // Update sender's inverse index to trigger stream refresh
+    final senderInverseRef = _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('group_memberships')
+        .doc(groupId);
+    messageBatch.set(
+      senderInverseRef,
+      {'updatedAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    );
 
-      if (memberUserId == senderId) {
-        // Sender: reset unread count and update lastReadAt
-        batch.update(doc.reference, {
-          'unreadCount': 0,
-          'lastReadAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Other members: increment unread count
-        batch.update(doc.reference, {
-          'unreadCount': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-      
-      // Update the inverse index to trigger stream refresh for all members
-      final inverseIndexRef = _firestore
-          .collection('users')
-          .doc(memberUserId)
-          .collection('group_memberships')
-          .doc(groupId);
-      batch.set(
-        inverseIndexRef,
-        {'updatedAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
-      );
-    }
+    await messageBatch.commit();
 
-    await batch.commit();
+    // ==================================================================
+    // PHASE 2: Update unread counts for other members (fire-and-forget).
+    // Failures here are non-critical — the message is already persisted.
+    // Uses batches of 200 to stay under Firestore's 500-operation limit
+    // (each member needs 2 ops: member update + inverse index update).
+    // ==================================================================
+    _updateMemberUnreadCounts(groupId, senderId);
 
     _logger.d('Message sent: ${messageRef.id}');
 
@@ -149,6 +147,64 @@ class GroupChatService {
       type: GroupMessageType.text,
       sentAt: DateTime.now(),
     );
+  }
+
+  /// Fire-and-forget: increment unreadCount for all active members except sender.
+  ///
+  /// Each member needs 2 operations (member update + inverse index update),
+  /// so we process in batches of 200 to stay under Firestore's 500-op limit.
+  /// Failures are logged but do not affect message delivery.
+  Future<void> _updateMemberUnreadCounts(String groupId, String senderId) async {
+    try {
+      final membersSnapshot = await _groupRef(groupId)
+          .collection('members')
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      final otherMembers = membersSnapshot.docs.where((doc) {
+        final memberUserId = doc.data()['userId'] as String?;
+        return memberUserId != null && memberUserId != senderId;
+      }).toList();
+
+      if (otherMembers.isEmpty) return;
+
+      // Each member needs 2 operations: member update + inverse index update
+      // 200 members × 2 ops = 400 ops per batch (safe under 500 limit)
+      const batchLimit = 200;
+      for (var i = 0; i < otherMembers.length; i += batchLimit) {
+        final batch = _firestore.batch();
+        final end = (i + batchLimit).clamp(0, otherMembers.length);
+        for (var j = i; j < end; j++) {
+          final doc = otherMembers[j];
+          final memberUserId = doc.data()['userId'] as String;
+
+          // Increment unread count
+          batch.update(doc.reference, {
+            'unreadCount': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          // Update inverse index to trigger stream refresh
+          final inverseIndexRef = _firestore
+              .collection('users')
+              .doc(memberUserId)
+              .collection('group_memberships')
+              .doc(groupId);
+          batch.set(
+            inverseIndexRef,
+            {'updatedAt': FieldValue.serverTimestamp()},
+            SetOptions(merge: true),
+          );
+        }
+        try {
+          await batch.commit();
+        } catch (e) {
+          _logger.w('Failed to update unread counts batch ${i ~/ batchLimit}', error: e);
+        }
+      }
+    } catch (e) {
+      _logger.w('Failed to update member unread counts', error: e);
+    }
   }
 
   /// Sends a system message (e.g., "X joined the group").
@@ -338,6 +394,11 @@ class GroupChatService {
   }
 
   /// Marks a group as read for a user (resets unread count).
+  ///
+  /// Optimized: when unreadCount is already 0, only updates lastReadAt
+  /// (skips the inverse index update since no badge change is needed).
+  /// This prevents redundant writes when the stream handler calls this
+  /// on every message emission while the chat is open.
   Future<void> markGroupAsRead({
     required String groupId,
     required String userId,
@@ -347,38 +408,53 @@ class GroupChatService {
       final memberDoc = await memberRef.get();
       if (!memberDoc.exists) return;
 
-      // Use a batch to update both the membership and inverse index
-      // The inverse index update triggers the streamUserMemberships to refetch
-      final batch = _firestore.batch();
-      
-      // Update the membership document
-      batch.set(
-        memberRef,
-        {
-          'unreadCount': 0,
-          'lastReadAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      
-      // Update the inverse index to trigger stream refresh
-      // This ensures the membership stream picks up the unread count change
-      final inverseIndexRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('group_memberships')
-          .doc(groupId);
-      
-      batch.set(
-        inverseIndexRef,
-        {
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      
-      await batch.commit();
+      final data = memberDoc.data();
+      final currentUnread = (data?['unreadCount'] as num?)?.toInt() ?? 0;
+
+      if (currentUnread == 0) {
+        // Unread is already 0 — only update lastReadAt to advance the
+        // "read" pointer (used by getFirstUnreadMessageId).
+        // Skip inverse index update since badge hasn't changed.
+        await memberRef.set(
+          {
+            'lastReadAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        // Reset unread count and update lastReadAt.
+        // Use a batch to update both the membership and inverse index.
+        // The inverse index update triggers streamUserMemberships to refetch
+        // so the badge on the group list page clears.
+        final batch = _firestore.batch();
+
+        batch.set(
+          memberRef,
+          {
+            'unreadCount': 0,
+            'lastReadAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+
+        final inverseIndexRef = _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('group_memberships')
+            .doc(groupId);
+
+        batch.set(
+          inverseIndexRef,
+          {
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+
+        await batch.commit();
+      }
       _logger.d('Marked group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);

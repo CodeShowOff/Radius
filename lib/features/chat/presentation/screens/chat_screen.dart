@@ -530,22 +530,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     );
                   }
 
-                  // Show full-screen spinner when:
-                  // - Status is initial (state was just reset, ChatOpen hasn't processed yet)
-                  // - Status is loading with no cached messages (first time opening this chat)
-                  // If we have cached messages from a previous session, show them immediately
-                  // while the stream reconnects in the background.
-                  final hasMessages = state.allMessages.isNotEmpty;
-                  final isInitialOrLoading = 
-                      (state.status == ChatStatus.initial) ||
-                      (state.status == ChatStatus.loading && !hasMessages);
-                  
-                  if (isInitialOrLoading) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
                   // Show messages list (may be empty for new conversations)
                   // The _MessagesList handles empty state internally
                   return _MessagesList(
@@ -555,7 +539,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     hasMore: state.hasMore,
                     scrollController: _scrollController,
                     // Pass loading state so list can show subtle indicator
-                    isLoading: state.status == ChatStatus.loading,
+                    isLoading: state.status == ChatStatus.loading || state.status == ChatStatus.initial,
                     firstUnreadMessageId: state.firstUnreadMessageId,
                     unreadCount: state.unreadCountAtOpen,
                   );

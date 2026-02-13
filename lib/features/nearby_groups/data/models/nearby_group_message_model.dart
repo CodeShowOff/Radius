@@ -79,6 +79,7 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       'text': text,
       'type': 'text',
       'sentAt': FieldValue.serverTimestamp(),
+      'isDeleted': false,
     };
   }
 
@@ -96,6 +97,7 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       'text': text,
       'type': 'system',
       'sentAt': FieldValue.serverTimestamp(),
+      'isDeleted': false,
     };
   }
 

@@ -80,7 +80,12 @@ class RandomGroupChatService {
       throw ArgumentError('Message must be 5000 characters or less');
     }
 
-    final batch = _firestore.batch();
+    // ==================================================================
+    // BATCH 1: Message creation + group metadata (critical, must succeed)
+    // Separated from member unread updates to prevent a removed member's
+    // stale doc from failing the entire batch (including the message).
+    // ==================================================================
+    final messageBatch = _firestore.batch();
 
     // Create the message
     final messageRef = _messagesRef(groupId).doc();
@@ -92,10 +97,10 @@ class RandomGroupChatService {
       senderPhotoUrl: senderPhotoUrl,
       text: sanitizedText,
     );
-    batch.set(messageRef, messageData);
+    messageBatch.set(messageRef, messageData);
 
     // Update group's lastMessagePreview and lastMessageAt
-    batch.update(_groupRef(groupId), {
+    messageBatch.update(_groupRef(groupId), {
       'lastMessagePreview': sanitizedText.length > 100
           ? '${sanitizedText.substring(0, 100)}...'
           : sanitizedText,
@@ -103,34 +108,26 @@ class RandomGroupChatService {
       'lastActiveAt': FieldValue.serverTimestamp(),
     });
 
-    // Update unread counts for all members:
-    // - Sender: reset unreadCount to 0 and update lastReadAt
-    // - Others: increment unreadCount by 1
-    final membersSnapshot = await _groupRef(groupId)
-        .collection('members')
-        .get();
+    // Update sender's lastReadAt atomically with the message.
+    // NOTE: We intentionally do NOT set unreadCount to 0 here to avoid a
+    // race condition where a concurrent message from another user increments
+    // the sender's count between the member read and batch commit, and this
+    // hard 0 would overwrite it. The stream handler's markGroupAsRead()
+    // handles resetting the count safely.
+    final senderMemberRef = _groupRef(groupId).collection('members').doc(senderId);
+    messageBatch.set(senderMemberRef, {
+      'lastReadAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-    for (final doc in membersSnapshot.docs) {
-      final memberUserId = doc.data()['userId'] as String?;
-      if (memberUserId == null) continue;
+    await messageBatch.commit();
 
-      if (memberUserId == senderId) {
-        // Sender: reset unread count and update lastReadAt
-        batch.update(doc.reference, {
-          'unreadCount': 0,
-          'lastReadAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Other members: increment unread count
-        batch.update(doc.reference, {
-          'unreadCount': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-    }
-
-    await batch.commit();
+    // ==================================================================
+    // PHASE 2: Update unread counts for other members (fire-and-forget).
+    // Failures here are non-critical — the message is already persisted.
+    // Uses batches of 450 to stay under Firestore's 500-operation limit.
+    // ==================================================================
+    _updateMemberUnreadCounts(groupId, senderId);
 
     _logger.d('Message sent: ${messageRef.id}');
 
@@ -146,6 +143,45 @@ class RandomGroupChatService {
       type: RandomGroupMessageType.text,
       sentAt: DateTime.now(),
     );
+  }
+
+  /// Fire-and-forget: increment unreadCount for all members except sender.
+  ///
+  /// Processes in batches of 450 to stay under Firestore's 500-op limit.
+  /// Failures are logged but do not affect message delivery.
+  Future<void> _updateMemberUnreadCounts(String groupId, String senderId) async {
+    try {
+      final membersSnapshot = await _groupRef(groupId)
+          .collection('members')
+          .get();
+
+      final otherMembers = membersSnapshot.docs.where((doc) {
+        final memberUserId = doc.data()['userId'] as String?;
+        return memberUserId != null && memberUserId != senderId;
+      }).toList();
+
+      if (otherMembers.isEmpty) return;
+
+      // Process in batches of 450 (safe limit under Firestore's 500)
+      const batchLimit = 450;
+      for (var i = 0; i < otherMembers.length; i += batchLimit) {
+        final batch = _firestore.batch();
+        final end = (i + batchLimit).clamp(0, otherMembers.length);
+        for (var j = i; j < end; j++) {
+          batch.update(otherMembers[j].reference, {
+            'unreadCount': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        try {
+          await batch.commit();
+        } catch (e) {
+          _logger.w('Failed to update unread counts batch ${i ~/ batchLimit}', error: e);
+        }
+      }
+    } catch (e) {
+      _logger.w('Failed to update member unread counts', error: e);
+    }
   }
 
   /// Sends a system message (e.g., "X joined", "X left").
@@ -222,6 +258,7 @@ class RandomGroupChatService {
     _logger.d('Watching messages for random group: $groupId');
 
     return _messagesRef(groupId)
+        .where('isDeleted', isEqualTo: false)
         .orderBy('sentAt', descending: true)
         .limit(limit)
         .snapshots()
@@ -240,6 +277,7 @@ class RandomGroupChatService {
   }) async {
     try {
       Query<Map<String, dynamic>> query = _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
           .orderBy('sentAt', descending: true)
           .limit(limit);
 
@@ -267,6 +305,7 @@ class RandomGroupChatService {
 
     try {
       final snapshot = await _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
           .orderBy('sentAt', descending: true)
           .startAfter([Timestamp.fromDate(beforeTimestamp)])
           .limit(limit)
@@ -307,6 +346,10 @@ class RandomGroupChatService {
   }
 
   /// Marks a group as read for a user (resets unread count).
+  ///
+  /// Optimized: skips the write if unreadCount is already 0, only updating
+  /// lastReadAt. This prevents redundant writes when the stream handler
+  /// calls this on every message emission while the chat is open.
   Future<void> markGroupAsRead({
     required String groupId,
     required String userId,
@@ -316,14 +359,30 @@ class RandomGroupChatService {
       final memberDoc = await memberRef.get();
       if (!memberDoc.exists) return;
 
-      await memberRef.set(
-        {
-          'unreadCount': 0,
-          'lastReadAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      final data = memberDoc.data();
+      final currentUnread = (data?['unreadCount'] as num?)?.toInt() ?? 0;
+
+      if (currentUnread == 0) {
+        // Unread is already 0 — only update lastReadAt to advance the
+        // "read" pointer (used by getFirstUnreadMessageId).
+        await memberRef.set(
+          {
+            'lastReadAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        // Reset unread count and update lastReadAt.
+        await memberRef.set(
+          {
+            'unreadCount': 0,
+            'lastReadAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
       _logger.d('Marked random group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);
@@ -367,6 +426,7 @@ class RandomGroupChatService {
 
       // Find the first message AFTER lastReadAt that was NOT sent by this user
       final unreadSnapshot = await _messagesRef(groupId)
+          .where('isDeleted', isEqualTo: false)
           .where('sentAt', isGreaterThan: lastReadTimestamp)
           .orderBy('sentAt', descending: false)
           .limit(50)
