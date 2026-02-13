@@ -174,10 +174,9 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
           if (state.myActiveGroup != null) {
             return const SizedBox.shrink();
           }
-          return FloatingActionButton.extended(
+          return FloatingActionButton(
             onPressed: () => context.push(Routes.createNearbyGroup),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Group'),
+            child: const Icon(Icons.add),
           );
         },
       ),
@@ -370,84 +369,100 @@ class _NearbyGroupCard extends StatelessWidget {
     required this.group,
   });
 
+  String _formatTimestamp(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final messageDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    if (messageDate == today) {
+      // Today - show time
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$displayHour:$minute $period';
+    } else if (messageDate == yesterday) {
+      return 'Yesterday';
+    } else {
+      // Older - show date
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lastActivity = group.lastMessageAt ?? group.lastActiveAt;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E), // Charcoal black background
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: InkWell(
         onTap: () => context.push(Routes.nearbyGroupChatWith(group.id)),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Text(
-                  group.name.isNotEmpty ? group.name[0].toUpperCase() : 'G',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          children: [
+            // Group avatar - WhatsApp style
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              child: Icon(
+                Icons.group,
+                size: 28,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(width: 12),
+            
+            // Group info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Group name
+                  Text(
+                    group.name,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'by ${group.creatorDisplayName ?? 'Anonymous'} • ${group.memberCount} nearby',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (group.lastMessagePreview != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        group.lastMessagePreview!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'In Range',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  
+                  // Last message or creator info
+                  Text(
+                    group.lastMessagePreview ?? 
+                    'by ${group.creatorDisplayName ?? 'Anonymous'} • ${group.memberCount} nearby',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            
+            const SizedBox(width: 8),
+            
+            // Right side - timestamp
+            Text(
+              _formatTimestamp(lastActivity),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
+    ),
     );
   }
 }

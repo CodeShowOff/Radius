@@ -183,7 +183,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
             }
 
             return ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(top: 8, bottom: 100),
               itemCount: state.userGroups.length,
               itemBuilder: (context, index) {
                 final group = state.userGroups[index];
@@ -192,44 +192,29 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                 final userId =
                     authState is AuthAuthenticated ? authState.user.id : null;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GroupCard(
-                    group: group,
-                    showChatPreview: true,
-                    unreadCount: unreadCount,
-                    onTap: () {
-                      context.push(Routes.locationGroupChatWith(group.id));
-                    },
-                    onLongPress: userId != null
-                        ? () {
-                            // Preload group chat messages into cache on long-press
-                            // This makes navigation instant even on cache miss
-                            _preloadGroupChat(group.id, userId);
-                          }
-                        : null,
-                  ),
+                return GroupCard(
+                  group: group,
+                  showChatPreview: true,
+                  unreadCount: unreadCount,
+                  onTap: () {
+                    context.push(Routes.locationGroupChatWith(group.id));
+                  },
+                  onLongPress: userId != null
+                      ? () {
+                          // Preload group chat messages into cache on long-press
+                          // This makes navigation instant even on cache miss
+                          _preloadGroupChat(group.id, userId);
+                        }
+                      : null,
                 );
               },
             );
           },
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
-            onPressed: () => context.push(Routes.createLocationGroup),
-            heroTag: 'createGroup',
-            child: const Icon(Icons.add),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton(
-            onPressed: () => context.push(Routes.locationGroups),
-            heroTag: 'findGroups',
-            child: const Icon(Icons.search),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push(Routes.createLocationGroup),
+        child: const Icon(Icons.add),
       ),
     );
   }

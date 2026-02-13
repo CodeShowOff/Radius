@@ -25,6 +25,120 @@ class GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // WhatsApp-style simplified view for My Groups page
+    if (showChatPreview) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E), // Charcoal black background
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+            children: [
+              // Group avatar - WhatsApp style
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                backgroundImage: group.avatarUrl != null
+                    ? NetworkImage(group.avatarUrl!)
+                    : null,
+                child: group.avatarUrl == null
+                    ? Icon(
+                        Icons.group,
+                        size: 28,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              
+              // Group info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Group name
+                    Text(
+                      group.name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    
+                    // Last message preview
+                    Text(
+                      group.lastMessagePreview ?? 'No messages yet',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Right side - timestamp and unread count
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Timestamp
+                  if (group.lastActivityAt != null)
+                    Text(
+                      _formatTimestamp(group.lastActivityAt!),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: unreadCount > 0
+                            ? const Color(0xFF25D366) // WhatsApp green
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  
+                  // Unread count badge
+                  if (unreadCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366), // WhatsApp green
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 20),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      );
+    }
+
+    // Original detailed view for discovery pages
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -105,89 +219,28 @@ class GroupCard extends StatelessWidget {
               ),
 
               // Location (only shown when not in chat preview mode)
-              if (showLocation && !showChatPreview) ...[
+              if (showLocation) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(
                       Icons.location_on_outlined,
                       size: 14,
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       group.locationString,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ],
 
-              // Description or chat preview
-              if (showChatPreview) ...[
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        group.lastMessagePreview ?? 'No messages yet',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: unreadCount > 0
-                              ? theme.colorScheme.onSurface
-                              : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: unreadCount > 0 
-                              ? FontWeight.w500 
-                              : FontWeight.normal,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (group.lastActivityAt != null)
-                          Text(
-                            _formatLastActivity(group.lastActivityAt!),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: unreadCount > 0
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
-                              fontWeight: unreadCount > 0
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        if (unreadCount > 0) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            constraints: const BoxConstraints(minWidth: 20),
-                            child: Text(
-                              unreadCount > 99 ? '99+' : unreadCount.toString(),
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ] else if (group.description != null &&
-                  group.description!.isNotEmpty) ...[
+              // Description
+              if (group.description != null && group.description!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
                   group.description!,
@@ -199,48 +252,67 @@ class GroupCard extends StatelessWidget {
                 ),
               ],
 
-              // Footer with stats (only when not showing chat preview to avoid duplication)
-              if (!showChatPreview) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
+              // Footer with stats
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.people_outline,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${group.memberCount} ${group.memberCount == 1 ? 'member' : 'members'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  if (group.lastActivityAt != null) ...[
                     Icon(
-                      Icons.people_outline,
+                      Icons.access_time,
                       size: 16,
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${group.memberCount} ${group.memberCount == 1 ? 'member' : 'members'}',
+                      _formatLastActivity(group.lastActivityAt!),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-
-                    const SizedBox(width: 16),
-
-                    if (group.lastActivityAt != null) ...[
-                      Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: theme.colorScheme.outline,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatLastActivity(group.lastActivityAt!),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                    ],
                   ],
-                ),
-              ],
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _formatTimestamp(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final messageDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    if (messageDate == today) {
+      // Today - show time
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$displayHour:$minute $period';
+    } else if (messageDate == yesterday) {
+      return 'Yesterday';
+    } else {
+      // Older - show date
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
   }
 
   String _formatLastActivity(DateTime time) {

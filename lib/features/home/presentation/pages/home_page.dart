@@ -430,9 +430,6 @@ class _HomePageState extends State<HomePage>
                         onTap: () => context.push(Routes.connectionRequests),
                         label: 'Nearby\nRequest',
                         icon: Icons.mail_outline,
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.errorContainer,
                         badgeBuilder: (context) {
                           return BlocBuilder<ConnectionBloc,
                               ConnectionBlocState>(
@@ -466,9 +463,6 @@ class _HomePageState extends State<HomePage>
                         onTap: () => context.push(Routes.discoveryRequests),
                         label: 'Connection\nRequest',
                         icon: Icons.person_search_outlined,
-                        color: Theme.of(context).colorScheme.onTertiaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.tertiaryContainer,
                         badgeBuilder: (context) {
                           return BlocBuilder<DiscoveryBloc, DiscoveryState>(
                             buildWhen: (prev, curr) =>
@@ -706,7 +700,7 @@ class _SimpleGroupCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Icon container
+              // Icon container - matches GroupCard avatar size
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -715,7 +709,7 @@ class _SimpleGroupCard extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  size: 28,
+                  size: 32,
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
@@ -734,10 +728,10 @@ class _SimpleGroupCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color:
                             theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
@@ -746,12 +740,6 @@ class _SimpleGroupCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              // Arrow icon
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ],
           ),
@@ -766,16 +754,12 @@ class _RequestButtonCard extends StatelessWidget {
   final VoidCallback onTap;
   final String label;
   final IconData icon;
-  final Color color;
-  final Color backgroundColor;
   final Widget Function(BuildContext context) badgeBuilder;
 
   const _RequestButtonCard({
     required this.onTap,
     required this.label,
     required this.icon,
-    required this.color,
-    required this.backgroundColor,
     required this.badgeBuilder,
   });
 
@@ -790,11 +774,9 @@ class _RequestButtonCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        color: backgroundColor,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.all(16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Stack(
                 clipBehavior: Clip.none,
@@ -802,13 +784,13 @@ class _RequestButtonCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.2),
+                      color: theme.colorScheme.primaryContainer,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       icon,
                       size: 28,
-                      color: color,
+                      color: theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                   Positioned(
@@ -818,13 +800,12 @@ class _RequestButtonCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Flexible(
                 child: Text(
                   label,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: color,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
