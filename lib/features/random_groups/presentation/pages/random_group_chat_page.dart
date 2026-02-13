@@ -37,6 +37,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   final FocusNode _focusNode = FocusNode();
   bool _isLoadingMore = false;
   RandomGroupChatBloc? _chatBloc;
+  bool _hasScrolledToUnread = false;
 
   @override
   void initState() {
@@ -87,6 +88,10 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
       case AppLifecycleState.resumed:
         // App came back to foreground - resync to get any missed messages
         _chatBloc?.add(const ResyncRandomGroupChat());
+        // Re-assert notification context in case in-memory state was lost
+        try {
+          getIt<NotificationService>().setCurrentGroup(widget.groupId);
+        } catch (_) {}
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -122,7 +127,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
 
     // Notify notification service that user left this group
     try {
-      getIt<NotificationService>().clearCurrentGroup();
+      getIt<NotificationService>().clearCurrentGroup(widget.groupId);
     } catch (_) {
       // Ignore if service not available
     }
@@ -163,6 +168,33 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  /// Scrolls to the first unread message position.
+  void _scrollToFirstUnread(RandomGroupChatState state) {
+    final messages = state.messages;
+    final firstUnreadIndex = messages.indexWhere(
+      (m) => m.id == state.firstUnreadMessageId,
+    );
+
+    // If unread message is near the bottom (within first 3 items), no scroll needed
+    if (firstUnreadIndex <= 2) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      if (maxExtent <= 0) return;
+
+      // Estimate offset: index * average message height (70px)
+      final estimatedOffset = (firstUnreadIndex - 1) * 70.0;
+      final targetOffset = estimatedOffset.clamp(0.0, maxExtent);
+
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -374,10 +406,21 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             ],
           ),
           body: BlocConsumer<RandomGroupChatBloc, RandomGroupChatState>(
+            listenWhen: (previous, current) =>
+                previous.status != current.status ||
+                (current.firstUnreadMessageId != null &&
+                    previous.firstUnreadMessageId == null),
             listener: (context, state) {
               // Reset loading more flag
               if (state.status != RandomGroupChatStatus.loading) {
                 _isLoadingMore = false;
+              }
+
+              // Scroll to first unread message on initial load
+              if (!_hasScrolledToUnread &&
+                  state.firstUnreadMessageId != null) {
+                _hasScrolledToUnread = true;
+                _scrollToFirstUnread(state);
               }
 
               // Handle access denial - navigate away with error
@@ -411,28 +454,6 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               }
             },
             builder: (context, state) {
-              // ================================================================
-              // SECURITY: Show loading while verifying membership
-              // Do NOT show any content until membership is confirmed
-              // ================================================================
-              if (state.isVerifyingMembership) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Verifying access...',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
               // SECURITY: Show access denied state for non-members
               if (state.status == RandomGroupChatStatus.error &&
                   !state.membershipVerified) {
@@ -559,10 +580,20 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
         final isMe = message.senderId == state.currentUserId;
         final showSenderInfo = !isMe && _shouldShowSenderInfo(state, index);
 
-        return _MessageBubble(
-          message: message,
-          isMe: isMe,
-          showSenderInfo: showSenderInfo,
+        // Check if this message is the first unread message
+        final isFirstUnread = state.firstUnreadMessageId != null &&
+            message.id == state.firstUnreadMessageId;
+
+        return Column(
+          children: [
+            if (isFirstUnread)
+              _UnreadDivider(count: state.unreadCountAtOpen),
+            _MessageBubble(
+              message: message,
+              isMe: isMe,
+              showSenderInfo: showSenderInfo,
+            ),
+          ],
         );
       },
     );
@@ -607,6 +638,9 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                 focusNode: _focusNode,
                 decoration: InputDecoration(
                   hintText: 'Type a message...',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
@@ -812,5 +846,55 @@ class _MessageBubble extends StatelessWidget {
       return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     }
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Divider shown above the first unread message, similar to WhatsApp.
+class _UnreadDivider extends StatelessWidget {
+  final int count;
+
+  const _UnreadDivider({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = count <= 0
+        ? 'Unread messages'
+        : count == 1
+            ? '1 unread message'
+            : '$count unread messages';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -495,7 +495,7 @@ class _RandomChatPageState extends State<RandomChatPage>
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: FilledButton.tonalIcon(
                     onPressed: () {
                       context.push(
                         Routes.userProfileWith(otherUserId),

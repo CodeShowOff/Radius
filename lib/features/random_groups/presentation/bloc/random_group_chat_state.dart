@@ -55,6 +55,13 @@ class RandomGroupChatState extends Equatable {
   /// This prevents showing cached messages before membership is confirmed.
   final bool membershipVerified;
 
+  /// ID of the first unread message (for showing unread divider).
+  final String? firstUnreadMessageId;
+
+  /// Number of unread messages at the time chat was opened.
+  /// Used to display "X unread messages" in the divider.
+  final int unreadCountAtOpen;
+
   const RandomGroupChatState({
     this.status = RandomGroupChatStatus.initial,
     this.currentGroupId,
@@ -67,6 +74,8 @@ class RandomGroupChatState extends Equatable {
     this.isLoadingMore = false,
     this.errorMessage,
     this.membershipVerified = false,
+    this.firstUnreadMessageId,
+    this.unreadCountAtOpen = 0,
   });
 
   /// Whether the chat is currently loading.
@@ -102,6 +111,9 @@ class RandomGroupChatState extends Equatable {
     bool clearError = false,
     bool clearGroupId = false,
     bool? membershipVerified,
+    String? firstUnreadMessageId,
+    bool clearFirstUnreadMessageId = false,
+    int? unreadCountAtOpen,
   }) {
     return RandomGroupChatState(
       status: status ?? this.status,
@@ -116,6 +128,10 @@ class RandomGroupChatState extends Equatable {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       membershipVerified: membershipVerified ?? this.membershipVerified,
+      firstUnreadMessageId: clearFirstUnreadMessageId
+          ? null
+          : (firstUnreadMessageId ?? this.firstUnreadMessageId),
+      unreadCountAtOpen: unreadCountAtOpen ?? this.unreadCountAtOpen,
     );
   }
 
@@ -132,5 +148,7 @@ class RandomGroupChatState extends Equatable {
         isLoadingMore,
         errorMessage,
         membershipVerified,
+        firstUnreadMessageId,
+        unreadCountAtOpen,
       ];
 }

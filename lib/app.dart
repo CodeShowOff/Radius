@@ -223,7 +223,11 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
                 onPressed: () {
                   final conversationId = data['conversationId'] as String?;
                   if (conversationId != null) {
-                    appRouter.go(Routes.chatWith(conversationId));
+                    // Use push() instead of go() to prevent race condition:
+                    // go() replaces the current route, which can cause the old
+                    // screen's dispose() to clear the notification context
+                    // AFTER the new screen's initState() sets it.
+                    appRouter.push(Routes.chatWith(conversationId));
                   }
                 },
               ),

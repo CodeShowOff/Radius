@@ -103,6 +103,33 @@ class RandomGroupChatService {
       'lastActiveAt': FieldValue.serverTimestamp(),
     });
 
+    // Update unread counts for all members:
+    // - Sender: reset unreadCount to 0 and update lastReadAt
+    // - Others: increment unreadCount by 1
+    final membersSnapshot = await _groupRef(groupId)
+        .collection('members')
+        .get();
+
+    for (final doc in membersSnapshot.docs) {
+      final memberUserId = doc.data()['userId'] as String?;
+      if (memberUserId == null) continue;
+
+      if (memberUserId == senderId) {
+        // Sender: reset unread count and update lastReadAt
+        batch.update(doc.reference, {
+          'unreadCount': 0,
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Other members: increment unread count
+        batch.update(doc.reference, {
+          'unreadCount': FieldValue.increment(1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
     await batch.commit();
 
     _logger.d('Message sent: ${messageRef.id}');
@@ -291,6 +318,7 @@ class RandomGroupChatService {
 
       await memberRef.set(
         {
+          'unreadCount': 0,
           'lastReadAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
@@ -299,6 +327,85 @@ class RandomGroupChatService {
       _logger.d('Marked random group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);
+    }
+  }
+
+  /// Gets the ID of the first unread message for a user based on lastReadAt.
+  ///
+  /// Returns null if:
+  /// - No unread messages exist
+  /// - User is not a member
+  /// - An error occurs (fails silently to avoid blocking chat load)
+  ///
+  /// Used to:
+  /// 1. Scroll to the first unread message when opening group chat
+  /// 2. Show "Unread messages" divider above this message
+  Future<String?> getFirstUnreadMessageId({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      // Get user's membership to find lastReadAt
+      final memberDoc = await _groupRef(groupId)
+          .collection('members')
+          .doc(userId)
+          .get();
+
+      if (!memberDoc.exists) return null;
+
+      final data = memberDoc.data();
+      final lastReadAt = data?['lastReadAt'];
+
+      if (lastReadAt == null) {
+        // User never read this group - no divider needed.
+        // Returning null avoids pointing to messages that predate the user's join.
+        // The unread count badge on the list page already indicates unread messages.
+        return null;
+      }
+
+      final lastReadTimestamp = lastReadAt as Timestamp;
+
+      // Find the first message AFTER lastReadAt that was NOT sent by this user
+      final unreadSnapshot = await _messagesRef(groupId)
+          .where('sentAt', isGreaterThan: lastReadTimestamp)
+          .orderBy('sentAt', descending: false)
+          .limit(50)
+          .get();
+
+      // Filter out messages sent by the current user and system messages
+      final unreadFromOthers = unreadSnapshot.docs.where((doc) {
+        final senderId = doc.data()['senderId'] as String?;
+        final type = doc.data()['type'] as String?;
+        return senderId != userId && type != 'system';
+      }).toList();
+
+      if (unreadFromOthers.isEmpty) return null;
+      return unreadFromOthers.first.id;
+    } catch (e, stack) {
+      _logger.w('Error getting first unread message ID',
+          error: e, stackTrace: stack);
+      return null; // Fail silently
+    }
+  }
+
+  /// Gets the unread count for a user in a group from the member document.
+  Future<int> getUnreadCount({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberDoc = await _groupRef(groupId)
+          .collection('members')
+          .doc(userId)
+          .get();
+
+      if (!memberDoc.exists) return 0;
+
+      final data = memberDoc.data();
+      return (data?['unreadCount'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      _logger.w('Error getting unread count', error: e);
+      return 0;
     }
   }
 }

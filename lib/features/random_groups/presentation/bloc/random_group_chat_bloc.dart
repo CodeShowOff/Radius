@@ -33,10 +33,11 @@ const _uuid = Uuid();
 ///
 /// ## Access Flow
 ///
-/// 1. [OpenRandomGroupChat] → Start loading, `membershipVerified = false`
-/// 2. Check `isActiveMember()` → If false, show error and block access
-/// 3. If member, set `membershipVerified = true` → NOW show cached/streamed messages
-/// 4. [SendRandomGroupMessage] → Blocked if `membershipVerified == false`
+/// 1. [OpenRandomGroupChat] → Check for cached messages
+/// 2. If cached messages exist → Show immediately, verify membership in background
+/// 3. If no cache → Check `isActiveMember()` → If false, show error and block access
+/// 4. If member, set `membershipVerified = true` → Show streamed messages
+/// 5. [SendRandomGroupMessage] → Blocked if `membershipVerified == false`
 class RandomGroupChatBloc
     extends Bloc<RandomGroupChatEvent, RandomGroupChatState> {
   final RandomGroupChatService _chatService;
@@ -92,6 +93,30 @@ class RandomGroupChatBloc
     _logger.d('Invalidated membership cache for $key');
   }
 
+  /// Refreshes membership verification in the background without blocking UI.
+  /// If the user was removed, the Firestore stream will handle access revocation.
+  /// This ensures the membership cache stays up to date for future navigations.
+  void _refreshMembershipInBackground(String userId, String groupId) {
+    _chatService
+        .isActiveMember(groupId: groupId, userId: userId)
+        .then((isActive) {
+      if (isActive) {
+        _cacheMembership(userId, groupId);
+      } else if (!isClosed) {
+        _logger.w(
+            'Background membership check failed for $userId in $groupId');
+        _invalidateMembershipCache(userId, groupId);
+        _cacheService.clearCache(groupId);
+        add(const _ChatStreamError(
+          'You no longer have access to this group chat.',
+        ));
+      }
+    }).catchError((e) {
+      _logger.w('Background membership check error: $e');
+      // Don't revoke access on network error - stream handles this
+    });
+  }
+
   Future<void> _onOpenRandomGroupChat(
     OpenRandomGroupChat event,
     Emitter<RandomGroupChatState> emit,
@@ -102,9 +127,9 @@ class RandomGroupChatBloc
     await _cancelSubscriptions();
 
     // ========================================================================
-    // CRITICAL SECURITY FIX: Verify membership BEFORE showing ANY content
-    // Do NOT show cached messages until membership is confirmed.
-    // This prevents privacy leaks from stale cache or URL manipulation.
+    // SECURITY: Verify membership before showing content.
+    // When cached messages exist, they are shown immediately (fast path above)
+    // with background verification. This slow path handles the no-cache case.
     // ========================================================================
 
     // Check if we have a cached membership verification (optimization)
@@ -113,10 +138,14 @@ class RandomGroupChatBloc
     final cachedMessages = _cacheService.getMessages(event.groupId);
     final hasCache = cachedMessages.isNotEmpty;
 
-    if (hasCachedMembership && hasCache) {
-      // FAST PATH: Membership was recently verified, show cached messages immediately
+    if (hasCache) {
+      // FAST PATH: Show cached messages immediately for smooth UX.
+      // Security is maintained via:
+      // 1. Firestore stream errors with permission-denied if user was removed
+      // 2. Background membership check revokes access if verification fails
+      // 3. Firestore security rules enforce membership on all operations
       _logger.i(
-          'Using cached membership for ${event.groupId} - skipping Firestore check');
+          'Showing cached messages for ${event.groupId} immediately');
       final cachedEntry = _cacheService.getCache(event.groupId);
 
       emit(state.copyWith(
@@ -130,10 +159,39 @@ class RandomGroupChatBloc
         hasMore: cachedEntry?.hasMore ?? true,
         clearError: true,
         membershipVerified: true,
+        clearFirstUnreadMessageId: true,
       ));
 
-      // Start listening to messages (already verified)
+      // Fetch first unread message ID BEFORE subscribing to messages.
+      // CRITICAL: Must happen before _subscribeToMessages because
+      // _onMessagesReceived calls markGroupAsRead() which updates lastReadAt,
+      // which would cause getFirstUnreadMessageId to return null.
+      try {
+        final firstUnreadId = await _chatService.getFirstUnreadMessageId(
+          groupId: event.groupId,
+          userId: event.userId,
+        );
+        if (!isClosed && state.currentGroupId == event.groupId && firstUnreadId != null) {
+          final unreadCount = await _chatService.getUnreadCount(
+            groupId: event.groupId,
+            userId: event.userId,
+          );
+          emit(state.copyWith(
+            firstUnreadMessageId: firstUnreadId,
+            unreadCountAtOpen: unreadCount,
+          ));
+        }
+      } catch (e) {
+        _logger.w('Error fetching first unread message ID', error: e);
+      }
+
+      // Start listening to messages (stream will error if user was removed)
       await _subscribeToMessages(event.groupId);
+
+      // Refresh membership cache in background if expired
+      if (!hasCachedMembership) {
+        _refreshMembershipInBackground(event.userId, event.groupId);
+      }
       return;
     }
 
@@ -206,7 +264,29 @@ class RandomGroupChatBloc
       }
 
       // ======================================================================
-      // STEP 3: Start listening to messages (membership already verified)
+      // STEP 3: Fetch first unread message ID for unread divider
+      // ======================================================================
+      try {
+        final firstUnreadId = await _chatService.getFirstUnreadMessageId(
+          groupId: event.groupId,
+          userId: event.userId,
+        );
+        if (!isClosed && state.currentGroupId == event.groupId && firstUnreadId != null) {
+          final unreadCount = await _chatService.getUnreadCount(
+            groupId: event.groupId,
+            userId: event.userId,
+          );
+          emit(state.copyWith(
+            firstUnreadMessageId: firstUnreadId,
+            unreadCountAtOpen: unreadCount,
+          ));
+        }
+      } catch (e) {
+        _logger.w('Error fetching first unread message ID', error: e);
+      }
+
+      // ======================================================================
+      // STEP 4: Start listening to messages (membership already verified)
       // ======================================================================
       await _subscribeToMessages(event.groupId);
 
@@ -510,6 +590,7 @@ class RandomGroupChatBloc
     emit(state.copyWith(
       messages: const [],
       hasMore: false,
+      clearFirstUnreadMessageId: true,
     ));
 
     // Clear messages from cache

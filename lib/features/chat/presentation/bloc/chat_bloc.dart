@@ -563,12 +563,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
+    // Clear messages from local state immediately for instant feedback
+    _logger.d('Clearing all local chat messages');
+    emit(state.copyWith(
+      messages: const [],
+      pendingMessages: const {},
+      hasMore: false,
+      clearFirstUnreadMessageId: true,
+    ));
+
+    // Clear messages from cache
+    _cacheService.clearConversation(state.conversationId!);
+
     try {
+      // Clear messages from backend (will also trigger stream update)
       await _chatService.clearMessages(
         state.conversationId!,
         state.currentUserId!,
       );
-      // Messages will be updated through the stream
     } catch (e) {
       emit(state.copyWith(
         errorMessage: 'Failed to clear chat: ${e.toString()}',

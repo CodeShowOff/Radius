@@ -32,6 +32,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   StreamSubscription<RandomGroup?>? _groupDetailsSubscription;
   StreamSubscription<List<JoinRequest>>? _pendingRequestsSubscription;
   StreamSubscription<List<RandomGroupMember>>? _membersSubscription;
+  StreamSubscription<Map<String, int>>? _unreadCountsSubscription;
 
   RandomGroupBloc({
     required RandomGroupService groupService,
@@ -68,6 +69,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<_PendingRequestsReceived>(_onPendingRequestsReceived);
     on<_MembersReceived>(_onMembersReceived);
     on<_RandomGroupStreamError>(_onRandomGroupStreamError);
+    on<_UnreadCountsReceived>(_onUnreadCountsReceived);
   }
 
   Future<void> _onWatchActiveRandomGroups(
@@ -143,6 +145,17 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
             onError: (error) {
               _logger.e('User groups stream error: $error');
               add(_RandomGroupStreamError(error.toString()));
+            },
+          );
+
+      // Also start watching unread counts
+      await _unreadCountsSubscription?.cancel();
+      _unreadCountsSubscription = _groupService
+          .watchUserUnreadCounts(event.userId)
+          .listen(
+            (unreadCounts) => add(_UnreadCountsReceived(unreadCounts)),
+            onError: (error) {
+              _logger.w('Unread counts stream error: $error');
             },
           );
     } catch (e) {
@@ -692,6 +705,13 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     ));
   }
 
+  void _onUnreadCountsReceived(
+    _UnreadCountsReceived event,
+    Emitter<RandomGroupState> emit,
+  ) {
+    emit(state.copyWith(userGroupUnreadCounts: event.unreadCounts));
+  }
+
   /// Handler for resetting the BLoC state when switching accounts.
   /// Cancels all subscriptions and clears state to prevent permission errors.
   Future<void> _onResetRandomGroupState(
@@ -720,6 +740,8 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     if (event.userId != null) {
       await _userGroupsSubscription?.cancel();
       _userGroupsSubscription = null;
+      await _unreadCountsSubscription?.cancel();
+      _unreadCountsSubscription = null;
     }
 
     // Re-dispatch watch events which will now start fresh subscriptions
@@ -748,6 +770,9 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     
     await _membersSubscription?.cancel();
     _membersSubscription = null;
+
+    await _unreadCountsSubscription?.cancel();
+    _unreadCountsSubscription = null;
   }
 
   @override

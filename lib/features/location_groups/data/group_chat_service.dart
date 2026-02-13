@@ -413,15 +413,10 @@ class GroupChatService {
       final lastReadAt = data?['lastReadAt'];
 
       if (lastReadAt == null) {
-        // User never read this group - return earliest message
-        final firstMessageSnapshot = await _messagesRef(groupId)
-            .where('isDeleted', isEqualTo: false)
-            .orderBy('sentAt', descending: false)
-            .limit(1)
-            .get();
-
-        if (firstMessageSnapshot.docs.isEmpty) return null;
-        return firstMessageSnapshot.docs.first.id;
+        // User never read this group - no divider needed.
+        // Returning null avoids pointing to messages that predate the user's join.
+        // The unread count badge on the list page already indicates unread messages.
+        return null;
       }
 
       final lastReadTimestamp = lastReadAt as Timestamp;
@@ -446,6 +441,27 @@ class GroupChatService {
     } catch (e, stack) {
       _logger.w('Error getting first unread message ID', error: e, stackTrace: stack);
       return null; // Fail silently
+    }
+  }
+
+  /// Gets the unread count for a user in a group from the member document.
+  Future<int> getUnreadCount({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberDoc = await _groupRef(groupId)
+          .collection('members')
+          .doc(userId)
+          .get();
+
+      if (!memberDoc.exists) return 0;
+
+      final data = memberDoc.data();
+      return (data?['unreadCount'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      _logger.w('Error getting unread count', error: e);
+      return 0;
     }
   }
 }

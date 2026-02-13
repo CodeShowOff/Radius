@@ -150,6 +150,9 @@ class _SharedChatInputState extends State<SharedChatInput> {
               focusNode: _focusNode,
               decoration: InputDecoration(
                 hintText: widget.config.inputPlaceholder ?? 'Type a message...',
+                hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

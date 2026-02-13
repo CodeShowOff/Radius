@@ -366,3 +366,12 @@ class _RandomGroupStreamError extends RandomGroupEvent {
 class ResetRandomGroupState extends RandomGroupEvent {
   const ResetRandomGroupState();
 }
+
+class _UnreadCountsReceived extends RandomGroupEvent {
+  final Map<String, int> unreadCounts;
+
+  const _UnreadCountsReceived(this.unreadCounts);
+
+  @override
+  List<Object?> get props => [unreadCounts];
+}

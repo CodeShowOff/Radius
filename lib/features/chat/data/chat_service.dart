@@ -264,9 +264,9 @@ class ChatService {
       // Update last message info
       batch.update(_conversationsRef.doc(conversationId), {
         'lastMessageAt': FieldValue.serverTimestamp(),
-        'lastMessageText': text.trim().length > 100
-            ? '${text.trim().substring(0, 100)}...'
-            : text.trim(),
+        'lastMessageText': sanitizedText.length > 100
+            ? '${sanitizedText.substring(0, 100)}...'
+            : sanitizedText,
         'lastMessageSenderId': senderId,
         // Reset sender's unread count, increment recipient's
         'unreadCounts.$senderId': 0,
@@ -650,10 +650,11 @@ class ChatService {
         _logger.d('Cleared batch ${(i ~/ batchSize) + 1}: ${end - i} messages');
       }
 
-      // Update conversation to clear last message
+      // Update conversation to clear last message and reset unread counts
       await _conversationsRef.doc(conversationId).update({
         'lastMessageText': '',
         'lastMessageAt': FieldValue.serverTimestamp(),
+        'unreadCounts': {},
       });
 
       _logger.d('Successfully cleared ${docs.length} messages for conversation: $conversationId');

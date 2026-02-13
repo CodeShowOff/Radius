@@ -233,6 +233,15 @@ class NotificationService {
     final messageGroupId = message.data['groupId'] as String?;
     final messageType = message.data['type'] as String?;
     final requestId = message.data['requestId'] as String?;
+    final senderId = message.data['senderId'] as String?;
+
+    // Safety: suppress notifications for the user's own messages.
+    // The Cloud Function already skips the sender, but this is a client-side
+    // safety net in case of race conditions or stale FCM token mappings.
+    if (senderId != null && senderId == _currentUserId) {
+      _logger.d('Suppressing notification for own message (senderId=$senderId)');
+      return;
+    }
 
     // Check if user is viewing the conversation that received a message
     final isViewingConversation = messageType == 'message' &&
@@ -251,16 +260,24 @@ class NotificationService {
     if (isViewingConversation) {
       // User is viewing this chat - don't show any notification
       _logger.d(
-          'User is viewing conversation $messageConversationId - suppressing notification');
+          'Suppressing notification: user is viewing conversation '
+          '$messageConversationId (currentConversationId=$_currentConversationId)');
       return;
     }
 
     if (isViewingGroupChat) {
       // User is viewing this group chat - don't show any notification
       _logger.d(
-          'User is viewing group $messageGroupId - suppressing notification');
+          'Suppressing notification: user is viewing group '
+          '$messageGroupId (currentGroupId=$_currentGroupId)');
       return;
     }
+
+    _logger.d(
+      'Showing notification: type=$messageType, '
+      'convId=$messageConversationId, groupId=$messageGroupId, '
+      'currentConv=$_currentConversationId, currentGroup=$_currentGroupId',
+    );
 
     // User is not viewing this chat - show in-app notification
     if (notification != null) {
@@ -415,9 +432,24 @@ class NotificationService {
   }
 
   /// Clear the current conversation (user left the chat screen).
-  void clearCurrentConversation() {
+  ///
+  /// Accepts an optional [conversationId] to prevent race conditions:
+  /// when navigating between chats, the old screen's dispose() might run
+  /// AFTER the new screen's initState(), which would incorrectly clear
+  /// the conversation ID that the new screen just set.
+  ///
+  /// If [conversationId] is provided, only clears if it matches the current one.
+  /// If null, always clears (legacy behavior).
+  void clearCurrentConversation([String? conversationId]) {
+    if (conversationId != null && _currentConversationId != conversationId) {
+      _logger.d(
+        'Skipping clearCurrentConversation: current=$_currentConversationId, '
+        'requested=$conversationId (another chat is active)',
+      );
+      return;
+    }
+    _logger.d('Current conversation cleared (was: $_currentConversationId)');
     _currentConversationId = null;
-    _logger.d('Current conversation cleared');
   }
 
   /// Set the current group the user is viewing.
@@ -432,9 +464,24 @@ class NotificationService {
   }
 
   /// Clear the current group (user left the group chat screen).
-  void clearCurrentGroup() {
+  ///
+  /// Accepts an optional [groupId] to prevent race conditions:
+  /// when navigating between group chats, the old screen's dispose() might
+  /// run AFTER the new screen's initState(), which would incorrectly clear
+  /// the group ID that the new screen just set.
+  ///
+  /// If [groupId] is provided, only clears if it matches the current one.
+  /// If null, always clears (legacy behavior).
+  void clearCurrentGroup([String? groupId]) {
+    if (groupId != null && _currentGroupId != groupId) {
+      _logger.d(
+        'Skipping clearCurrentGroup: current=$_currentGroupId, '
+        'requested=$groupId (another group chat is active)',
+      );
+      return;
+    }
+    _logger.d('Current group cleared (was: $_currentGroupId)');
     _currentGroupId = null;
-    _logger.d('Current group cleared');
   }
 
   /// Cancel all device notifications for a given conversation or group ID.

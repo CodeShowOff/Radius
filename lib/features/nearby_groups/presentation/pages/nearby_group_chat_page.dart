@@ -101,6 +101,10 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
       case AppLifecycleState.resumed:
         // App came back to foreground - resync to get any missed messages
         _chatBloc?.add(const ResyncNearbyGroupChat());
+        // Re-assert notification context in case in-memory state was lost
+        try {
+          getIt<NotificationService>().setCurrentGroup(widget.groupId);
+        } catch (_) {}
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -136,7 +140,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
 
     // Notify notification service that user left this group
     try {
-      getIt<NotificationService>().clearCurrentGroup();
+      getIt<NotificationService>().clearCurrentGroup(widget.groupId);
     } catch (_) {
       // Ignore if service not available
     }
@@ -473,6 +477,9 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
                 focusNode: _focusNode,
                 decoration: InputDecoration(
                   hintText: 'Type a message...',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(

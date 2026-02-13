@@ -218,6 +218,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         // App came back to foreground - resync to get any missed messages
         _chatBloc?.add(const ChatResync());
+        // Re-assert notification context in case in-memory state was lost
+        // (e.g., after process restart or long background pause)
+        try {
+          getIt<NotificationService>()
+              .setCurrentConversation(widget.conversationId);
+        } catch (_) {}
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -248,7 +254,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     // Notify notification service that user left this conversation
     try {
-      getIt<NotificationService>().clearCurrentConversation();
+      getIt<NotificationService>().clearCurrentConversation(widget.conversationId);
     } catch (_) {
       // Ignore if service not available
     }
@@ -1180,8 +1186,11 @@ class _UnreadDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label =
-        count == 1 ? '1 unread message' : '$count unread messages';
+    final label = count <= 0
+        ? 'Unread messages'
+        : count == 1
+            ? '1 unread message'
+            : '$count unread messages';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

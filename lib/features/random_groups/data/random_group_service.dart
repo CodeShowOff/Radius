@@ -256,6 +256,30 @@ class RandomGroupService {
     });
   }
 
+  /// Stream of unread counts per group for a user.
+  ///
+  /// Uses a collection group query on 'members' to find all memberships,
+  /// then extracts the unreadCount from each member document.
+  /// Returns a map of groupId → unreadCount.
+  Stream<Map<String, int>> watchUserUnreadCounts(String userId) {
+    return _firestore
+        .collectionGroup('members')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+      final unreadMap = <String, int>{};
+      for (final doc in snapshot.docs) {
+        final pathSegments = doc.reference.path.split('/');
+        if (pathSegments.length >= 4 && pathSegments[0] == 'random_groups') {
+          final groupId = pathSegments[1];
+          final unreadCount = (doc.data()['unreadCount'] as num?)?.toInt() ?? 0;
+          unreadMap[groupId] = unreadCount;
+        }
+      }
+      return unreadMap;
+    });
+  }
+
   /// Stream of groups created by the user.
   Stream<List<RandomGroup>> watchUserCreatedGroups(String userId) {
     return _groupsRef

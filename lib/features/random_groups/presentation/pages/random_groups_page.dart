@@ -157,8 +157,10 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
               itemCount: state.userGroups.length,
               itemBuilder: (context, index) {
                 final group = state.userGroups[index];
+                final unreadCount = state.userGroupUnreadCounts[group.id] ?? 0;
                 return _RandomGroupCard(
                   group: group,
+                  unreadCount: unreadCount,
                   onTap: () {
                     context.push(Routes.randomGroupChatWith(group.id));
                   },
@@ -184,11 +186,13 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
 
 class _RandomGroupCard extends StatelessWidget {
   final RandomGroup group;
+  final int unreadCount;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
   const _RandomGroupCard({
     required this.group,
+    this.unreadCount = 0,
     this.onTap,
     this.onLongPress,
   });
@@ -286,10 +290,29 @@ class _RandomGroupCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chat,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              if (unreadCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              else
+                Icon(
+                  Icons.chat,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
             ],
           ),
         ),

@@ -57,6 +57,9 @@ class RandomGroupState extends Equatable {
   /// User ID for tracked groups (to detect account switches).
   final String? userGroupsUserId;
 
+  /// Unread counts per group for the current user.
+  final Map<String, int> userGroupUnreadCounts;
+
   const RandomGroupState({
     this.status = RandomGroupBlocStatus.initial,
     this.activeGroups = const [],
@@ -69,6 +72,7 @@ class RandomGroupState extends Equatable {
     this.userJoinRequest,
     this.errorMessage,
     this.userGroupsUserId,
+    this.userGroupUnreadCounts = const {},
   });
 
   /// Creates a copy with updated fields.
@@ -84,6 +88,7 @@ class RandomGroupState extends Equatable {
     JoinRequest? userJoinRequest,
     String? errorMessage,
     String? userGroupsUserId,
+    Map<String, int>? userGroupUnreadCounts,
     bool clearError = false,
     bool clearSelectedGroup = false,
     bool clearUserJoinRequest = false,
@@ -104,6 +109,7 @@ class RandomGroupState extends Equatable {
           : (userJoinRequest ?? this.userJoinRequest),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       userGroupsUserId: userGroupsUserId ?? this.userGroupsUserId,
+      userGroupUnreadCounts: userGroupUnreadCounts ?? this.userGroupUnreadCounts,
     );
   }
 
@@ -120,5 +126,6 @@ class RandomGroupState extends Equatable {
         userJoinRequest,
         errorMessage,
         userGroupsUserId,
+        userGroupUnreadCounts,
       ];
 }

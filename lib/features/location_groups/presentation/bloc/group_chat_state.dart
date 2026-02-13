@@ -52,6 +52,10 @@ class GroupChatState extends Equatable {
   /// ID of the first unread message (for showing unread divider).
   final String? firstUnreadMessageId;
 
+  /// Number of unread messages at the time chat was opened.
+  /// Used to display "X unread messages" in the divider.
+  final int unreadCountAtOpen;
+
   const GroupChatState({
     this.status = GroupChatStatus.initial,
     this.groupId,
@@ -63,6 +67,7 @@ class GroupChatState extends Equatable {
     this.errorMessage,
     this.membershipVerified = false,
     this.firstUnreadMessageId,
+    this.unreadCountAtOpen = 0,
   });
 
   /// Whether the chat is currently loading.
@@ -96,6 +101,7 @@ class GroupChatState extends Equatable {
     bool? membershipVerified,
     String? firstUnreadMessageId,
     bool clearFirstUnreadMessageId = false,
+    int? unreadCountAtOpen,
   }) {
     return GroupChatState(
       status: status ?? this.status,
@@ -110,6 +116,7 @@ class GroupChatState extends Equatable {
       firstUnreadMessageId: clearFirstUnreadMessageId
           ? null
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
+      unreadCountAtOpen: unreadCountAtOpen ?? this.unreadCountAtOpen,
     );
   }
 
@@ -125,5 +132,6 @@ class GroupChatState extends Equatable {
         errorMessage,
         membershipVerified,
         firstUnreadMessageId,
+        unreadCountAtOpen,
       ];
 }
