@@ -116,11 +116,20 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
       final crashFuture = () async {
         if (AppConfig.enableCrashReporting) {
-          await CrashService().initialize().timeout(const Duration(seconds: 5));
+          try {
+            await CrashService().initialize().timeout(const Duration(seconds: 5));
+          } catch (e) {
+            debugPrint('[Bootstrap] Crash service init failed: $e');
+          }
         }
       }();
 
-      await Future.wait([diFuture, appCheckFuture, crashFuture]);
+      // Only DI is on the critical path — the app cannot render without it.
+      // AppCheck and CrashService are non-critical and complete in the
+      // background so they don't add to perceived startup time.
+      await diFuture;
+      unawaited(appCheckFuture);
+      unawaited(crashFuture);
 
       // Show the app immediately — Phase 3 (diagnostics) is non-critical
       // and should not block the user from seeing the home page.

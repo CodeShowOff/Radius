@@ -78,10 +78,12 @@ class RealtimeConnectionService {
   Future<void> initialize() async {
     _logger.i('Initializing RealtimeConnectionService');
 
-    // Enable Firestore offline persistence for better offline experience
+    // Enable Firestore offline persistence for better offline experience.
+    // Use a bounded cache (100 MB) to prevent unbounded disk growth that
+    // would gradually slow Firestore operations over time.
     _firestore.settings = const Settings(
       persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      cacheSizeBytes: 100 * 1024 * 1024, // 100 MB
     );
 
     // Check initial connectivity

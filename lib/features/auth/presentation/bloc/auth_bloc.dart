@@ -24,6 +24,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// to prevent race conditions.
   bool _operationInProgress = false;
 
+  /// Whether the initial auth check (AuthCheckRequested) has completed.
+  /// The authStateChanges subscription is deferred until after this to avoid
+  /// a redundant Firestore query and state churn on startup.
+  bool _initialCheckDone = false;
+
   AuthBloc({required IAuthRepository authRepository})
       : _authRepository = authRepository,
         super(AuthInitial()) {
@@ -37,11 +42,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthResendVerificationRequested>(_onResendVerificationRequested);
     on<AuthCheckEmailVerificationRequested>(_onCheckEmailVerificationRequested);
 
-    // Listen to auth state changes from Firebase
-    // This handles external auth changes (e.g., token expiry, account deletion)
-    _authStateSubscription = _authRepository.authStateChanges.listen(
-      (user) => add(AuthStateChanged(user)),
-    );
+    // NOTE: authStateChanges subscription is NOT started here.
+    // It is deferred until after the first AuthCheckRequested completes
+    // (see _startAuthStateSubscription). This eliminates a redundant
+    // Firestore query and prevents the race condition where the stream's
+    // asyncMap fires concurrently with getCurrentUser(), causing a
+    // AuthLoading flash and double navigation.
   }
 
   Future<void> _onAuthCheckRequested(
@@ -63,6 +69,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthAuthenticated(user));
         }
       },
+    );
+
+    // Start listening for external auth changes (token expiry, account
+    // deletion, etc.) now that the initial check is done. On subscription,
+    // Firebase emits the current user — the asyncMap Firestore query still
+    // runs, but _onAuthStateChanged will early-return because the state
+    // already matches, so no visible state churn occurs.
+    _startAuthStateSubscription();
+  }
+
+  /// Begin listening to the repository's authStateChanges stream.
+  /// Called once after the initial auth check to avoid duplicate Firestore
+  /// queries and race conditions on startup.
+  void _startAuthStateSubscription() {
+    if (_initialCheckDone) return; // Already subscribed
+    _initialCheckDone = true;
+    _authStateSubscription ??= _authRepository.authStateChanges.listen(
+      (user) => add(AuthStateChanged(user)),
     );
   }
 

@@ -398,7 +398,8 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
   }
 
   /// Waits for the Firebase auth token to be available and valid.
-  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 5}) async {
+  /// This is the fallback path (only used if RealTimeDataManager fails).
+  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 3}) async {
     final auth = FirebaseAuth.instance;
 
     for (int i = 0; i < maxRetries; i++) {
