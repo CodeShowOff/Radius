@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -1386,6 +1386,88 @@ exports.cleanupOldGroupJoinRequests = (0, scheduler_1.onSchedule)({
 // NEARBY HELP FUNCTIONS
 // ============================================================================
 /**
+ * Callable Cloud Function that finds nearby helpers server-side.
+ *
+ * This replaces the client-side findNearbyHelpers() that would leak all
+ * opted-in users' home/work GPS coordinates. Distance filtering now happens
+ * entirely on the server — the client never sees other users' coordinates.
+ *
+ * @param data.latitude - Seeker's latitude
+ * @param data.longitude - Seeker's longitude
+ * @param data.radiusMeters - Search radius in meters (must be one of 50, 100, 500, 1000, 2000)
+ * @returns {userIds: string[]} - IDs of nearby users (no location data)
+ */
+exports.findNearbyHelpers = (0, https_1.onCall)({
+    enforceAppCheck: false,
+}, async (request) => {
+    // 1. Auth check
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Must be authenticated");
+    }
+    const currentUserId = request.auth.uid;
+    const latitude = request.data?.latitude;
+    const longitude = request.data?.longitude;
+    const radiusMeters = request.data?.radiusMeters;
+    // 2. Validate inputs
+    if (latitude == null || longitude == null || radiusMeters == null) {
+        throw new https_1.HttpsError("invalid-argument", "latitude, longitude, and radiusMeters are required");
+    }
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        throw new https_1.HttpsError("invalid-argument", "Invalid coordinates");
+    }
+    const allowedRadii = [50, 100, 500, 1000, 2000];
+    if (!allowedRadii.includes(radiusMeters)) {
+        throw new https_1.HttpsError("invalid-argument", `radiusMeters must be one of: ${allowedRadii.join(", ")}`);
+    }
+    const db = admin.firestore();
+    try {
+        // 3. Query all users (Admin SDK bypasses security rules)
+        const usersSnapshot = await db.collection("users").get();
+        const nearbyUserIds = [];
+        for (const userDoc of usersSnapshot.docs) {
+            const userId = userDoc.id;
+            // Skip the requesting user
+            if (userId === currentUserId)
+                continue;
+            const userData = userDoc.data();
+            // Check opt-out: only skip if explicitly set to false
+            const helpSettings = userData?.nearbyHelpSettings;
+            if (helpSettings?.receiveHelpAlerts === false) {
+                continue;
+            }
+            // Get user's saved locations
+            const locationsSnapshot = await db
+                .collection("users")
+                .doc(userId)
+                .collection("locations")
+                .where("isActive", "!=", false)
+                .get();
+            if (locationsSnapshot.empty)
+                continue;
+            // Check each location for proximity
+            for (const locationDoc of locationsSnapshot.docs) {
+                const location = locationDoc.data();
+                const userLat = location.latitude;
+                const userLon = location.longitude;
+                if (userLat == null || userLon == null)
+                    continue;
+                const distance = calculateDistance(latitude, longitude, userLat, userLon);
+                if (distance <= radiusMeters) {
+                    nearbyUserIds.push(userId);
+                    break; // User matched, no need to check other locations
+                }
+            }
+        }
+        firebase_functions_1.logger.log(`findNearbyHelpers: found ${nearbyUserIds.length} nearby users ` +
+            `within ${radiusMeters}m for user ${currentUserId}`);
+        return { userIds: nearbyUserIds };
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error in findNearbyHelpers:", error);
+        throw new https_1.HttpsError("internal", "Failed to find nearby helpers");
+    }
+});
+/**
  * Calculate distance between two points using Haversine formula.
  * Returns distance in meters.
  */
@@ -1621,12 +1703,15 @@ exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests
                 firebase_functions_1.logger.error(`Error sending to user ${userId}:`, error);
             }
         }
-        // Update the request with notification count
+        // Update the request with notification count and notified user IDs.
+        // notifiedUserIds is used by client queries to scope request visibility:
+        // only server-verified nearby users can discover this request via browsing.
         await admin
             .firestore()
             .collection("help_requests")
             .doc(requestId)
             .update({
+            notifiedUserIds: uniqueUsers,
             notifiedUsersCount: uniqueUsers.length,
             notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
         });

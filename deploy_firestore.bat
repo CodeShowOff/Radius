@@ -1,4 +1,4 @@
 @echo off
 
-echo Deploying Firestore...
-firebase deploy --only firestore
+echo Deploying all Firebase resources...
+firebase deploy
