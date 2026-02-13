@@ -19,9 +19,6 @@ class DeviceSessionModel {
   final String? appBuildNumber;
   final String? installSource;
   final String? ipAddress;
-  final String? country;
-  final String? city;
-  final String? isp;
   final String? networkType;
   final String? carrierName;
   final String sessionType;
@@ -43,9 +40,6 @@ class DeviceSessionModel {
     this.appBuildNumber,
     this.installSource,
     this.ipAddress,
-    this.country,
-    this.city,
-    this.isp,
     this.networkType,
     this.carrierName,
   });
@@ -69,9 +63,6 @@ class DeviceSessionModel {
       appBuildNumber: entity.appBuildNumber,
       installSource: entity.installSource,
       ipAddress: entity.ipAddress,
-      country: entity.country,
-      city: entity.city,
-      isp: entity.isp,
       networkType: entity.networkType,
       carrierName: entity.carrierName,
     );
@@ -96,9 +87,6 @@ class DeviceSessionModel {
       'appBuildNumber': appBuildNumber,
       'installSource': installSource,
       'ipAddress': ipAddress,
-      'country': country,
-      'city': city,
-      'isp': isp,
       'networkType': networkType,
       'carrierName': carrierName,
     };
@@ -124,9 +112,6 @@ class DeviceSessionModel {
       appBuildNumber: data['appBuildNumber'] as String?,
       installSource: data['installSource'] as String?,
       ipAddress: data['ipAddress'] as String?,
-      country: data['country'] as String?,
-      city: data['city'] as String?,
-      isp: data['isp'] as String?,
       networkType: data['networkType'] as String?,
       carrierName: data['carrierName'] as String?,
     );
@@ -151,9 +136,6 @@ class DeviceSessionModel {
       appBuildNumber: appBuildNumber,
       installSource: installSource,
       ipAddress: ipAddress,
-      country: country,
-      city: city,
-      isp: isp,
       networkType: networkType,
       carrierName: carrierName,
     );

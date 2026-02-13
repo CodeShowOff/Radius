@@ -50,15 +50,6 @@ class DeviceSession extends Equatable {
   /// IP address (IPv4/IPv6)
   final String? ipAddress;
 
-  /// Approximate country
-  final String? country;
-
-  /// Approximate city
-  final String? city;
-
-  /// Internet Service Provider / ASN
-  final String? isp;
-
   /// Network type (e.g., "WiFi", "cellular", "ethernet")
   final String? networkType;
 
@@ -85,9 +76,6 @@ class DeviceSession extends Equatable {
     this.appBuildNumber,
     this.installSource,
     this.ipAddress,
-    this.country,
-    this.city,
-    this.isp,
     this.networkType,
     this.carrierName,
   });
@@ -109,9 +97,6 @@ class DeviceSession extends Equatable {
         appBuildNumber,
         installSource,
         ipAddress,
-        country,
-        city,
-        isp,
         networkType,
         carrierName,
         sessionType,

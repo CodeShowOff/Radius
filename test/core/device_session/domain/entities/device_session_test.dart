@@ -96,16 +96,10 @@ void main() {
         timestamp: testDate,
         sessionType: 'login',
         ipAddress: '192.168.1.1',
-        country: 'United States',
-        city: 'San Francisco',
-        isp: 'Comcast',
         networkType: 'WiFi',
       );
 
       expect(session.ipAddress, '192.168.1.1');
-      expect(session.country, 'United States');
-      expect(session.city, 'San Francisco');
-      expect(session.isp, 'Comcast');
       expect(session.networkType, 'WiFi');
     });
 
@@ -221,7 +215,6 @@ void main() {
       expect(session.deviceModel, isNull);
       expect(session.operatingSystem, isNull);
       expect(session.ipAddress, isNull);
-      expect(session.country, isNull);
     });
 
     test('should distinguish between different sessions', () {

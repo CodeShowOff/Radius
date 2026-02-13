@@ -32,13 +32,11 @@ class DeviceInfoService {
       _getDeviceInfo(),
       _getAppInfo(),
       _getNetworkInfo(),
-      _getLocationInfo(),
     ]);
 
     final deviceInfo = results[0];
     final appInfo = results[1];
     final networkInfo = results[2];
-    final locationInfo = results[3];
 
     return DeviceSession(
       sessionId: sessionId,
@@ -62,10 +60,6 @@ class DeviceInfoService {
       ipAddress: networkInfo['ipAddress'] as String?,
       networkType: networkInfo['networkType'] as String?,
       carrierName: networkInfo['carrierName'] as String?,
-      // Location info
-      country: locationInfo['country'] as String?,
-      city: locationInfo['city'] as String?,
-      isp: locationInfo['isp'] as String?,
     );
   }
 
@@ -87,7 +81,7 @@ class DeviceInfoService {
   /// Get Android device information
   Future<Map<String, dynamic>> _getAndroidDeviceInfo() async {
     final androidInfo = await _deviceInfo.androidInfo;
-    
+
     // Determine device type
     String deviceType = 'phone';
     if (androidInfo.isPhysicalDevice == false) {
@@ -115,7 +109,7 @@ class DeviceInfoService {
   /// Get iOS device information
   Future<Map<String, dynamic>> _getIosDeviceInfo() async {
     final iosInfo = await _deviceInfo.iosInfo;
-    
+
     // Determine device type
     String deviceType = 'phone';
     if (iosInfo.isPhysicalDevice == false) {
@@ -140,7 +134,7 @@ class DeviceInfoService {
   Future<Map<String, dynamic>> _getAppInfo() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      
+
       // Determine install source
       String? installSource;
       if (Platform.isAndroid) {
@@ -169,7 +163,7 @@ class DeviceInfoService {
   Future<Map<String, dynamic>> _getNetworkInfo() async {
     try {
       final connectivityResults = await _connectivity.checkConnectivity();
-      
+
       String networkType = 'unknown';
       if (connectivityResults.contains(ConnectivityResult.wifi)) {
         networkType = 'WiFi';
@@ -191,10 +185,12 @@ class DeviceInfoService {
       String? ipAddress;
       try {
         // Use a free IP API service to get public IP
-        final response = await http.get(
-          Uri.parse('https://api.ipify.org?format=json'),
-        ).timeout(const Duration(seconds: 5));
-        
+        final response = await http
+            .get(
+              Uri.parse('https://api.ipify.org?format=json'),
+            )
+            .timeout(const Duration(seconds: 5));
+
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           ipAddress = data['ip'] as String?;
@@ -212,28 +208,5 @@ class DeviceInfoService {
       debugPrint('Error collecting network info: $e');
       return {};
     }
-  }
-
-  /// Get location and ISP information
-  Future<Map<String, dynamic>> _getLocationInfo() async {
-    try {
-      // Get IP-based geolocation using a free service
-      final response = await http.get(
-        Uri.parse('http://ip-api.com/json/'),
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return {
-          'country': data['country'] as String?,
-          'city': data['city'] as String?,
-          'isp': data['isp'] as String?,
-        };
-      }
-    } catch (e) {
-      debugPrint('Error getting location info: $e');
-    }
-    
-    return {};
   }
 }
