@@ -12,6 +12,15 @@ service firebase.storage {
       return request.auth != null;
     }
     
+    /// Check if the authenticated user is a participant in the conversation.
+    /// Uses a cross-service Firestore read to verify membership.
+    function isConversationParticipant(conversationId) {
+      return isAuthenticated()
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/conversations/$(conversationId)
+        ).data.participantIds;
+    }
+    
     /// Check if file size is within limit (20MB for images, 100MB for docs)
     function isValidSize(maxSizeMB) {
       return request.resource.size <= maxSizeMB * 1024 * 1024;
@@ -43,52 +52,52 @@ service firebase.storage {
     // CHAT MEDIA FILES
     // ============================================================
     
-    // Images in chat_media/images/{conversationId}/{userId_timestamp}.ext
+    // Images in chat_media/images/{conversationId}/{uuid}.ext
     match /chat_media/images/{conversationId}/{fileName} {
-      // Allow authenticated users to upload images
-      allow write: if isAuthenticated()
+      // Allow conversation participants to upload images
+      allow write: if isConversationParticipant(conversationId)
         && isImage()
         && isValidSize(20) // 20MB max
         && resource == null; // Only allow creating new files, not overwriting
       
-      // Allow reading images from conversations user is part of
-      allow read: if isAuthenticated();
+      // Allow reading images only to conversation participants
+      allow read: if isConversationParticipant(conversationId);
     }
     
-    // Audio files in chat_media/audio/{conversationId}/{userId_timestamp}.ext
+    // Audio files in chat_media/audio/{conversationId}/{uuid}.ext
     match /chat_media/audio/{conversationId}/{fileName} {
-      // Allow authenticated users to upload audio (voice messages)
-      allow write: if isAuthenticated()
+      // Allow conversation participants to upload audio (voice messages)
+      allow write: if isConversationParticipant(conversationId)
         && isAudio()
         && isValidSize(50) // 50MB max for audio
         && resource == null;
       
-      // Allow reading audio from conversations user is part of
-      allow read: if isAuthenticated();
+      // Allow reading audio only to conversation participants
+      allow read: if isConversationParticipant(conversationId);
     }
     
-    // Documents in chat_media/documents/{conversationId}/{userId_timestamp}.ext
+    // Documents in chat_media/documents/{conversationId}/{uuid}.ext
     match /chat_media/documents/{conversationId}/{fileName} {
-      // Allow authenticated users to upload documents
-      allow write: if isAuthenticated()
+      // Allow conversation participants to upload documents
+      allow write: if isConversationParticipant(conversationId)
         && isDocument()
         && isValidSize(100) // 100MB max for documents
         && resource == null;
       
-      // Allow reading documents from conversations user is part of
-      allow read: if isAuthenticated();
+      // Allow reading documents only to conversation participants
+      allow read: if isConversationParticipant(conversationId);
     }
     
-    // Stickers in chat_media/stickers/{conversationId}/{userId_timestamp}.ext
+    // Stickers in chat_media/stickers/{conversationId}/{uuid}.ext
     match /chat_media/stickers/{conversationId}/{fileName} {
-      // Allow authenticated users to upload stickers (same as images)
-      allow write: if isAuthenticated()
+      // Allow conversation participants to upload stickers (same as images)
+      allow write: if isConversationParticipant(conversationId)
         && isImage()
         && isValidSize(5) // 5MB max for stickers
         && resource == null;
       
-      // Allow reading stickers from conversations user is part of
-      allow read: if isAuthenticated();
+      // Allow reading stickers only to conversation participants
+      allow read: if isConversationParticipant(conversationId);
     }
     
     // Default: deny all other access

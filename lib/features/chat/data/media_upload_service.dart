@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/error/exceptions.dart';
 
@@ -38,6 +39,8 @@ class MediaUploadService {
   static const String _audioPath = 'chat_media/audio';
   static const String _documentsPath = 'chat_media/documents';
   static const String _stickersPath = 'chat_media/stickers';
+
+  static const _uuid = Uuid();
 
   MediaUploadService({
     FirebaseStorage? storage,
@@ -143,9 +146,11 @@ class MediaUploadService {
       // Validate file extension for the storage path
       _validateFileExtension(extension, storagePath);
 
-      // Create unique file path: storagePath/conversationId/senderId_timestamp.ext
+      // Create unique file path with a UUID to prevent path enumeration.
+      // Metadata still records senderId and timestamp for auditing.
+      final fileId = _uuid.v4();
       final filePath =
-          '$storagePath/$conversationId/${senderId}_$timestamp$extension';
+          '$storagePath/$conversationId/$fileId$extension';
 
       _logger.d('Uploading file to: $filePath ($fileSize bytes)');
 
