@@ -122,18 +122,22 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
       await Future.wait([diFuture, appCheckFuture, crashFuture]);
 
-      // ── Phase 3: Final diagnostics ───────────────────────────────────
-      await DeviceLog.instance.init().timeout(const Duration(seconds: 5));
-
-      DeviceLog.instance.info('app', 'Bootstrap complete', data: {
-        'environment': AppConfig.environment.name,
-        'crashReporting': AppConfig.enableCrashReporting,
-      });
-
+      // Show the app immediately — Phase 3 (diagnostics) is non-critical
+      // and should not block the user from seeing the home page.
       if (!mounted) return;
       setState(() {
         _phase = _InitPhase.ready;
       });
+
+      // ── Phase 3: Final diagnostics (non-blocking) ───────────────────
+      // DeviceLog initializes in the background. Its _log() method is
+      // safe to call before init completes (it silently no-ops).
+      unawaited(DeviceLog.instance.init().then((_) {
+        DeviceLog.instance.info('app', 'Bootstrap complete', data: {
+          'environment': AppConfig.environment.name,
+          'crashReporting': AppConfig.enableCrashReporting,
+        });
+      }).catchError((_) {}));
     } on TimeoutException catch (e, st) {
       _fail('Initialization timed out: ${e.message ?? 'timeout'}', e, st);
     } catch (e, st) {
