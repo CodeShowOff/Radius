@@ -308,15 +308,23 @@ class ChatService {
     final localId = _uuid.v4();
     final now = DateTime.now();
 
+    // Sanitize input text and file name
+    final sanitizedText = _sanitizeText(text);
+    final sanitizedFileName = mediaFileName != null
+        ? _sanitizeText(mediaFileName).isEmpty
+            ? null
+            : _sanitizeText(mediaFileName)
+        : null;
+
     // Create optimistic message for immediate UI (show as sent)
     final optimisticMessage = Message(
       id: localId,
       conversationId: conversationId,
       senderId: senderId,
-      text: text,
+      text: sanitizedText,
       type: type,
       mediaUrl: mediaUrl,
-      mediaFileName: mediaFileName,
+      mediaFileName: sanitizedFileName,
       mediaFileSize: mediaFileSize,
       duration: duration,
       thumbnailUrl: thumbnailUrl,
@@ -348,7 +356,7 @@ class ChatService {
           lastMessagePreview = '🎤 Voice message';
           break;
         case MessageType.document:
-          lastMessagePreview = '📄 ${mediaFileName ?? 'Document'}';
+          lastMessagePreview = '📄 ${sanitizedFileName ?? 'Document'}';
           break;
         case MessageType.sticker:
           lastMessagePreview = '😀 Sticker';
@@ -357,7 +365,7 @@ class ChatService {
           lastMessagePreview = '🎥 Video';
           break;
         default:
-          lastMessagePreview = text;
+          lastMessagePreview = sanitizedText;
       }
 
       batch.update(_conversationsRef.doc(conversationId), {

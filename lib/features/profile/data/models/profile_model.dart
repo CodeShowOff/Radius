@@ -102,17 +102,17 @@ class ProfileModel {
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
-      'displayName': name, // Use displayName for users collection
-      'bio': bio,
+      'displayName': _sanitizeField(name, maxNameLength),
+      'bio': _sanitizeField(bio, maxBioLength),
       'photoUrl': photoUrl,
       'isVisible': isVisible,
       'isDiscoverable': isVisible, // Keep both for compatibility
       'showOnlineStatus': showOnlineStatus,
       'allowConnectionRequests': allowConnectionRequests,
       'showLastSeen': showLastSeen,
-      'vibe': vibe,
-      'mood': mood,
-      'gender': gender,
+      'vibe': vibe != null ? _sanitizeField(vibe!, maxVibeLength) : null,
+      'mood': mood != null ? _sanitizeField(mood!, maxMoodLength) : null,
+      'gender': gender != null ? _sanitizeField(gender!, maxGenderLength) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'notificationPreferences': {
@@ -148,6 +148,26 @@ class ProfileModel {
     );
   }
 
+  /// Maximum allowed lengths for profile fields.
+  static const int maxNameLength = 50;
+  static const int maxBioLength = 200;
+  static const int maxVibeLength = 50;
+  static const int maxMoodLength = 50;
+  static const int maxGenderLength = 30;
+
+  /// Sanitizes a profile string field: removes control characters/null bytes,
+  /// trims whitespace, and enforces a max length.
+  static String _sanitizeField(String value, int maxLength) {
+    // Remove null bytes and control characters (except newlines and tabs)
+    var sanitized =
+        value.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '');
+    sanitized = sanitized.trim();
+    if (sanitized.length > maxLength) {
+      sanitized = sanitized.substring(0, maxLength);
+    }
+    return sanitized;
+  }
+
   /// Creates a map for partial updates (only changed fields).
   /// Uses 'displayName' for users collection consistency
   static Map<String, dynamic> toUpdateMap({
@@ -170,8 +190,8 @@ class ProfileModel {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (name != null) map['displayName'] = name; // Use displayName for users collection
-    if (bio != null) map['bio'] = bio;
+    if (name != null) map['displayName'] = _sanitizeField(name, maxNameLength);
+    if (bio != null) map['bio'] = _sanitizeField(bio, maxBioLength);
     if (photoUrl != null) map['photoUrl'] = photoUrl;
     if (isVisible != null) {
       map['isVisible'] = isVisible;
@@ -182,9 +202,9 @@ class ProfileModel {
       map['allowConnectionRequests'] = allowConnectionRequests;
     }
     if (showLastSeen != null) map['showLastSeen'] = showLastSeen;
-    if (vibe != null) map['vibe'] = vibe;
-    if (mood != null) map['mood'] = mood;
-    if (gender != null) map['gender'] = gender;
+    if (vibe != null) map['vibe'] = _sanitizeField(vibe, maxVibeLength);
+    if (mood != null) map['mood'] = _sanitizeField(mood, maxMoodLength);
+    if (gender != null) map['gender'] = _sanitizeField(gender, maxGenderLength);
 
     // Handle notification preferences as nested map
     if (notifyDirectMessages != null || notifyLocationGroups != null ||
