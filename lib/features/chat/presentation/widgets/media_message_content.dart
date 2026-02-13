@@ -45,7 +45,7 @@ class _ImageContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.mediaUrl == null) {
-      return const _LoadingPlaceholder(icon: Icons.image);
+      return _LoadingPlaceholder(icon: Icons.image, uploadProgress: message.uploadProgress);
     }
 
     return ClipRRect(
@@ -172,7 +172,7 @@ class _AudioContentState extends State<_AudioContent> {
         : theme.colorScheme.onSurface;
 
     if (widget.message.mediaUrl == null) {
-      return const _LoadingPlaceholder(icon: Icons.mic);
+      return _LoadingPlaceholder(icon: Icons.mic, uploadProgress: widget.message.uploadProgress);
     }
 
     return Container(
@@ -261,7 +261,7 @@ class _DocumentContent extends StatelessWidget {
         isSent ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface;
 
     if (message.mediaUrl == null) {
-      return const _LoadingPlaceholder(icon: Icons.description);
+      return _LoadingPlaceholder(icon: Icons.description, uploadProgress: message.uploadProgress);
     }
 
     return InkWell(
@@ -323,7 +323,7 @@ class _StickerContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.mediaUrl == null) {
-      return const _LoadingPlaceholder(icon: Icons.emoji_emotions);
+      return _LoadingPlaceholder(icon: Icons.emoji_emotions, uploadProgress: message.uploadProgress);
     }
 
     return CachedNetworkImage(
@@ -421,7 +421,7 @@ class _VideoContentState extends State<_VideoContent> {
     final theme = Theme.of(context);
 
     if (widget.message.mediaUrl == null) {
-      return const _LoadingPlaceholder(icon: Icons.videocam);
+      return _LoadingPlaceholder(icon: Icons.videocam, uploadProgress: widget.message.uploadProgress);
     }
 
     if (_hasError) {
@@ -543,27 +543,63 @@ class _VideoContentState extends State<_VideoContent> {
 }
 
 /// Loading placeholder for media that's still uploading.
+/// Shows a determinate progress indicator when [uploadProgress] is provided.
 class _LoadingPlaceholder extends StatelessWidget {
   final IconData icon;
+  final double? uploadProgress;
 
-  const _LoadingPlaceholder({required this.icon});
+  const _LoadingPlaceholder({required this.icon, this.uploadProgress});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasProgress = uploadProgress != null;
+    final progressPercent = hasProgress ? (uploadProgress! * 100).toInt() : 0;
+
     return Container(
       width: 250,
       height: 150,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 8),
-            const CircularProgressIndicator(),
+            Icon(icon, size: 40, color: theme.colorScheme.outline),
+            const SizedBox(height: 12),
+            if (hasProgress) ...[
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: uploadProgress,
+                      strokeWidth: 3,
+                      color: theme.colorScheme.primary,
+                    ),
+                    Text(
+                      '$progressPercent%',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Sending...',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ] else
+              const CircularProgressIndicator(),
           ],
         ),
       ),

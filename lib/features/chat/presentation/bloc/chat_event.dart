@@ -188,3 +188,25 @@ class _ChatErrorOccurred extends ChatEvent {
   @override
   List<Object?> get props => [message];
 }
+
+/// Internal: Media upload progress updated.
+class _ChatMediaUploadProgress extends ChatEvent {
+  final String localId;
+  final double progress;
+
+  const _ChatMediaUploadProgress({required this.localId, required this.progress});
+
+  @override
+  List<Object?> get props => [localId, progress];
+}
+
+/// Internal: Media upload or send failed.
+class _ChatMediaUploadFailed extends ChatEvent {
+  final String localId;
+  final String error;
+
+  const _ChatMediaUploadFailed({required this.localId, required this.error});
+
+  @override
+  List<Object?> get props => [localId, error];
+}

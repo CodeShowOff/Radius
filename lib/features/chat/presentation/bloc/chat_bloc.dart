@@ -66,6 +66,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatConversationUpdated>(_onConversationUpdated);
     on<_ChatTypingUpdated>(_onTypingUpdated);
     on<_ChatErrorOccurred>(_onErrorOccurred);
+    on<_ChatMediaUploadProgress>(_onMediaUploadProgress);
+    on<_ChatMediaUploadFailed>(_onMediaUploadFailed);
   }
 
   Future<void> _onOpen(
@@ -294,31 +296,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    try {
-      // Upload image
-      final uploadResult = await _mediaUploadService.uploadImage(
-        file: event.file,
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        onProgress: (progress) {
-          // Could emit progress updates here if needed
-        },
-      );
+    // Create optimistic pending message IMMEDIATELY for instant display
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: event.caption ?? '',
+      type: MessageType.image,
+      sentAt: DateTime.now(),
+      localId: localId,
+      uploadProgress: 0.0,
+    );
 
-      // Send media message
-      await _chatService.sendMediaMessage(
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        type: MessageType.image,
-        mediaUrl: uploadResult.downloadUrl,
-        mediaFileName: uploadResult.fileName,
-        mediaFileSize: uploadResult.fileSize,
-        text: event.caption ?? '',
-        recipientId: state.otherUserId,
-      );
-    } catch (e) {
-      emit(state.copyWith(errorMessage: 'Failed to send image: $e'));
-    }
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // Capture state values before async operation
+    final conversationId = state.conversationId!;
+    final senderId = state.currentUserId!;
+    final otherUserId = state.otherUserId;
+    final caption = event.caption ?? '';
+
+    // Fire-and-forget: start upload in background (doesn't block event queue)
+    var lastReportedProgress = -1.0;
+    unawaited(_performMediaUpload(
+      localId: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      otherUserId: otherUserId,
+      type: MessageType.image,
+      text: caption,
+      upload: () => _mediaUploadService.uploadImage(
+        file: event.file,
+        conversationId: conversationId,
+        senderId: senderId,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _onSendAudio(
@@ -338,32 +359,52 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    try {
-      // Upload audio
-      final uploadResult = await _mediaUploadService.uploadAudio(
-        file: event.file,
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        duration: event.duration,
-        onProgress: (progress) {
-          // Could emit progress updates here if needed
-        },
-      );
+    // Create optimistic pending message IMMEDIATELY for instant display
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: '',
+      type: MessageType.audio,
+      duration: event.duration,
+      sentAt: DateTime.now(),
+      localId: localId,
+      uploadProgress: 0.0,
+    );
 
-      // Send media message
-      await _chatService.sendMediaMessage(
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        type: MessageType.audio,
-        mediaUrl: uploadResult.downloadUrl,
-        mediaFileName: uploadResult.fileName,
-        mediaFileSize: uploadResult.fileSize,
-        duration: event.duration,
-        recipientId: state.otherUserId,
-      );
-    } catch (e) {
-      emit(state.copyWith(errorMessage: 'Failed to send voice message: $e'));
-    }
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // Capture state values before async operation
+    final conversationId = state.conversationId!;
+    final senderId = state.currentUserId!;
+    final otherUserId = state.otherUserId;
+    final duration = event.duration;
+
+    // Fire-and-forget: start upload in background (doesn't block event queue)
+    var lastReportedProgress = -1.0;
+    unawaited(_performMediaUpload(
+      localId: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      otherUserId: otherUserId,
+      type: MessageType.audio,
+      duration: duration,
+      upload: () => _mediaUploadService.uploadAudio(
+        file: event.file,
+        conversationId: conversationId,
+        senderId: senderId,
+        duration: duration,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _onSendDocument(
@@ -383,31 +424,52 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    try {
-      // Upload document
-      final uploadResult = await _mediaUploadService.uploadDocument(
-        file: event.file,
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        onProgress: (progress) {
-          // Could emit progress updates here if needed
-        },
-      );
+    // Create optimistic pending message IMMEDIATELY for instant display
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final fileName = event.file.path.split(Platform.pathSeparator).last;
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: event.caption ?? '',
+      type: MessageType.document,
+      mediaFileName: fileName,
+      sentAt: DateTime.now(),
+      localId: localId,
+      uploadProgress: 0.0,
+    );
 
-      // Send media message
-      await _chatService.sendMediaMessage(
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        type: MessageType.document,
-        mediaUrl: uploadResult.downloadUrl,
-        mediaFileName: uploadResult.fileName,
-        mediaFileSize: uploadResult.fileSize,
-        text: event.caption ?? '',
-        recipientId: state.otherUserId,
-      );
-    } catch (e) {
-      emit(state.copyWith(errorMessage: 'Failed to send document: $e'));
-    }
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // Capture state values before async operation
+    final conversationId = state.conversationId!;
+    final senderId = state.currentUserId!;
+    final otherUserId = state.otherUserId;
+    final caption = event.caption ?? '';
+
+    // Fire-and-forget: start upload in background (doesn't block event queue)
+    var lastReportedProgress = -1.0;
+    unawaited(_performMediaUpload(
+      localId: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      otherUserId: otherUserId,
+      type: MessageType.document,
+      text: caption,
+      upload: () => _mediaUploadService.uploadDocument(
+        file: event.file,
+        conversationId: conversationId,
+        senderId: senderId,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _onSendSticker(
@@ -427,30 +489,112 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    try {
-      // Upload sticker
-      final uploadResult = await _mediaUploadService.uploadSticker(
-        file: event.file,
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        onProgress: (progress) {
-          // Could emit progress updates here if needed
-        },
-      );
+    // Create optimistic pending message IMMEDIATELY for instant display
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: '',
+      type: MessageType.sticker,
+      sentAt: DateTime.now(),
+      localId: localId,
+      uploadProgress: 0.0,
+    );
 
-      // Send media message
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // Capture state values before async operation
+    final conversationId = state.conversationId!;
+    final senderId = state.currentUserId!;
+    final otherUserId = state.otherUserId;
+
+    // Fire-and-forget: start upload in background (doesn't block event queue)
+    var lastReportedProgress = -1.0;
+    unawaited(_performMediaUpload(
+      localId: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      otherUserId: otherUserId,
+      type: MessageType.sticker,
+      upload: () => _mediaUploadService.uploadSticker(
+        file: event.file,
+        conversationId: conversationId,
+        senderId: senderId,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
+    ));
+  }
+
+  /// Performs the actual media upload and sends the message to Firestore.
+  /// Runs as fire-and-forget to avoid blocking the bloc's event queue,
+  /// allowing other events (messages from stream, typing, etc.) to process.
+  Future<void> _performMediaUpload({
+    required String localId,
+    required String conversationId,
+    required String senderId,
+    required String? otherUserId,
+    required MessageType type,
+    required Future<UploadResult> Function() upload,
+    String text = '',
+    int? duration,
+  }) async {
+    try {
+      final uploadResult = await upload();
+      if (isClosed) return;
+
       await _chatService.sendMediaMessage(
-        conversationId: state.conversationId!,
-        senderId: state.currentUserId!,
-        type: MessageType.sticker,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
         mediaUrl: uploadResult.downloadUrl,
         mediaFileName: uploadResult.fileName,
         mediaFileSize: uploadResult.fileSize,
-        recipientId: state.otherUserId,
+        text: text,
+        duration: duration,
+        recipientId: otherUserId,
+        localId: localId,
       );
+      // Stream-based deduplication will remove the pending message
     } catch (e) {
-      emit(state.copyWith(errorMessage: 'Failed to send sticker: $e'));
+      _logger.e('Media upload/send failed', error: e);
+      if (!isClosed) {
+        add(_ChatMediaUploadFailed(localId: localId, error: 'Failed to send media: $e'));
+      }
     }
+  }
+
+  void _onMediaUploadProgress(
+    _ChatMediaUploadProgress event,
+    Emitter<ChatState> emit,
+  ) {
+    final currentPending = Map<String, Message>.from(state.pendingMessages);
+    final existingMsg = currentPending[event.localId];
+    if (existingMsg != null) {
+      currentPending[event.localId] = existingMsg.copyWith(
+        uploadProgress: event.progress,
+      );
+      emit(state.copyWith(pendingMessages: currentPending));
+    }
+  }
+
+  void _onMediaUploadFailed(
+    _ChatMediaUploadFailed event,
+    Emitter<ChatState> emit,
+  ) {
+    final currentPending = Map<String, Message>.from(state.pendingMessages);
+    currentPending.remove(event.localId);
+    emit(state.copyWith(
+      pendingMessages: currentPending,
+      errorMessage: event.error,
+    ));
   }
 
   Future<void> _onLoadMore(

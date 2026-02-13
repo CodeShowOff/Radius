@@ -293,6 +293,8 @@ class ChatService {
   /// Sends a media message (image, audio, document, sticker).
   ///
   /// Returns the optimistic message immediately for UI update.
+  /// [localId] - Optional local ID for matching optimistic messages.
+  /// If not provided, a UUID will be generated.
   Future<Message> sendMediaMessage({
     required String conversationId,
     required String senderId,
@@ -304,8 +306,9 @@ class ChatService {
     String? thumbnailUrl,
     String text = '',
     String? recipientId,
+    String? localId,
   }) async {
-    final localId = _uuid.v4();
+    final effectiveLocalId = localId ?? _uuid.v4();
     final now = DateTime.now();
 
     // Sanitize input text and file name
@@ -318,7 +321,7 @@ class ChatService {
 
     // Create optimistic message for immediate UI (show as sent)
     final optimisticMessage = Message(
-      id: localId,
+      id: effectiveLocalId,
       conversationId: conversationId,
       senderId: senderId,
       text: sanitizedText,
@@ -329,7 +332,7 @@ class ChatService {
       duration: duration,
       thumbnailUrl: thumbnailUrl,
       sentAt: now,
-      localId: localId,
+      localId: effectiveLocalId,
     );
 
     try {
