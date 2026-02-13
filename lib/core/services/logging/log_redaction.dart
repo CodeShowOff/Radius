@@ -3,7 +3,12 @@ import 'package:flutter/foundation.dart';
 /// Centralized redaction/sanitization for logs/telemetry.
 ///
 /// Default behavior:
-/// - Always redact sensitive BLE identifiers/payloads from on-device logs.
+/// - Always redact sensitive data from on-device logs, including:
+///   - BLE identifiers/payloads (device IDs, MAC addresses, manufacturer data)
+///   - FCM tokens and push notification tokens
+///   - User IDs and account identifiers
+///   - Email addresses
+///   - GPS coordinates (latitude/longitude)
 /// - You can temporarily disable redaction in debug builds only via:
 ///   `--dart-define=RADIUS_ALLOW_SENSITIVE_LOGS=true`
 ///
@@ -36,6 +41,62 @@ class LogRedaction {
     'manufacturerpayloadfull',
     'mfgdata',
     'payload',
+
+    // FCM tokens
+    'fcmtoken',
+    'fcm_token',
+    'fcmtokens',
+    'fcm_tokens',
+    'messagingtoken',
+    'pushtoken',
+    'push_token',
+    'notificationtoken',
+
+    // User identifiers
+    'userid',
+    'user_id',
+    'uid',
+    'user1',
+    'user2',
+    'userid1',
+    'userid2',
+    'user_id_1',
+    'user_id_2',
+    'ownerid',
+    'owner_id',
+    'creatorid',
+    'creator_id',
+    'senderid',
+    'sender_id',
+    'recipientid',
+    'recipient_id',
+    'seekerid',
+    'seeker_id',
+    'helperid',
+    'helper_id',
+    'memberid',
+    'member_id',
+
+    // Email addresses
+    'email',
+    'emailaddress',
+    'email_address',
+    'useremail',
+    'user_email',
+
+    // GPS coordinates
+    'latitude',
+    'longitude',
+    'lat',
+    'lng',
+    'lon',
+    'gps',
+    'coordinates',
+    'location',
+    'geolocation',
+    'position',
+    'geohash',
+    'geo_hash',
   };
 
   // Keys that are *allowed* to contain derived values (non-reversible tokens)
@@ -55,10 +116,46 @@ class LogRedaction {
     if (normalized.contains('ble') && normalized.contains('id')) {
       return !normalized.contains('token');
     }
+
+    // BLE-related patterns
     if (normalized.contains('manufacturer')) return true;
     if (normalized.contains('payload')) return true;
     if (normalized.contains('mac')) return true;
     if (normalized.contains('address')) return true;
+
+    // FCM/Push token patterns
+    if (normalized.contains('fcm')) return true;
+    if (normalized.contains('pushtoken')) return true;
+    if (normalized.contains('messagingtoken')) return true;
+
+    // User ID patterns
+    if (normalized.contains('userid')) return true;
+    if (normalized.contains('user_id')) return true;
+    if (normalized.endsWith('id') &&
+        (normalized.contains('user') ||
+            normalized.contains('owner') ||
+            normalized.contains('sender') ||
+            normalized.contains('recipient') ||
+            normalized.contains('seeker') ||
+            normalized.contains('helper') ||
+            normalized.contains('member') ||
+            normalized.contains('creator'))) {
+      return true;
+    }
+
+    // Email patterns
+    if (normalized.contains('email')) return true;
+
+    // GPS coordinate patterns
+    if (normalized.contains('latitude')) return true;
+    if (normalized.contains('longitude')) return true;
+    if (normalized.contains('geohash')) return true;
+    if (normalized == 'lat' || normalized == 'lng' || normalized == 'lon') {
+      return true;
+    }
+    if (normalized.contains('gps')) return true;
+    if (normalized.contains('coordinates')) return true;
+    if (normalized.contains('geolocation')) return true;
 
     return false;
   }
@@ -102,13 +199,23 @@ class LogRedaction {
   }
 
   static final RegExp _kvRedactionPattern = RegExp(
-    r'(anonymousId|bleId|bleAnonymousId|currentAnonymousId|manufacturerData|manufacturerPayload|macAddress|bluetoothAddress|deviceAddress)\s*[:=]\s*([^\s,;\]\}\)]+)',
+    r'(anonymousId|bleId|bleAnonymousId|currentAnonymousId|manufacturerData|manufacturerPayload|macAddress|bluetoothAddress|deviceAddress|fcmToken|fcm_token|userId|user_id|uid|email|latitude|longitude|lat|lng|geoHash|geo_hash)\s*[:=]\s*([^\s,;\]\}\)]+)',
     caseSensitive: false,
   );
 
   static final RegExp _jsonRedactionPattern = RegExp(
-    r'("(anonymousId|bleId|bleAnonymousId|currentAnonymousId|manufacturerData|manufacturerPayload|macAddress|bluetoothAddress|deviceAddress)"\s*:\s*)"[^"]*"',
+    r'("(anonymousId|bleId|bleAnonymousId|currentAnonymousId|manufacturerData|manufacturerPayload|macAddress|bluetoothAddress|deviceAddress|fcmToken|fcm_token|userId|user_id|uid|email|latitude|longitude|lat|lng|geoHash|geo_hash)"\s*:\s*)"[^"]*"',
     caseSensitive: false,
+  );
+
+  /// Redacts email addresses from strings (e.g., user@example.com -> redacted_email)
+  static final RegExp _emailPattern = RegExp(
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+  );
+
+  /// Redacts GPS coordinate pairs (e.g., (37.7749, -122.4194) -> redacted_coords)
+  static final RegExp _coordsPattern = RegExp(
+    r'\(?\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*\)?',
   );
 
   static String redactString(String input) {
@@ -125,6 +232,20 @@ class LogRedaction {
     out = out.replaceAllMapped(_jsonRedactionPattern, (m) {
       return '${m.group(1)}"<redacted>"';
     });
+
+    // Redact email addresses
+    out = out.replaceAll(_emailPattern, '<redacted_email>');
+
+    // Redact GPS coordinate pairs (but be conservative to avoid over-redaction)
+    // Only redact if it looks like GPS coordinates in context
+    if (out.contains('lat') ||
+        out.contains('long') ||
+        out.contains('gps') ||
+        out.contains('coord') ||
+        out.contains('position') ||
+        out.contains('location')) {
+      out = out.replaceAll(_coordsPattern, '<redacted_coords>');
+    }
 
     return out;
   }
