@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 import '../../../features/chat/data/chat_preload_service.dart';
 import '../../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../../features/connections/presentation/bloc/connection_bloc.dart';
+import '../../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
@@ -39,6 +40,7 @@ class RealTimeDataManager {
   final GroupChatPreloadService? _groupChatPreloadService;
   final RandomGroupChatPreloadService? _randomGroupChatPreloadService;
   final ConnectionBloc _connectionBloc;
+  final DiscoveryBloc _discoveryBloc;
   final ConversationsBloc _conversationsBloc;
   final LocationGroupBloc _locationGroupBloc;
   final RandomGroupBloc _randomGroupBloc;
@@ -53,6 +55,7 @@ class RealTimeDataManager {
   RealTimeDataManager({
     required RealtimeConnectionService connectionService,
     required ConnectionBloc connectionBloc,
+    required DiscoveryBloc discoveryBloc,
     required ConversationsBloc conversationsBloc,
     required LocationGroupBloc locationGroupBloc,
     required RandomGroupBloc randomGroupBloc,
@@ -68,6 +71,7 @@ class RealTimeDataManager {
         _groupChatPreloadService = groupChatPreloadService,
         _randomGroupChatPreloadService = randomGroupChatPreloadService,
         _connectionBloc = connectionBloc,
+        _discoveryBloc = discoveryBloc,
         _conversationsBloc = conversationsBloc,
         _locationGroupBloc = locationGroupBloc,
         _randomGroupBloc = randomGroupBloc,
@@ -165,6 +169,18 @@ class RealTimeDataManager {
         photoUrl: photoUrl,
       );
       _connectionBloc.add(ConnectionLoadAll(
+        userId,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      ));
+
+      // 2b. Load discovery connection requests (uses real-time Firestore streams)
+      _discoveryBloc.setCurrentUser(
+        userId: userId,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      );
+      _discoveryBloc.add(DiscoveryLoadRequests(
         userId,
         displayName: displayName,
         photoUrl: photoUrl,

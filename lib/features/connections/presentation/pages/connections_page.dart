@@ -159,8 +159,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(Routes.nearby),
-        tooltip: 'Find people nearby',
+        heroTag: 'add_connection',
+        onPressed: () => _showAddConnectionOptions(context),
+        tooltip: 'Add connection',
         child: const Icon(Icons.person_add),
       ),
     );
@@ -178,7 +179,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           onPressed: () => setState(() => _isSearching = true),
           tooltip: 'Search',
         ),
-        _RequestsBadge(),
       ],
     );
   }
@@ -238,6 +238,74 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     );
   }
 
+  void _showAddConnectionOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Add Connection',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    child: Icon(
+                      Icons.bluetooth_searching,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  title: const Text('Find Nearby'),
+                  subtitle: const Text('Search for people around you via Bluetooth'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push(Routes.nearby);
+                  },
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: theme.colorScheme.tertiaryContainer,
+                    child: Icon(
+                      Icons.person_search,
+                      color: theme.colorScheme.onTertiaryContainer,
+                    ),
+                  ),
+                  title: const Text('Search by Username'),
+                  subtitle: const Text('Find someone using their username'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push(Routes.discoverySearch);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _navigateToChat(
     BuildContext context,
     Connection connection,
@@ -274,66 +342,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         currentUserId: currentUserId,
         profile: profile,
       ),
-    );
-  }
-}
-
-/// Badge showing pending connection requests count from nearby.
-class _RequestsBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-      buildWhen: (prev, curr) {
-        // Rebuild when the count of nearby requests changes
-        final prevNearbyCount = prev.receivedRequests
-            .where((req) => req.source == 'nearby')
-            .length;
-        final currNearbyCount = curr.receivedRequests
-            .where((req) => req.source == 'nearby')
-            .length;
-        return prevNearbyCount != currNearbyCount;
-      },
-      builder: (context, state) {
-        // Count only connection requests received from nearby
-        final nearbyRequestsCount = state.receivedRequests
-            .where((req) => req.source == 'nearby')
-            .length;
-
-        return Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.mail_outline),
-              onPressed: () => context.push(Routes.connectionRequests),
-              tooltip: 'Requests',
-            ),
-            if (nearbyRequestsCount > 0)
-              Positioned(
-                right: 6,
-                top: 6,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: Text(
-                    nearbyRequestsCount > 99 ? '99+' : nearbyRequestsCount.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

@@ -14,6 +14,7 @@ import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/chat/presentation/bloc/conversations_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
+import 'features/connections/presentation/bloc/discovery_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
 import 'features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
@@ -46,6 +47,10 @@ class RadiusApp extends StatelessWidget {
           // Connection BLoC for managing user connections app-wide
           BlocProvider<ConnectionBloc>(
             create: (_) => getIt<ConnectionBloc>(),
+          ),
+          // Discovery BLoC for username-based user search and connection requests
+          BlocProvider<DiscoveryBloc>(
+            create: (_) => getIt<DiscoveryBloc>(),
           ),
           // Conversations BLoC for chat list and unread counts (app-wide)
           BlocProvider<ConversationsBloc>(

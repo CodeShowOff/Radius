@@ -47,6 +47,7 @@ class ProfileRepositoryImpl implements IProfileRepository {
             vibe: profile.vibe,
             mood: profile.mood,
             gender: profile.gender,
+            discoveryUsername: profile.discoveryUsername,
           ),
         );
       } else {

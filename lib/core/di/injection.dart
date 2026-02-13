@@ -6,6 +6,7 @@ import 'package:injectable/injectable.dart';
 import '../services/bluetooth/bluetooth_service.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/firebase/username_service.dart';
+import '../services/firebase/discovery_username_service.dart';
 import '../services/presence/presence_service.dart';
 import '../services/realtime/realtime_connection_service.dart';
 import '../services/realtime/realtime_data_manager.dart';
@@ -16,6 +17,7 @@ import '../../features/chat/data/chat_service.dart';
 import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
+import '../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../features/location_groups/data/group_chat_service.dart';
@@ -97,6 +99,13 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<ConnectionService>(() => ConnectionService());
   }
 
+  // Discovery username service for username-based user search
+  if (!getIt.isRegistered<DiscoveryUsernameService>()) {
+    getIt.registerLazySingleton<DiscoveryUsernameService>(
+      () => DiscoveryUsernameService(),
+    );
+  }
+
   // Real-time connection monitoring service
   if (!getIt.isRegistered<RealtimeConnectionService>()) {
     getIt.registerLazySingleton<RealtimeConnectionService>(
@@ -146,6 +155,16 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<ConnectionBloc>()) {
     getIt.registerLazySingleton<ConnectionBloc>(
       () => ConnectionBloc(connectionService: getIt()),
+    );
+  }
+
+  // Discovery BLoC for username-based user search and connection requests
+  if (!getIt.isRegistered<DiscoveryBloc>()) {
+    getIt.registerLazySingleton<DiscoveryBloc>(
+      () => DiscoveryBloc(
+        discoveryService: getIt<DiscoveryUsernameService>(),
+        connectionService: getIt<ConnectionService>(),
+      ),
     );
   }
 
@@ -353,6 +372,7 @@ Future<void> configureDependencies() {
         groupChatPreloadService: getIt<GroupChatPreloadService>(),
         randomGroupChatPreloadService: getIt<RandomGroupChatPreloadService>(),
         connectionBloc: getIt<ConnectionBloc>(),
+        discoveryBloc: getIt<DiscoveryBloc>(),
         conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),
         randomGroupBloc: getIt<RandomGroupBloc>(),

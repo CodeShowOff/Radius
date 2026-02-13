@@ -14,6 +14,7 @@ class Profile extends Equatable {
   final String? vibe;
   final String? mood;
   final String? gender;
+  final String? discoveryUsername;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool notifyDirectMessages;
@@ -34,6 +35,7 @@ class Profile extends Equatable {
     this.vibe,
     this.mood,
     this.gender,
+    this.discoveryUsername,
     required this.createdAt,
     required this.updatedAt,
     this.notifyDirectMessages = true,
@@ -58,6 +60,7 @@ class Profile extends Equatable {
       vibe: null,
       mood: null,
       gender: null,
+      discoveryUsername: null,
       createdAt: now,
       updatedAt: now,
       notifyDirectMessages: true,
@@ -81,6 +84,7 @@ class Profile extends Equatable {
     String? vibe,
     String? mood,
     String? gender,
+    String? discoveryUsername,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? notifyDirectMessages,
@@ -102,6 +106,7 @@ class Profile extends Equatable {
       vibe: vibe ?? this.vibe,
       mood: mood ?? this.mood,
       gender: gender ?? this.gender,
+      discoveryUsername: discoveryUsername ?? this.discoveryUsername,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       notifyDirectMessages: notifyDirectMessages ?? this.notifyDirectMessages,
@@ -125,6 +130,7 @@ class Profile extends Equatable {
         vibe,
         mood,
         gender,
+        discoveryUsername,
         createdAt,
         updatedAt,
         notifyDirectMessages,

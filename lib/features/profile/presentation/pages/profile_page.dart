@@ -51,6 +51,7 @@ class _ProfilePageState extends State<ProfilePage> {
               String bio = '';
               String? vibe;
               String? mood;
+              String? discoveryUsername;
 
               if (profileState is ProfileLoaded) {
                 final profile = profileState.profile;
@@ -63,6 +64,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 bio = profile.bio;
                 vibe = profile.vibe;
                 mood = profile.mood;
+                discoveryUsername = profile.discoveryUsername;
               }
 
               return Scaffold(
@@ -142,6 +144,12 @@ class _ProfilePageState extends State<ProfilePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                _ProfileInfoField(
+                                  icon: Icons.alternate_email,
+                                  label: 'Username',
+                                  value: discoveryUsername,
+                                ),
+                                const Divider(height: 24),
                                 _ProfileInfoField(
                                   icon: Icons.description_outlined,
                                   label: 'Bio',

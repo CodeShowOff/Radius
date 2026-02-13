@@ -17,6 +17,7 @@ class ProfileModel {
   final String? vibe;
   final String? mood;
   final String? gender;
+  final String? discoveryUsername;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool notifyDirectMessages;
@@ -37,6 +38,7 @@ class ProfileModel {
     this.vibe,
     this.mood,
     this.gender,
+    this.discoveryUsername,
     required this.createdAt,
     required this.updatedAt,
     this.notifyDirectMessages = true,
@@ -64,6 +66,7 @@ class ProfileModel {
       vibe: data['vibe'] as String?,
       mood: data['mood'] as String?,
       gender: data['gender'] as String?,
+      discoveryUsername: data['discoveryUsername'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       notifyDirectMessages: notifPrefs?['directMessages'] as bool? ?? true,
@@ -88,6 +91,7 @@ class ProfileModel {
       vibe: profile.vibe,
       mood: profile.mood,
       gender: profile.gender,
+      discoveryUsername: profile.discoveryUsername,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
       notifyDirectMessages: profile.notifyDirectMessages,
@@ -113,6 +117,7 @@ class ProfileModel {
       'vibe': vibe != null ? _sanitizeField(vibe!, maxVibeLength) : null,
       'mood': mood != null ? _sanitizeField(mood!, maxMoodLength) : null,
       'gender': gender != null ? _sanitizeField(gender!, maxGenderLength) : null,
+      'discoveryUsername': discoveryUsername,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'notificationPreferences': {
@@ -139,6 +144,7 @@ class ProfileModel {
       vibe: vibe,
       mood: mood,
       gender: gender,
+      discoveryUsername: discoveryUsername,
       createdAt: createdAt,
       updatedAt: updatedAt,
       notifyDirectMessages: notifyDirectMessages,
@@ -181,6 +187,7 @@ class ProfileModel {
     String? vibe,
     String? mood,
     String? gender,
+    String? discoveryUsername,
     bool? notifyDirectMessages,
     bool? notifyLocationGroups,
     bool? notifyNearbyGroups,
@@ -205,6 +212,7 @@ class ProfileModel {
     if (vibe != null) map['vibe'] = _sanitizeField(vibe, maxVibeLength);
     if (mood != null) map['mood'] = _sanitizeField(mood, maxMoodLength);
     if (gender != null) map['gender'] = _sanitizeField(gender, maxGenderLength);
+    if (discoveryUsername != null) map['discoveryUsername'] = discoveryUsername;
 
     // Handle notification preferences as nested map
     if (notifyDirectMessages != null || notifyLocationGroups != null ||

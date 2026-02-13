@@ -13,6 +13,9 @@ import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
 import '../../features/connections/presentation/pages/connection_profile_page.dart';
 import '../../features/connections/presentation/pages/connections_page.dart';
+import '../../features/connections/presentation/pages/discovery_search_page.dart';
+import '../../features/connections/presentation/pages/discovery_requests_screen.dart';
+import '../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
 import '../../features/location_groups/presentation/pages/create_group_page.dart';
@@ -279,6 +282,24 @@ GoRouter get appRouter {
         path: Routes.connectionRequests,
         name: 'connectionRequests',
         builder: (context, state) => const ConnectionRequestsScreen(),
+      ),
+
+      // Discovery routes (username-based user search & connection)
+      GoRoute(
+        path: Routes.discoverySearch,
+        name: 'discoverySearch',
+        builder: (context, state) => BlocProvider.value(
+          value: getIt<DiscoveryBloc>(),
+          child: const DiscoverySearchPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.discoveryRequests,
+        name: 'discoveryRequests',
+        builder: (context, state) => BlocProvider.value(
+          value: getIt<DiscoveryBloc>(),
+          child: const DiscoveryRequestsScreen(),
+        ),
       ),
       GoRoute(
         path: Routes.userProfile,

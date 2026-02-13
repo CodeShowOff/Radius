@@ -8,6 +8,8 @@ import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../../core/settings/app_settings_store.dart';
 import '../../../../core/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
+import '../../../connections/presentation/bloc/discovery_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
 import '../../../proximity/proximity_service.dart';
@@ -302,6 +304,12 @@ class _HomePageState extends State<HomePage>
             ),
           ],
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => context.push(Routes.discoverySearch),
+          heroTag: 'searchUsers',
+          tooltip: 'Find People',
+          child: const Icon(Icons.person_search),
+        ),
         body: SafeArea(
           bottom: true,
           child: SingleChildScrollView(
@@ -408,6 +416,75 @@ class _HomePageState extends State<HomePage>
                             Theme.of(context).colorScheme.primaryContainer,
                         isSquare: true,
                         animationType: _CardAnimationType.personCycle,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Received request buttons row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RequestButtonCard(
+                        onTap: () => context.push(Routes.connectionRequests),
+                        label: 'Nearby\nRequest',
+                        icon: Icons.mail_outline,
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.errorContainer,
+                        badgeBuilder: (context) {
+                          return BlocBuilder<ConnectionBloc,
+                              ConnectionBlocState>(
+                            buildWhen: (prev, curr) {
+                              final prevCount = prev.receivedRequests
+                                  .where((req) => req.source == 'nearby')
+                                  .length;
+                              final currCount = curr.receivedRequests
+                                  .where((req) => req.source == 'nearby')
+                                  .length;
+                              return prevCount != currCount;
+                            },
+                            builder: (context, state) {
+                              final count = state.receivedRequests
+                                  .where((req) => req.source == 'nearby')
+                                  .length;
+                              if (count == 0) return const SizedBox.shrink();
+                              return _BadgeCount(
+                                count: count,
+                                color:
+                                    Theme.of(context).colorScheme.error,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _RequestButtonCard(
+                        onTap: () => context.push(Routes.discoveryRequests),
+                        label: 'Connection\nRequest',
+                        icon: Icons.person_search_outlined,
+                        color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.tertiaryContainer,
+                        badgeBuilder: (context) {
+                          return BlocBuilder<DiscoveryBloc, DiscoveryState>(
+                            buildWhen: (prev, curr) =>
+                                prev.receivedRequests.length !=
+                                curr.receivedRequests.length,
+                            builder: (context, state) {
+                              final count = state.receivedRequests.length;
+                              if (count == 0) return const SizedBox.shrink();
+                              return _BadgeCount(
+                                count: count,
+                                color:
+                                    Theme.of(context).colorScheme.tertiary,
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -679,6 +756,118 @@ class _SimpleGroupCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Card button for received connection/discovery requests on home page.
+class _RequestButtonCard extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+  final Widget Function(BuildContext context) badgeBuilder;
+
+  const _RequestButtonCard({
+    required this.onTap,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+    required this.badgeBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        color: backgroundColor,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 28,
+                      color: color,
+                    ),
+                  ),
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: badgeBuilder(context),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Badge count indicator for request buttons.
+class _BadgeCount extends StatelessWidget {
+  final int count;
+  final Color color;
+
+  const _BadgeCount({
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      constraints: const BoxConstraints(
+        minWidth: 20,
+        minHeight: 20,
+      ),
+      child: Text(
+        count > 99 ? '99+' : count.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }

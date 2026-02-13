@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,7 +6,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/services/cloudinary_service.dart';
+import '../../../../core/services/firebase/discovery_username_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../bloc/profile_bloc.dart';
 import '../../domain/entities/profile.dart';
@@ -22,6 +25,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _bioController;
+  late TextEditingController _discoveryUsernameController;
   bool _isVisible = true;
   bool _hasChanges = false;
   String? _profileImageUrl;
@@ -32,11 +36,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _cloudinaryService = CloudinaryService();
   final _imagePicker = ImagePicker();
 
+  // Discovery username state
+  Timer? _usernameDebounce;
+  String? _originalDiscoveryUsername;
+  _UsernameAvailability _usernameAvailability = _UsernameAvailability.idle;
+  String? _usernameError;
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _bioController = TextEditingController();
+    _discoveryUsernameController = TextEditingController();
 
     // Load profile when page opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -53,6 +64,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void dispose() {
     _nameController.dispose();
     _bioController.dispose();
+    _discoveryUsernameController.dispose();
+    _usernameDebounce?.cancel();
     super.dispose();
   }
 
@@ -64,6 +77,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
       _profileImageUrl = profile.photoUrl;
       _selectedVibe = profile.vibe;
       _selectedGender = profile.gender;
+      _originalDiscoveryUsername = profile.discoveryUsername;
+      if (profile.discoveryUsername != null &&
+          _discoveryUsernameController.text.isEmpty) {
+        _discoveryUsernameController.text = profile.discoveryUsername!;
+        _usernameAvailability = _UsernameAvailability.available;
+      }
     }
   }
 
@@ -170,6 +189,74 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
+  void _onDiscoveryUsernameChanged(String value) {
+    _onFieldChanged();
+    final username = value.toLowerCase().trim();
+
+    // If cleared, reset to idle
+    if (username.isEmpty) {
+      setState(() {
+        _usernameAvailability = _UsernameAvailability.idle;
+        _usernameError = null;
+      });
+      _usernameDebounce?.cancel();
+      return;
+    }
+
+    // If same as original, no need to check
+    // Handle both non-null and null original username (for users who had profiles before this feature)
+    if (_originalDiscoveryUsername != null && 
+        username == _originalDiscoveryUsername!.toLowerCase()) {
+      setState(() {
+        _usernameAvailability = _UsernameAvailability.available;
+        _usernameError = null;
+      });
+      _usernameDebounce?.cancel();
+      return;
+    }
+
+    // Client-side format validation first
+    final discoveryService = getIt<DiscoveryUsernameService>();
+    final formatError = discoveryService.validateFormat(username);
+    if (formatError != null) {
+      setState(() {
+        _usernameAvailability = _UsernameAvailability.invalid;
+        _usernameError = formatError;
+      });
+      _usernameDebounce?.cancel();
+      return;
+    }
+
+    // Show checking state and debounce the availability check
+    setState(() {
+      _usernameAvailability = _UsernameAvailability.checking;
+      _usernameError = null;
+    });
+
+    _usernameDebounce?.cancel();
+    _usernameDebounce = Timer(const Duration(milliseconds: 600), () async {
+      final authState = context.read<AuthBloc>().state;
+      final userId =
+          authState is AuthAuthenticated ? authState.user.id : null;
+
+      final isAvailable = await discoveryService.isUsernameAvailable(
+        username,
+        excludeUserId: userId,
+      );
+
+      if (!mounted) return;
+      // Only update if the field still has the same value
+      if (_discoveryUsernameController.text.toLowerCase().trim() == username) {
+        setState(() {
+          _usernameAvailability = isAvailable
+              ? _UsernameAvailability.available
+              : _UsernameAvailability.taken;
+          _usernameError = isAvailable ? null : 'Username is already taken';
+        });
+      }
+    });
+  }
+
   void _onFieldChanged() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
@@ -179,8 +266,74 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validate discovery username if set
+    final discoveryUsername =
+        _discoveryUsernameController.text.toLowerCase().trim();
+    if (discoveryUsername.isNotEmpty) {
+      if (_usernameAvailability == _UsernameAvailability.taken ||
+          _usernameAvailability == _UsernameAvailability.invalid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fix your discovery username before saving'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      if (_usernameAvailability == _UsernameAvailability.checking) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait for username check to complete'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
     final profileState = context.read<ProfileBloc>().state;
     if (profileState is! ProfileLoaded) return;
+
+    // Claim the discovery username if changed
+    final newDiscoveryUsername =
+        discoveryUsername.isEmpty ? null : discoveryUsername;
+    if (newDiscoveryUsername != _originalDiscoveryUsername &&
+        newDiscoveryUsername != null) {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is AuthAuthenticated) {
+        try {
+          final discoveryService = getIt<DiscoveryUsernameService>();
+          final claimed = await discoveryService.claimUsername(
+            userId: authState.user.id,
+            newUsername: newDiscoveryUsername,
+            oldUsername: _originalDiscoveryUsername,
+          );
+          if (!claimed) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Username was just taken. Please try another.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            setState(() {
+              _usernameAvailability = _UsernameAvailability.taken;
+              _usernameError = 'Username is already taken';
+            });
+            return;
+          }
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to claim username: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+      }
+    }
 
     final updatedProfile = profileState.profile.copyWith(
       name: _nameController.text.trim(),
@@ -189,9 +342,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
       photoUrl: _profileImageUrl,
       vibe: _selectedVibe,
       gender: _selectedGender,
+      discoveryUsername: newDiscoveryUsername,
       updatedAt: DateTime.now(),
     );
 
+    if (!mounted) return;
     context.read<ProfileBloc>().add(ProfileUpdateRequested(updatedProfile));
   }
 
@@ -345,6 +500,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 maxLength: 200,
                                 maxLines: 4,
                                 onChanged: (_) => _onFieldChanged(),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Discovery username field
+                              _DiscoveryUsernameField(
+                                controller: _discoveryUsernameController,
+                                availability: _usernameAvailability,
+                                errorText: _usernameError,
+                                onChanged: _onDiscoveryUsernameChanged,
                               ),
                               const SizedBox(height: 24),
 
@@ -975,6 +1139,142 @@ class _GenderSelector extends StatelessWidget {
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 );
               }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Availability status for discovery username.
+enum _UsernameAvailability {
+  idle,
+  checking,
+  available,
+  taken,
+  invalid,
+}
+
+/// Discovery username field with real-time availability indicator.
+class _DiscoveryUsernameField extends StatelessWidget {
+  final TextEditingController controller;
+  final _UsernameAvailability availability;
+  final String? errorText;
+  final ValueChanged<String> onChanged;
+
+  const _DiscoveryUsernameField({
+    required this.controller,
+    required this.availability,
+    required this.onChanged,
+    this.errorText,
+  });
+
+  Widget? _buildSuffixIcon(BuildContext context) {
+    switch (availability) {
+      case _UsernameAvailability.idle:
+        return null;
+      case _UsernameAvailability.checking:
+        return const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      case _UsernameAvailability.available:
+        return Icon(Icons.check_circle,
+            color: Theme.of(context).colorScheme.primary);
+      case _UsernameAvailability.taken:
+        return Icon(Icons.cancel,
+            color: Theme.of(context).colorScheme.error);
+      case _UsernameAvailability.invalid:
+        return Icon(Icons.error_outline,
+            color: Theme.of(context).colorScheme.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.alternate_email,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Discovery Username',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Others can find and connect with you using this',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: controller,
+              maxLength: 30,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.done,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: 'Username',
+                hintText: 'e.g. john_doe',
+                prefixIcon: const Icon(Icons.alternate_email),
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildSuffixIcon(context),
+                ),
+                suffixIconConstraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 20,
+                ),
+                errorText: errorText,
+                helperText: availability == _UsernameAvailability.available
+                    ? 'Username is available!'
+                    : null,
+                helperStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.3),
+              ),
             ),
           ],
         ),

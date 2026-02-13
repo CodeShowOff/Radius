@@ -22,6 +22,10 @@ abstract class Routes {
   static const String connectionRequests = '/connections/requests';
   static const String connectionDetails = '/connection/:id';
 
+  // Discovery routes (username-based user search & connection)
+  static const String discoverySearch = '/discovery/search';
+  static const String discoveryRequests = '/discovery/requests';
+
     // User profile (other user) routes
     static const String userProfile = '/users/:userId';
 

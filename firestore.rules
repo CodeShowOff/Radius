@@ -200,9 +200,32 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && request.resource.data.userId == request.auth.uid;
       
-      // RULE: Users cannot update or delete index entries
+      // RULE: Users cannot update index entries
       // This prevents username hijacking
-      allow update, delete: if false;
+      allow update: if false;
+      
+      // RULE: Owner can delete their own index entry (for account deletion)
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // Discovery usernames - maps discovery usernames to user IDs for online search
+    match /discovery_usernames/{username} {
+      // RULE: Any authenticated user can read to search for users
+      allow read: if isAuthenticated();
+      
+      // RULE: Users can only create their own index entry
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+      
+      // RULE: Users can update their own index entry (for username changes)
+      // Transaction ensures atomicity when claiming new username
+      allow update: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+      
+      // RULE: Owner can delete their own index entry (for account deletion or username change)
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
     }
     
     // ============================================================

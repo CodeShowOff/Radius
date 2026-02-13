@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2299,6 +2299,97 @@ exports.onRandomChatConnectionCreated = (0, firestore_1.onDocumentCreated)("rand
     }
     catch (error) {
         firebase_functions_1.logger.error("Error expiring requests after connection created:", error);
+    }
+});
+// =============================================================================
+// AUTO-ASSIGN DISCOVERY USERNAME ON SIGNUP
+// =============================================================================
+/**
+ * Generates a valid discovery username from a display name.
+ * Rules: lowercase, [a-z0-9._], 3-30 chars, no leading/trailing/consecutive dots or underscores.
+ */
+function generateBaseUsername(displayName) {
+    if (!displayName || displayName.trim().length === 0) {
+        return "user";
+    }
+    let base = displayName
+        .toLowerCase()
+        .trim()
+        .replace(/[\s-]+/g, ".")
+        .replace(/[^a-z0-9._]/g, "")
+        .replace(/\.{2,}/g, ".")
+        .replace(/_{2,}/g, "_")
+        .replace(/^[._]+/, "")
+        .replace(/[._]+$/, "");
+    if (base.length < 3) {
+        base = base.length === 0 ? "user" : base + "0".repeat(3 - base.length);
+    }
+    // Truncate to leave room for suffix (max 24 chars base, 6 for suffix)
+    if (base.length > 24) {
+        base = base.substring(0, 24).replace(/[._]+$/, "");
+    }
+    return base;
+}
+/**
+ * Firestore trigger: auto-assigns a discovery username when a new user document
+ * is created in the `users` collection (i.e., on signup).
+ *
+ * Instagram-inspired approach:
+ * - Derives username from displayName (e.g. "John Smith" → "john.smith")
+ * - If taken, appends a random 4-digit suffix (e.g. "john.smith4827")
+ * - Tries up to 10 suffixes, then falls back to "user.<first8charsOfUid>"
+ * - Uses a batched write (index + user + profile) — fast, no deadlocks
+ * - Runs async after signup, doesn't block the client
+ */
+exports.onUserCreatedAssignDiscoveryUsername = (0, firestore_1.onDocumentCreated)("users/{userId}", async (event) => {
+    const snapshot = event.data;
+    if (!snapshot)
+        return;
+    const userId = event.params.userId;
+    const data = snapshot.data();
+    // Skip if already has a discovery username
+    if (data.discoveryUsername &&
+        typeof data.discoveryUsername === "string" &&
+        data.discoveryUsername.length > 0) {
+        firebase_functions_1.logger.log(`User ${userId} already has username: ` +
+            `${data.discoveryUsername}`);
+        return;
+    }
+    const db = admin.firestore();
+    const displayName = data.displayName;
+    const baseUsername = generateBaseUsername(displayName);
+    try {
+        let finalUsername = null;
+        // Try the base username first, then append random suffixes
+        const candidates = [baseUsername];
+        for (let i = 0; i < 10; i++) {
+            const suffix = Math.floor(Math.random() * 9000 + 1000);
+            candidates.push(`${baseUsername}${suffix}`);
+        }
+        for (const candidate of candidates) {
+            const indexDoc = await db.collection("discovery_usernames").doc(candidate).get();
+            if (!indexDoc.exists) {
+                finalUsername = candidate;
+                break;
+            }
+        }
+        if (!finalUsername) {
+            // Fallback: uid-based username (guaranteed unique)
+            finalUsername = `user.${userId.substring(0, 8).toLowerCase()}`;
+        }
+        // Batched write: index entry + user doc + profile doc
+        const batch = db.batch();
+        batch.set(db.collection("discovery_usernames").doc(finalUsername), {
+            userId: userId,
+            claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        batch.set(db.collection("users").doc(userId), { discoveryUsername: finalUsername }, { merge: true });
+        batch.set(db.collection("profiles").doc(userId), { discoveryUsername: finalUsername }, { merge: true });
+        await batch.commit();
+        firebase_functions_1.logger.log(`Auto-assigned @${finalUsername} to new user ${userId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Failed to assign discovery username for user ${userId}:`, error);
     }
 });
 //# sourceMappingURL=index.js.map

@@ -406,9 +406,10 @@ class AuthRepositoryImpl implements IAuthRepository {
         ));
       }
 
-      // Delete user data from Firestore first
+      // Anonymize user data: keep documents but remove identifying info
+      // so the user is no longer discoverable
       try {
-        // Get username before deleting user document
+        // Get username before clearing it
         String? username;
         try {
           final userDoc = await _firestoreService.getDocument(
@@ -421,29 +422,40 @@ class AuthRepositoryImpl implements IAuthRepository {
           // Continue even if we can't get username
         }
 
-        // Delete profile
-        await _profileService.deleteProfile(uid);
+        // Anonymize profile: set display name to "Deleted Account",
+        // clear username and discoveryUsername, mark as not discoverable/visible
+        await _profileService.updateProfile(uid, {
+          'name': 'Deleted Account',
+          'displayName': 'Deleted Account',
+          'username': '',
+          'discoveryUsername': '',
+          'isVisible': false,
+          'isDiscoverable': false,
+          'photoUrl': null,
+          'bio': '',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
 
-        // Delete user document
-        await _firestoreService.deleteDocument(
-          '${FirestoreCollections.users}/$uid',
-        );
-
-        // Delete username index if we found the username
+        // Delete username index entry so the username is freed up
         if (username != null) {
           try {
             await _firestoreService.deleteDocument(
               'username_index/$username',
             );
           } catch (e) {
-            // Username index might already be deleted, continue
+            // Log but continue — username index cleanup is best-effort
+            assert(() {
+              // ignore: avoid_print
+              print('Warning: Failed to delete username index: $e');
+              return true;
+            }());
           }
         }
       } catch (e) {
-        // Log but continue with account deletion
+        // Log but continue with auth account deletion
         assert(() {
           // ignore: avoid_print
-          print('Warning: Failed to delete user data: $e');
+          print('Warning: Failed to anonymize user data: $e');
           return true;
         }());
       }

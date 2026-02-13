@@ -135,6 +135,7 @@ class ConnectionRequestCard extends StatelessWidget {
       'nearby' => Icons.radar,
       'search' => Icons.search,
       'profile' => Icons.person,
+      'discovery' => Icons.person_search,
       _ => Icons.link,
     };
   }
@@ -144,6 +145,7 @@ class ConnectionRequestCard extends StatelessWidget {
       'nearby' => 'Met nearby',
       'search' => 'From search',
       'profile' => 'From profile',
+      'discovery' => 'Found by username',
       _ => 'Connection request',
     };
   }
