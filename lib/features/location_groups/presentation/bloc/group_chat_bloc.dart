@@ -77,6 +77,7 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<_GroupChatStreamError>(_onGroupChatStreamError);
     on<DeleteGroupMessage>(_onDeleteGroupMessage);
     on<ClearGroupChatMessages>(_onClearGroupChatMessages);
+    on<_UnreadInfoReceived>(_onUnreadInfoReceived);
   }
 
   /// Check if membership is cached and still valid.
@@ -168,31 +169,15 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         membershipVerified: true,
       ));
 
-      // Fetch first unread message ID BEFORE subscribing to messages.
-      // CRITICAL: Must happen before _subscribeToMessages because
-      // _onGroupMessagesReceived calls markGroupAsRead() which updates lastReadAt,
-      // which would cause getFirstUnreadMessageId to return null.
-      try {
-        final firstUnreadId = await _chatService.getFirstUnreadMessageId(
-          groupId: event.groupId,
-          userId: event.currentUserId,
-        );
-        if (!isClosed && firstUnreadId != null) {
-          final unreadCount = await _chatService.getUnreadCount(
-            groupId: event.groupId,
-            userId: event.currentUserId,
-          );
-          emit(state.copyWith(
-            firstUnreadMessageId: firstUnreadId,
-            unreadCountAtOpen: unreadCount,
-          ));
-        }
-      } catch (_) {
-        // Ignore errors for first unread message
-      }
+      // Fetch unread info AND start message stream in parallel
+      // Unread info fetch is non-blocking - messages show immediately from cache
+      final unreadFuture = _fetchUnreadInfo(event.groupId, event.currentUserId);
 
       // Start listening to messages (stream will error if user was removed)
       await _subscribeToMessages(event.groupId);
+
+      // Await unread info (may already be done by now)
+      await unreadFuture;
 
       // Refresh membership cache in background if expired
       if (!hasCachedMembership) {
@@ -201,105 +186,35 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       return;
     }
 
-    // Always start with loading state and unverified membership
+    // Always start with the group context and immediately subscribe to messages.
+    // WhatsApp-style: no blocking membership check — just start streaming.
+    // Firestore security rules enforce membership on the backend.
+    // If user isn't a member, the stream will error with permission-denied.
     emit(state.copyWith(
-      status: GroupChatStatus.loading,
+      status: GroupChatStatus.loaded,
       groupId: event.groupId,
       currentUserId: event.currentUserId,
       currentUserName: event.currentUserName,
       currentUserPhotoUrl: event.currentUserPhotoUrl,
-      messages: const [], // SECURITY: Don't show cached messages until verified
+      messages: const [],
       hasMore: true,
       errorMessage: null,
-      membershipVerified: false, // CRITICAL: Block access until verified
+      membershipVerified: true,
     ));
 
     try {
-      // ======================================================================
-      // STEP 1: Verify membership FIRST (security gate)
-      // ======================================================================
-      final canRead = await _chatService.isActiveMember(
-        groupId: event.groupId,
-        userId: event.currentUserId,
-      );
+      // Start message stream AND fetch unread info in PARALLEL — no blocking
+      final unreadFuture = _fetchUnreadInfo(event.groupId, event.currentUserId);
 
-      if (!canRead) {
-        _logger.w(
-            'Access denied: User ${event.currentUserId} is not a member of group ${event.groupId}');
-        // Invalidate any cached membership
-        _invalidateMembershipCache(event.currentUserId, event.groupId);
-        // Clear any cached messages for this group to prevent stale data display
-        _cacheService.clearGroup(event.groupId);
-        emit(state.copyWith(
-          status: GroupChatStatus.error,
-          errorMessage: 'You are not a member of this group.',
-          membershipVerified: false,
-          messages: const [],
-        ));
-        return;
-      }
-
-      // ======================================================================
-      // STEP 2: Membership verified - cache it and show messages
-      // ======================================================================
-      _cacheMembership(event.currentUserId, event.groupId);
-      _logger.i(
-          'Membership verified for user ${event.currentUserId} in group ${event.groupId}');
-
-      final cachedMessagesAfterVerify =
-          _cacheService.getMessages(event.groupId);
-      final hasCacheAfterVerify = cachedMessagesAfterVerify.isNotEmpty;
-      final cachedEntryAfterVerify = _cacheService.getCache(event.groupId);
-
-      if (hasCacheAfterVerify) {
-        // Show cached messages now that membership is confirmed
-        _logger.i(
-            'Cache hit for group ${event.groupId}: ${cachedMessagesAfterVerify.length} messages');
-        emit(state.copyWith(
-          status: GroupChatStatus.loaded,
-          messages: cachedMessagesAfterVerify,
-          hasMore: cachedEntryAfterVerify?.hasMore ?? true,
-          membershipVerified: true, // CRITICAL: Enable access
-        ));
-      } else {
-        // No cache - mark as verified but keep loading for stream
-        emit(state.copyWith(
-          membershipVerified: true,
-        ));
-      }
-
-      // ======================================================================
-      // STEP 3: Fetch first unread message ID BEFORE subscribing to messages.
-      // CRITICAL: Must happen before _subscribeToMessages because
-      // _onGroupMessagesReceived calls markGroupAsRead() which updates lastReadAt,
-      // which would cause getFirstUnreadMessageId to return null.
-      // ======================================================================
-      try {
-        final firstUnreadId = await _chatService.getFirstUnreadMessageId(
-          groupId: event.groupId,
-          userId: event.currentUserId,
-        );
-
-        if (firstUnreadId != null && !isClosed) {
-          _logger.i('First unread message ID: $firstUnreadId');
-          final unreadCount = await _chatService.getUnreadCount(
-            groupId: event.groupId,
-            userId: event.currentUserId,
-          );
-          emit(state.copyWith(
-            firstUnreadMessageId: firstUnreadId,
-            unreadCountAtOpen: unreadCount,
-          ));
-        }
-      } catch (e) {
-        _logger.w('Failed to get first unread message ID: $e');
-        // Continue without unread divider - not critical
-      }
-
-      // ======================================================================
-      // STEP 4: Start listening to messages (membership already verified)
-      // ======================================================================
+      // Subscribe to messages immediately — stream will deliver messages
+      // or error with permission-denied if user is not a member
       await _subscribeToMessages(event.groupId);
+
+      // Cache membership on successful stream setup
+      _cacheMembership(event.currentUserId, event.groupId);
+
+      // Await unread info (may already be done by now)
+      await unreadFuture;
     } catch (e, stack) {
       _logger.e('Error opening group chat', error: e, stackTrace: stack);
       emit(state.copyWith(
@@ -621,6 +536,42 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
 
     // Cancel existing subscription and resubscribe
     await _subscribeToMessages(state.groupId!);
+  }
+
+  /// Handles unread info received from background fetch.
+  void _onUnreadInfoReceived(
+    _UnreadInfoReceived event,
+    Emitter<GroupChatState> emit,
+  ) {
+    emit(state.copyWith(
+      firstUnreadMessageId: event.firstUnreadMessageId,
+      unreadCountAtOpen: event.unreadCount,
+    ));
+  }
+
+  /// Fetches first unread message ID and unread count in parallel.
+  /// This is non-blocking and won't prevent messages from loading.
+  Future<void> _fetchUnreadInfo(String groupId, String userId) async {
+    try {
+      final firstUnreadId = await _chatService.getFirstUnreadMessageId(
+        groupId: groupId,
+        userId: userId,
+      );
+
+      if (firstUnreadId != null && !isClosed) {
+        _logger.i('First unread message ID: $firstUnreadId');
+        final unreadCount = await _chatService.getUnreadCount(
+          groupId: groupId,
+          userId: userId,
+        );
+        if (!isClosed) {
+          add(_UnreadInfoReceived(firstUnreadId, unreadCount));
+        }
+      }
+    } catch (e) {
+      _logger.w('Failed to get first unread message ID: $e');
+      // Continue without unread divider - not critical
+    }
   }
 
   /// Cancels all Firestore stream subscriptions.

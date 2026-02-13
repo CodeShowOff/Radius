@@ -17,6 +17,7 @@ import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../features/location_groups/data/group_chat_cache_service.dart';
+import '../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../features/location_groups/data/group_chat_service.dart';
 import '../../features/location_groups/data/location_data_service.dart';
 import '../../features/location_groups/data/location_group_service.dart';
@@ -34,6 +35,7 @@ import '../../features/random_chat/data/random_chat_cache_service.dart';
 import '../../features/random_chat/data/random_chat_service.dart';
 import '../../features/random_chat/presentation/bloc/random_chat_bloc.dart';
 import '../../features/random_groups/data/random_group_chat_cache_service.dart';
+import '../../features/random_groups/data/random_group_chat_preload_service.dart';
 import '../../features/random_groups/data/random_group_chat_service.dart';
 import '../../features/random_groups/data/random_group_service.dart';
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
@@ -316,6 +318,30 @@ Future<void> configureDependencies() {
     );
   }
 
+  // GroupChatPreloadService - preloads recent group chat messages on app startup
+  // Eliminates the "No messages yet" flash when opening group chats
+  if (!getIt.isRegistered<GroupChatPreloadService>()) {
+    getIt.registerLazySingleton<GroupChatPreloadService>(
+      () => GroupChatPreloadService(
+        chatService: getIt<GroupChatService>(),
+        cacheService: getIt<GroupChatCacheService>(),
+        locationGroupBloc: getIt<LocationGroupBloc>(),
+      ),
+    );
+  }
+
+  // RandomGroupChatPreloadService - preloads recent random group chat messages on app startup
+  // Eliminates the "No messages yet" flash when opening random group chats
+  if (!getIt.isRegistered<RandomGroupChatPreloadService>()) {
+    getIt.registerLazySingleton<RandomGroupChatPreloadService>(
+      () => RandomGroupChatPreloadService(
+        chatService: getIt<RandomGroupChatService>(),
+        cacheService: getIt<RandomGroupChatCacheService>(),
+        randomGroupBloc: getIt<RandomGroupBloc>(),
+      ),
+    );
+  }
+
   // Register RealTimeDataManager after all BLoCs are registered
   // This needs to be registered after getIt.init() so that ConversationsBloc is available
   if (!getIt.isRegistered<RealTimeDataManager>()) {
@@ -324,6 +350,8 @@ Future<void> configureDependencies() {
         connectionService: getIt<RealtimeConnectionService>(),
         presenceService: getIt<PresenceService>(),
         chatPreloadService: getIt<ChatPreloadService>(),
+        groupChatPreloadService: getIt<GroupChatPreloadService>(),
+        randomGroupChatPreloadService: getIt<RandomGroupChatPreloadService>(),
         connectionBloc: getIt<ConnectionBloc>(),
         conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),

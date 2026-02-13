@@ -92,6 +92,25 @@ service cloud.firestore {
         allow delete: if isAuthenticated();
       }
 
+      // Random group memberships inverse index - for fast user random groups query
+      match /random_group_memberships/{groupId} {
+        // RULE: Owner can read their own random group memberships
+        allow read: if isOwner(userId);
+        
+        // RULE: Write random group memberships (join/leave/approve operations)
+        // User must match the userId in the document
+        allow create: if isAuthenticated()
+          && request.resource.data.userId == userId
+          && request.resource.data.groupId == groupId;
+        
+        // RULE: Allow updates for role changes
+        allow update: if isAuthenticated()
+          && request.resource.data.userId == userId;
+        
+        // RULE: Allow deletion when leaving/removing from groups
+        allow delete: if isAuthenticated();
+      }
+
       // Nearby Help saved locations subcollection
       match /locations/{locationType} {
         // RULE: Owner can read their own saved locations

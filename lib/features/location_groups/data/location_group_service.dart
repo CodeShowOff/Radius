@@ -419,14 +419,13 @@ class LocationGroupService {
           .map((doc) => doc.data()['groupId'] as String)
           .toSet();
 
-      // Fetch groups
-      final groups = <LocationGroup>[];
-      for (final groupId in groupIds) {
-        final group = await getGroupById(groupId);
-        if (group != null && group.isActive) {
-          groups.add(group);
-        }
-      }
+      // Fetch all groups in PARALLEL instead of sequentially
+      final groupFutures = groupIds.map((id) => getGroupById(id));
+      final results = await Future.wait(groupFutures);
+      final groups = results
+          .whereType<LocationGroup>()
+          .where((g) => g.isActive)
+          .toList();
 
       // Sort by last activity
       groups.sort((a, b) {
@@ -440,33 +439,6 @@ class LocationGroupService {
       _logger.e('Error fetching user groups', error: e);
       return [];
     }
-  }
-
-  /// Waits for the auth token to be available and valid.
-  ///
-  /// This prevents race conditions where Firestore queries are executed
-  /// before the auth token has propagated to the Firebase SDK.
-  Future<bool> _waitForAuthToken(String userId, {int maxRetries = 3}) async {
-    for (int i = 0; i < maxRetries; i++) {
-      final currentUser = _auth.currentUser;
-      if (currentUser != null && currentUser.uid == userId) {
-        try {
-          // Force token refresh to ensure it's valid
-          final token = await currentUser.getIdToken(false);
-          if (token != null && token.isNotEmpty) {
-            return true;
-          }
-        } catch (e) {
-          _logger.w('Token validation failed on attempt ${i + 1}', error: e);
-        }
-      }
-      // Wait briefly before retry
-      if (i < maxRetries - 1) {
-        await Future.delayed(Duration(milliseconds: 100 * (i + 1)));
-      }
-    }
-    _logger.e('Failed to validate auth token after $maxRetries attempts');
-    return false;
   }
 
   /// Streams groups the user is a member of.
@@ -486,25 +458,15 @@ class LocationGroupService {
       return Stream.value(<LocationGroup>[]);
     }
 
-    // Create a controller to handle the async token validation
+    // Create a controller to pipe the Firestore stream
     final controller = StreamController<List<LocationGroup>>();
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
     bool isDisposed = false;
 
-    // Start the stream after validating the auth token
+    // Start the stream immediately — auth token is already validated by
+    // RealTimeDataManager before LoadUserGroups is dispatched.
+    // No redundant _waitForAuthToken() call here.
     () async {
-      // Wait for auth token to be ready
-      final isAuthReady = await _waitForAuthToken(userId);
-      if (!isAuthReady || isDisposed) {
-        if (!isDisposed) {
-          _logger
-              .w('streamUserGroups: Auth token not ready, emitting empty list');
-          controller.add(<LocationGroup>[]);
-          await controller.close();
-        }
-        return;
-      }
-
       // Use inverse index - MUCH faster than collection group query
       subscription = _firestore
           .collection('users')
@@ -535,13 +497,14 @@ class LocationGroupService {
                 .map((doc) => doc.data()['groupId'] as String)
                 .toSet();
 
-            final groups = <LocationGroup>[];
-            for (final groupId in groupIds) {
-              final group = await getGroupById(groupId);
-              if (group != null && group.isActive) {
-                groups.add(group);
-              }
-            }
+            // Fetch all groups in PARALLEL instead of sequentially
+            // This eliminates the N+1 query problem that caused 2s delays
+            final groupFutures = groupIds.map((id) => getGroupById(id));
+            final results = await Future.wait(groupFutures);
+            final groups = results
+                .whereType<LocationGroup>()
+                .where((g) => g.isActive)
+                .toList();
 
             groups.sort((a, b) {
               final aTime = a.lastActivityAt ?? a.createdAt;
@@ -594,25 +557,14 @@ class LocationGroupService {
       return Stream.value(<GroupMembership>[]);
     }
 
-    // Create a controller to handle the async token validation
+    // Create a controller to pipe the Firestore stream
     final controller = StreamController<List<GroupMembership>>();
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
     bool isDisposed = false;
 
-    // Start the stream after validating the auth token
+    // Start the stream immediately — auth token is already validated by
+    // RealTimeDataManager before LoadUserGroups is dispatched.
     () async {
-      // Wait for auth token to be ready
-      final isAuthReady = await _waitForAuthToken(userId);
-      if (!isAuthReady || isDisposed) {
-        if (!isDisposed) {
-          _logger.w(
-              'streamUserMemberships: Auth token not ready, emitting empty list');
-          controller.add(<GroupMembership>[]);
-          await controller.close();
-        }
-        return;
-      }
-
       // Use inverse index - MUCH faster than collection group query
       subscription = _firestore
           .collection('users')

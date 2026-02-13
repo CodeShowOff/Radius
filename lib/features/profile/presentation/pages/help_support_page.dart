@@ -581,7 +581,8 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'Radius discovers nearby users using Bluetooth Low Energy (BLE). '
-                    'Advertising runs continuously while the app is open (foreground or in recent apps). '
+                    'By default, advertising runs while the app is open (foreground or in recent apps). '
+                    'You can optionally enable Background Advertising in Bluetooth Settings to stay discoverable even after closing the app. '
                     'Scanning runs for 15 seconds when you tap "Find People Nearby". '
                     'For best results, keep Bluetooth enabled and grant all requested permissions.',
                     style: TextStyle(
@@ -792,13 +793,15 @@ class _FAQsPage extends StatelessWidget {
                 'Radius uses Bluetooth Low Energy (BLE) to detect other Radius users within approximately 30 meters. '
                 'Your phone broadcasts your username via BLE for discovery. '
                 'When another user is detected, the app looks up their full profile from our servers. '
-                'Discovery runs while the app is open (foreground or in recent apps).',
+                'By default, discovery runs while the app is open (foreground or in recent apps). '
+                'If you\'d like to stay discoverable even after closing the app, you can enable the optional Background Advertising setting in Bluetooth Settings.',
           ),
           _FAQItem(
             question: 'Does Radius drain my battery?',
             answer:
                 'Radius is optimized for battery efficiency. It uses BLE which consumes minimal power. '
-                'Scanning runs for 15 seconds when you tap "Find People Nearby", and advertising runs continuously while the app is open. '
+                'Scanning runs for 15 seconds when you tap "Find People Nearby", and advertising runs while the app is open. '
+                'If you enable the optional Background Advertising, it uses a lightweight service that has negligible battery impact. '
                 'Most users report less than 5% additional battery drain per day.',
           ),
           _FAQItem(
@@ -825,8 +828,9 @@ class _FAQsPage extends StatelessWidget {
           _FAQItem(
             question: 'How do I stop being discoverable?',
             answer:
-                'Close the app or switch it to background to stop advertising. '
+                'Simply close the app to stop advertising. '
                 'You can also go to Profile → Privacy Settings to manage visibility. '
+                'If you have Background Advertising enabled, you can turn it off anytime in Bluetooth Settings. '
                 'Scanning only runs when you tap "Find People Nearby".',
           ),
           _FAQItem(
@@ -1265,6 +1269,12 @@ class _PrivacyPolicyPage extends StatelessWidget {
                 '• Discovery requires Bluetooth permissions but NOT location permissions (Android 12+)\n'
                 '• You can stop being discoverable by closing the app or adjusting privacy settings\n'
                 '• Only users you accept as connections can message you\n\n'
+                'Optional Background Advertising:\n\n'
+                '• You may choose to enable Background Advertising in Bluetooth Settings\n'
+                '• When enabled, your username continues to be broadcast via BLE even after the app is closed\n'
+                '• This is entirely optional and off by default — you are always in control\n'
+                '• Only your username is broadcast; no other personal data is shared\n'
+                '• You can disable it at any time from Bluetooth Settings\n\n'
                 'Bluetooth is also used for:\n\n'
                 '• Nearby Groups: Auto-detecting and adding members within Bluetooth range',
           ),
@@ -1496,10 +1506,11 @@ class _TermsOfServicePage extends StatelessWidget {
             content:
                 'Radius uses Bluetooth Low Energy (BLE) for proximity-based user discovery:\n\n'
                 '• Your username is broadcast via BLE when the app is open, making you discoverable to nearby users\n'
-                '• Bluetooth advertising runs continuously while the app is in the foreground or recent apps\n'
+                '• By default, Bluetooth advertising runs while the app is in the foreground or recent apps\n'
+                '• You may optionally enable Background Advertising to stay discoverable after closing the app — this is off by default and fully under your control\n'
                 '• Scanning for nearby users runs for 10 seconds when you tap the "Scan" button\n'
                 '• We do not collect or track your GPS location\n'
-                '• You can control your discoverability by closing the app or adjusting privacy settings\n\n'
+                '• You can control your discoverability by closing the app, disabling Background Advertising, or adjusting privacy settings\n\n'
                 'You acknowledge and agree that:\n\n'
                 '• Bluetooth discovery is inherently proximity-based and may reveal your general location to nearby users\n'
                 '• We are not responsible for how other users use the proximity information\n'

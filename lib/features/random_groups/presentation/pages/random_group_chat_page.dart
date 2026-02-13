@@ -503,9 +503,11 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
                 children: [
                   // Messages list
                   Expanded(
-                    child: state.messages.isEmpty
-                        ? _buildEmptyState(theme)
-                        : _buildMessagesList(state),
+                    child: state.isLoading && state.messages.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : state.messages.isEmpty
+                            ? _buildEmptyState(theme)
+                            : _buildMessagesList(state),
                   ),
 
                   // Input area (only show if membership verified)

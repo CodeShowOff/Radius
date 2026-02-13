@@ -88,3 +88,14 @@ class _ChatStreamError extends RandomGroupChatEvent {
   @override
   List<Object?> get props => [message];
 }
+
+/// Internal event: unread info fetched for display.
+class _UnreadInfoReceived extends RandomGroupChatEvent {
+  final String firstUnreadMessageId;
+  final int unreadCount;
+
+  const _UnreadInfoReceived(this.firstUnreadMessageId, this.unreadCount);
+
+  @override
+  List<Object?> get props => [firstUnreadMessageId, unreadCount];
+}

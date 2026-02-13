@@ -6,8 +6,10 @@ import 'package:logger/logger.dart';
 import '../../../features/chat/data/chat_preload_service.dart';
 import '../../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../../features/connections/presentation/bloc/connection_bloc.dart';
+import '../../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
+import '../../../features/random_groups/data/random_group_chat_preload_service.dart';
 import '../../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../presence/presence_service.dart';
 import 'realtime_connection_service.dart';
@@ -34,6 +36,8 @@ class RealTimeDataManager {
   final RealtimeConnectionService _connectionService;
   final PresenceService? _presenceService;
   final ChatPreloadService? _chatPreloadService;
+  final GroupChatPreloadService? _groupChatPreloadService;
+  final RandomGroupChatPreloadService? _randomGroupChatPreloadService;
   final ConnectionBloc _connectionBloc;
   final ConversationsBloc _conversationsBloc;
   final LocationGroupBloc _locationGroupBloc;
@@ -55,10 +59,14 @@ class RealTimeDataManager {
     required ProfileBloc profileBloc,
     PresenceService? presenceService,
     ChatPreloadService? chatPreloadService,
+    GroupChatPreloadService? groupChatPreloadService,
+    RandomGroupChatPreloadService? randomGroupChatPreloadService,
     Logger? logger,
   })  : _connectionService = connectionService,
         _presenceService = presenceService,
         _chatPreloadService = chatPreloadService,
+        _groupChatPreloadService = groupChatPreloadService,
+        _randomGroupChatPreloadService = randomGroupChatPreloadService,
         _connectionBloc = connectionBloc,
         _conversationsBloc = conversationsBloc,
         _locationGroupBloc = locationGroupBloc,
@@ -177,13 +185,8 @@ class RealTimeDataManager {
 
       // 6. Initialize presence tracking (online/offline status via Firebase RTDB)
       // This enables WhatsApp-style "last seen" and online indicators
-      try {
-        await _presenceService?.initialize(userId);
-        _logger.i('Presence service initialized for user $userId');
-      } catch (e) {
-        _logger.e('Failed to initialize presence service', error: e);
-        // Presence is non-critical, continue without it
-      }
+      // Non-blocking: presence is non-critical and should not delay preloading
+      _initPresence(userId);
 
       _isInitialized = true;
       _logger.i('RealTimeDataManager initialization complete');
@@ -191,9 +194,31 @@ class RealTimeDataManager {
       // 7. Preload recent/unread chats in the background (non-blocking)
       // This warms the cache so first chat opens are instant
       _triggerChatPreload(userId);
+
+      // 8. Preload recent group chats in the background (non-blocking)
+      // This warms the group chat cache so group chats open instantly
+      _triggerGroupChatPreload(userId);
+
+      // 9. Preload recent random group chats in the background (non-blocking)
+      // This warms the random group chat cache so random group chats open instantly
+      _triggerRandomGroupChatPreload(userId);
     } finally {
       _isInitializing = false;
     }
+  }
+
+  /// Initialize presence tracking in the background (non-blocking).
+  void _initPresence(String userId) {
+    if (_presenceService == null) return;
+    Future.microtask(() async {
+      try {
+        await _presenceService.initialize(userId);
+        _logger.i('Presence service initialized for user $userId');
+      } catch (e) {
+        _logger.e('Failed to initialize presence service', error: e);
+        // Presence is non-critical, continue without it
+      }
+    });
   }
 
   /// Trigger chat preloading in the background.
@@ -211,6 +236,47 @@ class RealTimeDataManager {
         await _chatPreloadService.preloadOnStartup(userId);
       } catch (e) {
         _logger.e('Chat preload failed', error: e);
+        // Preload failures are silent - don't affect UX
+      }
+    });
+  }
+
+  /// Trigger group chat preloading in the background.
+  /// This is non-blocking and will not affect UI rendering.
+  void _triggerGroupChatPreload(String userId) {
+    if (_groupChatPreloadService == null) {
+      _logger.d('Group chat preload service not available, skipping preload');
+      return;
+    }
+
+    // Run preload asynchronously without awaiting
+    // This ensures UI is not blocked during startup
+    Future.microtask(() async {
+      try {
+        await _groupChatPreloadService.preloadOnStartup(userId);
+      } catch (e) {
+        _logger.e('Group chat preload failed', error: e);
+        // Preload failures are silent - don't affect UX
+      }
+    });
+  }
+
+  /// Trigger random group chat preloading in the background.
+  /// This is non-blocking and will not affect UI rendering.
+  void _triggerRandomGroupChatPreload(String userId) {
+    if (_randomGroupChatPreloadService == null) {
+      _logger
+          .d('Random group chat preload service not available, skipping preload');
+      return;
+    }
+
+    // Run preload asynchronously without awaiting
+    // This ensures UI is not blocked during startup
+    Future.microtask(() async {
+      try {
+        await _randomGroupChatPreloadService.preloadOnStartup(userId);
+      } catch (e) {
+        _logger.e('Random group chat preload failed', error: e);
         // Preload failures are silent - don't affect UX
       }
     });
@@ -290,6 +356,8 @@ class RealTimeDataManager {
 
     // Clear chat preload tracking
     _chatPreloadService?.clear();
+    _groupChatPreloadService?.clear();
+    _randomGroupChatPreloadService?.clear();
 
     _currentUserId = null;
     _isInitialized = false;

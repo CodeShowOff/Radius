@@ -87,3 +87,14 @@ class ResyncGroupChat extends GroupChatEvent {
 class ClearGroupChatMessages extends GroupChatEvent {
   const ClearGroupChatMessages();
 }
+
+/// Internal event: unread info fetched for display.
+class _UnreadInfoReceived extends GroupChatEvent {
+  final String firstUnreadMessageId;
+  final int unreadCount;
+
+  const _UnreadInfoReceived(this.firstUnreadMessageId, this.unreadCount);
+
+  @override
+  List<Object?> get props => [firstUnreadMessageId, unreadCount];
+}

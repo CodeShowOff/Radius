@@ -271,7 +271,8 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Nearby discovery runs while the app is open (foreground or in recent apps). '
+                      'By default, nearby discovery runs while the app is open. '
+                      'You can optionally enable Background Advertising in Bluetooth Settings to stay discoverable after closing the app. '
                       'Your broadcast username is visible to nearby Radius users for discovery. '
                       'You can disconnect from any user to disable chatting while preserving chat history. '
                       'All chat messages are encrypted in transit and stored securely.',

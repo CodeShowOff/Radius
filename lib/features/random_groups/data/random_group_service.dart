@@ -156,6 +156,23 @@ class RandomGroupService {
         creatorMember.toFirestore(useServerTimestamp: true),
       );
 
+      // Inverse index for fast user groups query
+      batch.set(
+        _firestore
+            .collection('users')
+            .doc(creatorId)
+            .collection('random_group_memberships')
+            .doc(groupId),
+        {
+          'groupId': groupId,
+          'userId': creatorId,
+          'role': 'admin',
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
       await batch.commit();
 
       _logger.i('Created random group: $groupId with name: $trimmedName');
@@ -205,54 +222,46 @@ class RandomGroupService {
 
   /// Stream of groups the user is a member of.
   ///
-  /// Uses a collection group query on the 'members' subcollection to efficiently
-  /// find all groups where the user is a member, then fetches the group details.
+  /// PERFORMANCE: Uses inverse index `users/{userId}/random_group_memberships`
+  /// for O(1) lookup instead of slow `collectionGroup('members')` scan.
   Stream<List<RandomGroup>> watchUserMemberships(String userId) {
-    // Use collection group query to find all memberships for this user
     return _firestore
-        .collectionGroup('members')
-        .where('userId', isEqualTo: userId)
+        .collection('users')
+        .doc(userId)
+        .collection('random_group_memberships')
+        .where('status', isEqualTo: 'active')
         .snapshots()
         .asyncMap((snapshot) async {
       if (snapshot.docs.isEmpty) return <RandomGroup>[];
 
-      // Extract group IDs from the member documents
+      // Extract group IDs from inverse index documents
       final groupIds = snapshot.docs
-          .map((doc) {
-            // Path format: random_groups/{groupId}/members/{memberId}
-            final pathSegments = doc.reference.path.split('/');
-            // Validate path structure: must have at least 4 segments
-            // and be from random_groups collection
-            if (pathSegments.length >= 4 && pathSegments[0] == 'random_groups') {
-              return pathSegments[1]; // groupId is at index 1
-            }
-            return null;
-          })
-          .where((id) => id != null)
-          .cast<String>()
+          .map((doc) => doc.id)
           .toSet()
           .toList();
 
       if (groupIds.isEmpty) return <RandomGroup>[];
 
-      // Fetch group details for each group (in batches of 10 for whereIn limitation)
-      final memberGroups = <RandomGroup>[];
+      // Fetch group details in PARALLEL batches of 10 (whereIn limitation)
+      final batchFutures = <Future<List<RandomGroup>>>[];
       for (var i = 0; i < groupIds.length; i += 10) {
         final batchIds = groupIds.sublist(
           i,
           (i + 10 > groupIds.length) ? groupIds.length : i + 10,
         );
-        final groupDocs = await _groupsRef
-            .where(FieldPath.documentId, whereIn: batchIds)
-            .where('status', isEqualTo: 'active')
-            .get();
-
-        for (final doc in groupDocs.docs) {
-          memberGroups.add(RandomGroupModel.fromFirestore(doc).toEntity());
-        }
+        batchFutures.add(
+          _groupsRef
+              .where(FieldPath.documentId, whereIn: batchIds)
+              .where('status', isEqualTo: 'active')
+              .get()
+              .then((snapshot) => snapshot.docs
+                  .map((doc) => RandomGroupModel.fromFirestore(doc).toEntity())
+                  .toList()),
+        );
       }
 
-      return memberGroups;
+      final results = await Future.wait(batchFutures);
+      return results.expand((list) => list).toList();
     });
   }
 
@@ -261,6 +270,11 @@ class RandomGroupService {
   /// Uses a collection group query on 'members' to find all memberships,
   /// then extracts the unreadCount from each member document.
   /// Returns a map of groupId → unreadCount.
+  ///
+  /// NOTE: Still uses `collectionGroup('members')` because unreadCount lives
+  /// on the member docs and is incremented by the chat service. Moving it to
+  /// the inverse index would require dual-writes on every message send.
+  /// This is acceptable since unread badges are a secondary, non-blocking stream.
   ///
   /// Uses `.distinct()` to suppress duplicate emissions when only
   /// non-unread fields change (e.g., lastReadAt updates on chat close).
@@ -386,6 +400,15 @@ class RandomGroupService {
       // Remove member
       batch.delete(_groupsRef.doc(groupId).collection('members').doc(memberId));
 
+      // Remove inverse index entry
+      batch.delete(
+        _firestore
+            .collection('users')
+            .doc(memberId)
+            .collection('random_group_memberships')
+            .doc(groupId),
+      );
+
       // Update member count
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(-1),
@@ -507,6 +530,15 @@ class RandomGroupService {
 
       // Remove member
       batch.delete(_groupsRef.doc(groupId).collection('members').doc(userId));
+
+      // Remove inverse index entry
+      batch.delete(
+        _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('random_group_memberships')
+            .doc(groupId),
+      );
 
       // Update member count
       batch.update(_groupsRef.doc(groupId), {
@@ -765,6 +797,23 @@ class RandomGroupService {
         member.toFirestore(useServerTimestamp: true),
       );
 
+      // Inverse index for fast user groups query
+      batch.set(
+        _firestore
+            .collection('users')
+            .doc(request.requesterId)
+            .collection('random_group_memberships')
+            .doc(groupId),
+        {
+          'groupId': groupId,
+          'userId': request.requesterId,
+          'role': 'member',
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
       // Update group counts
       batch.update(_groupsRef.doc(groupId), {
         'memberCount': FieldValue.increment(1),
@@ -975,11 +1024,32 @@ class RandomGroupService {
         );
       }
 
+      // Fetch all members to clean up inverse index entries
+      final membersSnapshot = await _groupsRef
+          .doc(groupId)
+          .collection('members')
+          .get();
+
+      final batch = _firestore.batch();
+
       // Set group to inactive (soft delete)
-      await _groupsRef.doc(groupId).update({
+      batch.update(_groupsRef.doc(groupId), {
         'status': 'inactive',
         'lastActiveAt': FieldValue.serverTimestamp(),
       });
+
+      // Remove inverse index entries for all members
+      for (final memberDoc in membersSnapshot.docs) {
+        batch.delete(
+          _firestore
+              .collection('users')
+              .doc(memberDoc.id)
+              .collection('random_group_memberships')
+              .doc(groupId),
+        );
+      }
+
+      await batch.commit();
 
       _logger.i('Deleted group $groupId');
       return const RandomGroupSuccess(null);
