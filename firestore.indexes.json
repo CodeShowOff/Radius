@@ -557,6 +557,20 @@
       ]
     },
     {
+      "collectionGroup": "help_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notifiedUserIds",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "requests",
       "queryScope": "COLLECTION",
       "fields": [

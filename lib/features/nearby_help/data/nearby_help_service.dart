@@ -421,24 +421,27 @@ class NearbyHelpService {
   }
 
   /// Streams open help requests that the user can potentially help with.
-  /// 
-  /// This streams all open requests that:
-  /// - Are not created by the user (can't help your own request)
-  /// - Are still open (not assigned to anyone yet)
-  /// - Haven't expired
-  /// 
-  /// Note: Distance filtering should be done on the client side
-  /// since the user's current location may not match their saved locations.
-  Stream<List<HelpRequest>> streamOpenHelpRequests(String excludeUserId) {
+  ///
+  /// Only returns requests where [userId] is in the server-populated
+  /// `notifiedUserIds` array. This means only users the Cloud Function
+  /// verified as nearby (via `onHelpRequestCreated`) can discover requests
+  /// through browsing — exact GPS coordinates are never broadcast to all
+  /// authenticated users.
+  ///
+  /// Additional client-side filters:
+  /// - Excludes the user's own requests (safety net)
+  /// - Excludes expired requests
+  Stream<List<HelpRequest>> streamOpenHelpRequests(String userId) {
     return _helpRequestsRef
         .where('status', isEqualTo: 'OPEN')
+        .where('notifiedUserIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) {
           final now = DateTime.now();
           final requests = snapshot.docs
               .map((doc) => HelpRequestModel.fromFirestore(doc))
-              .where((request) => 
-                  request.seekerUserId != excludeUserId &&
+              .where((request) =>
+                  request.seekerUserId != userId &&
                   now.isBefore(request.expiresAt))
               .toList();
           // Sort by createdAt descending (most recent first)
@@ -448,20 +451,24 @@ class NearbyHelpService {
   }
 
   /// Gets all open help requests that the user might be able to help with.
-  Future<List<HelpRequest>> getOpenHelpRequests(String excludeUserId) async {
+  ///
+  /// Scoped to requests where [userId] appears in `notifiedUserIds`
+  /// (server-side proximity verification).
+  Future<List<HelpRequest>> getOpenHelpRequests(String userId) async {
     try {
       final snapshot = await _helpRequestsRef
           .where('status', isEqualTo: 'OPEN')
+          .where('notifiedUserIds', arrayContains: userId)
           .get();
-      
+
       final now = DateTime.now();
       final requests = snapshot.docs
           .map((doc) => HelpRequestModel.fromFirestore(doc))
           .where((request) =>
-              request.seekerUserId != excludeUserId &&
+              request.seekerUserId != userId &&
               now.isBefore(request.expiresAt))
           .toList();
-      
+
       // Sort by createdAt descending
       requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return requests;

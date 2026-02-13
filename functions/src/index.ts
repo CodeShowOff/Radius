@@ -1995,12 +1995,15 @@ export const onHelpRequestCreated = onDocumentCreated(
         }
       }
 
-      // Update the request with notification count
+      // Update the request with notification count and notified user IDs.
+      // notifiedUserIds is used by client queries to scope request visibility:
+      // only server-verified nearby users can discover this request via browsing.
       await admin
         .firestore()
         .collection("help_requests")
         .doc(requestId)
         .update({
+          notifiedUserIds: uniqueUsers,
           notifiedUsersCount: uniqueUsers.length,
           notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
         });

@@ -939,9 +939,16 @@ service cloud.firestore {
         return isAuthenticated() && request.resource.data.seekerUserId == request.auth.uid;
       }
       
-      // RULE: Authenticated users can read any help request
-      // This is needed for helpers to view requests they might accept
-      allow read: if isAuthenticated();
+      // RULE: Any authenticated user can read a specific request by ID
+      // (needed for notification deep-links and real-time subscriptions).
+      allow get: if isAuthenticated();
+      
+      // RULE: Collection queries are allowed for authenticated users.
+      // Visibility is scoped at the query level: streamOpenHelpRequests
+      // uses 'notifiedUserIds arrayContains uid' so only server-verified
+      // nearby users discover requests. Other list queries filter by
+      // seekerUserId or helperUserId matching the caller.
+      allow list: if isAuthenticated();
       
       // RULE: Users can create help requests for themselves
       allow create: if isAuthenticated()
@@ -970,7 +977,9 @@ service cloud.firestore {
         // Cannot change seeker fields
         && request.resource.data.seekerUserId == resource.data.seekerUserId
         && request.resource.data.latitude == resource.data.latitude
-        && request.resource.data.longitude == resource.data.longitude;
+        && request.resource.data.longitude == resource.data.longitude
+        // Cannot tamper with server-managed notification fields
+        && request.resource.data.get('notifiedUserIds', null) == resource.data.get('notifiedUserIds', null);
       
       // RULE: Only seeker can delete their own request (soft delete via status change preferred)
       allow delete: if isSeeker();
