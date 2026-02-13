@@ -306,9 +306,11 @@ class NearbyHelpSettingsPage extends StatelessWidget {
           ),
         );
 
-        // Log the accuracy for debugging
-        debugPrint(
-            'Got location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
+        // Log the accuracy for debugging (debug-only, no coordinates)
+        assert(() {
+          debugPrint('Got location accuracy: ${position.accuracy}m');
+          return true;
+        }());
 
         if (context.mounted) {
           Navigator.of(context).pop(); // Close loading dialog

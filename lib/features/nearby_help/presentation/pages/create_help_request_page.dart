@@ -112,8 +112,11 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> with Widg
       );
 
       // Log accuracy for debugging
-      debugPrint(
-          'Help request location: lat=${position.latitude}, lon=${position.longitude}, accuracy=${position.accuracy}m');
+      assert(() {
+        debugPrint(
+            'Help request location accuracy: ${position.accuracy}m');
+        return true;
+      }());
 
       setState(() {
         _latitude = position.latitude;

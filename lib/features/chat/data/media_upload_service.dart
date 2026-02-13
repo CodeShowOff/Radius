@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
@@ -146,6 +147,9 @@ class MediaUploadService {
       // Validate file extension for the storage path
       _validateFileExtension(extension, storagePath);
 
+      // Validate file content matches extension via magic-byte check
+      await _validateMagicBytes(file, extension, storagePath);
+
       // Create unique file path with a UUID to prevent path enumeration.
       // Metadata still records senderId and timestamp for auditing.
       final fileId = _uuid.v4();
@@ -196,6 +200,9 @@ class MediaUploadService {
       final downloadUrl = await ref.getDownloadURL();
 
       _logger.i('File uploaded successfully: $downloadUrl');
+
+      // Clean up temp source file after successful upload
+      _deleteTempFile(file);
 
       return UploadResult(
         downloadUrl: downloadUrl,
@@ -400,5 +407,125 @@ class MediaUploadService {
         code: 'invalid-file-type',
       );
     }
+  }
+
+  /// Magic-byte signatures for validating file content matches its extension.
+  static const Map<String, List<List<int>>> _magicBytes = {
+    // Images
+    '.jpg': [
+      [0xFF, 0xD8, 0xFF],
+    ],
+    '.jpeg': [
+      [0xFF, 0xD8, 0xFF],
+    ],
+    '.png': [
+      [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+    ],
+    '.gif': [
+      [0x47, 0x49, 0x46, 0x38], // GIF8
+    ],
+    '.webp': [
+      [0x52, 0x49, 0x46, 0x46], // RIFF (+ WEBP at offset 8)
+    ],
+    // Audio
+    '.mp3': [
+      [0xFF, 0xFB], // MPEG sync
+      [0xFF, 0xF3],
+      [0xFF, 0xF2],
+      [0x49, 0x44, 0x33], // ID3 tag
+    ],
+    '.wav': [
+      [0x52, 0x49, 0x46, 0x46], // RIFF
+    ],
+    '.ogg': [
+      [0x4F, 0x67, 0x67, 0x53], // OggS
+    ],
+    '.m4a': [
+      [0x00, 0x00, 0x00], // ftyp box (variable offset)
+    ],
+    '.aac': [
+      [0xFF, 0xF1],
+      [0xFF, 0xF9],
+    ],
+    // Documents
+    '.pdf': [
+      [0x25, 0x50, 0x44, 0x46], // %PDF
+    ],
+    '.doc': [
+      [0xD0, 0xCF, 0x11, 0xE0], // OLE compound file
+    ],
+    '.docx': [
+      [0x50, 0x4B, 0x03, 0x04], // PK (ZIP)
+    ],
+    '.xls': [
+      [0xD0, 0xCF, 0x11, 0xE0], // OLE compound file
+    ],
+    '.xlsx': [
+      [0x50, 0x4B, 0x03, 0x04], // PK (ZIP)
+    ],
+    // Video
+    '.mp4': [
+      [0x00, 0x00, 0x00], // ftyp box (variable offset)
+    ],
+    '.avi': [
+      [0x52, 0x49, 0x46, 0x46], // RIFF
+    ],
+  };
+
+  /// Validates that the file's leading bytes match the expected magic bytes
+  /// for the given extension. This prevents a renamed file from bypassing
+  /// extension-based content-type rules.
+  Future<void> _validateMagicBytes(
+    File file,
+    String extension,
+    String storagePath,
+  ) async {
+    final ext = extension.toLowerCase();
+    final signatures = _magicBytes[ext];
+
+    // Skip validation for formats without reliable magic bytes (e.g. .txt, .mov)
+    if (signatures == null) return;
+
+    // Read enough leading bytes to check the longest signature
+    final maxLen =
+        signatures.fold<int>(0, (m, s) => s.length > m ? s.length : m);
+    final Uint8List header;
+    final raf = await file.open(mode: FileMode.read);
+    try {
+      header = (await raf.read(maxLen.clamp(0, 16)));
+    } finally {
+      await raf.close();
+    }
+
+    final matches = signatures.any((sig) {
+      if (header.length < sig.length) return false;
+      for (int i = 0; i < sig.length; i++) {
+        if (header[i] != sig[i]) return false;
+      }
+      return true;
+    });
+
+    if (!matches) {
+      throw const DatabaseException(
+        message:
+            'File content does not match its extension. The file may be corrupted or renamed.',
+        code: 'invalid-file-content',
+      );
+    }
+  }
+
+  /// Deletes a temporary source file after a successful upload.
+  /// Runs asynchronously and does not throw on failure.
+  void _deleteTempFile(File file) {
+    Future(() async {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          _logger.d('Temp file deleted: ${file.path}');
+        }
+      } catch (e) {
+        _logger.w('Failed to delete temp file: ${file.path}', error: e);
+      }
+    });
   }
 }

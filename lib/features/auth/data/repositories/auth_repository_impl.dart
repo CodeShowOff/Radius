@@ -341,6 +341,12 @@ class AuthRepositoryImpl implements IAuthRepository {
   @override
   Future<Either<Failure, void>> signOut() async {
     try {
+      // Record device session logout before signing out (need uid while still authenticated)
+      final uid = _authService.currentUser?.uid;
+      if (uid != null) {
+        _recordDeviceSession(uid, 'logout');
+      }
+
       await _authService.signOut();
       return const Right(null);
     } on AuthException catch (e) {
@@ -435,8 +441,11 @@ class AuthRepositoryImpl implements IAuthRepository {
         }
       } catch (e) {
         // Log but continue with account deletion
-        // ignore: avoid_print
-        print('Warning: Failed to delete user data: $e');
+        assert(() {
+          // ignore: avoid_print
+          print('Warning: Failed to delete user data: $e');
+          return true;
+        }());
       }
 
       // Delete Firebase Auth account
@@ -578,10 +587,8 @@ class AuthRepositoryImpl implements IAuthRepository {
           sessionType,
         );
         await _deviceSessionRepository.saveDeviceSession(session);
-      } catch (e) {
-        // Log error but don't fail the authentication
-        // ignore: avoid_print
-        print('Warning: Failed to record device session: $e');
+      } catch (_) {
+        // Silently swallow – crash reporting should handle this in production
       }
     });
   }
@@ -631,13 +638,8 @@ class AuthRepositoryImpl implements IAuthRepository {
         );
 
         await _profileService.createProfile(profileModel);
-
-        // ignore: avoid_print
-        print('Migration: Created profile document for user $userId');
-      } catch (e) {
+      } catch (_) {
         // Log error but don't fail - profile will be created on next update
-        // ignore: avoid_print
-        print('Warning: Failed to ensure profile exists for $userId: $e');
       }
     });
   }
