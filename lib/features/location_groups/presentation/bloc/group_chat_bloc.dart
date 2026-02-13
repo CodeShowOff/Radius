@@ -300,17 +300,6 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
       // STEP 4: Start listening to messages (membership already verified)
       // ======================================================================
       await _subscribeToMessages(event.groupId);
-
-      // Mark group as read after a brief delay to ensure messages are loaded
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!isClosed && state.groupId == event.groupId) {
-          _chatService.markGroupAsRead(
-            groupId: event.groupId,
-            userId: event.currentUserId,
-          );
-          _logger.d('Marked group as read: ${event.groupId}');
-        }
-      });
     } catch (e, stack) {
       _logger.e('Error opening group chat', error: e, stackTrace: stack);
       emit(state.copyWith(
@@ -350,6 +339,20 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     Emitter<GroupChatState> emit,
   ) async {
     _logger.d('Closing group chat');
+
+    // Update lastReadAt before closing to ensure the unread divider
+    // positions correctly next time the user opens this chat.
+    // This is important because markGroupAsRead skips writes when
+    // unreadCount is 0 (to avoid unnecessary Firestore writes).
+    if (state.groupId != null &&
+        state.currentUserId != null &&
+        state.membershipVerified) {
+      unawaited(_chatService.updateLastReadTimestamp(
+        groupId: state.groupId!,
+        userId: state.currentUserId!,
+      ));
+    }
+
     await _cancelSubscriptions();
   }
 

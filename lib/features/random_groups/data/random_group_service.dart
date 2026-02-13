@@ -261,6 +261,9 @@ class RandomGroupService {
   /// Uses a collection group query on 'members' to find all memberships,
   /// then extracts the unreadCount from each member document.
   /// Returns a map of groupId → unreadCount.
+  ///
+  /// Uses `.distinct()` to suppress duplicate emissions when only
+  /// non-unread fields change (e.g., lastReadAt updates on chat close).
   Stream<Map<String, int>> watchUserUnreadCounts(String userId) {
     return _firestore
         .collectionGroup('members')
@@ -277,6 +280,15 @@ class RandomGroupService {
         }
       }
       return unreadMap;
+    }).distinct((previous, next) {
+      // Suppress duplicate emissions when unread counts haven't changed.
+      // This prevents unnecessary state updates from lastReadAt/updatedAt
+      // writes that don't affect badge display.
+      if (previous.length != next.length) return false;
+      for (final entry in previous.entries) {
+        if (next[entry.key] != entry.value) return false;
+      }
+      return true;
     });
   }
 

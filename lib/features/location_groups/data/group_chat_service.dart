@@ -395,10 +395,10 @@ class GroupChatService {
 
   /// Marks a group as read for a user (resets unread count).
   ///
-  /// Optimized: when unreadCount is already 0, only updates lastReadAt
-  /// (skips the inverse index update since no badge change is needed).
-  /// This prevents redundant writes when the stream handler calls this
-  /// on every message emission while the chat is open.
+  /// Optimized: when unreadCount is already 0, skips the write entirely.
+  /// This eliminates unnecessary Firestore reads/writes on every message
+  /// stream emission while the chat is open. The `updateLastReadTimestamp()`
+  /// method should be called on chat close to keep lastReadAt current.
   Future<void> markGroupAsRead({
     required String groupId,
     required String userId,
@@ -412,52 +412,69 @@ class GroupChatService {
       final currentUnread = (data?['unreadCount'] as num?)?.toInt() ?? 0;
 
       if (currentUnread == 0) {
-        // Unread is already 0 — only update lastReadAt to advance the
-        // "read" pointer (used by getFirstUnreadMessageId).
-        // Skip inverse index update since badge hasn't changed.
-        await memberRef.set(
-          {
-            'lastReadAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      } else {
-        // Reset unread count and update lastReadAt.
-        // Use a batch to update both the membership and inverse index.
-        // The inverse index update triggers streamUserMemberships to refetch
-        // so the badge on the group list page clears.
-        final batch = _firestore.batch();
-
-        batch.set(
-          memberRef,
-          {
-            'unreadCount': 0,
-            'lastReadAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-
-        final inverseIndexRef = _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('group_memberships')
-            .doc(groupId);
-
-        batch.set(
-          inverseIndexRef,
-          {
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-
-        await batch.commit();
+        // Unread is already 0 — skip write entirely.
+        // lastReadAt is updated on chat close via updateLastReadTimestamp().
+        return;
       }
+
+      // Reset unread count and update lastReadAt.
+      // Use a batch to update both the membership and inverse index.
+      // The inverse index update triggers streamUserMemberships to refetch
+      // so the badge on the group list page clears.
+      final batch = _firestore.batch();
+
+      batch.set(
+        memberRef,
+        {
+          'unreadCount': 0,
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      final inverseIndexRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('group_memberships')
+          .doc(groupId);
+
+      batch.set(
+        inverseIndexRef,
+        {
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
       _logger.d('Marked group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);
+    }
+  }
+
+  /// Updates lastReadAt for a user in a group without touching unreadCount.
+  ///
+  /// Called on chat close to ensure the "read" pointer is current for the
+  /// next session's unread divider positioning (`getFirstUnreadMessageId`).
+  /// Separated from `markGroupAsRead` to avoid unnecessary writes/inverse
+  /// index updates during normal chat flow.
+  Future<void> updateLastReadTimestamp({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberRef = _groupRef(groupId).collection('members').doc(userId);
+      await memberRef.set(
+        {
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      _logger.w('Failed to update last read timestamp', error: e);
     }
   }
 

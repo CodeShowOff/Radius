@@ -347,9 +347,11 @@ class RandomGroupChatService {
 
   /// Marks a group as read for a user (resets unread count).
   ///
-  /// Optimized: skips the write if unreadCount is already 0, only updating
-  /// lastReadAt. This prevents redundant writes when the stream handler
-  /// calls this on every message emission while the chat is open.
+  /// Optimized: skips the write entirely when unreadCount is already 0.
+  /// This prevents triggering the `watchUserUnreadCounts` collection group
+  /// listener unnecessarily on every message stream emission while the
+  /// chat is open. The `updateLastReadTimestamp()` method should be called
+  /// on chat close to ensure lastReadAt stays current.
   Future<void> markGroupAsRead({
     required String groupId,
     required String userId,
@@ -363,26 +365,22 @@ class RandomGroupChatService {
       final currentUnread = (data?['unreadCount'] as num?)?.toInt() ?? 0;
 
       if (currentUnread == 0) {
-        // Unread is already 0 — only update lastReadAt to advance the
-        // "read" pointer (used by getFirstUnreadMessageId).
-        await memberRef.set(
-          {
-            'lastReadAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      } else {
-        // Reset unread count and update lastReadAt.
-        await memberRef.set(
-          {
-            'unreadCount': 0,
-            'lastReadAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        // Unread is already 0 — skip write entirely.
+        // Writing to the member doc would trigger the collection group
+        // listener in watchUserUnreadCounts, causing unnecessary state
+        // emissions. lastReadAt is updated on chat close instead.
+        return;
       }
+
+      // Reset unread count and update lastReadAt.
+      await memberRef.set(
+        {
+          'unreadCount': 0,
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
       _logger.d('Marked random group $groupId as read for user $userId');
     } catch (e) {
       _logger.w('Failed to mark group as read', error: e);
@@ -445,6 +443,30 @@ class RandomGroupChatService {
       _logger.w('Error getting first unread message ID',
           error: e, stackTrace: stack);
       return null; // Fail silently
+    }
+  }
+
+  /// Updates lastReadAt for a user in a group without touching unreadCount.
+  ///
+  /// Called on chat close to ensure the "read" pointer is current for the
+  /// next session's unread divider positioning (`getFirstUnreadMessageId`).
+  /// Separated from `markGroupAsRead` to avoid triggering unnecessary
+  /// collection group listener emissions during normal chat flow.
+  Future<void> updateLastReadTimestamp({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final memberRef = _groupRef(groupId).collection('members').doc(userId);
+      await memberRef.set(
+        {
+          'lastReadAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      _logger.w('Failed to update last read timestamp', error: e);
     }
   }
 

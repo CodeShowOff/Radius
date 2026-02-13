@@ -289,17 +289,6 @@ class RandomGroupChatBloc
       // STEP 4: Start listening to messages (membership already verified)
       // ======================================================================
       await _subscribeToMessages(event.groupId);
-
-      // Mark group as read after a brief delay to ensure messages are loaded
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!isClosed && state.currentGroupId == event.groupId) {
-          _chatService.markGroupAsRead(
-            groupId: event.groupId,
-            userId: event.userId,
-          );
-          _logger.d('Marked random group as read: ${event.groupId}');
-        }
-      });
     } catch (e, stack) {
       _logger.e('Error opening random group chat', error: e, stackTrace: stack);
       emit(state.copyWith(
@@ -339,6 +328,20 @@ class RandomGroupChatBloc
     Emitter<RandomGroupChatState> emit,
   ) async {
     _logger.d('Closing random group chat');
+
+    // Update lastReadAt before closing to ensure the unread divider
+    // positions correctly next time the user opens this chat.
+    // This is important because markGroupAsRead skips writes when
+    // unreadCount is 0 (to avoid triggering collection group listener).
+    if (state.currentGroupId != null &&
+        state.currentUserId != null &&
+        state.membershipVerified) {
+      unawaited(_chatService.updateLastReadTimestamp(
+        groupId: state.currentGroupId!,
+        userId: state.currentUserId!,
+      ));
+    }
+
     await _cancelSubscriptions();
   }
 
