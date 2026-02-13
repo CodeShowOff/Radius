@@ -9,6 +9,7 @@ import '../di/injection.dart';
 import '../../features/chat/data/chat_cache_service.dart';
 import '../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
+import '../../features/random_chat/data/random_chat_cache_service.dart';
 import '../../features/random_groups/data/random_group_chat_cache_service.dart';
 import '../services/notifications/notification_service.dart';
 import 'logging/device_log.dart';
@@ -50,6 +51,11 @@ class AppDataClearer {
     }
     if (getIt.isRegistered<RandomGroupChatCacheService>()) {
       getIt<RandomGroupChatCacheService>().clearAll();
+    }
+    if (getIt.isRegistered<RandomChatCacheService>()) {
+      final randomChatCache = getIt<RandomChatCacheService>();
+      await randomChatCache.clearCache();
+      await randomChatCache.close();
     }
   }
 

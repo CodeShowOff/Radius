@@ -188,7 +188,7 @@ class NotificationService {
       }
 
       _fcmToken = token;
-      _logger.i('FCM Token: $token');
+      _logger.i('FCM Token obtained (${token.length} chars)');
 
       // Save token to Firestore
       await _saveTokenToFirestore(token);
@@ -220,7 +220,7 @@ class NotificationService {
   /// Handle token refresh.
   void _onTokenRefresh(String newToken) {
     _fcmToken = newToken;
-    _logger.i('FCM Token refreshed: $newToken');
+    _logger.i('FCM Token refreshed (${newToken.length} chars)');
     _saveTokenToFirestore(newToken);
   }
 
@@ -525,5 +525,5 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize Firebase if not already initialized
   // await Firebase.initializeApp();
 
-  Logger().i('Background message: ${message.notification?.title}');
+  debugPrint('Background message: ${message.notification?.title}');
 }
