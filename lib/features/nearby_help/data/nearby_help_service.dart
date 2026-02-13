@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:logger/logger.dart';
 
 import '../domain/entities/help_radius.dart';
 import '../domain/entities/help_request.dart';
 import '../domain/entities/help_request_status.dart';
 import 'models/help_request_model.dart';
-import 'models/user_location_model.dart';
 
 /// Result type for nearby help operations.
 sealed class NearbyHelpResult<T> {
@@ -64,6 +63,7 @@ enum NearbyHelpErrorType {
 /// - `users/{userId}` - nearbyHelpSettings field for opt-in/opt-out
 class NearbyHelpService {
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   final Logger _logger;
 
   // Collection references
@@ -77,8 +77,10 @@ class NearbyHelpService {
 
   NearbyHelpService({
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
     Logger? logger,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ?? FirebaseFunctions.instance,
         _logger = logger ?? Logger() {
     _helpRequestsRef = _firestore.collection('help_requests');
   }
@@ -471,8 +473,9 @@ class NearbyHelpService {
 
   /// Finds nearby users who can help based on their saved locations.
   ///
-  /// Returns user IDs of users whose home/work location is within the radius
-  /// and who have opted in for help alerts.
+  /// Calls a server-side Cloud Function to perform the proximity query.
+  /// The server does all distance filtering — no other users' GPS coordinates
+  /// are ever sent to the client. Only matching user IDs are returned.
   Future<List<String>> findNearbyHelpers({
     required double latitude,
     required double longitude,
@@ -480,49 +483,23 @@ class NearbyHelpService {
     required String excludeUserId,
   }) async {
     try {
-      final nearbyUserIds = <String>{};
+      final callable = _functions.httpsCallable(
+        'findNearbyHelpers',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
 
-      // Query all users who have opted in for help alerts
-      final usersSnapshot = await _firestore
-          .collection('users')
-          .where('nearbyHelpSettings.receiveHelpAlerts', isEqualTo: true)
-          .get();
+      final result = await callable.call<Map<String, dynamic>>({
+        'latitude': latitude,
+        'longitude': longitude,
+        'radiusMeters': radius.meters,
+      });
 
-      for (final userDoc in usersSnapshot.docs) {
-        final userId = userDoc.id;
+      final data = result.data;
+      final userIds =
+          (data['userIds'] as List<dynamic>?)?.cast<String>() ?? [];
 
-        // Skip the seeker
-        if (userId == excludeUserId) continue;
-
-        // Get user's saved locations
-        final locationsSnapshot = await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('locations')
-            .where('isActive', isEqualTo: true)
-            .get();
-
-        for (final locationDoc in locationsSnapshot.docs) {
-          final location = UserLocationModel.fromFirestore(locationDoc);
-
-          // Calculate distance using Haversine formula
-          final distance = _calculateDistance(
-            latitude,
-            longitude,
-            location.latitude,
-            location.longitude,
-          );
-
-          // Check if within radius
-          if (distance <= radius.meters) {
-            nearbyUserIds.add(userId);
-            break; // User is nearby, no need to check other locations
-          }
-        }
-      }
-
-      _logger.i('Found ${nearbyUserIds.length} nearby helpers');
-      return nearbyUserIds.toList();
+      _logger.i('Found ${userIds.length} nearby helpers (server-side)');
+      return userIds;
     } catch (e, stack) {
       _logger.e('Error finding nearby helpers', error: e, stackTrace: stack);
       return [];
@@ -571,34 +548,6 @@ class NearbyHelpService {
       _logger.e('Error getting active request', error: e);
       return null;
     }
-  }
-
-  /// Calculates distance between two coordinates using Haversine formula.
-  /// Returns distance in meters.
-  double _calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadius = 6371000.0; // meters
-
-    final dLat = _toRadians(lat2 - lat1);
-    final dLon = _toRadians(lon2 - lon1);
-
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_toRadians(lat1)) *
-            math.cos(_toRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return earthRadius * c;
-  }
-
-  double _toRadians(double degrees) {
-    return degrees * math.pi / 180;
   }
 
   /// Generates a simple geohash for the given coordinates.
