@@ -30,7 +30,7 @@ class GroupCard extends StatelessWidget {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E), // Charcoal black background
+          color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: InkWell(
@@ -38,25 +38,27 @@ class GroupCard extends StatelessWidget {
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Row(
             children: [
               // Group avatar - WhatsApp style
               CircleAvatar(
                 radius: 28,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                backgroundColor: theme.colorScheme.primaryContainer,
                 backgroundImage: group.avatarUrl != null
                     ? NetworkImage(group.avatarUrl!)
                     : null,
                 child: group.avatarUrl == null
-                    ? Icon(
-                        Icons.group,
-                        size: 28,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    ? Text(
+                        group.name.isNotEmpty ? group.name[0].toUpperCase() : '?',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
                       )
                     : null,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               
               // Group info
               Expanded(
@@ -74,13 +76,25 @@ class GroupCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     
+                    // Location
+                    Text(
+                      '${group.stateName}, ${group.countryName}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    
                     // Last message preview
                     Text(
                       group.lastMessagePreview ?? 'No messages yet',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

@@ -323,21 +323,7 @@ class _HomePageState extends State<HomePage>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Mood selector - with blue border effect
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.all(3),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.all(20),
-                    child: const MoodSelector(showLabel: true, compact: false),
-                  ),
-                ),
+                const MoodSelector(showLabel: true, compact: false),
                 const SizedBox(height: 16),
 
                 // Background Advertising Toggle Card
@@ -396,26 +382,42 @@ class _HomePageState extends State<HomePage>
                 Row(
                   children: [
                     Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.nearby),
-                        label: 'Find\nNearby',
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        isSquare: true,
-                        animationType: _CardAnimationType.wave,
+                      child: Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return _AnimatedSquareCard(
+                            onTap: () => context.push(Routes.nearby),
+                            label: 'Find\nNearby',
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.onSurface,
+                            backgroundColor: isDark
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
+                            isSquare: true,
+                            animationType: _CardAnimationType.wave,
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.randomChat),
-                        label: 'Random\nChat',
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        isSquare: true,
-                        animationType: _CardAnimationType.personCycle,
+                      child: Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return _AnimatedSquareCard(
+                            onTap: () => context.push(Routes.randomChat),
+                            label: 'Random\nChat',
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.onSurface,
+                            backgroundColor: isDark
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
+                            isSquare: true,
+                            animationType: _CardAnimationType.personCycle,
+                          );
+                        },
                       ),
                     ),
                   ],

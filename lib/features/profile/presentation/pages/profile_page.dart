@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
+import '../../../nearby_help/data/nearby_help_service.dart';
 import '../bloc/profile_bloc.dart';
 
 /// User profile page.
@@ -178,8 +180,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           builder: (context, connectionState) {
                             final connectionsCount =
                                 connectionState.connections.length;
-                            // Encounters would be total nearby users ever discovered
-                            // For now, use 0 as placeholder until we add encounter tracking
+                            
+                            // Get helps done count where user was the helper
+                            final userId = user?.id ?? '';
                             return Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
@@ -187,9 +190,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                   label: 'Connections',
                                   value: connectionsCount.toString(),
                                 ),
-                                const _StatItem(
-                                  label: 'Encounters',
-                                  value: '0',
+                                StreamBuilder<int>(
+                                  stream: getIt<NearbyHelpService>().streamHelpsDoneCount(userId),
+                                  builder: (context, snapshot) {
+                                    final helpsDone = snapshot.data ?? 0;
+                                    return _StatItem(
+                                      label: 'Helps Done',
+                                      value: helpsDone.toString(),
+                                    );
+                                  },
                                 ),
                               ],
                             );

@@ -70,10 +70,12 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<UpdateGroupSettings>(_onUpdateGroupSettings);
     on<ClearGroupError>(_onClearGroupError);
     on<ClearGroupDeletionFlag>(_onClearGroupDeletionFlag);
+    on<ClearGroupLeftFlag>(_onClearGroupLeftFlag);
     on<ResetGroupState>(_onResetGroupState);
     on<ChangeSortOption>(_onChangeSortOption);
     on<DeleteGroup>(_onDeleteGroup);
     on<ClearGroupChat>(_onClearGroupChat);
+    on<ForceRefreshUserGroups>(_onForceRefreshUserGroups);
 
     // Private events for stream updates
     on<_GroupsUpdated>((event, emit) {
@@ -286,6 +288,29 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     );
   }
 
+  Future<void> _onForceRefreshUserGroups(
+    ForceRefreshUserGroups event,
+    Emitter<LocationGroupState> emit,
+  ) async {
+    _logger.d('Force refreshing user groups');
+
+    // Cancel existing subscriptions to force re-subscribe
+    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
+    await _userGroupMembershipsSubscription?.cancel();
+    _userGroupMembershipsSubscription = null;
+
+    // Reset status AND clear userGroupsUserId so the idempotency guard
+    // in LoadUserGroups won't skip the reload
+    emit(state.copyWith(
+      status: GroupBlocStatus.initial,
+      userGroupsUserId: '', // Clear so idempotency guard sees a different user
+    ));
+
+    // Re-dispatch LoadUserGroups which will now start fresh subscriptions
+    add(LoadUserGroups(userId: event.userId));
+  }
+
   Future<void> _onCreateGroup(
     CreateGroup event,
     Emitter<LocationGroupState> emit,
@@ -404,10 +429,26 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     switch (result) {
       case GroupSuccess():
         _logger.i('Left group: ${event.groupId}');
+        // Cancel detail streams to prevent stale state re-emission
+        await _currentGroupSubscription?.cancel();
+        _currentGroupSubscription = null;
+        await _membersSubscription?.cancel();
+        _membersSubscription = null;
+        await _requestsSubscription?.cancel();
+        _requestsSubscription = null;
+        await _userPendingRequestSubscription?.cancel();
+        _userPendingRequestSubscription = null;
+        // Remove the left group from userGroups for immediate UI update
+        final updatedGroupsAfterLeave = state.userGroups
+            .where((g) => g.id != event.groupId)
+            .toList();
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
           clearCurrentMembership: true, // SECURITY: Explicitly clear membership
+          clearCurrentGroupUserId: true,
           hasPendingRequest: false,
+          userGroups: updatedGroupsAfterLeave,
+          groupLeft: true,
         ));
         break;
       case GroupFailure(:final message):
@@ -666,6 +707,13 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     emit(state.copyWith(groupDeleted: false));
   }
 
+  void _onClearGroupLeftFlag(
+    ClearGroupLeftFlag event,
+    Emitter<LocationGroupState> emit,
+  ) {
+    emit(state.copyWith(groupLeft: false));
+  }
+
   void _onResetGroupState(
     ResetGroupState event,
     Emitter<LocationGroupState> emit,
@@ -701,11 +749,28 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     switch (result) {
       case GroupSuccess():
         _logger.i('Group ${event.groupId} deleted successfully');
+        // Cancel detail streams to prevent stale state from deleted group
+        await _currentGroupSubscription?.cancel();
+        _currentGroupSubscription = null;
+        await _membersSubscription?.cancel();
+        _membersSubscription = null;
+        await _requestsSubscription?.cancel();
+        _requestsSubscription = null;
+        await _userPendingRequestSubscription?.cancel();
+        _userPendingRequestSubscription = null;
+        // Remove the deleted group from userGroups for immediate UI update
+        final updatedGroupsAfterDelete = state.userGroups
+            .where((g) => g.id != event.groupId)
+            .toList();
         emit(state.copyWith(
           status: GroupBlocStatus.loaded,
           currentGroup: null,
+          clearCurrentMembership: true,
+          clearCurrentGroupUserId: true,
           groupDeleted: true,
           errorMessage: null,
+          groupMembers: const [],
+          userGroups: updatedGroupsAfterDelete,
         ));
         break;
       case GroupFailure(:final message):
@@ -742,19 +807,26 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     }
   }
 
-  void _cancelSubscriptions() {
-    _groupsSubscription?.cancel();
-    _userGroupsSubscription?.cancel();
-    _userGroupMembershipsSubscription?.cancel();
-    _currentGroupSubscription?.cancel();
-    _membersSubscription?.cancel();
-    _requestsSubscription?.cancel();
-    _userPendingRequestSubscription?.cancel();
+  Future<void> _cancelSubscriptions() async {
+    await _groupsSubscription?.cancel();
+    _groupsSubscription = null;
+    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
+    await _userGroupMembershipsSubscription?.cancel();
+    _userGroupMembershipsSubscription = null;
+    await _currentGroupSubscription?.cancel();
+    _currentGroupSubscription = null;
+    await _membersSubscription?.cancel();
+    _membersSubscription = null;
+    await _requestsSubscription?.cancel();
+    _requestsSubscription = null;
+    await _userPendingRequestSubscription?.cancel();
+    _userPendingRequestSubscription = null;
   }
 
   @override
-  Future<void> close() {
-    _cancelSubscriptions();
+  Future<void> close() async {
+    await _cancelSubscriptions();
     return super.close();
   }
 }

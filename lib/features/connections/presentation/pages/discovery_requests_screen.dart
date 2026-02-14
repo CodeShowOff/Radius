@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../bloc/connection_bloc.dart';
 import '../bloc/discovery_bloc.dart';
 import '../widgets/connection_request_card.dart';
 
@@ -37,7 +38,7 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Discovery Requests',
+          'Connection Requests',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
@@ -107,6 +108,14 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
                 backgroundColor: Colors.green,
               ),
             );
+            // After a discovery request is accepted, force-refresh
+            // ConnectionBloc streams so the new connection appears
+            // immediately on the connections page.
+            if (state.successMessage == 'Connection accepted!') {
+              context
+                  .read<ConnectionBloc>()
+                  .add(const ConnectionForceRefresh());
+            }
           }
         },
         child: TabBarView(

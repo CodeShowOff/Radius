@@ -58,6 +58,9 @@ class LocationGroupState extends Equatable {
   /// Flag to indicate a group was successfully deleted (for navigation).
   final bool groupDeleted;
 
+  /// Flag to indicate the user successfully left a group (for navigation).
+  final bool groupLeft;
+
   /// The current user's ID for the group detail view.
   /// Used to reactively update currentMembership when groupMembers changes.
   final String? currentGroupUserId;
@@ -79,6 +82,7 @@ class LocationGroupState extends Equatable {
     this.createdGroup,
     this.hasPendingRequest = false,
     this.groupDeleted = false,
+    this.groupLeft = false,
     this.currentGroupUserId,
   });
 
@@ -112,6 +116,7 @@ class LocationGroupState extends Equatable {
     LocationGroup? createdGroup,
     bool? hasPendingRequest,
     bool? groupDeleted,
+    bool? groupLeft,
     String? currentGroupUserId,
     bool clearCurrentGroupUserId = false,
   }) {
@@ -132,6 +137,7 @@ class LocationGroupState extends Equatable {
       createdGroup: createdGroup,
       hasPendingRequest: hasPendingRequest ?? this.hasPendingRequest,
       groupDeleted: groupDeleted ?? this.groupDeleted,
+      groupLeft: groupLeft ?? this.groupLeft,
       currentGroupUserId: clearCurrentGroupUserId ? null : (currentGroupUserId ?? this.currentGroupUserId),
     );
   }
@@ -154,6 +160,7 @@ class LocationGroupState extends Equatable {
         createdGroup,
         hasPendingRequest,
         groupDeleted,
+        groupLeft,
         currentGroupUserId,
       ];
 }

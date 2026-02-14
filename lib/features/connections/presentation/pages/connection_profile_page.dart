@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../nearby_help/data/nearby_help_service.dart';
 import '../../data/connection_service.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
@@ -123,7 +124,12 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         widget.otherUserId,
       );
       if (mounted) {
-        setState(() => _connection = connection);
+        // Only set _connection if actually connected — a disconnected or
+        // blocked record should not enable the "Remove" button.
+        setState(() => _connection =
+            connection?.status == ConnectionStatus.connected
+                ? connection
+                : null);
       }
     } catch (_) {
       // ignore
@@ -343,6 +349,35 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          // Stats — Connections count & Helps Done count
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              StreamBuilder<List<Connection>>(
+                stream: getIt<ConnectionService>()
+                    .getConnectionsStream(widget.otherUserId),
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.length ?? 0;
+                  return _StatItem(
+                    label: 'Connections',
+                    value: count.toString(),
+                  );
+                },
+              ),
+              StreamBuilder<int>(
+                stream: getIt<NearbyHelpService>()
+                    .streamHelpsDoneCount(widget.otherUserId),
+                builder: (context, snapshot) {
+                  final helpsDone = snapshot.data ?? 0;
+                  return _StatItem(
+                    label: 'Helps Done',
+                    value: helpsDone.toString(),
+                  );
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: 32),
           Row(
             children: [
@@ -383,6 +418,37 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
     if (diff.inDays < 7) return '${diff.inDays}d ago';
 
     return '${time.day}/${time.month}/${time.year}';
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatItem({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+        ),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
   }
 }
 

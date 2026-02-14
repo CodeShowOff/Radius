@@ -90,7 +90,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           NavigationDestination(
             icon: _GroupsIcon(selected: false),
             selectedIcon: _GroupsIcon(selected: true),
-            label: 'Groups',
+            label: 'Location',
           ),
         ],
       ),

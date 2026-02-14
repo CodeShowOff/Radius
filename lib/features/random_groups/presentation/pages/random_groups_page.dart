@@ -225,7 +225,7 @@ class _RandomGroupCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E), // Charcoal black background
+        color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
@@ -233,20 +233,27 @@ class _RandomGroupCard extends StatelessWidget {
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Row(
           children: [
             // Group avatar - WhatsApp style
             CircleAvatar(
               radius: 28,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              child: Icon(
-                Icons.group,
-                size: 28,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              backgroundColor: theme.colorScheme.primaryContainer,
+              backgroundImage: group.photoUrl != null
+                  ? NetworkImage(group.photoUrl!)
+                  : null,
+              child: group.photoUrl == null
+                  ? Text(
+                      group.name.isNotEmpty ? group.name[0].toUpperCase() : '?',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             
             // Group info
             Expanded(
@@ -264,13 +271,25 @@ class _RandomGroupCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   
+                  // Topic
+                  Text(
+                    group.topic ?? 'No topic',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  
                   // Last message or member info
                   Text(
                     group.lastMessagePreview ?? '${group.memberCount} members',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

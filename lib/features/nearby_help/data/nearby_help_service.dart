@@ -300,10 +300,10 @@ class NearbyHelpService {
 
       final request = HelpRequestModel.fromFirestore(doc);
 
-      // Either seeker or helper can mark as completed
-      if (request.seekerUserId != userId && request.helperUserId != userId) {
+      // Only the seeker can mark as completed
+      if (request.seekerUserId != userId) {
         return const NearbyHelpFailure(
-          'Only the seeker or helper can complete this request',
+          'Only the help seeker can mark this request as completed',
           NearbyHelpErrorType.unauthorized,
         );
       }
@@ -511,6 +511,31 @@ class NearbyHelpService {
       _logger.e('Error finding nearby helpers', error: e, stackTrace: stack);
       return [];
     }
+  }
+
+  /// Gets the count of successfully completed help requests where the user was the helper.
+  Future<int> getHelpsDoneCount(String userId) async {
+    try {
+      final result = await _helpRequestsRef
+          .where('helperUserId', isEqualTo: userId)
+          .where('status', isEqualTo: 'RESOLVED')
+          .count()
+          .get();
+
+      return result.count ?? 0;
+    } catch (e, stack) {
+      _logger.e('Error getting helps done count', error: e, stackTrace: stack);
+      return 0;
+    }
+  }
+
+  /// Streams the count of successfully completed help requests where the user was the helper.
+  Stream<int> streamHelpsDoneCount(String userId) {
+    return _helpRequestsRef
+        .where('helperUserId', isEqualTo: userId)
+        .where('status', isEqualTo: 'RESOLVED')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
   }
 
   // ==================== HELPER METHODS ====================

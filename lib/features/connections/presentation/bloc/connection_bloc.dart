@@ -43,6 +43,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     on<ConnectionRemove>(_onRemove);
     on<ConnectionBlockUser>(_onBlockUser);
     on<ConnectionUnblockUser>(_onUnblockUser);
+    on<ConnectionForceRefresh>(_onForceRefresh);
     on<ConnectionCheckState>(_onCheckState);
     on<_ConnectionsUpdated>(_onConnectionsUpdated);
     on<_ReceivedRequestsUpdated>(_onReceivedRequestsUpdated);
@@ -518,6 +519,68 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
           processingId: null,
           errorMessage: result.message,
         ));
+    }
+  }
+
+  /// Force re-subscribe to all Firestore streams.
+  /// Cancels existing subscriptions and creates new ones.
+  Future<void> _onForceRefresh(
+    ConnectionForceRefresh event,
+    Emitter<ConnectionBlocState> emit,
+  ) async {
+    if (_currentUserId == null) return;
+
+    _logger.i('Force refreshing connection streams for user $_currentUserId');
+
+    // Cancel existing subscriptions
+    await _connectionsSubscription?.cancel();
+    await _receivedRequestsSubscription?.cancel();
+    await _sentRequestsSubscription?.cancel();
+    _connectionsSubscription = null;
+    _receivedRequestsSubscription = null;
+    _sentRequestsSubscription = null;
+
+    try {
+      // Re-subscribe to connections stream
+      _connectionsSubscription = _connectionService
+          .getConnectionsStream(_currentUserId!)
+          .listen(
+            (connections) {
+              if (!isClosed) add(_ConnectionsUpdated(connections));
+            },
+            onError: (error) {
+              _logger.e('Error in connections stream', error: error);
+              if (!isClosed) add(const _ConnectionsUpdated([]));
+            },
+          );
+
+      // Re-subscribe to received requests stream
+      _receivedRequestsSubscription = _connectionService
+          .getReceivedRequestsStream(_currentUserId!)
+          .listen(
+            (requests) {
+              if (!isClosed) add(_ReceivedRequestsUpdated(requests));
+            },
+            onError: (error) {
+              _logger.e('Error in received requests stream', error: error);
+              if (!isClosed) add(const _ReceivedRequestsUpdated([]));
+            },
+          );
+
+      // Re-subscribe to sent requests stream
+      _sentRequestsSubscription = _connectionService
+          .getSentRequestsStream(_currentUserId!)
+          .listen(
+            (requests) {
+              if (!isClosed) add(_SentRequestsUpdated(requests));
+            },
+            onError: (error) {
+              _logger.e('Error in sent requests stream', error: error);
+              if (!isClosed) add(const _SentRequestsUpdated([]));
+            },
+          );
+    } catch (e) {
+      _logger.e('Error refreshing connection streams', error: e);
     }
   }
 

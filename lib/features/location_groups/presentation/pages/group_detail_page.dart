@@ -443,6 +443,23 @@ class _GroupDetailPageState extends State<GroupDetailPage>
           context.go(Routes.myGroups);
           return;
         }
+
+        // Handle successful leave - membership cleared and status is loaded
+        if (state.groupLeft) {
+          // Clear the flag first
+          context.read<LocationGroupBloc>().add(const ClearGroupLeftFlag());
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('You left the group'),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+          );
+          
+          // Navigate to my groups page
+          context.go(Routes.myGroups);
+          return;
+        }
         
         if (state.hasError && state.errorMessage != null) {
           ScaffoldMessenger.of(context).showSnackBar(

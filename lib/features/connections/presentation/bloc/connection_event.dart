@@ -134,6 +134,13 @@ class _SentRequestsUpdated extends ConnectionEvent {
   List<Object?> get props => [requests];
 }
 
+/// Force refresh connections by re-subscribing to Firestore streams.
+/// Use when streams may have gone stale or after external actions
+/// (e.g., discovery accept) that should be reflected immediately.
+class ConnectionForceRefresh extends ConnectionEvent {
+  const ConnectionForceRefresh();
+}
+
 /// Check connection state with a specific user.
 class ConnectionCheckState extends ConnectionEvent {
   final String otherUserId;

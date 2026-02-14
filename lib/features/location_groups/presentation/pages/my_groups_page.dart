@@ -23,10 +23,17 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
   @override
   void initState() {
     super.initState();
-    // Clear any stale errors from previous operations (e.g., failed deletions from detail page)
+    // Clear any stale flags from previous operations (e.g., failed deletions,
+    // leave/delete where the listener was disposed before processing the flag)
     final groupState = context.read<LocationGroupBloc>().state;
     if (groupState.hasError) {
       context.read<LocationGroupBloc>().add(const ClearGroupError());
+    }
+    if (groupState.groupDeleted) {
+      context.read<LocationGroupBloc>().add(const ClearGroupDeletionFlag());
+    }
+    if (groupState.groupLeft) {
+      context.read<LocationGroupBloc>().add(const ClearGroupLeftFlag());
     }
 
     // Only load if not already loaded for this user
@@ -49,6 +56,16 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
       context
           .read<LocationGroupBloc>()
           .add(LoadUserGroups(userId: authState.user.id));
+    }
+  }
+
+  Future<void> _forceRefreshGroups() async {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      context
+          .read<LocationGroupBloc>()
+          .add(ForceRefreshUserGroups(userId: authState.user.id));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
   }
 
@@ -89,7 +106,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'My Groups',
+          'My Location Groups',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -101,10 +118,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          _loadUserGroups();
-          await Future.delayed(const Duration(milliseconds: 500));
-        },
+        onRefresh: _forceRefreshGroups,
         child: BlocBuilder<LocationGroupBloc, LocationGroupState>(
           builder: (context, state) {
             if (state.isLoading && state.userGroups.isEmpty) {
@@ -175,6 +189,12 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      FilledButton.icon(
+                        onPressed: () => context.push(Routes.locationGroups),
+                        icon: const Icon(Icons.search),
+                        label: const Text('Find Groups'),
                       ),
                     ],
                   ),

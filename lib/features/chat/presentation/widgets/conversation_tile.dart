@@ -39,7 +39,6 @@ class ConversationTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: ListTile(
-          enabled: false, // Disable ListTile's own tap handling
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: CachedAvatar(
             imageUrl: photoUrl,

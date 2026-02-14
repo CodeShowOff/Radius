@@ -276,27 +276,6 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-
-                FilledButton.icon(
-                  onPressed: isUpdating
-                      ? null
-                      : () => _showCompleteConfirmation(context),
-                  icon: isUpdating
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.check_circle),
-                  label: const Text('Mark Help as Completed'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.green,
-                  ),
-                ),
               ],
             ),
           ),
@@ -337,35 +316,6 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
     }
   }
 
-  void _showCompleteConfirmation(BuildContext context) {
-    // Capture the bloc before showing dialog to ensure it's accessible
-    final bloc = context.read<NearbyHelpBloc>();
-    
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Complete Help?'),
-        content: const Text(
-          'Are you sure you want to mark this help as completed? '
-          'This will notify the seeker and close the request.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Not Yet'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              bloc.add(NearbyHelpMarkCompleted(widget.requestId));
-            },
-            child: const Text('Yes, Complete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showInfoDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -379,7 +329,7 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
             SizedBox(height: 8),
             Text('• Mark as "On The Way" to notify the seeker'),
             SizedBox(height: 8),
-            Text('• Mark as "Completed" when done helping'),
+            Text('• The seeker will mark the request as completed'),
             SizedBox(height: 8),
             Text('• The seeker can see your status in real-time'),
           ],

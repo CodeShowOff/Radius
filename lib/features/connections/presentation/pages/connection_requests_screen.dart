@@ -34,7 +34,7 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Connection Requests',
+          'Nearby Requests',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(

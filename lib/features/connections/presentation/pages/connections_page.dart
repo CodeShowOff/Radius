@@ -88,7 +88,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
   // Refresh method for pull-to-refresh
   Future<void> _refreshConnections() async {
-    _loadConnections();
+    // Force re-subscribe to Firestore streams to get fresh data
+    context.read<ConnectionBloc>().add(const ConnectionForceRefresh());
     // Wait for the streams to emit at least once
     await Future.delayed(const Duration(milliseconds: 500));
   }
@@ -129,7 +130,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 child: SizedBox(
                   height: MediaQuery.of(context).size.height - 200,
                   child: _EmptyState(
-                    onFindPeople: () => context.push(Routes.nearby),
+                    onFindPeople: () => _showAddConnectionOptions(context),
                   ),
                 ),
               ),
@@ -850,7 +851,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onFindPeople,
               icon: const Icon(Icons.radar),
-              label: const Text('Find People Nearby'),
+              label: const Text('Find People'),
             ),
           ],
         ),

@@ -34,6 +34,7 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _initialized = false;
+  bool _isLeavingOrDeleting = false;
 
   @override
   void initState() {
@@ -121,13 +122,14 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
           ),
           FilledButton(
             onPressed: () {
+              if (_isLeavingOrDeleting) return;
               Navigator.pop(dialogContext);
+              _isLeavingOrDeleting = true;
               bloc.add(LeaveRandomGroup(
                     groupId: widget.groupId,
                     userId: userId,
                     username: username,
                   ));
-              context.pop();
             },
             child: const Text('Leave'),
           ),
@@ -160,12 +162,13 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             onPressed: () {
+              if (_isLeavingOrDeleting) return;
               Navigator.pop(dialogContext);
+              _isLeavingOrDeleting = true;
               bloc.add(DeleteRandomGroup(
                     groupId: widget.groupId,
                     userId: userId,
                   ));
-              context.pop();
             },
             child: const Text('Delete'),
           ),
@@ -199,12 +202,44 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
           );
         } else if (state.status == RandomGroupBlocStatus.error &&
             state.errorMessage != null) {
+          // Reset the flag on error so the user can try again
+          _isLeavingOrDeleting = false;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.errorMessage!),
               backgroundColor: theme.colorScheme.error,
             ),
           );
+        }
+
+        // Handle successful leave - navigate back to My Random Groups
+        if (_isLeavingOrDeleting &&
+            state.membershipStatus == UserMembershipStatus.notMember &&
+            state.status == RandomGroupBlocStatus.loaded) {
+          _isLeavingOrDeleting = false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('You left the group'),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+          );
+          context.go(Routes.randomGroups);
+          return;
+        }
+
+        // Handle successful delete - navigate back to My Random Groups
+        if (_isLeavingOrDeleting &&
+            state.selectedGroup == null &&
+            state.status == RandomGroupBlocStatus.loaded) {
+          _isLeavingOrDeleting = false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Group deleted successfully'),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+          );
+          context.go(Routes.randomGroups);
+          return;
         }
       },
       builder: (context, state) {
@@ -441,7 +476,6 @@ class _AboutTab extends StatelessWidget {
               radius: 20,
             ),
             title: Text(group.creatorDisplayName ?? group.creatorUsername),
-            subtitle: Text('@${group.creatorUsername}'),
           ),
         ],
       ),

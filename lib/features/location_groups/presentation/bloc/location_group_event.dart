@@ -283,6 +283,11 @@ class ClearGroupDeletionFlag extends LocationGroupEvent {
   const ClearGroupDeletionFlag();
 }
 
+/// Clear the group left flag after navigation.
+class ClearGroupLeftFlag extends LocationGroupEvent {
+  const ClearGroupLeftFlag();
+}
+
 /// Reset the bloc state.
 class ResetGroupState extends LocationGroupEvent {
   const ResetGroupState();
@@ -310,4 +315,14 @@ class DeleteGroup extends LocationGroupEvent {
 
   @override
   List<Object?> get props => [groupId, adminUserId];
+}
+
+/// Force refresh user groups by cancelling and re-subscribing to Firestore streams.
+class ForceRefreshUserGroups extends LocationGroupEvent {
+  final String userId;
+
+  const ForceRefreshUserGroups({required this.userId});
+
+  @override
+  List<Object?> get props => [userId];
 }

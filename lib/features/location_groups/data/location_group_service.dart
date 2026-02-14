@@ -1578,6 +1578,13 @@ class LocationGroupService {
       // RISK MITIGATION: Clean up orphaned join requests
       _logger.i('Cleaned up join_requests subcollection for group $groupId');
 
+      // Fetch all members BEFORE deleting them so we can clean up inverse indexes
+      final membersSnapshot = await _groupsRef
+          .doc(groupId)
+          .collection('members')
+          .get();
+      final memberIds = membersSnapshot.docs.map((doc) => doc.id).toList();
+
       // Delete members, but keep the admin membership until the very end.
       // Otherwise subsequent admin-gated operations (including group delete)
       // can fail with permission-denied.
@@ -1597,6 +1604,30 @@ class LocationGroupService {
           .collection('members')
           .doc(adminUserId)
           .delete();
+
+      // Clean up inverse index entries for ALL members (including admin)
+      // so that streamUserGroups fires and removes the group from every user's list.
+      // Use batched writes for efficiency (max 450 per batch to stay under Firestore limit).
+      const batchLimit = 450;
+      for (var i = 0; i < memberIds.length; i += batchLimit) {
+        final batch = _firestore.batch();
+        final end = (i + batchLimit).clamp(0, memberIds.length);
+        for (final memberId in memberIds.sublist(i, end)) {
+          batch.delete(
+            _firestore
+                .collection('users')
+                .doc(memberId)
+                .collection('group_memberships')
+                .doc(groupId),
+          );
+        }
+        try {
+          await batch.commit();
+        } catch (e) {
+          _logger.w('Failed to clean up inverse index batch starting at $i', error: e);
+          // Continue with remaining batches even if one fails
+        }
+      }
 
       _logger.i('Group $groupId deleted by admin $adminUserId');
       return const GroupSuccess(null);

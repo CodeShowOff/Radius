@@ -111,6 +111,7 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
 
           return RefreshIndicator(
             onRefresh: () async {
+              context.read<ConnectionBloc>().add(const ConnectionForceRefresh());
               await Future.delayed(const Duration(milliseconds: 500));
             },
             child: ListView.builder(
@@ -529,20 +530,20 @@ class _EmptyConnectionsState extends StatelessWidget {
             Icon(
               Icons.people_outline,
               size: 80,
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(
               'No connections yet',
               style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 12),
             Text(
               'Find people nearby and connect with them\nto grow your network.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),

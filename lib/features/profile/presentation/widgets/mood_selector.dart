@@ -117,6 +117,13 @@ class MoodSelector extends StatelessWidget {
     final moodEmoji = displayMood.isNotEmpty ? displayMood.split(' ')[0] : '😊';
 
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(
+          color: Colors.blue,
+          width: 3,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

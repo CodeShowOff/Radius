@@ -260,7 +260,7 @@ class _MyActiveGroupCard extends StatelessWidget {
                     ),
                     child: Icon(
                       Icons.all_inclusive,
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -398,7 +398,7 @@ class _NearbyGroupCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E), // Charcoal black background
+        color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(

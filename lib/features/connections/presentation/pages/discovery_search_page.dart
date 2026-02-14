@@ -398,16 +398,6 @@ class _UserResultCard extends StatelessWidget {
     final photoUrl = user['photoUrl'] as String?;
     final bio = user['bio'] as String?;
 
-    // Check if already connected (through ConnectionBloc which has ALL connections)
-    final connectionState = context.watch<ConnectionBloc>().state;
-    final isConnected = connectionState.isConnectedWith(userId);
-
-    // Check if a request is already pending (from either bloc)
-    final existingSentRequest = state.getSentRequestTo(userId) ??
-        connectionState.getSentRequestTo(userId);
-    final existingReceivedRequest = state.getReceivedRequestFrom(userId) ??
-        connectionState.getReceivedRequestFrom(userId);
-
     final isLoading =
         state.isActionLoading && state.processingId == userId;
 
@@ -482,16 +472,31 @@ class _UserResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
 
-              // Action button
-              _ActionButton(
-                userId: userId,
-                displayName: displayName,
-                photoUrl: photoUrl,
-                discoveryUsername: discoveryUsername,
-                isConnected: isConnected,
-                existingSentRequest: existingSentRequest,
-                existingReceivedRequest: existingReceivedRequest,
-                isLoading: isLoading,
+              // Action button — BlocBuilder ensures proper reactivity
+              // to ConnectionBloc state changes (new connections, request
+              // updates) that would otherwise be missed by context.watch.
+              BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                builder: (context, connectionState) {
+                  final isConnected =
+                      connectionState.isConnectedWith(userId);
+                  final existingSentRequest =
+                      state.getSentRequestTo(userId) ??
+                          connectionState.getSentRequestTo(userId);
+                  final existingReceivedRequest =
+                      state.getReceivedRequestFrom(userId) ??
+                          connectionState.getReceivedRequestFrom(userId);
+
+                  return _ActionButton(
+                    userId: userId,
+                    displayName: displayName,
+                    photoUrl: photoUrl,
+                    discoveryUsername: discoveryUsername,
+                    isConnected: isConnected,
+                    existingSentRequest: existingSentRequest,
+                    existingReceivedRequest: existingReceivedRequest,
+                    isLoading: isLoading,
+                  );
+                },
               ),
             ],
           ),

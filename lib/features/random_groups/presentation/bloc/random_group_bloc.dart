@@ -464,10 +464,22 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Left group: ${event.groupId}');
+        // Cancel detail streams to prevent stale state re-emission
+        await _groupDetailsSubscription?.cancel();
+        _groupDetailsSubscription = null;
+        await _membersSubscription?.cancel();
+        _membersSubscription = null;
+        await _pendingRequestsSubscription?.cancel();
+        _pendingRequestsSubscription = null;
+        // Remove the left group from userGroups for immediate UI update
+        final updatedGroupsAfterLeave = state.userGroups
+            .where((g) => g.id != event.groupId)
+            .toList();
         emit(state.copyWith(
           status: RandomGroupBlocStatus.loaded,
           membershipStatus: UserMembershipStatus.notMember,
           clearSelectedGroup: true,
+          userGroups: updatedGroupsAfterLeave,
         ));
 
       case RandomGroupFailure(message: final msg):
@@ -493,9 +505,22 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Deleted group: ${event.groupId}');
+        // Cancel detail streams to prevent stale state from deleted group
+        await _groupDetailsSubscription?.cancel();
+        _groupDetailsSubscription = null;
+        await _membersSubscription?.cancel();
+        _membersSubscription = null;
+        await _pendingRequestsSubscription?.cancel();
+        _pendingRequestsSubscription = null;
+        // Remove the deleted group from userGroups for immediate UI update
+        final updatedGroupsAfterDelete = state.userGroups
+            .where((g) => g.id != event.groupId)
+            .toList();
         emit(state.copyWith(
           status: RandomGroupBlocStatus.loaded,
+          membershipStatus: UserMembershipStatus.notMember,
           clearSelectedGroup: true,
+          userGroups: updatedGroupsAfterDelete,
         ));
 
       case RandomGroupFailure(message: final msg):
