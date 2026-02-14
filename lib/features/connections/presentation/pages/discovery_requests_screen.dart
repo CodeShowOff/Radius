@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../bloc/discovery_bloc.dart';
+import '../bloc/connection_bloc.dart';
 import '../widgets/connection_request_card.dart';
 
 /// Screen for viewing and managing discovery connection requests.
 ///
-/// Separate from the nearby connection requests screen.
-/// Shows only requests with source == 'discovery'.
+/// Uses the same ConnectionBloc accept/reject/cancel logic as the nearby
+/// requests screen, ensuring immediate connections page updates when a
+/// request is accepted. Filters to show only requests with source == 'discovery'.
 class DiscoveryRequestsScreen extends StatefulWidget {
   const DiscoveryRequestsScreen({super.key});
 
@@ -37,15 +38,17 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Connection Requests',
+          'Discovery Requests',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            BlocBuilder<DiscoveryBloc, DiscoveryState>(
+            BlocBuilder<ConnectionBloc, ConnectionBlocState>(
               builder: (context, state) {
-                final count = state.receivedRequests.length;
+                final count = state.receivedRequests
+                    .where((r) => r.source == 'discovery')
+                    .length;
                 return Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -60,9 +63,11 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
                 );
               },
             ),
-            BlocBuilder<DiscoveryBloc, DiscoveryState>(
+            BlocBuilder<ConnectionBloc, ConnectionBlocState>(
               builder: (context, state) {
-                final count = state.sentRequests.length;
+                final count = state.sentRequests
+                    .where((r) => r.source == 'discovery')
+                    .length;
                 return Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -80,12 +85,9 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
           ],
         ),
       ),
-      body: BlocListener<DiscoveryBloc, DiscoveryState>(
+      body: BlocListener<ConnectionBloc, ConnectionBlocState>(
         listenWhen: (prev, curr) =>
-            (curr.errorMessage != null &&
-                prev.errorMessage != curr.errorMessage) ||
-            (curr.successMessage != null &&
-                prev.successMessage != curr.successMessage),
+            curr.errorMessage != null && prev.errorMessage != curr.errorMessage,
         listener: (context, state) {
           if (state.errorMessage != null) {
             ScaffoldMessenger.of(context).clearSnackBars();
@@ -96,23 +98,6 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
                 behavior: SnackBarBehavior.floating,
               ),
             );
-          }
-          if (state.successMessage != null) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.successMessage!),
-                duration: const Duration(seconds: 3),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.green,
-              ),
-            );
-            // NOTE: Do NOT call ConnectionForceRefresh here.
-            // The ConnectionBloc already has an active Firestore real-time stream
-            // that will automatically receive the new connection when it's created.
-            // Calling ConnectionForceRefresh actually DELAYS the update because
-            // it cancels the working stream and creates a new one that waits
-            // for conversation data before yielding connections.
           }
         },
         child: TabBarView(
@@ -165,13 +150,15 @@ class _ReceivedRequestsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<DiscoveryBloc, DiscoveryState>(
+    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
       builder: (context, state) {
-        if (state.status == DiscoveryStatus.loading) {
+        if (state.status == ConnectionBlocStatus.loading) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final requests = state.receivedRequests;
+        final requests = state.receivedRequests
+            .where((r) => r.source == 'discovery')
+            .toList();
 
         if (requests.isEmpty) {
           return const _EmptyState(
@@ -184,6 +171,7 @@ class _ReceivedRequestsTab extends StatelessWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
+            // Subscriptions auto-refresh, this is just for UX
             await Future.delayed(const Duration(milliseconds: 500));
           },
           child: ListView.builder(
@@ -199,9 +187,9 @@ class _ReceivedRequestsTab extends StatelessWidget {
                 isIncoming: true,
                 isLoading: isLoading,
                 onAccept: () {
-                  context
-                      .read<DiscoveryBloc>()
-                      .add(DiscoveryAcceptRequest(request.id));
+                  context.read<ConnectionBloc>().add(
+                        ConnectionAcceptRequest(request.id),
+                      );
                 },
                 onReject: () {
                   _confirmReject(context, request.id);
@@ -231,9 +219,9 @@ class _ReceivedRequestsTab extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context
-                  .read<DiscoveryBloc>()
-                  .add(DiscoveryRejectRequest(requestId));
+              context.read<ConnectionBloc>().add(
+                    ConnectionRejectRequest(requestId),
+                  );
             },
             child: const Text('Decline'),
           ),
@@ -248,13 +236,15 @@ class _SentRequestsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<DiscoveryBloc, DiscoveryState>(
+    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
       builder: (context, state) {
-        if (state.status == DiscoveryStatus.loading) {
+        if (state.status == ConnectionBlocStatus.loading) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final requests = state.sentRequests;
+        final requests = state.sentRequests
+            .where((r) => r.source == 'discovery')
+            .toList();
 
         if (requests.isEmpty) {
           return const _EmptyState(
@@ -308,9 +298,9 @@ class _SentRequestsTab extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context
-                  .read<DiscoveryBloc>()
-                  .add(DiscoveryCancelRequest(requestId));
+              context.read<ConnectionBloc>().add(
+                    ConnectionCancelRequest(requestId),
+                  );
             },
             child: const Text('Cancel Request'),
           ),

@@ -78,11 +78,14 @@ class _DiscoverySearchPageState extends State<DiscoverySearchPage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          BlocBuilder<DiscoveryBloc, DiscoveryState>(
+          BlocBuilder<ConnectionBloc, ConnectionBlocState>(
             buildWhen: (prev, curr) =>
-                prev.receivedRequests.length != curr.receivedRequests.length,
+                prev.receivedRequests.where((r) => r.source == 'discovery').length !=
+                curr.receivedRequests.where((r) => r.source == 'discovery').length,
             builder: (context, state) {
-              final count = state.receivedRequests.length;
+              final count = state.receivedRequests
+                  .where((r) => r.source == 'discovery')
+                  .length;
               return Stack(
                 children: [
                   IconButton(
@@ -566,8 +569,8 @@ class _ActionButton extends StatelessWidget {
     if (existingReceivedRequest != null) {
       return FilledButton.tonal(
         onPressed: () {
-          context.read<DiscoveryBloc>().add(
-                DiscoveryAcceptRequest(existingReceivedRequest!.id),
+          context.read<ConnectionBloc>().add(
+                ConnectionAcceptRequest(existingReceivedRequest!.id),
               );
         },
         style: FilledButton.styleFrom(

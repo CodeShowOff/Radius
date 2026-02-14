@@ -155,7 +155,12 @@ class _ConnectionRequestListenerState extends State<ConnectionRequestListener>
                           borderRadius: BorderRadius.circular(14),
                           onTap: () {
                             _dismissActive();
-                            context.push(Routes.connectionRequests);
+                            // Route to correct page based on request source
+                            if (request.source == 'discovery') {
+                              context.push(Routes.discoveryRequests);
+                            } else {
+                              context.push(Routes.connectionRequests);
+                            }
                           },
                           child: Row(
                             children: [

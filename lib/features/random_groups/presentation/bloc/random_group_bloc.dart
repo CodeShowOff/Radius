@@ -695,6 +695,18 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     _GroupDetailsReceived event,
     Emitter<RandomGroupState> emit,
   ) {
+    if (event.group == null) {
+      // Group document was deleted (hard-delete) or doesn't exist.
+      // Clear the selected group so the detail page shows appropriate state.
+      _logger.w('Group details stream emitted null (group deleted/not found)');
+      emit(state.copyWith(
+        status: RandomGroupBlocStatus.loaded,
+        clearSelectedGroup: true,
+        membershipStatus: UserMembershipStatus.notMember,
+      ));
+      return;
+    }
+
     emit(state.copyWith(
       status: RandomGroupBlocStatus.loaded,
       selectedGroup: event.group,

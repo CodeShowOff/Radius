@@ -417,15 +417,12 @@ class LocationGroupService {
       // Get group IDs from inverse index
       final groupIds = membershipQuery.docs
           .map((doc) => doc.data()['groupId'] as String)
-          .toSet();
-
-      // Fetch all groups in PARALLEL instead of sequentially
-      final groupFutures = groupIds.map((id) => getGroupById(id));
-      final results = await Future.wait(groupFutures);
-      final groups = results
-          .whereType<LocationGroup>()
-          .where((g) => g.isActive)
+          .toSet()
           .toList();
+
+      // Batch fetch groups using whereIn (max 10 per query) instead of
+      // individual get calls. Reduces N round-trips to ceil(N/10).
+      final groups = await _batchFetchGroups(groupIds);
 
       // Sort by last activity
       groups.sort((a, b) {
@@ -495,16 +492,13 @@ class LocationGroupService {
             // Get group IDs from inverse index
             final groupIds = snapshot.docs
                 .map((doc) => doc.data()['groupId'] as String)
-                .toSet();
-
-            // Fetch all groups in PARALLEL instead of sequentially
-            // This eliminates the N+1 query problem that caused 2s delays
-            final groupFutures = groupIds.map((id) => getGroupById(id));
-            final results = await Future.wait(groupFutures);
-            final groups = results
-                .whereType<LocationGroup>()
-                .where((g) => g.isActive)
+                .toSet()
                 .toList();
+
+            // Batch fetch groups using whereIn (max 10 per query) instead of
+            // individual getGroupById calls. This reduces N network round-trips
+            // to ceil(N/10), dramatically improving load time.
+            final groups = await _batchFetchGroups(groupIds);
 
             groups.sort((a, b) {
               final aTime = a.lastActivityAt ?? a.createdAt;
@@ -586,18 +580,17 @@ class LocationGroupService {
               return;
             }
 
-            // Fetch full membership details from inverse index data
-            final memberships = <GroupMembership>[];
-            for (final doc in snapshot.docs) {
-              final data = doc.data();
-              final groupId = data['groupId'] as String;
-
-              // Get full membership from group's members subcollection
-              final membership = await _getMembership(groupId, userId);
-              if (membership != null) {
-                memberships.add(membership);
-              }
-            }
+            // Fetch full membership details in PARALLEL instead of sequentially.
+            // Each _getMembership call is independent, so Future.wait eliminates
+            // the sequential delay (N * latency → max(latencies)).
+            final membershipFutures = snapshot.docs.map((doc) {
+              final groupId = doc.data()['groupId'] as String;
+              return _getMembership(groupId, userId);
+            });
+            final results = await Future.wait(membershipFutures);
+            final memberships = results
+                .whereType<GroupMembership>()
+                .toList();
 
             if (!isDisposed) {
               controller.add(memberships);
@@ -1840,6 +1833,35 @@ class LocationGroupService {
       _logger.e('Error getting membership', error: e);
       return null;
     }
+  }
+
+  /// Batch-fetches groups by IDs using Firestore `whereIn` queries.
+  ///
+  /// Fetches in parallel batches of 10 (Firestore `whereIn` limit).
+  /// This reduces N individual network round-trips to ceil(N/10) batch queries,
+  /// dramatically improving load time for users with many groups.
+  Future<List<LocationGroup>> _batchFetchGroups(List<String> groupIds) async {
+    if (groupIds.isEmpty) return [];
+
+    final batchFutures = <Future<List<LocationGroup>>>[];
+    for (var i = 0; i < groupIds.length; i += 10) {
+      final batchIds = groupIds.sublist(
+        i,
+        (i + 10 > groupIds.length) ? groupIds.length : i + 10,
+      );
+      batchFutures.add(
+        _groupsRef
+            .where(FieldPath.documentId, whereIn: batchIds)
+            .where('status', isEqualTo: 'active')
+            .get()
+            .then((snapshot) => snapshot.docs
+                .map((doc) => LocationGroupModel.fromFirestore(doc))
+                .toList()),
+      );
+    }
+
+    final results = await Future.wait(batchFutures);
+    return results.expand((list) => list).toList();
   }
 
   /// Updates last activity timestamp for a group (called when messages are sent).

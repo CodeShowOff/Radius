@@ -46,11 +46,12 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
-	<!-- Background modes for persistent BLE advertising & scanning -->
+	<!-- Background modes for persistent BLE advertising & scanning + push notifications -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-peripheral</string>
 		<string>bluetooth-central</string>
+		<string>remote-notification</string>
 	</array>
 	
 	<!-- Firebase Configuration -->

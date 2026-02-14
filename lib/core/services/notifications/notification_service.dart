@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -281,8 +282,14 @@ class NotificationService {
 
     // User is not viewing this chat - show in-app notification
     if (notification != null) {
-      // Show in-app notification (SnackBar) if callback is registered
-      if (onInAppNotification != null && messageType == 'message') {
+      // Show in-app notification (SnackBar) if callback is registered.
+      // Supports DMs and all group message types so users see a banner
+      // regardless of which chat type the message belongs to.
+      final isInAppType = messageType == 'message' ||
+          messageType == 'group_message' ||
+          messageType == 'nearby_group_message' ||
+          messageType == 'random_group_message';
+      if (onInAppNotification != null && isInAppType) {
         onInAppNotification!(
           notification.title ?? 'New Message',
           notification.body ?? '',
@@ -522,8 +529,14 @@ class NotificationService {
 /// Background message handler (must be top-level function).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Initialize Firebase if not already initialized
-  // await Firebase.initializeApp();
+  // Initialize Firebase if not already initialized.
+  // Required on iOS when the app is terminated and a data-only message
+  // arrives — without this, Firestore and other Firebase calls would fail.
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Already initialized — safe to ignore.
+  }
 
   debugPrint('Background message: ${message.notification?.title}');
 }

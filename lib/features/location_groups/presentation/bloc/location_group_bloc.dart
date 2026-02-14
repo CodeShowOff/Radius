@@ -158,6 +158,46 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
         errorMessage: event.message,
       ));
     });
+
+    on<_GroupDocUpdated>((event, emit) {
+      // Subsequent group doc updates: only update the group data.
+      // Membership is maintained reactively by _MembersUpdated handler.
+      emit(state.copyWith(
+        status: GroupBlocStatus.loaded,
+        currentGroup: event.group,
+      ));
+    });
+
+    on<_GroupDeletedExternally>((event, emit) async {
+      // Group was hard-deleted by another admin while user was viewing it.
+      // Cancel detail streams and set groupDeleted flag for UI navigation.
+      _logger.w('Group deleted externally, cleaning up detail state');
+      await _currentGroupSubscription?.cancel();
+      _currentGroupSubscription = null;
+      await _membersSubscription?.cancel();
+      _membersSubscription = null;
+      await _requestsSubscription?.cancel();
+      _requestsSubscription = null;
+      await _userPendingRequestSubscription?.cancel();
+      _userPendingRequestSubscription = null;
+
+      // Remove from userGroups if present
+      final updatedGroups = state.currentGroup != null
+          ? state.userGroups
+              .where((g) => g.id != state.currentGroup!.id)
+              .toList()
+          : state.userGroups;
+
+      emit(state.copyWith(
+        status: GroupBlocStatus.loaded,
+        currentGroup: null,
+        clearCurrentMembership: true,
+        clearCurrentGroupUserId: true,
+        groupMembers: const [],
+        groupDeleted: true,
+        userGroups: updatedGroups,
+      ));
+    });
   }
 
   Future<void> _onLoadGroupsForLocation(
@@ -300,15 +340,28 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     await _userGroupMembershipsSubscription?.cancel();
     _userGroupMembershipsSubscription = null;
 
-    // Reset status AND clear userGroupsUserId so the idempotency guard
-    // in LoadUserGroups won't skip the reload
-    emit(state.copyWith(
-      status: GroupBlocStatus.initial,
-      userGroupsUserId: '', // Clear so idempotency guard sees a different user
-    ));
+    // Re-subscribe directly without clearing existing data.
+    // Old groups remain visible while fresh data loads in the background,
+    // providing a seamless refresh experience (no loading spinner flash).
+    _userGroupsSubscription =
+        _groupService.streamUserGroups(event.userId).listen(
+      (groups) {
+        if (!isClosed) add(_UserGroupsUpdated(groups));
+      },
+      onError: (error) {
+        _logger.e('Error in user groups stream', error: error);
+      },
+    );
 
-    // Re-dispatch LoadUserGroups which will now start fresh subscriptions
-    add(LoadUserGroups(userId: event.userId));
+    _userGroupMembershipsSubscription =
+        _groupService.streamUserMemberships(event.userId).listen(
+      (memberships) {
+        if (!isClosed) add(_UserGroupMembershipsUpdated(memberships));
+      },
+      onError: (error) {
+        _logger.e('Error in user memberships stream', error: error);
+      },
+    );
   }
 
   Future<void> _onCreateGroup(
@@ -461,6 +514,13 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     }
   }
 
+  /// Tracks whether the initial membership check has been performed for the
+  /// current group detail session. Reset in [_onLoadGroupDetails].
+  /// After the first check, membership is maintained reactively via the
+  /// [_MembersUpdated] stream handler, avoiding redundant Firestore reads
+  /// on every group document change (e.g., memberCount updates).
+  bool _initialMembershipChecked = false;
+
   Future<void> _onLoadGroupDetails(
     LoadGroupDetails event,
     Emitter<LocationGroupState> emit,
@@ -476,6 +536,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
       currentGroupUserId: event.currentUserId,
     ));
 
+    _initialMembershipChecked = false;
+
     await _currentGroupSubscription?.cancel();
     await _membersSubscription?.cancel();
     await _userPendingRequestSubscription?.cancel();
@@ -483,7 +545,21 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     _currentGroupSubscription = _groupService.streamGroup(event.groupId).listen(
       (group) async {
         if (isClosed) return;
-        if (group != null) {
+
+        if (group == null) {
+          // Group was deleted (hard-delete) by another admin while viewing.
+          // Set groupDeleted flag so the detail page navigates back.
+          _logger.w('Group ${event.groupId} was deleted (stream emitted null)');
+          add(const _GroupDeletedExternally());
+          return;
+        }
+
+        if (!_initialMembershipChecked) {
+          // FIRST EMISSION: Do async membership + pending request check.
+          // After this, membership is maintained reactively by _MembersUpdated
+          // and pending requests by _userPendingRequestSubscription.
+          _initialMembershipChecked = true;
+
           GroupMembership? membership;
           bool hasPendingRequest = false;
 
@@ -508,6 +584,13 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
           // NOW emit the loaded state with complete data
           if (!isClosed) {
             add(_GroupDetailsUpdated(group, membership, hasPendingRequest));
+          }
+        } else {
+          // SUBSEQUENT EMISSIONS: Only update the group document.
+          // Membership is kept in sync reactively by _MembersUpdated handler.
+          // Pending request is kept in sync by _userPendingRequestSubscription.
+          if (!isClosed) {
+            add(_GroupDocUpdated(group));
           }
         }
       },
@@ -873,4 +956,13 @@ class _PendingRequestUpdated extends LocationGroupEvent {
 class _GroupsError extends LocationGroupEvent {
   final String message;
   const _GroupsError(this.message);
+}
+
+class _GroupDocUpdated extends LocationGroupEvent {
+  final LocationGroup group;
+  const _GroupDocUpdated(this.group);
+}
+
+class _GroupDeletedExternally extends LocationGroupEvent {
+  const _GroupDeletedExternally();
 }

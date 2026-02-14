@@ -42,7 +42,9 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen>
           tabs: [
             BlocBuilder<ConnectionBloc, ConnectionBlocState>(
               builder: (context, state) {
-                final count = state.receivedRequests.length;
+                final count = state.receivedRequests
+                    .where((r) => r.source != 'discovery')
+                    .length;
                 return Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -59,7 +61,9 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen>
             ),
             BlocBuilder<ConnectionBloc, ConnectionBlocState>(
               builder: (context, state) {
-                final count = state.sentRequests.length;
+                final count = state.sentRequests
+                    .where((r) => r.source != 'discovery')
+                    .length;
                 return Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -148,14 +152,16 @@ class _ReceivedRequestsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final requests = state.receivedRequests;
+        final requests = state.receivedRequests
+            .where((r) => r.source != 'discovery')
+            .toList();
 
         if (requests.isEmpty) {
           return const _EmptyState(
             icon: Icons.inbox_outlined,
             title: 'No pending requests',
             message:
-                'When someone sends you a connection request,\nit will appear here.',
+                'When someone nearby sends you a connection request,\nit will appear here.',
           );
         }
 
@@ -232,14 +238,16 @@ class _SentRequestsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final requests = state.sentRequests;
+        final requests = state.sentRequests
+            .where((r) => r.source != 'discovery')
+            .toList();
 
         if (requests.isEmpty) {
           return const _EmptyState(
             icon: Icons.send_outlined,
             title: 'No pending requests',
             message:
-                'Requests you\'ve sent that are\nwaiting for a response will appear here.',
+                'Nearby requests you\'ve sent that are\nwaiting for a response will appear here.',
           );
         }
 

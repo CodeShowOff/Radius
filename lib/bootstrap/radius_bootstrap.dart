@@ -202,8 +202,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       return const RadiusApp();
     }
 
-    // Only show bootstrap screen on failure, otherwise show blank screen
-    // to avoid flashing initialization messages
+    // Only show bootstrap screen on failure
     if (_phase == _InitPhase.failed) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -228,35 +227,15 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       );
     }
 
-    // Show loading screen during initialization
+    // Show minimal blank screen during initialization to avoid UI flash
+    // The RadiusApp's splash screen will handle the loading state
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       home: const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.radar,
-                size: 64,
-                color: Colors.blue,
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Radius',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 32),
-              CircularProgressIndicator(),
-            ],
-          ),
-        ),
+        body: SizedBox.shrink(), // Blank screen - no flash
       ),
     );
   }

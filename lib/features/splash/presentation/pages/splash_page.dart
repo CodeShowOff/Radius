@@ -26,22 +26,22 @@ class _SplashPageState extends State<SplashPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 400), // Faster animation
     );
 
-    // Start fully visible to avoid a flash after the bootstrap loading screen.
-    // The scale animation still gives a subtle polish.
-    _fadeAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(
+    // Simple fade in animation
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+        curve: Curves.easeOut,
       ),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
+    // Subtle scale animation for polish
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
+        curve: Curves.easeOutCubic,
       ),
     );
 
@@ -65,6 +65,8 @@ class _SplashPageState extends State<SplashPage>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
@@ -76,35 +78,41 @@ class _SplashPageState extends State<SplashPage>
         }
       },
       child: Scaffold(
-        body: AnimatedBuilder(
-          animation: _animationController,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _fadeAnimation.value,
-              child: Transform.scale(
-                scale: _scaleAnimation.value,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.radar,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Radius',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 32),
-                      const CircularProgressIndicator(),
-                    ],
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.radar,
+                    size: 64,
+                    color: theme.colorScheme.primary,
                   ),
-                ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Radius',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );

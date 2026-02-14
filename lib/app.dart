@@ -226,12 +226,22 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
                 label: 'VIEW',
                 textColor: Colors.white,
                 onPressed: () {
+                  final type = data['type'] as String?;
                   final conversationId = data['conversationId'] as String?;
-                  if (conversationId != null) {
-                    // Use push() instead of go() to prevent race condition:
-                    // go() replaces the current route, which can cause the old
-                    // screen's dispose() to clear the notification context
-                    // AFTER the new screen's initState() sets it.
+                  final groupId = data['groupId'] as String?;
+
+                  // Navigate to the correct screen based on message type.
+                  // Use push() instead of go() to prevent race condition:
+                  // go() replaces the current route, which can cause the old
+                  // screen's dispose() to clear the notification context
+                  // AFTER the new screen's initState() sets it.
+                  if (type == 'group_message' && groupId != null) {
+                    appRouter.push(Routes.locationGroupChatWith(groupId));
+                  } else if (type == 'nearby_group_message' && groupId != null) {
+                    appRouter.push(Routes.nearbyGroupChatWith(groupId));
+                  } else if (type == 'random_group_message' && groupId != null) {
+                    appRouter.push(Routes.randomGroupChatWith(groupId));
+                  } else if (conversationId != null) {
                     appRouter.push(Routes.chatWith(conversationId));
                   }
                 },
