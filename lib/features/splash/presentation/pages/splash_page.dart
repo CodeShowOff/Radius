@@ -20,18 +20,16 @@ class _SplashPageState extends State<SplashPage>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  bool _canNavigate = false;
 
   @override
   void initState() {
     super.initState();
-    
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 400), // Faster animation
     );
 
-    // Smooth fade in animation
+    // Simple fade in animation
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
@@ -49,17 +47,6 @@ class _SplashPageState extends State<SplashPage>
 
     _animationController.forward();
     _checkAuth();
-    _enableNavigationAfterDelay();
-  }
-  
-  /// Ensure splash is shown for at least 800ms
-  Future<void> _enableNavigationAfterDelay() async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _canNavigate = true;
-      });
-    }
   }
 
   @override
@@ -82,9 +69,6 @@ class _SplashPageState extends State<SplashPage>
     
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        // Only navigate after minimum splash duration
-        if (!_canNavigate) return;
-        
         if (state is AuthAuthenticated) {
           context.go(Routes.home);
         } else if (state is AuthAwaitingEmailVerification) {
