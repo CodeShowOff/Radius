@@ -234,10 +234,10 @@ class BleForegroundService : Service() {
     }
 
     private fun buildNotification(bluetoothEnabled: Boolean = true): Notification {
-        // Tap opens bluetooth settings page
+        // Tap opens home page
         val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             action = Intent.ACTION_VIEW
-            data = android.net.Uri.parse("radius://settings/bluetooth")
+            data = android.net.Uri.parse("radius://home")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
