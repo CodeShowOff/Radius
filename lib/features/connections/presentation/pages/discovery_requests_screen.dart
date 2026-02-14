@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../bloc/connection_bloc.dart';
 import '../bloc/discovery_bloc.dart';
 import '../widgets/connection_request_card.dart';
 
@@ -108,14 +107,12 @@ class _DiscoveryRequestsScreenState extends State<DiscoveryRequestsScreen>
                 backgroundColor: Colors.green,
               ),
             );
-            // After a discovery request is accepted, force-refresh
-            // ConnectionBloc streams so the new connection appears
-            // immediately on the connections page.
-            if (state.successMessage == 'Connection accepted!') {
-              context
-                  .read<ConnectionBloc>()
-                  .add(const ConnectionForceRefresh());
-            }
+            // NOTE: Do NOT call ConnectionForceRefresh here.
+            // The ConnectionBloc already has an active Firestore real-time stream
+            // that will automatically receive the new connection when it's created.
+            // Calling ConnectionForceRefresh actually DELAYS the update because
+            // it cancels the working stream and creates a new one that waits
+            // for conversation data before yielding connections.
           }
         },
         child: TabBarView(
