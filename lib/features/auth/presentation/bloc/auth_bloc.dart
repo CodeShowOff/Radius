@@ -54,7 +54,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthCheckRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    // NOTE: AuthLoading is intentionally NOT emitted here.
+    // getCurrentUser() uses Firestore's local cache first (~0 ms for
+    // returning users), so the result is available almost instantly.
+    // Emitting AuthLoading would force GoRouter to trap the user on
+    // the splash screen for an extra frame, adding perceived delay.
+    // For cache-miss (first install) the state stays AuthInitial which
+    // the router already handles identically to AuthLoading.
 
     final result = await _authRepository.getCurrentUser();
     result.fold(

@@ -49,10 +49,29 @@ class AuthRepositoryImpl implements IAuthRepository {
       if (firebaseUser == null) return null;
 
       try {
-        // Fetch user profile from Firestore
-        final doc = await _firestoreService.getDocument(
-          '${FirestoreCollections.users}/${firebaseUser.uid}',
-        );
+        // Use cache-first strategy to avoid a redundant network round-trip.
+        // When the subscription starts, Firebase immediately emits the
+        // current user. The AuthBloc already has this user from the initial
+        // getCurrentUser() call, so the cache read is sufficient. Subsequent
+        // stream events (sign-out, account deletion) either return null or
+        // are handled by the network fallback.
+        final docPath =
+            '${FirestoreCollections.users}/${firebaseUser.uid}';
+        Map<String, dynamic>? doc;
+
+        try {
+          final cachedSnap = await FirebaseFirestore.instance
+              .doc(docPath)
+              .get(const GetOptions(source: Source.cache));
+          if (cachedSnap.exists && cachedSnap.data() != null) {
+            doc = {'id': cachedSnap.id, ...cachedSnap.data()!};
+          }
+        } catch (_) {
+          // Cache miss (first install, cleared data) — fall through to network.
+        }
+
+        // Fall back to network if no cached document.
+        doc ??= await _firestoreService.getDocument(docPath);
 
         if (doc == null) return null;
 
@@ -88,9 +107,27 @@ class AuthRepositoryImpl implements IAuthRepository {
         return const Right(null);
       }
 
-      final doc = await _firestoreService.getDocument(
-        '${FirestoreCollections.users}/${firebaseUser.uid}',
-      );
+      final docPath =
+          '${FirestoreCollections.users}/${firebaseUser.uid}';
+
+      // Try Firestore local cache first for instant startup.
+      // Persistence is enabled so returning users will have their profile
+      // document cached locally. This avoids the 300-1500 ms network
+      // round-trip that previously blocked the splash screen.
+      Map<String, dynamic>? doc;
+      try {
+        final cachedSnap = await FirebaseFirestore.instance
+            .doc(docPath)
+            .get(const GetOptions(source: Source.cache));
+        if (cachedSnap.exists && cachedSnap.data() != null) {
+          doc = {'id': cachedSnap.id, ...cachedSnap.data()!};
+        }
+      } catch (_) {
+        // Cache miss (first install, cleared data) — fall through to network.
+      }
+
+      // Fall back to network if no cached document.
+      doc ??= await _firestoreService.getDocument(docPath);
 
       if (doc == null) {
         return const Right(null);
@@ -605,10 +642,18 @@ class AuthRepositoryImpl implements IAuthRepository {
     });
   }
 
+  /// Users whose profile migration has already been attempted this session.
+  /// Avoids redundant Firestore reads on every auth stream event.
+  final Set<String> _profileMigrationAttempted = {};
+
   /// Ensures that a profile document exists in the profiles collection.
   /// This is a migration helper for existing users created before profiles collection sync.
   /// Runs asynchronously without blocking the authentication flow.
   void _ensureProfileExists(String userId, Map<String, dynamic> userDoc) {
+    // Skip if already attempted for this user this session.
+    if (_profileMigrationAttempted.contains(userId)) return;
+    _profileMigrationAttempted.add(userId);
+
     Future(() async {
       try {
         // Check if profile already exists in profiles collection

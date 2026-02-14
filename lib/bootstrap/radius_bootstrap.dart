@@ -54,7 +54,16 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 12));
 
-      final hiveFuture = Hive.initFlutter().timeout(const Duration(seconds: 5));
+      // Chain Hive init + settings box open together so the box is ready
+      // by the time Firebase finishes. This saves ~50-200ms on the critical
+      // path since Hive init (~5ms) + openBox (~50-200ms) runs in parallel
+      // with Firebase init (~2-4s) rather than sequentially after it.
+      late final Box<dynamic> settingsBox;
+      final hiveFuture = () async {
+        await Hive.initFlutter().timeout(const Duration(seconds: 5));
+        settingsBox = await Hive.openBox('radius_settings')
+            .timeout(const Duration(seconds: 5));
+      }();
 
       final orientationFuture = SystemChrome.setPreferredOrientations(const [
         DeviceOrientation.portraitUp,
@@ -71,15 +80,12 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       // ── Phase 2: Dependent tasks in parallel ─────────────────────────
-      // Chain A (critical path): Hive settings → DI registration
+      // Chain A (critical path): Settings registration → DI registration
+      //   (Hive box already opened in Phase 1)
       // Chain B (non-blocking): App Check (debug only)
       // Chain C (non-blocking): Crash reporting
 
-      late final Box<dynamic> settingsBox;
-
       final diFuture = () async {
-        settingsBox = await Hive.openBox('radius_settings')
-            .timeout(const Duration(seconds: 5));
         if (!getIt.isRegistered<Box<dynamic>>(
             instanceName: 'radius_settings')) {
           getIt.registerSingleton<Box<dynamic>>(
