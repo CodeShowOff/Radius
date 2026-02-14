@@ -21,7 +21,6 @@ class _SplashPageState extends State<SplashPage>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   bool _canNavigate = false;
-  bool _hasNavigated = false;
 
   @override
   void initState() {
@@ -83,17 +82,14 @@ class _SplashPageState extends State<SplashPage>
     
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        // Prevent multiple navigation calls and ensure minimum splash time
-        if (_hasNavigated || !_canNavigate) return;
+        // Only navigate after minimum splash duration
+        if (!_canNavigate) return;
         
         if (state is AuthAuthenticated) {
-          _hasNavigated = true;
           context.go(Routes.home);
         } else if (state is AuthAwaitingEmailVerification) {
-          _hasNavigated = true;
           context.go(Routes.emailVerification);
         } else if (state is AuthUnauthenticated || state is AuthError) {
-          _hasNavigated = true;
           context.go(Routes.login);
         }
       },
