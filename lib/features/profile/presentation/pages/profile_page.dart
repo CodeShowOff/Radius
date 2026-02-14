@@ -135,6 +135,37 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 20),
 
+                        // Stats
+                        BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                          builder: (context, connectionState) {
+                            final connectionsCount =
+                                connectionState.connections.length;
+                            
+                            // Get helps done count where user was the helper
+                            final userId = user?.id ?? '';
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _StatItem(
+                                  label: 'Connections',
+                                  value: connectionsCount.toString(),
+                                ),
+                                StreamBuilder<int>(
+                                  stream: getIt<NearbyHelpService>().streamHelpsDoneCount(userId),
+                                  builder: (context, snapshot) {
+                                    final helpsDone = snapshot.data ?? 0;
+                                    return _StatItem(
+                                      label: 'Helps Done',
+                                      value: helpsDone.toString(),
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
                         // Profile Info Card
                         Card(
                           elevation: 0,
@@ -172,37 +203,6 @@ class _ProfilePageState extends State<ProfilePage> {
                               ],
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Stats
-                        BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-                          builder: (context, connectionState) {
-                            final connectionsCount =
-                                connectionState.connections.length;
-                            
-                            // Get helps done count where user was the helper
-                            final userId = user?.id ?? '';
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _StatItem(
-                                  label: 'Connections',
-                                  value: connectionsCount.toString(),
-                                ),
-                                StreamBuilder<int>(
-                                  stream: getIt<NearbyHelpService>().streamHelpsDoneCount(userId),
-                                  builder: (context, snapshot) {
-                                    final helpsDone = snapshot.data ?? 0;
-                                    return _StatItem(
-                                      label: 'Helps Done',
-                                      value: helpsDone.toString(),
-                                    );
-                                  },
-                                ),
-                              ],
-                            );
-                          },
                         ),
                         const SizedBox(height: 32),
 

@@ -113,7 +113,12 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
           IconButton(
             onPressed: () => context.push(Routes.locationGroups),
             icon: const Icon(Icons.search),
-            tooltip: 'Find Groups',
+            tooltip: 'Discover Groups',
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _forceRefreshGroups,
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -184,7 +189,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'You haven\'t joined any location groups yet.\nFind groups near you to connect with people in your area.',
+                        'You haven\'t joined any location groups yet.\nDiscover groups near you to connect with people in your area.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -193,8 +198,8 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                       const SizedBox(height: 32),
                       FilledButton.icon(
                         onPressed: () => context.push(Routes.locationGroups),
-                        icon: const Icon(Icons.search),
-                        label: const Text('Find Groups'),
+                        icon: const Icon(Icons.explore),
+                        label: const Text('Discover Groups'),
                       ),
                     ],
                   ),

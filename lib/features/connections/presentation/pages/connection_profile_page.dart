@@ -319,6 +319,35 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
               ),
             ),
           const SizedBox(height: 32),
+          // Stats — Connections count & Helps Done count
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              StreamBuilder<List<Connection>>(
+                stream: getIt<ConnectionService>()
+                    .getConnectionsStream(widget.otherUserId),
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.length ?? 0;
+                  return _StatItem(
+                    label: 'Connections',
+                    value: count.toString(),
+                  );
+                },
+              ),
+              StreamBuilder<int>(
+                stream: getIt<NearbyHelpService>()
+                    .streamHelpsDoneCount(widget.otherUserId),
+                builder: (context, snapshot) {
+                  final helpsDone = snapshot.data ?? 0;
+                  return _StatItem(
+                    label: 'Helps Done',
+                    value: helpsDone.toString(),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           // Profile Fields
           Card(
             elevation: 0,
@@ -348,35 +377,6 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          // Stats — Connections count & Helps Done count
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              StreamBuilder<List<Connection>>(
-                stream: getIt<ConnectionService>()
-                    .getConnectionsStream(widget.otherUserId),
-                builder: (context, snapshot) {
-                  final count = snapshot.data?.length ?? 0;
-                  return _StatItem(
-                    label: 'Connections',
-                    value: count.toString(),
-                  );
-                },
-              ),
-              StreamBuilder<int>(
-                stream: getIt<NearbyHelpService>()
-                    .streamHelpsDoneCount(widget.otherUserId),
-                builder: (context, snapshot) {
-                  final helpsDone = snapshot.data ?? 0;
-                  return _StatItem(
-                    label: 'Helps Done',
-                    value: helpsDone.toString(),
-                  );
-                },
-              ),
-            ],
           ),
           const SizedBox(height: 32),
           Row(

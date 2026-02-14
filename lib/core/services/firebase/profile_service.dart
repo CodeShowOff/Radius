@@ -53,8 +53,19 @@ class ProfileService {
       // - The users doc is already created by auth flow with required fields (email, createdAt)
       // - Only update users doc with merge to add profile fields without overwriting auth fields
       // - Create profiles doc fresh (it doesn't exist yet)
-      batch.set(userDoc, dataForUsers, SetOptions(merge: true));
-      batch.set(profileDoc, dataWithUserId);
+      //
+      // IMPORTANT: Remove discoveryUsername from initial creation data.
+      // The cloud function (onUserCreatedAssignDiscoveryUsername) auto-assigns
+      // this field asynchronously. Including null here would overwrite the
+      // cloud function's value due to a race condition (merge with null
+      // sets the field to null in Firestore).
+      final createDataForUsers = Map<String, dynamic>.from(dataForUsers)
+        ..remove('discoveryUsername');
+      final createDataForProfile = Map<String, dynamic>.from(dataWithUserId)
+        ..remove('discoveryUsername');
+
+      batch.set(userDoc, createDataForUsers, SetOptions(merge: true));
+      batch.set(profileDoc, createDataForProfile);
     } else {
       // Use merge for updates to preserve existing fields
       // Include userId in case profiles doc doesn't exist yet (migration scenario)

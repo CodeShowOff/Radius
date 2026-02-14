@@ -58,6 +58,18 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
     });
   }
 
+  Future<void> _refreshGroups() async {
+    if (_selectedCountry != null && _selectedState != null) {
+      context.read<LocationGroupBloc>().add(LoadGroupsForLocation(
+            countryCode: _selectedCountry!.code,
+            stateCode: _selectedState!.code,
+            sortBy: _sortBy,
+          ));
+      // Wait a bit for the stream to update
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -69,6 +81,12 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (!_showLocationSelector)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _refreshGroups,
+              tooltip: 'Refresh',
+            ),
           IconButton(
             onPressed: () => context.push(Routes.createLocationGroup),
             icon: const Icon(Icons.add),
@@ -242,17 +260,7 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
               }
 
               return RefreshIndicator(
-                onRefresh: () async {
-                  if (_selectedCountry != null && _selectedState != null) {
-                    context.read<LocationGroupBloc>().add(LoadGroupsForLocation(
-                          countryCode: _selectedCountry!.code,
-                          stateCode: _selectedState!.code,
-                          sortBy: _sortBy,
-                        ));
-                    // Wait a bit for the stream to update
-                    await Future.delayed(const Duration(milliseconds: 500));
-                  }
-                },
+                onRefresh: _refreshGroups,
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: state.locationGroups.length,

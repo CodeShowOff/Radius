@@ -830,7 +830,7 @@ class _EmptyState extends StatelessWidget {
             Icon(
               Icons.people_outline,
               size: 80,
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(
