@@ -335,7 +335,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         onProgress: (progress) {
           if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
             lastReportedProgress = progress;
-            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+            _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: progress));
           }
         },
       ),
@@ -400,7 +400,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         onProgress: (progress) {
           if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
             lastReportedProgress = progress;
-            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+            _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: progress));
           }
         },
       ),
@@ -465,7 +465,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         onProgress: (progress) {
           if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
             lastReportedProgress = progress;
-            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+            _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: progress));
           }
         },
       ),
@@ -526,7 +526,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         onProgress: (progress) {
           if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
             lastReportedProgress = progress;
-            add(_ChatMediaUploadProgress(localId: localId, progress: progress));
+            _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: progress));
           }
         },
       ),
@@ -565,9 +565,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // Stream-based deduplication will remove the pending message
     } catch (e) {
       _logger.e('Media upload/send failed', error: e);
-      if (!isClosed) {
-        add(_ChatMediaUploadFailed(localId: localId, error: 'Failed to send media: $e'));
-      }
+      _safeAdd(_ChatMediaUploadFailed(localId: localId, error: 'Failed to send media: $e'));
     }
   }
 
@@ -736,6 +734,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) {
+    // Guard: state may have been reset by ChatClose before this event processed
+    if (isClosed || state.conversationId == null) return;
+
     const pageSize = 50;
     // Remove confirmed messages from pending
     final pending = Map<String, Message>.from(state.pendingMessages);
@@ -896,6 +897,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) {
     if (event.conversation == null) return;
+    // Guard: state may have been reset by ChatClose before this event processed
+    if (isClosed || state.conversationId == null) return;
 
     final currentUserId = state.currentUserId ?? '';
     final derivedOtherUserId =
@@ -909,18 +912,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     if (needsOtherUserId) {
       _typingSubscription?.cancel();
+      final conversationId = state.conversationId;
+      if (conversationId == null) return;
       _typingSubscription = _chatService
-          .getTypingStream(state.conversationId!, derivedOtherUserId)
+          .getTypingStream(conversationId, derivedOtherUserId)
           .listen(
             (isTyping) {
-              if (!isClosed) {
-                add(_ChatTypingUpdated(isTyping));
-              }
+              _safeAdd(_ChatTypingUpdated(isTyping));
             },
             onError: (error) {
-              if (!isClosed) {
-                add(_ChatErrorOccurred(error.toString()));
-              }
+              _safeAdd(_ChatErrorOccurred(error.toString()));
             },
           );
     }
@@ -941,6 +942,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatTypingUpdated event,
     Emitter<ChatState> emit,
   ) {
+    if (isClosed || state.conversationId == null) return;
     emit(state.copyWith(isOtherUserTyping: event.isOtherUserTyping));
   }
 
@@ -948,6 +950,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatErrorOccurred event,
     Emitter<ChatState> emit,
   ) {
+    if (isClosed || state.conversationId == null) return;
     emit(state.copyWith(
       status: ChatStatus.error,
       errorMessage: event.message,
@@ -962,6 +965,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription = null;
     _conversationSubscription = null;
     _typingSubscription = null;
+  }
+
+  /// Safely adds an event to the bloc, suppressing errors if the bloc
+  /// has already been closed. This prevents the "Cannot add new events
+  /// after calling close" crash from stream callbacks that fire during
+  /// the brief window between close() and subscription cancellation.
+  void _safeAdd(ChatEvent event) {
+    if (!isClosed) {
+      try {
+        add(event);
+      } catch (_) {
+        // Bloc was closed between the isClosed check and add() call.
+        // This is expected during teardown race conditions.
+      }
+    }
   }
 
   /// Subscribes to Firestore streams for the current conversation.
@@ -989,9 +1007,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription =
         _chatService.getMessagesStream(event.conversationId).listen(
               (messages) {
-                if (!isClosed) {
-                  add(_ChatMessagesUpdated(messages));
-                }
+                _safeAdd(_ChatMessagesUpdated(messages));
               },
               onError: (error) {
                 _logger.e('Messages stream error: $error');
@@ -1001,7 +1017,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                       errorMessage.contains('PERMISSION_DENIED')) {
                     errorMessage = 'Unable to access messages. The conversation may still be initializing. Please wait a moment and try again.';
                   }
-                  add(_ChatErrorOccurred(errorMessage));
+                  _safeAdd(_ChatErrorOccurred(errorMessage));
                 }
               },
             );
@@ -1010,14 +1026,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _conversationSubscription =
         _chatService.getConversationStream(event.conversationId).listen(
               (conversation) {
-                if (!isClosed) {
-                  add(_ChatConversationUpdated(conversation));
-                }
+                _safeAdd(_ChatConversationUpdated(conversation));
               },
               onError: (error) {
-                if (!isClosed) {
-                  add(_ChatErrorOccurred(error.toString()));
-                }
+                _safeAdd(_ChatErrorOccurred(error.toString()));
               },
             );
 
@@ -1027,14 +1039,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .getTypingStream(event.conversationId, event.otherUserId)
           .listen(
             (isTyping) {
-              if (!isClosed) {
-                add(_ChatTypingUpdated(isTyping));
-              }
+              _safeAdd(_ChatTypingUpdated(isTyping));
             },
             onError: (error) {
-              if (!isClosed) {
-                add(_ChatErrorOccurred(error.toString()));
-              }
+              _safeAdd(_ChatErrorOccurred(error.toString()));
             },
           );
     }
@@ -1081,8 +1089,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   @override
-  Future<void> close() {
-    _cancelSubscriptions();
+  Future<void> close() async {
+    // CRITICAL: Await subscription cancellation to prevent stream callbacks
+    // from firing after close, which causes "Cannot add new events after
+    // calling close" crashes.
+    await _cancelSubscriptions();
     _typingDebounce?.cancel();
     // Clear typing indicator as a safety net
     if (state.conversationId != null && state.currentUserId != null) {

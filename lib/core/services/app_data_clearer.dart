@@ -24,17 +24,35 @@ class AppDataClearer {
 
   /// Wipe every local data store. Safe to call multiple times.
   static Future<void> clearAllAppData() async {
+    // ── Phase 1: Clear caches that own SQLite / file handles ─────────────
+    // These must complete BEFORE we delete directories, otherwise deleting
+    // the underlying DB file while flutter_cache_manager still has it open
+    // triggers SQLITE_READONLY_DBMOVED (code 1032).
     await Future.wait([
       _clearInMemoryCaches(),
-      _clearHiveBoxes(),
-      _clearImageCache(),
       _clearFileCacheManager(),
-      _clearTempDirectory(),
-      _clearApplicationDocumentsDirectory(),
-      _clearApplicationSupportDirectory(),
+      _clearImageCache(),
       _clearNotifications(),
       _clearDeviceLogs(),
     ]);
+
+    // ── Phase 2: Hive boxes (close first, then delete files) ────────────
+    await _clearHiveBoxes();
+
+    // ── Phase 3: Delete directories (safe now — no open handles) ────────
+    await Future.wait([
+      _clearTempDirectory(),
+      _clearApplicationDocumentsDirectory(),
+      _clearApplicationSupportDirectory(),
+    ]);
+
+    // ── Phase 4: Re-initialize Hive so subsequent box opens don't crash
+    // with PathNotFoundException (the directories were just deleted). ─────
+    try {
+      await Hive.initFlutter();
+    } catch (_) {
+      // Best-effort: Hive re-init may fail if Flutter engine is shutting down
+    }
   }
 
   // ── In-memory LRU caches ──────────────────────────────────────────────────

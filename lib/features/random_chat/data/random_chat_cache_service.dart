@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logger/logger.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../domain/entities/random_chat_connection.dart';
 import '../domain/entities/random_chat_request.dart';
@@ -38,7 +39,42 @@ class RandomChatCacheService {
       _logger.d('Random Chat cache initialized');
     } catch (e, stack) {
       _logger.e('Failed to initialize Random Chat cache', error: e, stackTrace: stack);
+      // Recover from PathNotFoundException or corrupted box files:
+      // Ensure the Hive directory exists, delete the corrupt box, and retry once.
+      try {
+        await _ensureHiveDirectoryExists();
+        await Hive.deleteBoxFromDisk(_boxName);
+        _box = await Hive.openBox(_boxName);
+        _logger.i('Random Chat cache recovered after error');
+      } catch (retryError) {
+        _logger.e('Recovery also failed, cache will be unavailable', error: retryError);
+        _box = null;
+      }
     }
+  }
+
+  /// Ensures the Hive storage directory exists on disk.
+  /// Fixes PathNotFoundException on devices where the directory was deleted
+  /// (e.g., by clearAllAppData or OS storage cleanup).
+  Future<void> _ensureHiveDirectoryExists() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      if (!appDir.existsSync()) {
+        appDir.createSync(recursive: true);
+      }
+    } catch (_) {
+      // Best-effort: if we can't create the directory, the retry will fail
+      // and we'll fall back to null _box.
+    }
+  }
+
+  /// Safely access the box, returning null if it's been closed or invalidated.
+  Box? get _safeBox {
+    try {
+      if (_box != null && _box!.isOpen) return _box;
+    } catch (_) {}
+    _box = null;
+    return null;
   }
 
   /// Get cached data for today.
@@ -48,8 +84,8 @@ class RandomChatCacheService {
     required String dateKey,
   }) async {
     try {
-      if (_box == null) await init();
-      if (_box == null) return null;
+      if (_safeBox == null) await init();
+      if (_safeBox == null) return null;
 
       final cachedUserId = _box!.get(_userIdKey);
       final cachedDateKey = _box!.get(_dateKeyKey);
@@ -106,8 +142,8 @@ class RandomChatCacheService {
     RandomChatConnection? activeConnection,
   }) async {
     try {
-      if (_box == null) await init();
-      if (_box == null) return;
+      if (_safeBox == null) await init();
+      if (_safeBox == null) return;
 
       await _box!.put(_userIdKey, userId);
       await _box!.put(_dateKeyKey, dateKey);
@@ -130,7 +166,7 @@ class RandomChatCacheService {
   /// Update only incoming requests in cache.
   Future<void> updateIncomingRequests(List<RandomChatRequest> requests) async {
     try {
-      if (_box == null) return;
+      if (_safeBox == null) return;
       await _box!.put(_incomingRequestsKey, _encodeRequests(requests));
       await _box!.put(_lastUpdatedKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
@@ -141,7 +177,7 @@ class RandomChatCacheService {
   /// Update only sent requests in cache.
   Future<void> updateSentRequests(List<RandomChatRequest> requests) async {
     try {
-      if (_box == null) return;
+      if (_safeBox == null) return;
       await _box!.put(_sentRequestsKey, _encodeRequests(requests));
       await _box!.put(_lastUpdatedKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
@@ -152,7 +188,7 @@ class RandomChatCacheService {
   /// Update only active connection in cache.
   Future<void> updateActiveConnection(RandomChatConnection? connection) async {
     try {
-      if (_box == null) return;
+      if (_safeBox == null) return;
       await _box!.put(
         _activeConnectionKey,
         connection != null ? _encodeConnection(connection) : null,
@@ -166,7 +202,7 @@ class RandomChatCacheService {
   /// Clear all cached data (e.g., on logout or date change).
   Future<void> clearCache() async {
     try {
-      if (_box == null) return;
+      if (_safeBox == null) return;
       await _box!.clear();
       _logger.d('Cache cleared');
     } catch (e) {

@@ -348,8 +348,9 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   }
 
   @override
-  Future<void> close() {
-    _conversationsSubscription?.cancel();
+  Future<void> close() async {
+    await _conversationsSubscription?.cancel();
+    _conversationsSubscription = null;
     return super.close();
   }
 }

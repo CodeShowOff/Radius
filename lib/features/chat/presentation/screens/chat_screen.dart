@@ -180,12 +180,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .where((status) => status == RealtimeConnectionStatus.connected)
           .listen((_) {
         // Network reconnected - trigger resync
-        // Use context.read to get the bloc since _chatBloc might not be set yet
         if (mounted) {
           try {
-            context.read<ChatBloc>().add(const ChatResync());
+            final bloc = _chatBloc ?? context.read<ChatBloc>();
+            if (!bloc.isClosed) {
+              bloc.add(const ChatResync());
+            }
           } catch (_) {
-            // BLoC not available
+            // BLoC not available or closed
           }
         }
       });
@@ -217,7 +219,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         // App came back to foreground - resync to get any missed messages
-        _chatBloc?.add(const ChatResync());
+        // Guard: bloc may have been closed during background
+        if (_chatBloc != null && !_chatBloc!.isClosed) {
+          _chatBloc!.add(const ChatResync());
+        }
         // Re-assert notification context in case in-memory state was lost
         // (e.g., after process restart or long background pause)
         try {
@@ -265,12 +270,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // unreliable in dispose() — the element may already be deactivated,
     // causing activeConversationId to remain stuck and permanently zeroing
     // out that conversation's unread count on every stream update.
-    _conversationsBloc?.add(
-      const ConversationsSetActiveChat(conversationId: null),
-    );
+    // Also guard against adding events after bloc is closed.
+    if (_conversationsBloc != null && !_conversationsBloc!.isClosed) {
+      _conversationsBloc!.add(
+        const ConversationsSetActiveChat(conversationId: null),
+      );
+    }
 
     // Use cached reference to avoid context access after disposal.
-    _chatBloc?.add(const ChatClose());
+    if (_chatBloc != null && !_chatBloc!.isClosed) {
+      _chatBloc!.add(const ChatClose());
+    }
     super.dispose();
   }
 
@@ -279,10 +289,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200 &&
         !_isLoadingMore) {
-      final bloc = context.read<ChatBloc>();
-      if (bloc.state.hasMore && bloc.state.status != ChatStatus.loading) {
-        _isLoadingMore = true;
-        bloc.add(const ChatLoadMore());
+      try {
+        final bloc = context.read<ChatBloc>();
+        if (!bloc.isClosed && bloc.state.hasMore && bloc.state.status != ChatStatus.loading) {
+          _isLoadingMore = true;
+          bloc.add(const ChatLoadMore());
+        }
+      } catch (_) {
+        // BLoC not available (screen already disposed)
       }
     }
   }
@@ -353,7 +367,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _onTypingChanged(bool isTyping) {
-    context.read<ChatBloc>().add(ChatSetTyping(isTyping));
+    try {
+      final bloc = context.read<ChatBloc>();
+      if (!bloc.isClosed) {
+        bloc.add(ChatSetTyping(isTyping));
+      }
+    } catch (_) {}
   }
 
   @override
