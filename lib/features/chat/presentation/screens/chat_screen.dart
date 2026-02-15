@@ -591,9 +591,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleMenuAction(BuildContext context, String action) {
     switch (action) {
-      case 'delete':
-        _confirmDeleteConversation(context);
-        break;
       case 'mute':
         _toggleMute(context);
         break;
@@ -607,65 +604,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _confirmUnblockUser(context);
         break;
     }
-  }
-
-  void _confirmDeleteConversation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Conversation?'),
-        content: const Text(
-          'This will permanently delete all messages in this conversation. '
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-
-              try {
-                // Delete conversation directly via chat service
-                await getIt<ChatService>().deleteConversation(
-                  widget.conversationId,
-                  widget.currentUserId,
-                );
-
-                // Go back to conversations list
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-
-                  // Show confirmation
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Conversation deleted'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete: $e'),
-                      backgroundColor: Colors.red,
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-                }
-              }
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _toggleMute(BuildContext context) async {
@@ -968,19 +906,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           icon: const Icon(Icons.more_vert),
           onSelected: onMenuSelected,
           itemBuilder: (context) => [
-            if (isDisconnected || isBlocked)
-              const PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  leading: Icon(Icons.delete_outline, color: Colors.red),
-                  title: Text(
-                    'Delete Conversation',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              )
-            else ...[
+            if (!isDisconnected && !isBlocked) ...[
               PopupMenuItem(
                 value: 'mute',
                 child: Text(isMuted ? 'Unmute notifications' : 'Mute notifications'),
@@ -992,10 +918,6 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
               const PopupMenuItem(
                 value: 'block',
                 child: Text('Block user'),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Text('Delete conversation'),
               ),
             ],
             if (isBlocked) ...[

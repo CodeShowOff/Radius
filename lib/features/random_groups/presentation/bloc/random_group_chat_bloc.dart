@@ -413,6 +413,30 @@ class RandomGroupChatBloc
   ) {
     _logger.d('Received ${event.messages.length} messages');
 
+    // ========================================================================
+    // CLEAR CHAT GUARD: If a clear operation is in progress, ignore incoming
+    // stream messages until the stream confirms empty (all batches deleted).
+    // This prevents messages from briefly reappearing during multi-batch
+    // soft-delete operations.
+    // ========================================================================
+    if (state.isClearingChat) {
+      if (event.messages.isEmpty) {
+        // All messages confirmed deleted by stream — finalize clear
+        _logger.i('Chat clear confirmed by stream (0 messages)');
+        emit(state.copyWith(
+          status: RandomGroupChatStatus.loaded,
+          messages: const [],
+          hasMore: false,
+          isClearingChat: false,
+        ));
+      } else {
+        // Stream fired with partial results (intermediate batch) — ignore
+        _logger.d(
+            'Ignoring ${event.messages.length} messages during clear operation');
+      }
+      return;
+    }
+
     const pageSize = 50;
 
     // CRITICAL FIX: Deduplicate messages by ID to prevent double display
@@ -442,8 +466,9 @@ class RandomGroupChatBloc
         }
       }
 
-      // Keep messages that are older than the oldest message in the new list
-      if (event.messages.isEmpty) return true;
+      // Keep messages that are older than the oldest message in the new list.
+      // When stream returns empty, all messages have been deleted — clear state.
+      if (event.messages.isEmpty) return false;
       return m.sentAt.isBefore(event.messages.last.sentAt);
     }).toList();
 
@@ -503,17 +528,24 @@ class RandomGroupChatBloc
   /// Clears all local chat messages immediately.
   /// This is called after an admin successfully clears the chat,
   /// to provide immediate feedback without waiting for Firestore stream updates.
+  ///
+  /// Sets [isClearingChat] flag to prevent messages from reappearing
+  /// during multi-batch soft-delete (stream fires with partial results
+  /// between batches).
   void _onClearRandomGroupChatMessages(
     ClearRandomGroupChatMessages event,
     Emitter<RandomGroupChatState> emit,
   ) {
     _logger.d('Clearing all local chat messages');
 
-    // Clear messages from local state
+    // Clear messages from local state and set clearing flag
+    // The flag prevents _onMessagesReceived from re-populating messages
+    // while the backend soft-delete is in progress (fires in batches)
     emit(state.copyWith(
       messages: const [],
       hasMore: false,
       clearFirstUnreadMessageId: true,
+      isClearingChat: true,
     ));
 
     // Clear messages from cache

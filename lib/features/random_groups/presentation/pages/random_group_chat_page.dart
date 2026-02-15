@@ -220,22 +220,20 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             onPressed: () {
               Navigator.pop(dialogContext);
 
-              // Clear messages from UI immediately for instant feedback
+              // Clear messages from UI immediately for instant feedback.
+              // The isClearingChat flag in chat bloc prevents the Firestore
+              // stream from re-populating messages during batch soft-delete.
               chatBloc.add(const ClearRandomGroupChatMessages());
 
-              // Clear messages from backend (will also trigger stream update)
+              // Clear messages from backend (will also trigger stream update).
+              // Listen for result via _handleClearChatResult.
               randomGroupBloc.add(ClearRandomGroupChat(
                 groupId: widget.groupId,
                 adminUserId: authState.user.id,
               ));
 
-              // Show confirmation message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Chat cleared'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              // Don't show snackbar here — wait for backend result.
+              // Success/error is handled by the BlocListener for RandomGroupBloc.
             },
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
@@ -311,14 +309,44 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return BlocBuilder<RandomGroupBloc, RandomGroupState>(
-      builder: (context, groupState) {
-        final group = groupState.selectedGroup;
-        final groupName = group?.name ?? 'Group Chat';
-        final isAdmin =
-            groupState.membershipStatus == UserMembershipStatus.admin ||
-                groupState.membershipStatus == UserMembershipStatus.creator;
-        final hasPendingRequests = groupState.pendingRequests.isNotEmpty;
+    return BlocListener<RandomGroupBloc, RandomGroupState>(
+      listenWhen: (previous, current) =>
+          previous.errorMessage != current.errorMessage ||
+          previous.status != current.status,
+      listener: (context, groupState) {
+        // Handle clear chat result from backend
+        final chatState = context.read<RandomGroupChatBloc>().state;
+        if (chatState.isClearingChat) {
+          if (groupState.errorMessage != null) {
+            // Backend clear failed — re-open chat to restore messages
+            // from the Firestore stream (messages weren't actually deleted)
+            _openChat();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(groupState.errorMessage!),
+                backgroundColor: theme.colorScheme.error,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          } else if (groupState.status == RandomGroupBlocStatus.loaded) {
+            // Backend clear succeeded (loaded state, no error)
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Chat cleared'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      },
+      child: BlocBuilder<RandomGroupBloc, RandomGroupState>(
+        builder: (context, groupState) {
+          final group = groupState.selectedGroup;
+          final groupName = group?.name ?? 'Group Chat';
+          final isAdmin =
+              groupState.membershipStatus == UserMembershipStatus.admin ||
+                  groupState.membershipStatus == UserMembershipStatus.creator;
+          final hasPendingRequests = groupState.pendingRequests.isNotEmpty;
 
         return Scaffold(
           appBar: AppBar(
@@ -517,7 +545,8 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             },
           ),
         );
-      },
+        },
+      ),
     );
   }
 

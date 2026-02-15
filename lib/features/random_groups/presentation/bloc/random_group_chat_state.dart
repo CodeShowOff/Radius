@@ -62,6 +62,11 @@ class RandomGroupChatState extends Equatable {
   /// Used to display "X unread messages" in the divider.
   final int unreadCountAtOpen;
 
+  /// Whether a chat clear operation is in progress.
+  /// When true, incoming stream messages are ignored to prevent
+  /// messages from briefly reappearing during batch soft-delete.
+  final bool isClearingChat;
+
   const RandomGroupChatState({
     this.status = RandomGroupChatStatus.initial,
     this.currentGroupId,
@@ -76,6 +81,7 @@ class RandomGroupChatState extends Equatable {
     this.membershipVerified = false,
     this.firstUnreadMessageId,
     this.unreadCountAtOpen = 0,
+    this.isClearingChat = false,
   });
 
   /// Whether the chat is currently loading.
@@ -114,6 +120,7 @@ class RandomGroupChatState extends Equatable {
     String? firstUnreadMessageId,
     bool clearFirstUnreadMessageId = false,
     int? unreadCountAtOpen,
+    bool? isClearingChat,
   }) {
     return RandomGroupChatState(
       status: status ?? this.status,
@@ -132,6 +139,7 @@ class RandomGroupChatState extends Equatable {
           ? null
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
       unreadCountAtOpen: unreadCountAtOpen ?? this.unreadCountAtOpen,
+      isClearingChat: isClearingChat ?? this.isClearingChat,
     );
   }
 
@@ -150,5 +158,6 @@ class RandomGroupChatState extends Equatable {
         membershipVerified,
         firstUnreadMessageId,
         unreadCountAtOpen,
+        isClearingChat,
       ];
 }

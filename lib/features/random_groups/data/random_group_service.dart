@@ -1093,11 +1093,12 @@ class RandomGroupService {
         );
       }
 
-      await _softDeleteGroupMessages(groupId);
+      await _hardDeleteGroupMessages(groupId);
 
       await _groupsRef.doc(groupId).update({
         'lastActiveAt': FieldValue.serverTimestamp(),
-        'lastMessagePreview': null,
+        'lastMessagePreview': FieldValue.delete(),
+        'lastMessageAt': FieldValue.delete(),
       });
 
       _logger.i('Cleared messages for group $groupId');
@@ -1120,8 +1121,13 @@ class RandomGroupService {
     }
   }
 
-  /// Soft-deletes all messages in a group in batches.
-  Future<void> _softDeleteGroupMessages(
+  /// Hard-deletes all messages in a group in batches.
+  ///
+  /// Uses hard-delete (batch.delete) instead of soft-delete (batch.update)
+  /// because Firestore security rules block message updates:
+  ///   `allow update: if false; // No edits`
+  /// Soft-delete would fail with permission-denied.
+  Future<void> _hardDeleteGroupMessages(
     String groupId, {
     int batchSize = 450,
   }) async {
@@ -1130,7 +1136,7 @@ class RandomGroupService {
 
       while (true) {
         final snapshot = await collectionRef
-            .where('isDeleted', isEqualTo: false)
+            .orderBy('sentAt')
             .limit(batchSize)
             .get();
 
@@ -1138,14 +1144,14 @@ class RandomGroupService {
 
         final batch = _firestore.batch();
         for (final doc in snapshot.docs) {
-          batch.update(doc.reference, const {'isDeleted': true});
+          batch.delete(doc.reference);
         }
         await batch.commit();
 
         if (snapshot.size < batchSize) break;
       }
     } catch (e) {
-      _logger.e('Error soft-deleting messages', error: e);
+      _logger.e('Error deleting messages', error: e);
       rethrow;
     }
   }

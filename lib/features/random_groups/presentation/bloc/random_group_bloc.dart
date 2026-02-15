@@ -640,8 +640,8 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Clearing chat for group: ${event.groupId}');
 
-    emit(state.copyWith(
-        status: RandomGroupBlocStatus.loading, clearError: true));
+    // Don't set global status to loading — clear chat is a background operation
+    // that shouldn't block the group list page with a loading/error state.
 
     final result = await _groupService.clearGroupMessages(
       groupId: event.groupId,
@@ -651,12 +651,18 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Cleared chat for group: ${event.groupId}');
-        emit(state.copyWith(status: RandomGroupBlocStatus.loaded));
+        emit(state.copyWith(
+          status: RandomGroupBlocStatus.loaded,
+          clearError: true,
+        ));
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to clear chat: $msg');
+        // Stay in loaded state — don't emit global error that breaks
+        // other pages (like My Random Groups list showing error screen).
+        // The error message is available for listeners to show a snackbar.
         emit(state.copyWith(
-          status: RandomGroupBlocStatus.error,
+          status: RandomGroupBlocStatus.loaded,
           errorMessage: msg,
         ));
     }
