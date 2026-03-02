@@ -56,8 +56,7 @@ class VideoLobbyReadyView extends StatelessWidget {
             const SizedBox(height: 12),
 
             Text(
-              'You\'re all set as "${profile.displayName}".\n'
-              'Tap the button below to start matching\nwith random people for video chat.',
+              'You\'re all set as "${profile.displayName}".',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: isDark ? Colors.white70 : Colors.black54,
