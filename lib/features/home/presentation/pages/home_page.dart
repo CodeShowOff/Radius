@@ -486,6 +486,17 @@ class _HomePageState extends State<HomePage>
                   children: [
                     Expanded(
                       child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.videoChat),
+                        label: 'Video\nChat',
+                        color: Theme.of(context).colorScheme.onTertiary,
+                        backgroundColor: Theme.of(context).colorScheme.tertiary,
+                        isSquare: true,
+                        icon: Icons.videocam_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.locationGroups),
                         label: 'Location\nGroups',
                         color: Theme.of(context).colorScheme.onPrimary,
@@ -494,7 +505,11 @@ class _HomePageState extends State<HomePage>
                         icon: Icons.location_on,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
                     Expanded(
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.discoverRandomGroups),
@@ -505,11 +520,7 @@ class _HomePageState extends State<HomePage>
                         icon: Icons.public,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.discoverNearbyGroups),
@@ -520,9 +531,6 @@ class _HomePageState extends State<HomePage>
                         icon: Icons.all_inclusive,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    // Empty spacer to maintain grid alignment
-                    const Expanded(child: SizedBox()),
                   ],
                 ),
               ],

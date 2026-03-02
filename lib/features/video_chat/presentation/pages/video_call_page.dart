@@ -1,0 +1,371 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+
+import '../../../../core/theme/app_theme.dart';
+import '../bloc/video_call_bloc.dart';
+import '../widgets/call_controls.dart';
+
+/// Full-screen video call page.
+///
+/// Shows local + remote video streams, call controls,
+/// caller info, and a call duration timer.
+class VideoCallPage extends StatefulWidget {
+  const VideoCallPage({super.key});
+
+  @override
+  State<VideoCallPage> createState() => _VideoCallPageState();
+}
+
+class _VideoCallPageState extends State<VideoCallPage> {
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+
+  Timer? _durationTimer;
+  Duration _callDuration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRenderers();
+  }
+
+  Future<void> _initRenderers() async {
+    await _localRenderer.initialize();
+    await _remoteRenderer.initialize();
+  }
+
+  @override
+  void dispose() {
+    _durationTimer?.cancel();
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
+    super.dispose();
+  }
+
+  void _startDurationTimer() {
+    _durationTimer?.cancel();
+    _callDuration = Duration.zero;
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _callDuration += const Duration(seconds: 1);
+        });
+      }
+    });
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (duration.inHours > 0) {
+      final hours = duration.inHours.toString().padLeft(2, '0');
+      return '$hours:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: BlocConsumer<VideoCallBloc, VideoCallState>(
+        listener: (context, state) {
+          if (state is VideoCallConnected) {
+            // Attach streams to renderers
+            if (state.localStream != null) {
+              _localRenderer.srcObject = state.localStream;
+            }
+            if (state.remoteStream != null) {
+              _remoteRenderer.srcObject = state.remoteStream;
+            }
+            _startDurationTimer();
+          } else if (state is VideoCallConnecting) {
+            if (state.localStream != null) {
+              _localRenderer.srcObject = state.localStream;
+            }
+          } else if (state is VideoCallRinging) {
+            if (state.localStream != null) {
+              _localRenderer.srcObject = state.localStream;
+            }
+          } else if (state is VideoCallEndedState) {
+            _durationTimer?.cancel();
+            // Show end reason and pop after delay
+            final navigator = Navigator.of(context);
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) navigator.pop();
+            });
+          } else if (state is VideoCallError) {
+            final navigator = Navigator.of(context);
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) navigator.pop();
+            });
+          }
+        },
+        builder: (context, state) {
+          return Stack(
+            children: [
+              // Remote video (full screen background)
+              _buildRemoteVideo(state),
+
+              // Local video (draggable PiP)
+              _buildLocalVideo(state),
+
+              // Top bar with user info and call duration
+              _buildTopBar(state),
+
+              // Call status overlay (ringing, connecting, ended)
+              _buildStatusOverlay(state),
+
+              // Bottom call controls
+              if (state is VideoCallConnected ||
+                  state is VideoCallConnecting ||
+                  state is VideoCallRinging)
+                _buildCallControls(state),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRemoteVideo(VideoCallState state) {
+    if (state is VideoCallConnected && state.remoteStream != null) {
+      return Positioned.fill(
+        child: RTCVideoView(
+          _remoteRenderer,
+          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+        ),
+      );
+    }
+    return const Positioned.fill(
+      child: ColoredBox(color: Colors.black),
+    );
+  }
+
+  Widget _buildLocalVideo(VideoCallState state) {
+    final hasLocalStream = state is VideoCallConnected ||
+        state is VideoCallConnecting ||
+        state is VideoCallRinging;
+
+    if (!hasLocalStream) return const SizedBox.shrink();
+
+    return Positioned(
+      right: 16,
+      top: MediaQuery.of(context).padding.top + 80,
+      child: GestureDetector(
+        child: Container(
+          width: 120,
+          height: 160,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white30, width: 1),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: RTCVideoView(
+            _localRenderer,
+            mirror: true,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar(VideoCallState state) {
+    String name = '';
+    if (state is VideoCallConnected) {
+      name = state.otherUserName;
+    } else if (state is VideoCallRinging) {
+      name = state.receiverName;
+    } else if (state is VideoCallIncomingState) {
+      name = state.callerName;
+    }
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 16,
+          right: 16,
+          bottom: 12,
+        ),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black54, Colors.transparent],
+          ),
+        ),
+        child: Row(
+          children: [
+            if (name.isNotEmpty)
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (state is VideoCallConnected)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  _formatDuration(_callDuration),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusOverlay(VideoCallState state) {
+    String? statusText;
+    IconData? statusIcon;
+
+    if (state is VideoCallSettingUp) {
+      statusText = 'Setting up...';
+      statusIcon = Icons.settings;
+    } else if (state is VideoCallRinging) {
+      statusText = 'Ringing...';
+      statusIcon = Icons.ring_volume;
+    } else if (state is VideoCallConnecting) {
+      statusText = 'Connecting...';
+      statusIcon = Icons.sync;
+    } else if (state is VideoCallEndedState) {
+      statusText = state.reason;
+      statusIcon = Icons.call_end;
+    } else if (state is VideoCallError) {
+      statusText = state.message;
+      statusIcon = Icons.error_outline;
+    } else if (state is VideoCallIncomingState) {
+      statusText = '${state.callerName} is calling...';
+      statusIcon = Icons.videocam;
+    }
+
+    if (statusText == null) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (statusIcon != null)
+              Icon(statusIcon, size: 48, color: Colors.white70),
+            const SizedBox(height: 16),
+            Text(
+              statusText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (state is VideoCallIncomingState) ...[
+              const SizedBox(height: 40),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Decline button
+                  _buildCircleButton(
+                    icon: Icons.call_end,
+                    color: AppTheme.errorColor,
+                    label: 'Decline',
+                    onPressed: () {
+                      context
+                          .read<VideoCallBloc>()
+                          .add(const VideoCallDeclined());
+                    },
+                  ),
+                  // Accept button
+                  _buildCircleButton(
+                    icon: Icons.videocam,
+                    color: AppTheme.successColor,
+                    label: 'Accept',
+                    onPressed: () {
+                      context
+                          .read<VideoCallBloc>()
+                          .add(const VideoCallAccepted());
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircleButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      children: [
+        FloatingActionButton(
+          heroTag: label,
+          backgroundColor: color,
+          onPressed: onPressed,
+          child: Icon(icon, color: Colors.white, size: 28),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCallControls(VideoCallState state) {
+    bool isMicMuted = false;
+    bool isCameraOff = false;
+
+    if (state is VideoCallConnected) {
+      isMicMuted = state.isMicMuted;
+      isCameraOff = state.isCameraOff;
+    }
+
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: CallControls(
+        isMicMuted: isMicMuted,
+        isCameraOff: isCameraOff,
+        onToggleMic: () =>
+            context.read<VideoCallBloc>().add(const VideoCallMicToggled()),
+        onToggleCamera: () =>
+            context.read<VideoCallBloc>().add(const VideoCallCameraToggled()),
+        onSwitchCamera: () =>
+            context.read<VideoCallBloc>().add(const VideoCallCameraSwitched()),
+        onEndCall: () =>
+            context.read<VideoCallBloc>().add(const VideoCallEnded()),
+      ),
+    );
+  }
+}

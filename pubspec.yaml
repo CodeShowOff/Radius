@@ -76,6 +76,9 @@ dependencies:
   google_maps_flutter: ^2.10.0
   flutter_cache_manager: ^3.4.1
 
+  # WebRTC (Video Chat)
+  flutter_webrtc: ^0.12.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

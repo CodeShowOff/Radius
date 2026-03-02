@@ -24,10 +24,10 @@
     <!-- POST_NOTIFICATIONS permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     
-    <!-- Camera permission for taking photos -->
+    <!-- Camera permission for photos and video chat -->
     <uses-permission android:name="android.permission.CAMERA"/>
     
-    <!-- Microphone permission for voice messages -->
+    <!-- Microphone permission for voice messages and video chat -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     
     <!-- Location permissions for Nearby Help feature -->

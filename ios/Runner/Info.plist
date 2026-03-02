@@ -64,17 +64,17 @@
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Radius uses Bluetooth to broadcast your presence so nearby users can discover you.</string>
 	
-	<!-- Camera permission for taking photos -->
+	<!-- Camera permission for photos and video chat -->
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is needed to take photos for messages</string>
+	<string>Camera access is needed to take photos for messages and for video chat</string>
 	
 	<!-- Photo library permission for selecting images -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is needed to send images</string>
 	
-	<!-- Microphone permission for voice messages -->
+	<!-- Microphone permission for voice messages and video chat -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is needed to record voice messages</string>
+	<string>Microphone access is needed to record voice messages and for video chat</string>
 	
 	<!-- Location permissions for Nearby Help feature -->
 	<key>NSLocationWhenInUseUsageDescription</key>
