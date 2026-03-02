@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/di/injection.dart';
-import '../../../../core/services/firebase/profile_service.dart';
 import '../../../auth/domain/repositories/i_auth_repository.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/data/connection_service.dart';
@@ -55,25 +54,13 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     if (authState is AuthAuthenticated) {
       try {
         final connectionService = getIt<ConnectionService>();
-        final profileService = getIt<ProfileService>();
-        final blockedIds =
-            await connectionService.getBlockedUserIds(authState.user.id);
-        
-        // Fetch display names for blocked users
-        final names = <String, String>{};
-        for (final userId in blockedIds) {
-          try {
-            final profile = await profileService.getProfile(userId);
-            names[userId] = profile?.name ?? 'Unknown User';
-          } catch (_) {
-            names[userId] = 'Unknown User';
-          }
-        }
+        final blockedUsersWithNames =
+            await connectionService.getBlockedUsersWithNames(authState.user.id);
         
         if (mounted) {
           setState(() {
-            _blockedUserIds = blockedIds;
-            _blockedUserNames = names;
+            _blockedUserIds = blockedUsersWithNames.keys.toList();
+            _blockedUserNames = blockedUsersWithNames;
             _isLoadingBlocked = false;
           });
         }

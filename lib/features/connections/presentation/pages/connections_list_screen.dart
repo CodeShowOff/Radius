@@ -444,7 +444,7 @@ class _ConnectionTileState extends State<_ConnectionTile> {
         _confirmRemove(context);
         break;
       case 'block':
-        _confirmBlock(context, otherUserId);
+        _confirmBlock(context, otherUserId, otherUserName);
         break;
     }
   }
@@ -478,7 +478,7 @@ class _ConnectionTileState extends State<_ConnectionTile> {
     );
   }
 
-  void _confirmBlock(BuildContext context, String otherUserId) {
+  void _confirmBlock(BuildContext context, String otherUserId, String? blockedName) {
     // Capture BLoC and theme reference before showing dialog
     final bloc = context.read<ConnectionBloc>();
     final errorColor = Theme.of(context).colorScheme.error;
@@ -499,7 +499,7 @@ class _ConnectionTileState extends State<_ConnectionTile> {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              bloc.add(ConnectionBlockUser(otherUserId));
+              bloc.add(ConnectionBlockUser(otherUserId, blockedName: blockedName));
             },
             style: TextButton.styleFrom(
               foregroundColor: errorColor,

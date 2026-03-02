@@ -483,11 +483,12 @@ class ConnectionService {
   Future<ConnectionResult<void>> blockUser({
     required String blockerId,
     required String blockedId,
+    String? blockedName,
   }) async {
     try {
       final batch = _firestore.batch();
 
-      // Add to blocked users
+      // Add to blocked users with name for display in privacy settings
       batch.set(
         _firestore
             .collection('users')
@@ -496,6 +497,7 @@ class ConnectionService {
             .doc(blockedId),
         {
           'blockedAt': Timestamp.fromDate(DateTime.now()),
+          if (blockedName != null) 'displayName': blockedName,
         },
       );
 
@@ -805,6 +807,29 @@ class ConnectionService {
     } catch (e, stack) {
       _logger.e('Error getting blocked users', error: e, stackTrace: stack);
       return [];
+    }
+  }
+
+  /// Gets blocked users with their display names.
+  /// Returns a map of userId -> displayName.
+  Future<Map<String, String>> getBlockedUsersWithNames(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('blocked_users')
+          .get();
+
+      final result = <String, String>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final displayName = data['displayName'] as String?;
+        result[doc.id] = displayName ?? 'Unknown User';
+      }
+      return result;
+    } catch (e, stack) {
+      _logger.e('Error getting blocked users with names', error: e, stackTrace: stack);
+      return {};
     }
   }
 

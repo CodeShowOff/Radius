@@ -101,6 +101,7 @@ class ConnectionButton extends StatelessWidget {
         ),
       UserConnectionState.connected => _ConnectedButton(
           userId: userId,
+          displayName: displayName,
           compact: compact,
         ),
       UserConnectionState.blocked => _BlockedButton(
@@ -319,10 +320,12 @@ class _RequestReceivedButton extends StatelessWidget {
 
 class _ConnectedButton extends StatelessWidget {
   final String userId;
+  final String? displayName;
   final bool compact;
 
   const _ConnectedButton({
     required this.userId,
+    this.displayName,
     required this.compact,
   });
 
@@ -459,7 +462,7 @@ class _ConnectedButton extends StatelessWidget {
             onPressed: () {
               Navigator.pop(dialogContext);
               context.read<ConnectionBloc>().add(
-                    ConnectionBlockUser(userId),
+                    ConnectionBlockUser(userId, blockedName: displayName),
                   );
             },
             style: TextButton.styleFrom(

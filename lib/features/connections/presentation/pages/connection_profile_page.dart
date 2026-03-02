@@ -196,7 +196,10 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
             onPressed: () {
               Navigator.pop(dialogContext);
               context.read<ConnectionBloc>().add(
-                    ConnectionBlockUser(widget.otherUserId),
+                    ConnectionBlockUser(
+                      widget.otherUserId,
+                      blockedName: _profile?['displayName'] as String?,
+                    ),
                   );
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

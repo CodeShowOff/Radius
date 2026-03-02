@@ -461,6 +461,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     final result = await _connectionService.blockUser(
       blockerId: _currentUserId!,
       blockedId: event.userId,
+      blockedName: event.blockedName,
     );
 
     switch (result) {

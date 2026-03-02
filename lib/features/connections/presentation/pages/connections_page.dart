@@ -636,7 +636,7 @@ class _UserDetailsSheet extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () =>
-                                _confirmBlock(context, otherUserId),
+                                _confirmBlock(context, otherUserId, displayName),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: theme.colorScheme.error,
                             ),
@@ -704,7 +704,7 @@ class _UserDetailsSheet extends StatelessWidget {
     );
   }
 
-  void _confirmBlock(BuildContext context, String otherUserId) {
+  void _confirmBlock(BuildContext context, String otherUserId, String? blockedName) {
     // Capture BLoC and theme reference before showing dialog
     final bloc = context.read<ConnectionBloc>();
     final errorColor = Theme.of(context).colorScheme.error;
@@ -726,7 +726,7 @@ class _UserDetailsSheet extends StatelessWidget {
             onPressed: () {
               Navigator.pop(dialogContext);
               Navigator.pop(context);
-              bloc.add(ConnectionBlockUser(otherUserId));
+              bloc.add(ConnectionBlockUser(otherUserId, blockedName: blockedName));
             },
             style: TextButton.styleFrom(
               foregroundColor: errorColor,

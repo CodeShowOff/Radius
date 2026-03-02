@@ -731,7 +731,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
               // Block user via connections bloc
               context.read<ConnectionBloc>().add(
-                    ConnectionBlockUser(widget.otherUserId),
+                    ConnectionBlockUser(
+                      widget.otherUserId,
+                      blockedName: widget.otherUserName,
+                    ),
                   );
 
               // Wait a bit for the operation to propagate

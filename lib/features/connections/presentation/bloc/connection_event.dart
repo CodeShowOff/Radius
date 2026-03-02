@@ -87,11 +87,12 @@ class ConnectionRemove extends ConnectionEvent {
 /// Block a user.
 class ConnectionBlockUser extends ConnectionEvent {
   final String userId;
+  final String? blockedName;
 
-  const ConnectionBlockUser(this.userId);
+  const ConnectionBlockUser(this.userId, {this.blockedName});
 
   @override
-  List<Object?> get props => [userId];
+  List<Object?> get props => [userId, blockedName];
 }
 
 /// Unblock a user.
