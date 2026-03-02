@@ -488,8 +488,8 @@ class _HomePageState extends State<HomePage>
                       child: _AnimatedSquareCard(
                         onTap: () => context.push(Routes.videoChat),
                         label: 'Video\nChat',
-                        color: Theme.of(context).colorScheme.onTertiary,
-                        backgroundColor: Theme.of(context).colorScheme.tertiary,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         isSquare: true,
                         icon: Icons.videocam_rounded,
                       ),
