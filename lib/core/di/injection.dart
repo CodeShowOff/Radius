@@ -375,6 +375,7 @@ Future<void> configureDependencies() {
         discoveryBloc: getIt<DiscoveryBloc>(),
         conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),
+        nearbyGroupBloc: getIt<NearbyGroupBloc>(),
         randomGroupBloc: getIt<RandomGroupBloc>(),
         profileBloc: getIt<ProfileBloc>(),
       ),

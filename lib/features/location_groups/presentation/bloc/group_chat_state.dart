@@ -56,6 +56,9 @@ class GroupChatState extends Equatable {
   /// Used to display "X unread messages" in the divider.
   final int unreadCountAtOpen;
 
+  /// Pending messages not yet confirmed by server. Keyed by localId.
+  final Map<String, GroupMessage> pendingMessages;
+
   const GroupChatState({
     this.status = GroupChatStatus.initial,
     this.groupId,
@@ -68,6 +71,7 @@ class GroupChatState extends Equatable {
     this.membershipVerified = false,
     this.firstUnreadMessageId,
     this.unreadCountAtOpen = 0,
+    this.pendingMessages = const {},
   });
 
   /// Whether the chat is currently loading.
@@ -84,6 +88,21 @@ class GroupChatState extends Equatable {
   bool get isReady =>
       membershipVerified &&
       (status == GroupChatStatus.loaded || status == GroupChatStatus.sending);
+
+  /// All messages = confirmed + pending (deduped by localId, newest first).
+  List<GroupMessage> get allMessages {
+    if (pendingMessages.isEmpty) return messages;
+    final confirmedLocalIds = <String>{};
+    for (final m in messages) {
+      if (m.localId != null) confirmedLocalIds.add(m.localId!);
+    }
+    final pending = pendingMessages.values
+        .where((m) => m.localId == null || !confirmedLocalIds.contains(m.localId))
+        .toList();
+    final all = [...pending, ...messages];
+    all.sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    return all;
+  }
 
   /// Whether membership check is still pending.
   bool get isVerifyingMembership =>
@@ -102,6 +121,7 @@ class GroupChatState extends Equatable {
     String? firstUnreadMessageId,
     bool clearFirstUnreadMessageId = false,
     int? unreadCountAtOpen,
+    Map<String, GroupMessage>? pendingMessages,
   }) {
     return GroupChatState(
       status: status ?? this.status,
@@ -117,6 +137,7 @@ class GroupChatState extends Equatable {
           ? null
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
       unreadCountAtOpen: unreadCountAtOpen ?? this.unreadCountAtOpen,
+      pendingMessages: pendingMessages ?? this.pendingMessages,
     );
   }
 
@@ -133,5 +154,6 @@ class GroupChatState extends Equatable {
         membershipVerified,
         firstUnreadMessageId,
         unreadCountAtOpen,
+        pendingMessages,
       ];
 }

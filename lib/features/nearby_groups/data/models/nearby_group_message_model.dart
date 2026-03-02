@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
 import '../../domain/entities/nearby_group_message.dart';
 
 /// Firestore model for NearbyGroupMessage entity.
@@ -27,6 +28,9 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
     required super.text,
     required super.type,
     required super.sentAt,
+    super.isDeleted,
+    super.localId,
+    super.status,
   });
 
   /// Creates a model from Firestore document snapshot.
@@ -43,6 +47,9 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       text: data['text'] as String,
       type: _typeFromString(data['type'] as String?),
       sentAt: _parseTimestamp(data['sentAt']),
+      isDeleted: data['isDeleted'] as bool? ?? false,
+      localId: data['localId'] as String?,
+      status: GroupMessageStatus.sent,
     );
   }
 
@@ -58,6 +65,9 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       text: data['text'] as String,
       type: _typeFromString(data['type'] as String?),
       sentAt: _parseTimestamp(data['sentAt']),
+      isDeleted: data['isDeleted'] as bool? ?? false,
+      localId: data['localId'] as String?,
+      status: GroupMessageStatus.sent,
     );
   }
 
@@ -69,6 +79,7 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
     String? senderName,
     String? senderPhotoUrl,
     required String text,
+    String? localId,
   }) {
     return {
       'groupId': groupId,
@@ -80,6 +91,7 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       'type': 'text',
       'sentAt': FieldValue.serverTimestamp(),
       'isDeleted': false,
+      if (localId != null) 'localId': localId,
     };
   }
 
@@ -113,6 +125,9 @@ class NearbyGroupMessageModel extends NearbyGroupMessage {
       text: text,
       type: type,
       sentAt: sentAt,
+      isDeleted: isDeleted,
+      localId: localId,
+      status: status,
     );
   }
 

@@ -126,7 +126,11 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
         onRefresh: _forceRefreshGroups,
         child: BlocBuilder<LocationGroupBloc, LocationGroupState>(
           builder: (context, state) {
-            if (state.isLoading && state.userGroups.isEmpty) {
+            // Only show full-screen spinner for the truly initial state
+            // (before RealTimeDataManager dispatches any event).
+            // Once loading has started, show content area directly so
+            // tab switches feel instant (WhatsApp pattern).
+            if (state.status == GroupBlocStatus.initial) {
               return const Center(child: CircularProgressIndicator());
             }
 

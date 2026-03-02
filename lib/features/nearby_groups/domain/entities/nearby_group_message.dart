@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
+
 /// Type of message in nearby group chat.
 enum NearbyGroupMessageType {
   /// Regular text message from a user
@@ -38,6 +40,15 @@ class NearbyGroupMessage extends Equatable {
   /// When the message was sent
   final DateTime sentAt;
 
+  /// Whether this message has been deleted (soft delete).
+  final bool isDeleted;
+
+  /// Client-side optimistic ID for deduplication.
+  final String? localId;
+
+  /// Message send status (pending, sent, error).
+  final GroupMessageStatus status;
+
   const NearbyGroupMessage({
     required this.id,
     required this.groupId,
@@ -48,6 +59,9 @@ class NearbyGroupMessage extends Equatable {
     required this.text,
     required this.type,
     required this.sentAt,
+    this.isDeleted = false,
+    this.localId,
+    this.status = GroupMessageStatus.sent,
   });
 
   /// Whether this is a system message
@@ -55,6 +69,12 @@ class NearbyGroupMessage extends Equatable {
 
   /// Whether this message was sent by the given user
   bool isSentBy(String userId) => senderId == userId;
+
+  /// Whether this message can be retried (failed to send).
+  bool get canRetry => status == GroupMessageStatus.error;
+
+  /// Whether this message is still pending confirmation.
+  bool get isPending => status == GroupMessageStatus.pending;
 
   /// Creates a copy with updated fields
   NearbyGroupMessage copyWith({
@@ -67,6 +87,9 @@ class NearbyGroupMessage extends Equatable {
     String? text,
     NearbyGroupMessageType? type,
     DateTime? sentAt,
+    bool? isDeleted,
+    String? localId,
+    GroupMessageStatus? status,
   }) {
     return NearbyGroupMessage(
       id: id ?? this.id,
@@ -78,6 +101,9 @@ class NearbyGroupMessage extends Equatable {
       text: text ?? this.text,
       type: type ?? this.type,
       sentAt: sentAt ?? this.sentAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      localId: localId ?? this.localId,
+      status: status ?? this.status,
     );
   }
 
@@ -92,6 +118,9 @@ class NearbyGroupMessage extends Equatable {
         text,
         type,
         sentAt,
+        isDeleted,
+        localId,
+        status,
       ];
 
   @override

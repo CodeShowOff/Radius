@@ -41,6 +41,9 @@ class NearbyGroupChatState extends Equatable {
   /// Error message if any
   final String? errorMessage;
 
+  /// Pending messages not yet confirmed by server. Keyed by localId.
+  final Map<String, NearbyGroupMessage> pendingMessages;
+
   const NearbyGroupChatState({
     this.status = NearbyGroupChatStatus.initial,
     this.groupId,
@@ -52,6 +55,7 @@ class NearbyGroupChatState extends Equatable {
     this.hasMore = true,
     this.membershipVerified = false,
     this.errorMessage,
+    this.pendingMessages = const {},
   });
 
   /// Whether currently loading
@@ -69,6 +73,21 @@ class NearbyGroupChatState extends Equatable {
   bool get isReady =>
       status == NearbyGroupChatStatus.loaded && membershipVerified;
 
+  /// All messages = confirmed + pending (deduped by localId, newest first).
+  List<NearbyGroupMessage> get allMessages {
+    if (pendingMessages.isEmpty) return messages;
+    final confirmedLocalIds = <String>{};
+    for (final m in messages) {
+      if (m.localId != null) confirmedLocalIds.add(m.localId!);
+    }
+    final pending = pendingMessages.values
+        .where((m) => m.localId == null || !confirmedLocalIds.contains(m.localId))
+        .toList();
+    final all = [...pending, ...messages];
+    all.sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    return all;
+  }
+
   /// Whether there's an error state
   bool get hasError => status == NearbyGroupChatStatus.error;
 
@@ -84,6 +103,7 @@ class NearbyGroupChatState extends Equatable {
     bool? membershipVerified,
     String? errorMessage,
     bool clearError = false,
+    Map<String, NearbyGroupMessage>? pendingMessages,
   }) {
     return NearbyGroupChatState(
       status: status ?? this.status,
@@ -96,6 +116,7 @@ class NearbyGroupChatState extends Equatable {
       hasMore: hasMore ?? this.hasMore,
       membershipVerified: membershipVerified ?? this.membershipVerified,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      pendingMessages: pendingMessages ?? this.pendingMessages,
     );
   }
 
@@ -111,5 +132,6 @@ class NearbyGroupChatState extends Equatable {
         hasMore,
         membershipVerified,
         errorMessage,
+        pendingMessages,
       ];
 }

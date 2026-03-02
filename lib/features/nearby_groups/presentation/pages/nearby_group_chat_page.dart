@@ -6,8 +6,8 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/cached_avatar.dart';
+import '../../../../core/widgets/group_message_bubble.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../domain/entities/nearby_group_message.dart';
 import '../bloc/nearby_group_bloc.dart';
 import '../bloc/nearby_group_chat_bloc.dart';
 
@@ -359,7 +359,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
             children: [
               // Messages list
               Expanded(
-                child: state.messages.isEmpty
+                child: state.allMessages.isEmpty
                     ? _buildEmptyState(theme)
                     : _buildMessagesList(state),
               ),
@@ -403,13 +403,14 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
   }
 
   Widget _buildMessagesList(NearbyGroupChatState state) {
+    final messages = state.allMessages;
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-      itemCount: state.messages.length + (state.hasMore ? 1 : 0),
+      itemCount: messages.length + (state.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == state.messages.length) {
+        if (index == messages.length) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(16),
@@ -418,25 +419,45 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
           );
         }
 
-        final message = state.messages[index];
+        final message = messages[index];
         final isMe = message.senderId == state.currentUserId;
-        final showSenderInfo = !isMe && _shouldShowSenderInfo(state, index);
+        final showSenderInfo = !isMe && _shouldShowSenderInfo(messages, index);
 
-        return _MessageBubble(
-          message: message,
+        return GroupMessageBubble(
+          text: message.text,
           isMe: isMe,
+          isSystemMessage: message.isSystemMessage,
           showSenderInfo: showSenderInfo,
+          senderName: message.senderName ?? message.senderUsername,
+          senderPhotoUrl: message.senderPhotoUrl,
+          sentAt: message.sentAt,
+          status: message.status,
+          isDeleted: message.isDeleted,
+          onSenderTap: message.senderId != null
+              ? () => context.push(
+                    Routes.userProfileWith(message.senderId!),
+                    extra: {
+                      'displayName': message.senderName ?? message.senderUsername,
+                      'photoUrl': message.senderPhotoUrl,
+                    },
+                  )
+              : null,
+          onRetry: message.canRetry && message.localId != null
+              ? () => context.read<NearbyGroupChatBloc>().add(
+                    RetryNearbyGroupMessage(message.localId!),
+                  )
+              : null,
         );
       },
     );
   }
 
-  bool _shouldShowSenderInfo(NearbyGroupChatState state, int index) {
+  bool _shouldShowSenderInfo(List messages, int index) {
     // Always show for first message (at the bottom visually)
-    if (index == state.messages.length - 1) return true;
+    if (index == messages.length - 1) return true;
 
-    final message = state.messages[index];
-    final nextMessage = state.messages[index + 1];
+    final message = messages[index];
+    final nextMessage = messages[index + 1];
 
     // Show if sender changed
     if (message.senderId != nextMessage.senderId) return true;
@@ -493,17 +514,8 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: state.isSending ? null : _sendMessage,
-              icon: state.isSending
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.send),
+              onPressed: _sendMessage,
+              icon: const Icon(Icons.send),
             ),
           ],
         ),
@@ -637,173 +649,5 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
     if (diff.inSeconds < 60) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
-  }
-}
-
-class _MessageBubble extends StatelessWidget {
-  final NearbyGroupMessage message;
-  final bool isMe;
-  final bool showSenderInfo;
-
-  const _MessageBubble({
-    required this.message,
-    required this.isMe,
-    required this.showSenderInfo,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // System messages
-    if (message.isSystemMessage) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              message.text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Avatar for other users
-          if (!isMe) ...[
-            if (showSenderInfo)
-              GestureDetector(
-                onTap: message.senderId != null
-                    ? () => context.push(
-                          Routes.userProfileWith(message.senderId!),
-                          extra: {
-                            'displayName':
-                                message.senderName ?? message.senderUsername,
-                            'photoUrl': message.senderPhotoUrl,
-                          },
-                        )
-                    : null,
-                child: CachedAvatar(
-                  imageUrl: message.senderPhotoUrl,
-                  name: message.senderName ?? message.senderUsername ?? '?',
-                  radius: 16,
-                ),
-              )
-            else
-              const SizedBox(width: 32), // Placeholder for alignment
-            const SizedBox(width: 8),
-          ],
-
-          // Message content
-          IntrinsicWidth(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isMe
-                    ? theme.colorScheme.primaryContainer
-                    : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Sender name for other users
-                  if (!isMe &&
-                      showSenderInfo &&
-                      (message.senderName != null ||
-                          message.senderUsername != null))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        message.senderName ??
-                            message.senderUsername ??
-                            'Unknown',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-
-                  // Message text with inline time (WhatsApp style)
-                  Wrap(
-                    alignment: WrapAlignment.end,
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    children: [
-                      Text(
-                        message.text,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: isMe
-                              ? theme.colorScheme.onPrimaryContainer
-                              : theme.colorScheme.onSurface,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 1),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _formatTime(message.sentAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: isMe
-                                    ? theme.colorScheme.onPrimaryContainer
-                                        .withValues(alpha: 0.5)
-                                    : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (isMe) const SizedBox(width: 8),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-
-    if (diff.inDays > 0) {
-      return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    }
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

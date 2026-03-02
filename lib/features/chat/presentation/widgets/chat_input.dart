@@ -39,7 +39,6 @@ class _ChatInputState extends State<ChatInput> {
   bool _hasText = false;
   bool _isTyping = false;
   bool _isRecording = false;
-  int _recordingDuration = 0;
 
   @override
   void initState() {
@@ -174,27 +173,21 @@ class _ChatInputState extends State<ChatInput> {
   void _startVoiceRecording() {
     setState(() {
       _isRecording = true;
-      _recordingDuration = 0;
     });
   }
 
   void _cancelVoiceRecording() {
     setState(() {
       _isRecording = false;
-      _recordingDuration = 0;
     });
   }
 
-  void _onVoiceRecordingComplete(File file) {
-    widget.onVoiceRecorded?.call(file, _recordingDuration);
+  /// Called by VoiceRecorderWidget with the recorded file AND the actual duration.
+  void _onVoiceRecordingComplete(File file, int durationSeconds) {
+    widget.onVoiceRecorded?.call(file, durationSeconds);
     setState(() {
       _isRecording = false;
-      _recordingDuration = 0;
     });
-  }
-
-  int _getRecordingDuration() {
-    return _recordingDuration;
   }
 
   void _showError(String message) {
@@ -210,7 +203,6 @@ class _ChatInputState extends State<ChatInput> {
     if (_isRecording) {
       return VoiceRecorderWidget(
         onRecordingComplete: _onVoiceRecordingComplete,
-        getDuration: _getRecordingDuration,
         onCancel: _cancelVoiceRecording,
       );
     }

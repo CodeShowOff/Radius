@@ -151,6 +151,7 @@ class _ConnectionsIcon extends StatelessWidget {
             }
 
             return Badge(
+              backgroundColor: const Color(0xFF25D366), // WhatsApp green
               label: Text(chatsWithUnread > 99 ? '99+' : chatsWithUnread.toString()),
               child: Icon(selected ? Icons.people : Icons.people_outlined),
             );

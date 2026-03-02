@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 import 'media_message_content.dart';
 
 /// Message bubble widget for chat.
+///
+/// Enhanced with:
+/// - [MessageStatus] indicator (clock, check, double-check, error icon)
+/// - Long-press menu (copy, delete, retry)
+/// - Error overlay for failed messages
 class MessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
   final bool showTail;
   final VoidCallback? onLongPress;
+  final ValueChanged<Message>? onRetry;
+  final ValueChanged<String>? onDelete;
+  final AudioSessionManager? audioSessionManager;
 
   const MessageBubble({
     super.key,
@@ -16,6 +26,9 @@ class MessageBubble extends StatelessWidget {
     required this.isMe,
     this.showTail = true,
     this.onLongPress,
+    this.onRetry,
+    this.onDelete,
+    this.audioSessionManager,
   });
 
   @override
@@ -49,7 +62,8 @@ class MessageBubble extends StatelessWidget {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: onLongPress,
+        onLongPress: () => _showMessageActions(context),
+        onTap: message.canRetry ? () => onRetry?.call(message) : null,
         child: Container(
           margin: EdgeInsets.only(
             left: isMe ? 48 : 12,
@@ -68,7 +82,9 @@ class MessageBubble extends StatelessWidget {
                   constraints: BoxConstraints(maxWidth: maxWidth),
                   padding: contentPadding,
                   decoration: BoxDecoration(
-                    color: bubbleColor,
+                    color: message.canRetry
+                        ? bubbleColor.withValues(alpha: 0.6)
+                        : bubbleColor,
                     borderRadius: borderRadius,
                   ),
                   child: message.isDeleted
@@ -81,6 +97,7 @@ class MessageBubble extends StatelessWidget {
                               MediaMessageContent(
                                 message: message,
                                 isSent: isMe,
+                                audioSessionManager: audioSessionManager,
                               ),
 
                             // Caption or text
@@ -126,8 +143,88 @@ class MessageBubble extends StatelessWidget {
                         ),
                 ),
               ),
+
+              // Error indicator row
+              if (message.canRetry)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 14,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        message.errorReason ?? 'Failed to send. Tap to retry.',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.error,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Show contextual actions when long-pressing a message.
+  void _showMessageActions(BuildContext context) {
+    // Trigger custom callback if provided (backwards compatible)
+    onLongPress?.call();
+
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Copy text
+            if (message.text.isNotEmpty && !message.isDeleted)
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('Copy text'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: message.text));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Copied to clipboard'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+
+            // Retry (for failed messages)
+            if (message.canRetry && onRetry != null)
+              ListTile(
+                leading: Icon(Icons.refresh, color: theme.colorScheme.primary),
+                title: const Text('Retry'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onRetry?.call(message);
+                },
+              ),
+
+            // Delete (only for own messages)
+            if (isMe && !message.isDeleted && onDelete != null)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                title: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onDelete?.call(message.id);
+                },
+              ),
+          ],
         ),
       ),
     );
@@ -247,14 +344,26 @@ class _MessageMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      _formatTime(message.sentAt),
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: isMe
-            ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
-            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-        fontSize: 11,
-      ),
+    final metaColor = isMe
+        ? theme.colorScheme.onPrimary.withValues(alpha: 0.5)
+        : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _formatTime(message.sentAt),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: metaColor,
+            fontSize: 11,
+          ),
+        ),
+        // Status indicator (only for sent messages)
+        if (isMe) ...[
+          const SizedBox(width: 3),
+          _StatusIcon(status: message.status, color: metaColor),
+        ],
+      ],
     );
   }
 
@@ -262,6 +371,41 @@ class _MessageMeta extends StatelessWidget {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+}
+
+/// Status icon showing message lifecycle state.
+class _StatusIcon extends StatelessWidget {
+  final MessageStatus status;
+  final Color color;
+
+  const _StatusIcon({required this.status, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case MessageStatus.pending:
+        return Icon(Icons.access_time, size: 14, color: color);
+      case MessageStatus.sending:
+        return SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: color,
+          ),
+        );
+      case MessageStatus.sent:
+        return Icon(Icons.check, size: 14, color: color);
+      case MessageStatus.delivered:
+        return Icon(Icons.done_all, size: 14, color: color);
+      case MessageStatus.seen:
+        return Icon(Icons.done_all, size: 14,
+            color: Theme.of(context).colorScheme.primary);
+      case MessageStatus.error:
+        return Icon(Icons.error_outline, size: 14,
+            color: Theme.of(context).colorScheme.error);
+    }
   }
 }
 

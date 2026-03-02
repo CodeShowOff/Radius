@@ -53,6 +53,11 @@ class ChatCacheService {
   /// Map of conversationId -> cached messages (newest first)
   final Map<String, ChatCacheEntry> _cache = {};
 
+  /// Map of conversationId -> pending messages that haven't been confirmed.
+  /// This persists across screen rebuilds so pending/error messages survive
+  /// navigation. Mirrors v_chat_sdk's local DB persistence for pending messages.
+  final Map<String, Map<String, Message>> _pendingMessages = {};
+
   /// LRU access order tracking (most recently accessed at end)
   final List<String> _accessOrder = [];
 
@@ -218,9 +223,69 @@ class ChatCacheService {
     );
   }
 
+  // ==================== PENDING MESSAGE CACHE ====================
+
+  /// Save pending messages for a conversation.
+  /// Called by ChatBloc on close() to persist pending/error messages.
+  void savePendingMessages(String conversationId, Map<String, Message> pending) {
+    if (pending.isEmpty) {
+      _pendingMessages.remove(conversationId);
+    } else {
+      _pendingMessages[conversationId] = Map.from(pending);
+    }
+  }
+
+  /// Get cached pending messages for a conversation.
+  /// Returns empty map if none exist.
+  Map<String, Message> getPendingMessages(String conversationId) {
+    return Map.from(_pendingMessages[conversationId] ?? {});
+  }
+
+  /// Recover stale pending messages (v_chat_sdk `prepareMessages` pattern).
+  /// Any message stuck in `sending` or `pending` status is transitioned to
+  /// `error` so the user can see and retry them. This handles the case where
+  /// the app was killed mid-send.
+  Map<String, Message> recoverPendingMessages(String conversationId) {
+    final pending = _pendingMessages[conversationId];
+    if (pending == null || pending.isEmpty) return {};
+
+    final recovered = <String, Message>{};
+    for (final entry in pending.entries) {
+      final msg = entry.value;
+      if (msg.status == MessageStatus.sending ||
+          msg.status == MessageStatus.pending) {
+        // Mark stale sending/pending as error for retry
+        recovered[entry.key] = msg.copyWith(
+          status: MessageStatus.error,
+          errorReason: 'Message was interrupted. Tap to retry.',
+        );
+      } else if (msg.status == MessageStatus.error) {
+        // Keep error messages as-is for retry
+        recovered[entry.key] = msg;
+      }
+      // Skip sent/delivered/seen — those are confirmed
+    }
+
+    // Update the cache with recovered state
+    if (recovered.isNotEmpty) {
+      _pendingMessages[conversationId] = recovered;
+      _logger.i('Recovered ${recovered.length} pending messages for $conversationId');
+    } else {
+      _pendingMessages.remove(conversationId);
+    }
+
+    return recovered;
+  }
+
+  /// Clear pending messages for a conversation (called after all confirmed).
+  void clearPendingMessages(String conversationId) {
+    _pendingMessages.remove(conversationId);
+  }
+
   /// Clear cache for a specific conversation.
   void clearConversation(String conversationId) {
     _cache.remove(conversationId);
+    _pendingMessages.remove(conversationId);
     _accessOrder.remove(conversationId);
     _logger.d('Cleared cache for $conversationId');
   }
@@ -228,6 +293,7 @@ class ChatCacheService {
   /// Clear all cached data (e.g., on logout).
   void clearAll() {
     _cache.clear();
+    _pendingMessages.clear();
     _accessOrder.clear();
     _logger.d('Cleared all chat cache');
   }

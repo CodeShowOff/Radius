@@ -21,6 +21,30 @@ enum MessageType {
   video,
 }
 
+/// Lifecycle status of a message — inspired by v_chat_sdk's emitStatus pattern.
+///
+/// Tracks the full lifecycle from creation through delivery confirmation.
+/// This gives users clear feedback on what happened to their message.
+enum MessageStatus {
+  /// Message created locally, not yet sent to server.
+  pending,
+
+  /// Message is being uploaded/sent to server.
+  sending,
+
+  /// Message successfully written to Firestore.
+  sent,
+
+  /// Message delivered to recipient's device (future use).
+  delivered,
+
+  /// Message seen by recipient (future use).
+  seen,
+
+  /// Message failed to send — can be retried.
+  error,
+}
+
 /// Entity representing a chat message.
 class Message extends Equatable {
   /// Unique message ID.
@@ -37,6 +61,9 @@ class Message extends Equatable {
 
   /// Type of message (text, image, audio, etc.).
   final MessageType type;
+
+  /// Lifecycle status of this message.
+  final MessageStatus status;
 
   /// URL to media file in Firebase Storage (for non-text messages).
   final String? mediaUrl;
@@ -65,12 +92,19 @@ class Message extends Equatable {
   /// Upload progress (0.0 to 1.0) for media uploads.
   final double? uploadProgress;
 
+  /// Error description when status == MessageStatus.error.
+  final String? errorReason;
+
+  /// Number of retry attempts for failed messages.
+  final int retryCount;
+
   const Message({
     required this.id,
     required this.conversationId,
     required this.senderId,
     required this.text,
     this.type = MessageType.text,
+    this.status = MessageStatus.sent,
     this.mediaUrl,
     this.mediaFileName,
     this.mediaFileSize,
@@ -80,6 +114,8 @@ class Message extends Equatable {
     this.isDeleted = false,
     this.localId,
     this.uploadProgress,
+    this.errorReason,
+    this.retryCount = 0,
   });
 
   /// Whether this message was sent by the given user.
@@ -92,6 +128,13 @@ class Message extends Equatable {
   bool get isUploading =>
       isMediaMessage && uploadProgress != null && uploadProgress! < 1.0;
 
+  /// Whether the message failed and can be retried.
+  bool get canRetry => status == MessageStatus.error;
+
+  /// Whether the message is still being processed (pending or sending).
+  bool get isPending =>
+      status == MessageStatus.pending || status == MessageStatus.sending;
+
   /// Sentinel value for explicitly setting nullable fields to null in copyWith.
   static const _sentinel = Object();
 
@@ -101,6 +144,7 @@ class Message extends Equatable {
     String? senderId,
     String? text,
     MessageType? type,
+    MessageStatus? status,
     Object? mediaUrl = _sentinel,
     Object? mediaFileName = _sentinel,
     Object? mediaFileSize = _sentinel,
@@ -110,6 +154,8 @@ class Message extends Equatable {
     bool? isDeleted,
     Object? localId = _sentinel,
     Object? uploadProgress = _sentinel,
+    Object? errorReason = _sentinel,
+    int? retryCount,
   }) {
     return Message(
       id: id ?? this.id,
@@ -117,6 +163,7 @@ class Message extends Equatable {
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
       type: type ?? this.type,
+      status: status ?? this.status,
       mediaUrl: mediaUrl == _sentinel ? this.mediaUrl : mediaUrl as String?,
       mediaFileName: mediaFileName == _sentinel
           ? this.mediaFileName
@@ -134,6 +181,10 @@ class Message extends Equatable {
       uploadProgress: uploadProgress == _sentinel
           ? this.uploadProgress
           : uploadProgress as double?,
+      errorReason: errorReason == _sentinel
+          ? this.errorReason
+          : errorReason as String?,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
 
@@ -144,6 +195,7 @@ class Message extends Equatable {
         senderId,
         text,
         type,
+        status,
         mediaUrl,
         mediaFileName,
         mediaFileSize,
@@ -153,5 +205,7 @@ class Message extends Equatable {
         isDeleted,
         localId,
         uploadProgress,
+        errorReason,
+        retryCount,
       ];
 }

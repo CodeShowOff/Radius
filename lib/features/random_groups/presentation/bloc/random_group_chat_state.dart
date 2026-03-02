@@ -67,6 +67,9 @@ class RandomGroupChatState extends Equatable {
   /// messages from briefly reappearing during batch soft-delete.
   final bool isClearingChat;
 
+  /// Pending messages not yet confirmed by server. Keyed by localId.
+  final Map<String, RandomGroupMessage> pendingMessages;
+
   const RandomGroupChatState({
     this.status = RandomGroupChatStatus.initial,
     this.currentGroupId,
@@ -82,6 +85,7 @@ class RandomGroupChatState extends Equatable {
     this.firstUnreadMessageId,
     this.unreadCountAtOpen = 0,
     this.isClearingChat = false,
+    this.pendingMessages = const {},
   });
 
   /// Whether the chat is currently loading.
@@ -98,6 +102,21 @@ class RandomGroupChatState extends Equatable {
   bool get isReady =>
       membershipVerified &&
       (status == RandomGroupChatStatus.loaded || status == RandomGroupChatStatus.sending);
+
+  /// All messages = confirmed + pending (deduped by localId, newest first).
+  List<RandomGroupMessage> get allMessages {
+    if (pendingMessages.isEmpty) return messages;
+    final confirmedLocalIds = <String>{};
+    for (final m in messages) {
+      if (m.localId != null) confirmedLocalIds.add(m.localId!);
+    }
+    final pending = pendingMessages.values
+        .where((m) => m.localId == null || !confirmedLocalIds.contains(m.localId))
+        .toList();
+    final all = [...pending, ...messages];
+    all.sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    return all;
+  }
 
   /// Whether membership check is still pending.
   bool get isVerifyingMembership =>
@@ -121,6 +140,7 @@ class RandomGroupChatState extends Equatable {
     bool clearFirstUnreadMessageId = false,
     int? unreadCountAtOpen,
     bool? isClearingChat,
+    Map<String, RandomGroupMessage>? pendingMessages,
   }) {
     return RandomGroupChatState(
       status: status ?? this.status,
@@ -140,6 +160,7 @@ class RandomGroupChatState extends Equatable {
           : (firstUnreadMessageId ?? this.firstUnreadMessageId),
       unreadCountAtOpen: unreadCountAtOpen ?? this.unreadCountAtOpen,
       isClearingChat: isClearingChat ?? this.isClearingChat,
+      pendingMessages: pendingMessages ?? this.pendingMessages,
     );
   }
 
@@ -159,5 +180,6 @@ class RandomGroupChatState extends Equatable {
         firstUnreadMessageId,
         unreadCountAtOpen,
         isClearingChat,
+        pendingMessages,
       ];
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
 import '../../domain/entities/group_message.dart';
 
 /// Firestore model for group messages.
@@ -19,6 +20,8 @@ class GroupMessageModel {
       mediaUrl: data['mediaUrl'] as String?,
       sentAt: _parseTimestamp(data['sentAt']),
       isDeleted: data['isDeleted'] as bool? ?? false,
+      localId: data['localId'] as String?,
+      status: GroupMessageStatus.sent,
     );
   }
 
@@ -46,6 +49,7 @@ class GroupMessageModel {
     required String text,
     GroupMessageType type = GroupMessageType.text,
     String? mediaUrl,
+    String? localId,
   }) {
     return {
       'groupId': groupId,
@@ -57,6 +61,7 @@ class GroupMessageModel {
       'mediaUrl': mediaUrl,
       'sentAt': FieldValue.serverTimestamp(),
       'isDeleted': false,
+      if (localId != null) 'localId': localId,
     };
   }
 

@@ -6,15 +6,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 /// Widget for recording voice messages.
+///
+/// Duration is tracked internally and passed to [onRecordingComplete]
+/// as the second argument (duration in seconds).
 class VoiceRecorderWidget extends StatefulWidget {
-  final ValueChanged<File> onRecordingComplete;
-  final int Function() getDuration;
+  /// Called when recording is complete with the file and duration in seconds.
+  final void Function(File file, int durationSeconds) onRecordingComplete;
   final VoidCallback onCancel;
 
   const VoiceRecorderWidget({
     super.key,
     required this.onRecordingComplete,
-    required this.getDuration,
     required this.onCancel,
   });
 
@@ -102,6 +104,7 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
 
       if (_isRecording) {
         final path = await _audioRecorder.stop();
+        final duration = _recordDuration; // Capture before setState
 
         if (!mounted) return;
         setState(() {
@@ -109,7 +112,8 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
         });
 
         if (path != null && await File(path).exists()) {
-          widget.onRecordingComplete(File(path));
+          // Pass BOTH the file and the tracked duration to the callback
+          widget.onRecordingComplete(File(path), duration);
         } else {
           _showError('Recording file not found');
         }

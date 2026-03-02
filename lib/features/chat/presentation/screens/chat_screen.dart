@@ -17,6 +17,7 @@ import '../../../connections/data/connection_service.dart';
 import '../../../connections/domain/entities/connection.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
+import '../../data/audio_session_manager.dart';
 import '../../data/chat_service.dart';
 import '../../domain/entities/message.dart';
 import '../bloc/chat_bloc.dart';
@@ -62,6 +63,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Prevents repeated scrolling on stream updates.
   bool _hasScrolledToUnread = false;
 
+  // Global audio session manager — ensures only one audio plays at a time
+  late final AudioSessionManager _audioSessionManager;
+
   // Presence tracking
   PresenceState? _otherUserPresence;
   StreamSubscription<Map<String, PresenceState>>? _presenceSubscription;
@@ -86,6 +90,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // CRITICAL: Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
 
+    _audioSessionManager = AudioSessionManager();
     _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
     _initPresenceTracking();
@@ -247,6 +252,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _audioSessionManager.dispose();
     
     // Cancel reconnection subscription
     _reconnectionSubscription?.cancel();
@@ -561,6 +567,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     isLoading: state.status == ChatStatus.loading || state.status == ChatStatus.initial,
                     firstUnreadMessageId: state.firstUnreadMessageId,
                     unreadCount: state.unreadCountAtOpen,
+                    onRetry: (message) {
+                      context.read<ChatBloc>().add(ChatRetryMessage(message));
+                    },
+                    onDelete: (messageId) {
+                      context.read<ChatBloc>().add(ChatDeleteMessage(messageId));
+                    },
+                    audioSessionManager: _audioSessionManager,
                   );
                 },
               ),
@@ -843,9 +856,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       return Colors.white;
     }
     final baseColor = theme.textTheme.bodySmall?.color;
-    return baseColor != null
-        ? Color.fromRGBO(baseColor.r.toInt(), baseColor.g.toInt(), baseColor.b.toInt(), 0.7)
-        : null;
+    return baseColor?.withValues(alpha: 0.7);
   }
 
   @override
@@ -961,6 +972,9 @@ class _MessagesList extends StatelessWidget {
   final bool isLoading;
   final String? firstUnreadMessageId;
   final int unreadCount;
+  final ValueChanged<Message>? onRetry;
+  final ValueChanged<String>? onDelete;
+  final AudioSessionManager? audioSessionManager;
 
   const _MessagesList({
     required this.messages,
@@ -971,6 +985,9 @@ class _MessagesList extends StatelessWidget {
     this.isLoading = false,
     this.firstUnreadMessageId,
     this.unreadCount = 0,
+    this.onRetry,
+    this.onDelete,
+    this.audioSessionManager,
   });
 
   @override
@@ -1058,6 +1075,9 @@ class _MessagesList extends StatelessWidget {
               message: message,
               isMe: isMe,
               showTail: showTail,
+              onRetry: onRetry,
+              onDelete: onDelete,
+              audioSessionManager: audioSessionManager,
             ),
           ],
         );

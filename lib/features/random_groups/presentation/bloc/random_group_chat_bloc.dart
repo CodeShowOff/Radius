@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
 import '../../data/random_group_chat_cache_service.dart';
 import '../../data/random_group_chat_service.dart';
 import '../../domain/entities/random_group_message.dart';
@@ -70,6 +71,7 @@ class RandomGroupChatBloc
     on<DeleteRandomGroupMessage>(_onDeleteRandomGroupMessage);
     on<ClearRandomGroupChatMessages>(_onClearRandomGroupChatMessages);
     on<_UnreadInfoReceived>(_onUnreadInfoReceived);
+    on<RetryRandomGroupMessage>(_onRetryRandomGroupMessage);
   }
 
   /// Check if membership is cached and still valid.
@@ -291,13 +293,12 @@ class RandomGroupChatBloc
         'Sending message: ${text.substring(0, text.length.clamp(0, 20))}...');
 
     // ========================================================================
-    // OPTIMISTIC UPDATE: Show message immediately in UI for instant feedback
-    // This creates a WhatsApp-like experience where your message appears
-    // instantly, then gets confirmed when the server responds.
+    // OPTIMISTIC UPDATE: Add to pendingMessages map with pending status.
+    // The allMessages getter merges pending + confirmed with localId dedup.
     // ========================================================================
     final localId = _uuid.v4();
     final optimisticMessage = RandomGroupMessage(
-      id: localId, // Temporary ID until server assigns real one
+      id: 'pending_$localId',
       groupId: state.currentGroupId!,
       senderId: state.currentUserId!,
       senderUsername: state.currentUserUsername,
@@ -306,13 +307,16 @@ class RandomGroupChatBloc
       text: text,
       type: RandomGroupMessageType.text,
       sentAt: DateTime.now(),
+      localId: localId,
+      status: GroupMessageStatus.pending,
     );
 
-    // Add optimistic message to the front of the list
-    final updatedMessages = [optimisticMessage, ...state.messages];
+    final updatedPending =
+        Map<String, RandomGroupMessage>.from(state.pendingMessages);
+    updatedPending[localId] = optimisticMessage;
     emit(state.copyWith(
       status: RandomGroupChatStatus.sending,
-      messages: updatedMessages,
+      pendingMessages: updatedPending,
     ));
 
     try {
@@ -323,35 +327,40 @@ class RandomGroupChatBloc
         senderName: state.currentUserName,
         senderPhotoUrl: state.currentUserPhotoUrl,
         text: text,
+        localId: localId,
       );
 
-      // Success: The Firestore stream will automatically update with the real
-      // message (with server-assigned ID). The optimistic message will be
-      // replaced when _onMessagesReceived merges the new data.
+      // Success: The Firestore stream will deliver the confirmed message
+      // with matching localId. _onMessagesReceived will remove it from
+      // pendingMessages automatically via localId dedup.
       emit(state.copyWith(status: RandomGroupChatStatus.loaded));
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
 
-      // Remove the failed optimistic message and show error
-      final messagesWithoutFailed =
-          state.messages.where((m) => m.id != localId).toList();
-
-      // Provide helpful error messages based on error type
-      String errorMessage = 'Failed to send message. Please try again.';
+      // Mark the pending message as error instead of removing it
+      String errorMsg = 'Failed to send message. Please try again.';
       if (e is FirebaseException) {
         if (e.code == 'permission-denied') {
-          errorMessage =
+          errorMsg =
               'Unable to send message. This may happen if you just joined. Please wait a moment and try again.';
         } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
-          errorMessage =
+          errorMsg =
               'Network error. Please check your connection and try again.';
         }
       }
 
+      final errorPending =
+          Map<String, RandomGroupMessage>.from(state.pendingMessages);
+      if (errorPending.containsKey(localId)) {
+        errorPending[localId] = errorPending[localId]!.copyWith(
+          status: GroupMessageStatus.error,
+        );
+      }
+
       emit(state.copyWith(
-        status: RandomGroupChatStatus.error,
-        errorMessage: errorMessage,
-        messages: messagesWithoutFailed,
+        status: RandomGroupChatStatus.loaded,
+        errorMessage: errorMsg,
+        pendingMessages: errorPending,
       ));
     }
   }
@@ -416,21 +425,18 @@ class RandomGroupChatBloc
     // ========================================================================
     // CLEAR CHAT GUARD: If a clear operation is in progress, ignore incoming
     // stream messages until the stream confirms empty (all batches deleted).
-    // This prevents messages from briefly reappearing during multi-batch
-    // soft-delete operations.
     // ========================================================================
     if (state.isClearingChat) {
       if (event.messages.isEmpty) {
-        // All messages confirmed deleted by stream — finalize clear
         _logger.i('Chat clear confirmed by stream (0 messages)');
         emit(state.copyWith(
           status: RandomGroupChatStatus.loaded,
           messages: const [],
           hasMore: false,
           isClearingChat: false,
+          pendingMessages: const {},
         ));
       } else {
-        // Stream fired with partial results (intermediate batch) — ignore
         _logger.d(
             'Ignoring ${event.messages.length} messages during clear operation');
       }
@@ -439,35 +445,23 @@ class RandomGroupChatBloc
 
     const pageSize = 50;
 
-    // CRITICAL FIX: Deduplicate messages by ID to prevent double display
-    // Create a Set of IDs from newly received messages for O(1) lookup
-    final newMessageIds = event.messages.map((m) => m.id).toSet();
-
-    // Filter out optimistic messages (those with local/temporary IDs that start with UUID pattern)
-    // and messages that are duplicates of the incoming batch
-    final currentOldMessages = state.messages.where((m) {
-      // Skip if message is already in the new batch (prevents duplicates)
-      if (newMessageIds.contains(m.id)) return false;
-
-      // Filter out optimistic messages with temporary IDs (UUIDs)
-      // Real Firestore IDs are typically 20 characters, UUIDs are 36
-      // Check if this is an optimistic message that might have been replaced by a real one
-      if (m.id.length == 36 && m.id.contains('-')) {
-        // This looks like a temporary UUID - check if there's a matching real message
-        final hasMatchingRealMessage = event.messages.any((newMsg) =>
-            newMsg.senderId == m.senderId &&
-            newMsg.text == m.text &&
-            newMsg.sentAt.difference(m.sentAt).inSeconds.abs() < 5);
-
-        if (hasMatchingRealMessage) {
-          _logger.d(
-              'Filtering out optimistic message ${m.id} as it has a matching real message');
-          return false; // Filter out the optimistic message
-        }
+    // ========================================================================
+    // LOCAL-ID DEDUP: Remove confirmed messages from pendingMessages.
+    // When a message arrives from Firestore with a localId that matches
+    // one in pendingMessages, we know the server confirmed it.
+    // ========================================================================
+    final updatedPending =
+        Map<String, RandomGroupMessage>.from(state.pendingMessages);
+    for (final msg in event.messages) {
+      if (msg.localId != null && updatedPending.containsKey(msg.localId)) {
+        updatedPending.remove(msg.localId);
       }
+    }
 
-      // Keep messages that are older than the oldest message in the new list.
-      // When stream returns empty, all messages have been deleted — clear state.
+    // Merge new messages with older messages (outside the stream window)
+    final newMessageIds = event.messages.map((m) => m.id).toSet();
+    final currentOldMessages = state.messages.where((m) {
+      if (newMessageIds.contains(m.id)) return false;
       if (event.messages.isEmpty) return false;
       return m.sentAt.isBefore(event.messages.last.sentAt);
     }).toList();
@@ -475,10 +469,7 @@ class RandomGroupChatBloc
     final allMessages = [...event.messages, ...currentOldMessages];
     final hasMore = event.messages.length >= pageSize;
 
-    // ========================================================================
-    // CRITICAL: Update the global cache with new messages
-    // This enables instant display when returning to this group later
-    // ========================================================================
+    // Update cache
     if (state.currentGroupId != null) {
       _cacheService.updateCache(
         groupId: state.currentGroupId!,
@@ -487,12 +478,12 @@ class RandomGroupChatBloc
       );
     }
 
-    // Always set status to loaded when we receive messages to clear loading state
     emit(state.copyWith(
       status: RandomGroupChatStatus.loaded,
       messages: allMessages,
       hasMore: hasMore,
       isLoadingMore: false,
+      pendingMessages: updatedPending,
     ));
 
     if (state.currentGroupId != null && state.currentUserId != null) {
@@ -650,6 +641,46 @@ class RandomGroupChatBloc
     } catch (e) {
       _logger.w('Failed to get first unread message ID: $e');
       // Continue without unread divider - not critical
+    }
+  }
+
+  /// Retries sending a failed message.
+  Future<void> _onRetryRandomGroupMessage(
+    RetryRandomGroupMessage event,
+    Emitter<RandomGroupChatState> emit,
+  ) async {
+    final pendingMsg = state.pendingMessages[event.localId];
+    if (pendingMsg == null) return;
+
+    // Set status back to pending
+    final updatedPending =
+        Map<String, RandomGroupMessage>.from(state.pendingMessages);
+    updatedPending[event.localId] = pendingMsg.copyWith(
+      status: GroupMessageStatus.pending,
+    );
+    emit(state.copyWith(pendingMessages: updatedPending));
+
+    try {
+      await _chatService.sendMessage(
+        groupId: pendingMsg.groupId,
+        senderId: pendingMsg.senderId ?? state.currentUserId!,
+        senderUsername: pendingMsg.senderUsername ?? 'Unknown',
+        senderName: pendingMsg.senderName,
+        senderPhotoUrl: pendingMsg.senderPhotoUrl,
+        text: pendingMsg.text,
+        localId: event.localId,
+      );
+      // Stream will handle removing from pendingMessages via localId dedup
+    } catch (e) {
+      _logger.e('Retry failed for message ${event.localId}', error: e);
+      final errorPending =
+          Map<String, RandomGroupMessage>.from(state.pendingMessages);
+      if (errorPending.containsKey(event.localId)) {
+        errorPending[event.localId] = errorPending[event.localId]!.copyWith(
+          status: GroupMessageStatus.error,
+        );
+      }
+      emit(state.copyWith(pendingMessages: errorPending));
     }
   }
 

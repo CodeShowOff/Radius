@@ -66,6 +66,7 @@ class RandomGroupChatService {
     String? senderName,
     String? senderPhotoUrl,
     required String text,
+    String? localId,
   }) async {
     _logger.d('Sending message to random group: $groupId');
 
@@ -96,6 +97,7 @@ class RandomGroupChatService {
       senderName: senderName,
       senderPhotoUrl: senderPhotoUrl,
       text: sanitizedText,
+      localId: localId,
     );
     messageBatch.set(messageRef, messageData);
 
@@ -142,6 +144,7 @@ class RandomGroupChatService {
       text: sanitizedText,
       type: RandomGroupMessageType.text,
       sentAt: DateTime.now(),
+      localId: localId,
     );
   }
 

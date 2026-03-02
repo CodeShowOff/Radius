@@ -113,8 +113,11 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
       ),
       body: BlocBuilder<RandomGroupBloc, RandomGroupState>(
         builder: (context, state) {
-          if (state.status == RandomGroupBlocStatus.loading &&
-              state.userGroups.isEmpty) {
+          // Only show full-screen spinner for the truly initial state
+          // (before RealTimeDataManager dispatches any event).
+          // Once loading has started, show content area directly so
+          // tab switches feel instant (WhatsApp pattern).
+          if (state.status == RandomGroupBlocStatus.initial) {
             return const Center(child: CircularProgressIndicator());
           }
 

@@ -349,6 +349,10 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
 /// List of connections with user profiles.
 /// Sorted by last message time (most recent first), just like home page.
+///
+/// Uses a single [ConversationsBloc] subscription at the list level and builds
+/// an O(1) lookup map. Each tile receives its [Conversation] object directly,
+/// avoiding the previous O(n²) nested‑BlocBuilder‑per‑tile pattern.
 class _ConnectionsList extends StatelessWidget {
   final List<Connection> connections;
   final String currentUserId;
@@ -366,57 +370,80 @@ class _ConnectionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Single ConversationsBloc subscription at list level (not per‑tile).
     return BlocBuilder<ConversationsBloc, ConversationsState>(
       builder: (context, conversationsState) {
-        // Sort connections by last message time (most recent first)
-        final sortedConnections = List<Connection>.from(connections);
-        sortedConnections.sort((a, b) {
-          final conversationIdA = Conversation.createConversationId(a.userId1, a.userId2);
-          final conversationIdB = Conversation.createConversationId(b.userId1, b.userId2);
-          
-          final conversationA = conversationsState.conversations.firstWhere(
-            (conv) => conv.id == conversationIdA,
-            orElse: () => Conversation(
-              id: conversationIdA,
-              participantIds: [a.userId1, a.userId2],
-              participantInfo: const {},
-              createdAt: a.connectedAt,
-              lastMessageAt: null,
-            ),
-          );
-          
-          final conversationB = conversationsState.conversations.firstWhere(
-            (conv) => conv.id == conversationIdB,
-            orElse: () => Conversation(
-              id: conversationIdB,
-              participantIds: [b.userId1, b.userId2],
-              participantInfo: const {},
-              createdAt: b.connectedAt,
-              lastMessageAt: null,
-            ),
-          );
-          
-          // Sort by last message time, most recent first
-          // If no messages, use connection time
-          final timeA = conversationA.lastMessageAt ?? a.connectedAt;
-          final timeB = conversationB.lastMessageAt ?? b.connectedAt;
-          return timeB.compareTo(timeA); // Descending order (newest first)
-        });
+        // O(n) lookup map by conversation id.
+        final conversationMap = <String, Conversation>{
+          for (final conv in conversationsState.conversations) conv.id: conv,
+        };
 
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 80),
-          itemCount: sortedConnections.length,
-          itemBuilder: (context, index) {
-            final connection = sortedConnections[index];
-            final otherUserId = connection.getOtherUserId(currentUserId);
+        // Also subscribe to ConnectionBloc for cached profiles.
+        return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+          builder: (context, connectionState) {
+            // Build the filtered + sorted list in one pass.
+            final entries = <_SortedEntry>[];
 
-            return _ConnectionUserTile(
-              connection: connection,
-              userId: otherUserId,
-              searchQuery: searchQuery,
-              onTap: (profile) => onUserTap(connection, profile),
-              onProfilePhotoTap: (profile) =>
-                  onProfilePhotoTap(connection, profile),
+            for (final connection in connections) {
+              final otherUserId = connection.getOtherUserId(currentUserId);
+              final cachedProfile =
+                  connectionState.getCachedProfile(otherUserId);
+              final profile = cachedProfile?.toMap() ??
+                  {'id': otherUserId, 'displayName': 'User'};
+              final displayName =
+                  profile['displayName'] as String? ?? 'User';
+
+              // ---------- Search filter ----------
+              if (searchQuery.isNotEmpty) {
+                final query = searchQuery.toLowerCase();
+                if (!displayName.toLowerCase().contains(query)) continue;
+              }
+
+              final conversationId = Conversation.createConversationId(
+                connection.userId1,
+                connection.userId2,
+              );
+
+              // O(1) lookup instead of firstWhere.
+              final conversation = conversationMap[conversationId] ??
+                  Conversation(
+                    id: conversationId,
+                    participantIds: [connection.userId1, connection.userId2],
+                    participantInfo: const {},
+                    createdAt: connection.connectedAt,
+                    lastMessageAt: null,
+                  );
+
+              final sortTime =
+                  conversation.lastMessageAt ?? connection.connectedAt;
+              entries.add(_SortedEntry(
+                connection: connection,
+                conversation: conversation,
+                profile: profile,
+                displayName: displayName,
+                photoUrl: profile['photoUrl'] as String?,
+                sortTime: sortTime,
+              ));
+            }
+
+            // Descending by most recent message / connection time.
+            entries.sort((a, b) => b.sortTime.compareTo(a.sortTime));
+
+            return ListView.builder(
+              padding: const EdgeInsets.only(top: 8, bottom: 80),
+              itemCount: entries.length,
+              itemBuilder: (context, index) {
+                final e = entries[index];
+                return ConversationTile(
+                  conversation: e.conversation,
+                  currentUserId: currentUserId,
+                  overrideDisplayName: e.displayName,
+                  overridePhotoUrl: e.photoUrl,
+                  onTap: () => onUserTap(e.connection, e.profile),
+                  onLongPress: () =>
+                      onProfilePhotoTap(e.connection, e.profile),
+                );
+              },
             );
           },
         );
@@ -425,82 +452,23 @@ class _ConnectionsList extends StatelessWidget {
   }
 }
 
-/// Individual connection tile that uses cached profile from bloc.
-/// 
-/// This widget uses the profile cache in ConnectionBloc instead of
-/// fetching profiles individually, eliminating loading spinners on tab switches.
-/// Uses ConversationTile to match the home page display style and logic.
-class _ConnectionUserTile extends StatelessWidget {
+/// Internal helper to keep sort + profile data together.
+class _SortedEntry {
   final Connection connection;
-  final String userId;
-  final String searchQuery;
-  final void Function(Map<String, dynamic>) onTap;
-  final void Function(Map<String, dynamic>) onProfilePhotoTap;
+  final Conversation conversation;
+  final Map<String, dynamic> profile;
+  final String displayName;
+  final String? photoUrl;
+  final DateTime sortTime;
 
-  const _ConnectionUserTile({
+  const _SortedEntry({
     required this.connection,
-    required this.userId,
-    required this.searchQuery,
-    required this.onTap,
-    required this.onProfilePhotoTap,
+    required this.conversation,
+    required this.profile,
+    required this.displayName,
+    required this.photoUrl,
+    required this.sortTime,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<ConnectionBloc, ConnectionBlocState, CachedProfile?>(
-      selector: (state) => state.getCachedProfile(userId),
-      builder: (context, cachedProfile) {
-        // Use cached profile or show minimal loading state
-        final profile = cachedProfile?.toMap() ?? 
-            {'id': userId, 'displayName': 'User'};
-        
-        final displayName = profile['displayName'] as String? ?? 'User';
-        final photoUrl = profile['photoUrl'] as String?;
-
-        // Filter by search query
-        if (searchQuery.isNotEmpty) {
-          final query = searchQuery.toLowerCase();
-          if (!displayName.toLowerCase().contains(query)) {
-            return const SizedBox.shrink();
-          }
-        }
-
-        final conversationId = Conversation.createConversationId(
-          connection.userId1,
-          connection.userId2,
-        );
-
-        return BlocBuilder<ConversationsBloc, ConversationsState>(
-          builder: (context, conversationsState) {
-            // Find the conversation for this connection
-            final conversation = conversationsState.conversations.firstWhere(
-              (conv) => conv.id == conversationId,
-              orElse: () => Conversation(
-                id: conversationId,
-                participantIds: [connection.userId1, connection.userId2],
-                participantInfo: const {},
-                createdAt: connection.connectedAt,
-                lastMessageAt: null,
-              ),
-            );
-
-            // Get current user ID for the ConversationTile
-            final authState = context.read<AuthBloc>().state;
-            final currentUserId = authState is AuthAuthenticated ? authState.user.id : '';
-
-            // Use ConversationTile which has all the perfect logic from home page
-            return ConversationTile(
-              conversation: conversation,
-              currentUserId: currentUserId,
-              overrideDisplayName: displayName,
-              overridePhotoUrl: photoUrl,
-              onTap: () => onTap(profile),
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 /// Bottom sheet showing user details.

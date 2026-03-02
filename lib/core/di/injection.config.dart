@@ -26,6 +26,7 @@ import '../../features/auth/domain/repositories/i_auth_repository.dart'
 import '../../features/chat/data/chat_cache_service.dart' as _i125;
 import '../../features/chat/data/chat_service.dart' as _i621;
 import '../../features/chat/data/media_upload_service.dart' as _i356;
+import '../../features/chat/data/message_retry_service.dart' as _i777;
 import '../../features/chat/presentation/bloc/chat_bloc.dart' as _i65;
 import '../../features/chat/presentation/bloc/conversations_bloc.dart' as _i346;
 import '../device_session/data/repositories/device_session_repository.dart'
@@ -81,12 +82,20 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i974.FirebaseFirestore>(),
           gh<_i974.Logger>(),
         ));
+    gh.lazySingleton<_i125.ChatCacheService>(
+        () => chatModule.chatCacheService(gh<_i974.Logger>()));
+    gh.lazySingleton<_i777.MessageRetryService>(
+        () => chatModule.messageRetryService(
+              gh<_i621.ChatService>(),
+              gh<_i974.Logger>(),
+            ));
     gh.lazySingleton<_i346.ConversationsBloc>(
         () => chatModule.conversationsBloc(gh<_i621.ChatService>()));
     gh.factory<_i65.ChatBloc>(() => chatModule.chatBloc(
           gh<_i621.ChatService>(),
           gh<_i356.MediaUploadService>(),
           gh<_i125.ChatCacheService>(),
+          gh<_i777.MessageRetryService>(),
         ));
     gh.lazySingleton<_i702.NotificationNavigationService>(
         () => notificationModule.notificationNavigationService(

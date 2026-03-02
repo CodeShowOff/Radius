@@ -285,8 +285,10 @@ class ChatService {
       );
     } catch (e, stack) {
       _logger.e('Error sending message', error: e, stackTrace: stack);
-      // Return failed message
-      return optimisticMessage;
+      // CRITICAL: Rethrow so ChatBloc can mark the message as failed
+      // and trigger the retry service. The old code swallowed errors here,
+      // making the entire retry flow dead code.
+      rethrow;
     }
   }
 
@@ -392,8 +394,9 @@ class ChatService {
       );
     } catch (e, stack) {
       _logger.e('Error sending media message', error: e, stackTrace: stack);
-      // Return original message
-      return optimisticMessage;
+      // CRITICAL: Rethrow so ChatBloc can mark the message as failed.
+      // The old code swallowed errors here, preventing error UI.
+      rethrow;
     }
   }
 

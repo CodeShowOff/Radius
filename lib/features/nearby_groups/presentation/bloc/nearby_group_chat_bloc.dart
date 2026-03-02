@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
 import '../../data/nearby_group_chat_cache_service.dart';
 import '../../data/nearby_group_chat_service.dart';
 import '../../domain/entities/nearby_group_message.dart';
@@ -44,6 +45,7 @@ class NearbyGroupChatBloc
     on<DeleteNearbyGroupMessage>(_onDeleteNearbyGroupMessage);
     on<_NearbyGroupMessagesReceived>(_onNearbyGroupMessagesReceived);
     on<_NearbyGroupChatStreamError>(_onNearbyGroupChatStreamError);
+    on<RetryNearbyGroupMessage>(_onRetryNearbyGroupMessage);
   }
 
   Future<void> _onOpenNearbyGroupChat(
@@ -164,11 +166,12 @@ class NearbyGroupChatBloc
     _logger.d('Sending message to nearby group: ${state.groupId}');
 
     // ================================================================
-    // OPTIMISTIC UPDATE: Show message immediately with local ID
+    // OPTIMISTIC UPDATE: Add to pendingMessages map with pending status.
+    // The allMessages getter merges pending + confirmed with localId dedup.
     // ================================================================
-    final localId = 'local_${_uuid.v4()}';
+    final localId = _uuid.v4();
     final optimisticMessage = NearbyGroupMessage(
-      id: localId,
+      id: 'pending_$localId',
       groupId: state.groupId!,
       senderId: state.currentUserId!,
       senderUsername: state.currentUsername!,
@@ -177,13 +180,16 @@ class NearbyGroupChatBloc
       text: event.text.trim(),
       type: NearbyGroupMessageType.text,
       sentAt: DateTime.now(),
+      localId: localId,
+      status: GroupMessageStatus.pending,
     );
 
-    // Add optimistic message to the beginning of the list
-    final optimisticMessages = [optimisticMessage, ...state.messages];
+    final updatedPending =
+        Map<String, NearbyGroupMessage>.from(state.pendingMessages);
+    updatedPending[localId] = optimisticMessage;
     emit(state.copyWith(
       status: NearbyGroupChatStatus.sending,
-      messages: optimisticMessages,
+      pendingMessages: updatedPending,
     ));
 
     try {
@@ -194,25 +200,29 @@ class NearbyGroupChatBloc
         senderName: state.currentUserName,
         senderPhotoUrl: state.currentUserPhotoUrl,
         text: event.text,
+        localId: localId,
       );
 
-      // Message sent - keep the optimistic message until stream updates
-      // The stream handler will filter out the optimistic message when real message arrives
+      // Success: stream will deliver confirmed message with matching localId
       emit(state.copyWith(
         status: NearbyGroupChatStatus.loaded,
       ));
     } catch (e) {
       _logger.e('Failed to send message', error: e);
 
-      // Remove the optimistic message on failure
-      final updatedMessages = state.messages
-          .where((m) => m.id != localId)
-          .toList();
+      // Mark the pending message as error instead of removing it
+      final errorPending =
+          Map<String, NearbyGroupMessage>.from(state.pendingMessages);
+      if (errorPending.containsKey(localId)) {
+        errorPending[localId] = errorPending[localId]!.copyWith(
+          status: GroupMessageStatus.error,
+        );
+      }
 
       emit(state.copyWith(
-        status: NearbyGroupChatStatus.error,
-        messages: updatedMessages,
-        errorMessage: 'Failed to send message: $e',
+        status: NearbyGroupChatStatus.loaded,
+        errorMessage: 'Failed to send message',
+        pendingMessages: errorPending,
       ));
     }
   }
@@ -306,18 +316,27 @@ class NearbyGroupChatBloc
 
     const pageSize = 50;
 
-    // Filter out local/optimistic messages when merging
+    // ========================================================================
+    // LOCAL-ID DEDUP: Remove confirmed messages from pendingMessages.
+    // ========================================================================
+    final updatedPending =
+        Map<String, NearbyGroupMessage>.from(state.pendingMessages);
+    for (final msg in event.messages) {
+      if (msg.localId != null && updatedPending.containsKey(msg.localId)) {
+        updatedPending.remove(msg.localId);
+      }
+    }
+
+    // Merge new messages with older messages (outside the stream window)
+    final newMessageIds = event.messages.map((m) => m.id).toSet();
     final existingOlderMessages = state.messages
-        .where((m) => !m.id.startsWith('local_'))
-        .where((m) => !event.messages.any((newM) => newM.id == m.id))
+        .where((m) => !newMessageIds.contains(m.id))
         .where((m) =>
             event.messages.isEmpty ||
             m.sentAt.isBefore(event.messages.last.sentAt))
         .toList();
 
     final allMessages = [...event.messages, ...existingOlderMessages];
-
-    // If we received fewer than pageSize messages, there are no more to load
     final hasMore = event.messages.length >= pageSize;
 
     // Update cache
@@ -333,6 +352,7 @@ class NearbyGroupChatBloc
       status: NearbyGroupChatStatus.loaded,
       messages: allMessages,
       hasMore: hasMore,
+      pendingMessages: updatedPending,
     ));
   }
 
@@ -354,6 +374,44 @@ class NearbyGroupChatBloc
         status: NearbyGroupChatStatus.error,
         errorMessage: event.error,
       ));
+    }
+  }
+
+  /// Retries sending a failed message.
+  Future<void> _onRetryNearbyGroupMessage(
+    RetryNearbyGroupMessage event,
+    Emitter<NearbyGroupChatState> emit,
+  ) async {
+    final pendingMsg = state.pendingMessages[event.localId];
+    if (pendingMsg == null) return;
+
+    final updatedPending =
+        Map<String, NearbyGroupMessage>.from(state.pendingMessages);
+    updatedPending[event.localId] = pendingMsg.copyWith(
+      status: GroupMessageStatus.pending,
+    );
+    emit(state.copyWith(pendingMessages: updatedPending));
+
+    try {
+      await _chatService.sendMessage(
+        groupId: pendingMsg.groupId,
+        senderId: pendingMsg.senderId ?? state.currentUserId!,
+        senderUsername: pendingMsg.senderUsername ?? state.currentUsername ?? 'Unknown',
+        senderName: pendingMsg.senderName,
+        senderPhotoUrl: pendingMsg.senderPhotoUrl,
+        text: pendingMsg.text,
+        localId: event.localId,
+      );
+    } catch (e) {
+      _logger.e('Retry failed for message ${event.localId}', error: e);
+      final errorPending =
+          Map<String, NearbyGroupMessage>.from(state.pendingMessages);
+      if (errorPending.containsKey(event.localId)) {
+        errorPending[event.localId] = errorPending[event.localId]!.copyWith(
+          status: GroupMessageStatus.error,
+        );
+      }
+      emit(state.copyWith(pendingMessages: errorPending));
     }
   }
 

@@ -82,9 +82,11 @@ class _NearbyGroupsPageState extends State<NearbyGroupsPage> {
       ),
       body: BlocBuilder<NearbyGroupBloc, NearbyGroupState>(
         builder: (context, state) {
-          if (state.status == NearbyGroupBlocStatus.loading &&
-              state.userGroups.isEmpty &&
-              state.myActiveGroup == null) {
+          // Only show full-screen spinner for the truly initial state
+          // (before RealTimeDataManager dispatches any event).
+          // Once loading has started, show content area directly so
+          // tab switches feel instant (WhatsApp pattern).
+          if (state.status == NearbyGroupBlocStatus.initial) {
             return const Center(child: CircularProgressIndicator());
           }
 

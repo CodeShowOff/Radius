@@ -70,6 +70,16 @@ class ClearRandomGroupChatMessages extends RandomGroupChatEvent {
   const ClearRandomGroupChatMessages();
 }
 
+/// Retries sending a failed message.
+class RetryRandomGroupMessage extends RandomGroupChatEvent {
+  final String localId;
+
+  const RetryRandomGroupMessage(this.localId);
+
+  @override
+  List<Object?> get props => [localId];
+}
+
 // Internal events for stream updates
 class _MessagesReceived extends RandomGroupChatEvent {
   final List<RandomGroupMessage> messages;

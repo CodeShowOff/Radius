@@ -69,6 +69,16 @@ class DeleteNearbyGroupMessage extends NearbyGroupChatEvent {
   List<Object?> get props => [messageId];
 }
 
+/// Retries sending a failed message.
+class RetryNearbyGroupMessage extends NearbyGroupChatEvent {
+  final String localId;
+
+  const RetryNearbyGroupMessage(this.localId);
+
+  @override
+  List<Object?> get props => [localId];
+}
+
 /// Internal: Messages received from stream.
 class _NearbyGroupMessagesReceived extends NearbyGroupChatEvent {
   final List<NearbyGroupMessage> messages;

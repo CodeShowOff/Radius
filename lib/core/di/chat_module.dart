@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 import '../../features/chat/data/chat_cache_service.dart';
 import '../../features/chat/data/chat_service.dart';
 import '../../features/chat/data/media_upload_service.dart';
+import '../../features/chat/data/message_retry_service.dart';
 import '../../features/chat/presentation/bloc/chat_bloc.dart';
 import '../../features/chat/presentation/bloc/conversations_bloc.dart';
 
@@ -21,6 +22,11 @@ abstract class ChatModule {
           FirebaseStorage storage, Logger logger) =>
       MediaUploadService(storage: storage, logger: logger);
 
+  @lazySingleton
+  MessageRetryService messageRetryService(
+          ChatService chatService, Logger logger) =>
+      MessageRetryService(chatService: chatService, logger: logger);
+
   /// ChatBloc is a factory — each chat screen gets its own instance.
   /// This eliminates race conditions when switching between conversations.
   /// Instant display is still provided by the singleton ChatCacheService.
@@ -28,12 +34,18 @@ abstract class ChatModule {
   ChatBloc chatBloc(
           ChatService chatService, 
           MediaUploadService mediaUploadService,
-          ChatCacheService cacheService) =>
+          ChatCacheService cacheService,
+          MessageRetryService retryService) =>
       ChatBloc(
         chatService: chatService,
         mediaUploadService: mediaUploadService,
         cacheService: cacheService,
+        retryService: retryService,
       );
+
+  @lazySingleton
+  ChatCacheService chatCacheService(Logger logger) =>
+      ChatCacheService(logger: logger);
 
   @lazySingleton
   ConversationsBloc conversationsBloc(ChatService chatService) =>

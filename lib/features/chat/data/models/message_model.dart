@@ -26,6 +26,7 @@ class MessageModel extends Message {
     required super.senderId,
     required super.text,
     super.type,
+    super.status,
     super.mediaUrl,
     super.mediaFileName,
     super.mediaFileSize,
@@ -35,6 +36,8 @@ class MessageModel extends Message {
     super.isDeleted,
     super.localId,
     super.uploadProgress,
+    super.errorReason,
+    super.retryCount,
   });
 
   /// Creates model from Firestore document.
@@ -50,6 +53,7 @@ class MessageModel extends Message {
       senderId: data['senderId'] as String,
       text: data['text'] as String? ?? '',
       type: _parseType(data['type'] as String? ?? 'text'),
+      status: MessageStatus.sent, // Messages in Firestore are confirmed sent
       mediaUrl: data['mediaUrl'] as String?,
       mediaFileName: data['mediaFileName'] as String?,
       mediaFileSize: data['mediaFileSize'] as int?,
@@ -71,6 +75,7 @@ class MessageModel extends Message {
       senderId: message.senderId,
       text: message.text,
       type: message.type,
+      status: message.status,
       mediaUrl: message.mediaUrl,
       mediaFileName: message.mediaFileName,
       mediaFileSize: message.mediaFileSize,
@@ -80,10 +85,15 @@ class MessageModel extends Message {
       isDeleted: message.isDeleted,
       localId: message.localId,
       uploadProgress: message.uploadProgress,
+      errorReason: message.errorReason,
+      retryCount: message.retryCount,
     );
   }
 
   /// Creates an optimistic message (for immediate UI update).
+  /// Status defaults to [MessageStatus.pending] — will transition to
+  /// [MessageStatus.sending] when upload/send starts, then [MessageStatus.sent]
+  /// when confirmed by Firestore stream.
   factory MessageModel.optimistic({
     required String localId,
     required String conversationId,
@@ -103,6 +113,7 @@ class MessageModel extends Message {
       senderId: senderId,
       text: text,
       type: type,
+      status: MessageStatus.pending,
       mediaUrl: mediaUrl,
       mediaFileName: mediaFileName,
       mediaFileSize: mediaFileSize,
@@ -139,6 +150,7 @@ class MessageModel extends Message {
       senderId: senderId,
       text: text,
       type: type,
+      status: status,
       mediaUrl: mediaUrl,
       mediaFileName: mediaFileName,
       mediaFileSize: mediaFileSize,
@@ -148,6 +160,8 @@ class MessageModel extends Message {
       isDeleted: isDeleted,
       localId: localId,
       uploadProgress: uploadProgress,
+      errorReason: errorReason,
+      retryCount: retryCount,
     );
   }
 

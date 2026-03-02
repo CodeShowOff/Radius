@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/widgets/group_message_bubble.dart';
+
 /// Type of group message content.
 enum GroupMessageType {
   /// Text message.
@@ -47,6 +49,9 @@ class GroupMessage extends Equatable {
   /// Local-only: optimistic ID for pending messages.
   final String? localId;
 
+  /// Message send status (pending, sent, error).
+  final GroupMessageStatus status;
+
   const GroupMessage({
     required this.id,
     required this.groupId,
@@ -59,6 +64,7 @@ class GroupMessage extends Equatable {
     required this.sentAt,
     this.isDeleted = false,
     this.localId,
+    this.status = GroupMessageStatus.sent,
   });
 
   /// Whether this message is from the given user.
@@ -69,6 +75,12 @@ class GroupMessage extends Equatable {
 
   /// Whether this message has media attached.
   bool get hasMedia => mediaUrl != null && mediaUrl!.isNotEmpty;
+
+  /// Whether this message can be retried (failed to send).
+  bool get canRetry => status == GroupMessageStatus.error;
+
+  /// Whether this message is still pending confirmation.
+  bool get isPending => status == GroupMessageStatus.pending;
 
   GroupMessage copyWith({
     String? id,
@@ -82,6 +94,7 @@ class GroupMessage extends Equatable {
     DateTime? sentAt,
     bool? isDeleted,
     String? localId,
+    GroupMessageStatus? status,
   }) {
     return GroupMessage(
       id: id ?? this.id,
@@ -95,6 +108,7 @@ class GroupMessage extends Equatable {
       sentAt: sentAt ?? this.sentAt,
       isDeleted: isDeleted ?? this.isDeleted,
       localId: localId ?? this.localId,
+      status: status ?? this.status,
     );
   }
 
@@ -111,5 +125,6 @@ class GroupMessage extends Equatable {
         sentAt,
         isDeleted,
         localId,
+        status,
       ];
 }

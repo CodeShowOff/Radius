@@ -10,6 +10,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../data/chat_cache_service.dart';
 import '../../data/chat_service.dart';
 import '../../data/media_upload_service.dart';
+import '../../data/message_retry_service.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/entities/message.dart';
 
@@ -25,6 +26,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatService _chatService;
   final MediaUploadService _mediaUploadService;
   final ChatCacheService _cacheService;
+  final MessageRetryService _retryService;
   final Logger _logger = Logger();
 
   StreamSubscription<List<Message>>? _messagesSubscription;
@@ -32,6 +34,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<bool>? _typingSubscription;
 
   Timer? _typingDebounce;
+
+  /// Loading timeout: if the Firestore stream hasn't emitted within this
+  /// duration after subscribing, we show an error with retry instead of
+  /// keeping the user stuck on an infinite loading spinner.
+  /// This mirrors v_chat_sdk's reconnect-and-refetch pattern.
+  Timer? _loadingTimeoutTimer;
+  static const Duration _loadingTimeout = Duration(seconds: 12);
 
   /// The user's lastReadAt timestamp captured BEFORE marking conversation as read.
   /// Used to compute firstUnreadMessageId client-side.
@@ -41,13 +50,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   /// Prevents recomputation on subsequent stream updates.
   bool _firstUnreadComputed = false;
 
+  /// Track the number of stream subscription retries for new conversations
+  /// that may hit permission-denied before Firestore rules propagate.
+  int _streamRetryCount = 0;
+  static const int _maxStreamRetries = 2;
+
   ChatBloc({
     required ChatService chatService,
     required MediaUploadService mediaUploadService,
     required ChatCacheService cacheService,
+    required MessageRetryService retryService,
   })  : _chatService = chatService,
         _mediaUploadService = mediaUploadService,
         _cacheService = cacheService,
+        _retryService = retryService,
         super(const ChatState()) {
     on<ChatOpen>(_onOpen);
     on<ChatClose>(_onClose);
@@ -82,6 +98,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final hasCache = cachedMessages.isNotEmpty;
     final cachedEntry = _cacheService.getCache(event.conversationId);
 
+    // ========================================================================
+    // STARTUP RECOVERY (v_chat_sdk `prepareMessages` pattern):
+    // Recover any pending/error messages from previous session.
+    // Messages stuck in "sending" are marked as "error" for manual retry.
+    // ========================================================================
+    final recoveredPending = _cacheService.recoverPendingMessages(event.conversationId);
+
     if (hasCache) {
       _logger.i('Cache hit for ${event.conversationId}: ${cachedMessages.length} messages');
       emit(state.copyWith(
@@ -93,7 +116,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         otherUserPhotoUrl: event.otherUserPhotoUrl,
         messages: cachedMessages,
         hasMore: cachedEntry?.hasMore ?? true,
-        pendingMessages: const {},
+        pendingMessages: recoveredPending,
       ));
     } else {
       _logger.i('Cache miss for ${event.conversationId}, showing loading');
@@ -105,7 +128,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         otherUserName: event.otherUserName,
         otherUserPhotoUrl: event.otherUserPhotoUrl,
         messages: const [],
-        pendingMessages: const {},
+        pendingMessages: recoveredPending,
       ));
     }
 
@@ -157,6 +180,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatClose event,
     Emitter<ChatState> emit,
   ) async {
+    // Save pending messages to cache so they survive screen navigation.
+    // This is the v_chat_sdk pattern: pending messages persist across sessions.
+    if (state.conversationId != null && state.pendingMessages.isNotEmpty) {
+      _cacheService.savePendingMessages(
+        state.conversationId!,
+        state.pendingMessages,
+      );
+    } else if (state.conversationId != null) {
+      // All messages confirmed — clear pending cache
+      _cacheService.clearPendingMessages(state.conversationId!);
+    }
+
     // Clear typing indicator
     if (state.conversationId != null && state.currentUserId != null) {
       await _chatService.setTyping(
@@ -199,6 +234,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       conversationId: state.conversationId!,
       senderId: state.currentUserId!,
       text: event.text.trim(),
+      status: MessageStatus.pending,
       sentAt: DateTime.now(),
       localId: localId,
     );
@@ -209,25 +245,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(pendingMessages: pending));
 
     // ========================================================================
-    // SEND TO SERVER: Now actually send the message
+    // SEND TO SERVER: Transition to 'sending' status
     // ========================================================================
+    final sendingPending = Map<String, Message>.from(state.pendingMessages);
+    sendingPending[localId] = optimisticMessage.copyWith(status: MessageStatus.sending);
+    emit(state.copyWith(pendingMessages: sendingPending));
+
     try {
       await _chatService.sendMessage(
         conversationId: state.conversationId!,
         senderId: state.currentUserId!,
         text: event.text,
         recipientId: state.otherUserId,
-        localId: localId, // Pass localId so Firestore message matches pending
+        localId: localId,
       );
-
-      // Message sent successfully
-      // The Firestore stream will update the UI when the message arrives
+      // Message sent successfully — Firestore stream will confirm & remove from pending
     } catch (e) {
       _logger.e('Error sending message', error: e);
-      // Keep the pending message as is - user can retry
+      // Mark as error with reason — keeps message visible for manual retry
+      final errorPending = Map<String, Message>.from(state.pendingMessages);
+      errorPending[localId] = optimisticMessage.copyWith(
+        status: MessageStatus.error,
+        errorReason: 'Failed to send. Tap to retry.',
+        retryCount: 1,
+      );
       emit(state.copyWith(
+        pendingMessages: errorPending,
         errorMessage: 'Failed to send message',
       ));
+
+      // Enqueue for automatic retry
+      _retryService.enqueueTextMessage(
+        message: errorPending[localId]!,
+        recipientId: state.otherUserId,
+      );
     }
   }
 
@@ -240,41 +291,51 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     final failedMessage = event.message;
+    final localId = failedMessage.localId ?? failedMessage.id;
 
-    // Remove from pending
+    // Cancel any automatic retry for this message
+    _retryService.removeFromQueue(localId);
+
+    if (failedMessage.isMediaMessage) {
+      // Media messages can't be retried — user must re-send
+      final pending = Map<String, Message>.from(state.pendingMessages);
+      pending.remove(localId);
+      emit(state.copyWith(
+        pendingMessages: pending,
+        errorMessage: 'Cannot retry media messages. Please send again.',
+      ));
+      return;
+    }
+
+    // Transition to 'sending' status
     final pending = Map<String, Message>.from(state.pendingMessages);
-    pending.remove(failedMessage.localId ?? failedMessage.id);
+    pending[localId] = failedMessage.copyWith(
+      status: MessageStatus.sending,
+      errorReason: null,
+    );
     emit(state.copyWith(pendingMessages: pending));
 
     try {
-      // Retry sending based on message type
-
-      if (failedMessage.isMediaMessage) {
-        // For media messages, we can't retry from the failed message alone
-        // since we don't have the file anymore
-        emit(state.copyWith(
-          errorMessage: 'Cannot retry media messages. Please send again.',
-        ));
-        return;
-      } else {
-        // Retry text message
-        await _chatService.sendMessage(
-          conversationId: state.conversationId!,
-          senderId: state.currentUserId!,
-          text: failedMessage.text,
-          recipientId: state.otherUserId,
-        );
-      }
-
-      // Message sent successfully - will be updated by stream
+      await _chatService.sendMessage(
+        conversationId: state.conversationId!,
+        senderId: state.currentUserId!,
+        text: failedMessage.text,
+        recipientId: state.otherUserId,
+        localId: localId,
+      );
+      // Success — Firestore stream will confirm & remove from pending
     } catch (e) {
       _logger.e('Error retrying message', error: e);
-      // Add back to pending on error
-      final updatedPending = Map<String, Message>.from(state.pendingMessages);
-      updatedPending[failedMessage.localId ?? failedMessage.id] = failedMessage;
+      // Mark as error again with incremented retry count
+      final errorPending = Map<String, Message>.from(state.pendingMessages);
+      errorPending[localId] = failedMessage.copyWith(
+        status: MessageStatus.error,
+        errorReason: 'Retry failed. Tap to try again.',
+        retryCount: failedMessage.retryCount + 1,
+      );
       emit(state.copyWith(
-        pendingMessages: updatedPending,
-        errorMessage: 'Failed to retry message: $e',
+        pendingMessages: errorPending,
+        errorMessage: 'Failed to retry message',
       ));
     }
   }
@@ -304,6 +365,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       senderId: state.currentUserId!,
       text: event.caption ?? '',
       type: MessageType.image,
+      status: MessageStatus.pending,
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
@@ -367,6 +429,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       senderId: state.currentUserId!,
       text: '',
       type: MessageType.audio,
+      status: MessageStatus.pending,
       duration: event.duration,
       sentAt: DateTime.now(),
       localId: localId,
@@ -433,6 +496,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       senderId: state.currentUserId!,
       text: event.caption ?? '',
       type: MessageType.document,
+      status: MessageStatus.pending,
       mediaFileName: fileName,
       sentAt: DateTime.now(),
       localId: localId,
@@ -497,6 +561,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       senderId: state.currentUserId!,
       text: '',
       type: MessageType.sticker,
+      status: MessageStatus.pending,
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
@@ -547,6 +612,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     int? duration,
   }) async {
     try {
+      // Transition to sending status
+      _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: 0.0));
+
       final uploadResult = await upload();
       if (isClosed) return;
 
@@ -578,6 +646,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (existingMsg != null) {
       currentPending[event.localId] = existingMsg.copyWith(
         uploadProgress: event.progress,
+        status: MessageStatus.sending,
       );
       emit(state.copyWith(pendingMessages: currentPending));
     }
@@ -587,8 +656,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMediaUploadFailed event,
     Emitter<ChatState> emit,
   ) {
+    // Keep the failed message visible with error status for user feedback.
+    // Unlike the old approach (which removed it), this lets users see what failed.
     final currentPending = Map<String, Message>.from(state.pendingMessages);
-    currentPending.remove(event.localId);
+    final existingMsg = currentPending[event.localId];
+    if (existingMsg != null) {
+      currentPending[event.localId] = existingMsg.copyWith(
+        status: MessageStatus.error,
+        errorReason: event.error,
+        uploadProgress: null,
+      );
+    } else {
+      currentPending.remove(event.localId);
+    }
     emit(state.copyWith(
       pendingMessages: currentPending,
       errorMessage: event.error,
@@ -686,6 +766,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
+    // CRITICAL: Handle pending messages that don't exist in Firestore yet.
+    // If the message ID matches a pending message, just remove it locally.
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    if (pending.containsKey(event.messageId)) {
+      pending.remove(event.messageId);
+      _retryService.removeFromQueue(event.messageId);
+      emit(state.copyWith(pendingMessages: pending));
+      return;
+    }
+
+    // Also check if any pending message has a localId matching the messageId
+    final pendingKey = pending.keys.cast<String?>().firstWhere(
+      (key) => pending[key]?.localId == event.messageId,
+      orElse: () => null,
+    );
+    if (pendingKey != null) {
+      pending.remove(pendingKey);
+      _retryService.removeFromQueue(pendingKey);
+      emit(state.copyWith(pendingMessages: pending));
+      return;
+    }
+
+    // For confirmed messages, delete via Firestore
     try {
       await _chatService.deleteMessage(
         conversationId: state.conversationId!,
@@ -742,24 +845,35 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final pending = Map<String, Message>.from(state.pendingMessages);
 
     for (final message in event.messages) {
-      // Remove from pending by ID match or by localId match
+      // Remove from pending by localId match ONLY.
+      // This mirrors v_chat_sdk's approach: localId is the universal dedup key.
+      // Fuzzy matching (sender + text + time) was removed because it causes
+      // false positives when the same text is sent twice rapidly.
       pending.removeWhere((key, pendingMsg) {
-        // Direct ID match
+        // Direct key match (pending key IS the localId)
         if (key == message.id) return true;
         
-        // LocalId match (message from Firestore has the localId we set)
-        if (pendingMsg.localId != null && message.localId == pendingMsg.localId) {
+        // LocalId match — this is the primary dedup mechanism.
+        // ChatService stores localId in Firestore, so confirmed messages
+        // arriving via the stream carry the same localId.
+        if (pendingMsg.localId != null &&
+            pendingMsg.localId!.isNotEmpty &&
+            message.localId != null &&
+            message.localId == pendingMsg.localId) {
           return true;
         }
         
-        // Fuzzy match: same sender, same text, sent within 5 seconds
-        final isSameSender = pendingMsg.senderId == message.senderId;
-        final isSameText = pendingMsg.text == message.text;
-        final sentWithin5Seconds = 
-            message.sentAt.difference(pendingMsg.sentAt).abs().inSeconds < 5;
-        
-        return isSameSender && isSameText && sentWithin5Seconds;
+        return false;
       });
+    }
+
+    // Sync pending message cache: save current pending state or clear if empty.
+    if (state.conversationId != null) {
+      if (pending.isEmpty) {
+        _cacheService.clearPendingMessages(state.conversationId!);
+      } else {
+        _cacheService.savePendingMessages(state.conversationId!, pending);
+      }
     }
 
     // ========================================================================
@@ -965,6 +1079,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription = null;
     _conversationSubscription = null;
     _typingSubscription = null;
+    _loadingTimeoutTimer?.cancel();
+    _loadingTimeoutTimer = null;
   }
 
   /// Safely adds an event to the bloc, suppressing errors if the bloc
@@ -1007,20 +1123,61 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messagesSubscription =
         _chatService.getMessagesStream(event.conversationId).listen(
               (messages) {
+                // Stream delivered data — cancel loading timeout
+                _loadingTimeoutTimer?.cancel();
+                _loadingTimeoutTimer = null;
+                _streamRetryCount = 0;
                 _safeAdd(_ChatMessagesUpdated(messages));
               },
               onError: (error) {
                 _logger.e('Messages stream error: $error');
+                _loadingTimeoutTimer?.cancel();
+                _loadingTimeoutTimer = null;
                 if (!isClosed) {
-                  String errorMessage = error.toString();
-                  if (errorMessage.contains('permission-denied') || 
-                      errorMessage.contains('PERMISSION_DENIED')) {
+                  final errorStr = error.toString();
+                  final isPermissionDenied =
+                      errorStr.contains('permission-denied') ||
+                      errorStr.contains('PERMISSION_DENIED');
+
+                  // Auto-retry for new conversations that may hit permission-denied
+                  // before Firestore security rules propagate the new doc.
+                  if (isPermissionDenied && _streamRetryCount < _maxStreamRetries) {
+                    _streamRetryCount++;
+                    _logger.i('Stream permission-denied, auto-retry $_streamRetryCount/$_maxStreamRetries');
+                    Future.delayed(
+                      Duration(milliseconds: 500 * _streamRetryCount),
+                      () {
+                        if (!isClosed && state.conversationId != null) {
+                          _subscribeToStreams(event, isResync: true);
+                        }
+                      },
+                    );
+                    return;
+                  }
+
+                  String errorMessage = errorStr;
+                  if (isPermissionDenied) {
                     errorMessage = 'Unable to access messages. The conversation may still be initializing. Please wait a moment and try again.';
                   }
                   _safeAdd(_ChatErrorOccurred(errorMessage));
                 }
               },
             );
+
+    // Start loading timeout — if stream hasn't emitted within _loadingTimeout,
+    // show an error with retry instead of infinite loading spinner.
+    // Only start if we're currently in loading state (cache miss) and not resync.
+    if (!isResync && state.status == ChatStatus.loading) {
+      _loadingTimeoutTimer?.cancel();
+      _loadingTimeoutTimer = Timer(_loadingTimeout, () {
+        if (!isClosed && state.status == ChatStatus.loading) {
+          _logger.w('Loading timeout reached for ${event.conversationId}');
+          _safeAdd(const _ChatErrorOccurred(
+            'Messages are taking too long to load. Please check your internet connection and try again.',
+          ));
+        }
+      });
+    }
 
     // Subscribe to conversation updates
     _conversationSubscription =
@@ -1090,11 +1247,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   @override
   Future<void> close() async {
+    // Save pending messages to cache before destroying the BLoC.
+    // This ensures pending/error messages survive screen changes.
+    if (state.conversationId != null && state.pendingMessages.isNotEmpty) {
+      _cacheService.savePendingMessages(
+        state.conversationId!,
+        state.pendingMessages,
+      );
+    }
+
     // CRITICAL: Await subscription cancellation to prevent stream callbacks
     // from firing after close, which causes "Cannot add new events after
     // calling close" crashes.
     await _cancelSubscriptions();
     _typingDebounce?.cancel();
+    _retryService.clearAll();
     // Clear typing indicator as a safety net
     if (state.conversationId != null && state.currentUserId != null) {
       _chatService.setTyping(

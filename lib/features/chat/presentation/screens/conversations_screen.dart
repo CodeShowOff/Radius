@@ -116,7 +116,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 final conversation = state.conversations[index];
                 return TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 300 + (index * 50)),
+                  // Cap animation delay at 10 items to prevent unbounded growth
+                  duration: Duration(milliseconds: 300 + (index.clamp(0, 10) * 50)),
                   curve: Curves.easeOutCubic,
                   builder: (context, value, child) {
                     return Transform.translate(
@@ -149,20 +150,55 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                         }
                       }).catchError((_) {});
                     },
-                    onDismissed: (direction) {
-                      if (direction == DismissDirection.endToStart) {
-                        // Delete
-                        context.read<ConversationsBloc>().add(
-                              ConversationsDelete(
-                                  conversationId: conversation.id),
-                            );
-                      } else {
-                        // Archive
-                        context.read<ConversationsBloc>().add(
-                              ConversationsArchive(
-                                  conversationId: conversation.id),
-                            );
+                    onConfirmDismiss: (direction) async {
+                      // Require confirmation for destructive actions
+                      final action = direction == DismissDirection.endToStart
+                          ? 'Delete'
+                          : 'Archive';
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text('$action conversation?'),
+                          content: Text(
+                            direction == DismissDirection.endToStart
+                                ? 'This will permanently delete this conversation.'
+                                : 'This conversation will be archived.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: direction == DismissDirection.endToStart
+                                  ? TextButton.styleFrom(
+                                      foregroundColor:
+                                          Theme.of(context).colorScheme.error)
+                                  : null,
+                              child: Text(action),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        if (direction == DismissDirection.endToStart) {
+                          if (context.mounted) {
+                            context.read<ConversationsBloc>().add(
+                                  ConversationsDelete(
+                                      conversationId: conversation.id),
+                                );
+                          }
+                        } else {
+                          if (context.mounted) {
+                            context.read<ConversationsBloc>().add(
+                                  ConversationsArchive(
+                                      conversationId: conversation.id),
+                                );
+                          }
+                        }
                       }
+                      return confirmed ?? false;
                     },
                   ),
                 );
@@ -220,14 +256,14 @@ class _ConversationTile extends StatefulWidget {
   final String currentUserId;
   final VoidCallback onTap;
   final VoidCallback? onPreload;
-  final void Function(DismissDirection) onDismissed;
+  final Future<bool> Function(DismissDirection) onConfirmDismiss;
 
   const _ConversationTile({
     required this.conversation,
     required this.currentUserId,
     required this.onTap,
     this.onPreload,
-    required this.onDismissed,
+    required this.onConfirmDismiss,
   });
 
   @override
@@ -291,7 +327,7 @@ class _ConversationTileState extends State<_ConversationTile> {
           color: theme.colorScheme.onError,
         ),
       ),
-      onDismissed: widget.onDismissed,
+      confirmDismiss: widget.onConfirmDismiss,
       child: GestureDetector(
         onLongPressStart: (_) => widget.onPreload?.call(),
         child: Container(
@@ -421,26 +457,35 @@ class _ConversationTileState extends State<_ConversationTile> {
               Text(
                 _formatTime(widget.conversation.lastMessageAt),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: widget.conversation.getUnreadCount(widget.currentUserId) > 0
+                      ? const Color(0xFF25D366) // green when unread
+                      : theme.colorScheme.outline,
+                  fontWeight: widget.conversation.getUnreadCount(widget.currentUserId) > 0
+                      ? FontWeight.w600
+                      : FontWeight.normal,
                 ),
               ),
               if (widget.conversation.getUnreadCount(widget.currentUserId) > 0) ...[
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  height: 22,
+                  constraints: const BoxConstraints(minWidth: 22),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF25D366), // WhatsApp green
+                    borderRadius: BorderRadius.circular(11),
                   ),
                   child: Text(
                     widget.conversation.getUnreadCount(widget.currentUserId) > 99
                         ? '99+'
                         : widget.conversation.getUnreadCount(widget.currentUserId).toString(),
-                    style: TextStyle(
-                      color: theme.colorScheme.onPrimary,
-                      fontSize: 12,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],

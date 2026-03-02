@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/chat_config.dart';
 import 'message_bubble.dart';
@@ -41,6 +42,12 @@ class SharedMessagesList extends StatelessWidget {
   /// Callback for removing a failed message.
   final void Function(Message message)? onRemoveFailedMessage;
 
+  /// Callback for deleting a message by ID.
+  final void Function(String messageId)? onDeleteMessage;
+
+  /// Audio session manager for shared audio playback.
+  final AudioSessionManager? audioSessionManager;
+
   const SharedMessagesList({
     super.key,
     required this.messages,
@@ -54,6 +61,8 @@ class SharedMessagesList extends StatelessWidget {
     this.otherUserPhotoUrl,
     this.onRetryMessage,
     this.onRemoveFailedMessage,
+    this.onDeleteMessage,
+    this.audioSessionManager,
   });
 
   @override
@@ -289,6 +298,9 @@ class SharedMessagesList extends StatelessWidget {
         message: message,
         isMe: isMe,
         showTail: showTail,
+        onRetry: onRetryMessage,
+        onDelete: onDeleteMessage,
+        audioSessionManager: audioSessionManager,
       );
     }
 

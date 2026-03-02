@@ -69,6 +69,7 @@ class NearbyGroupChatService {
     String? senderName,
     String? senderPhotoUrl,
     required String text,
+    String? localId,
   }) async {
     _logger.d('Sending message to nearby group: $groupId');
 
@@ -94,6 +95,7 @@ class NearbyGroupChatService {
       senderName: senderName,
       senderPhotoUrl: senderPhotoUrl,
       text: sanitizedText,
+      localId: localId,
     );
     batch.set(messageRef, messageData);
 
@@ -121,6 +123,7 @@ class NearbyGroupChatService {
       text: sanitizedText,
       type: NearbyGroupMessageType.text,
       sentAt: DateTime.now(),
+      localId: localId,
     );
   }
 

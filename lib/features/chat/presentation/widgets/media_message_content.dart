@@ -1,20 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 
 /// Widget for displaying media content in message bubbles.
 class MediaMessageContent extends StatelessWidget {
   final Message message;
   final bool isSent;
+  final AudioSessionManager? audioSessionManager;
 
   const MediaMessageContent({
     super.key,
     required this.message,
     required this.isSent,
+    this.audioSessionManager,
   });
 
   @override
@@ -23,13 +27,20 @@ class MediaMessageContent extends StatelessWidget {
       case MessageType.image:
         return _ImageContent(message: message);
       case MessageType.audio:
-        return _AudioContent(message: message, isSent: isSent);
+        return _AudioContent(
+          message: message,
+          isSent: isSent,
+          audioSessionManager: audioSessionManager,
+        );
       case MessageType.document:
         return _DocumentContent(message: message, isSent: isSent);
       case MessageType.sticker:
         return _StickerContent(message: message);
       case MessageType.video:
-        return _VideoContent(message: message);
+        return _VideoContent(
+          message: message,
+          audioSessionManager: audioSessionManager,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -78,13 +89,18 @@ class _ImageContent extends StatelessWidget {
 }
 
 /// Audio/voice message content.
+///
+/// Uses the global [AudioSessionManager] to ensure only one audio plays at a time.
+/// Falls back to a local AudioPlayer if no manager is provided (backwards compatible).
 class _AudioContent extends StatefulWidget {
   final Message message;
   final bool isSent;
+  final AudioSessionManager? audioSessionManager;
 
   const _AudioContent({
     required this.message,
     required this.isSent,
+    this.audioSessionManager,
   });
 
   @override
@@ -92,47 +108,59 @@ class _AudioContent extends StatefulWidget {
 }
 
 class _AudioContentState extends State<_AudioContent> {
-  late AudioPlayer _audioPlayer;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   Duration? _duration;
 
+  // Subscriptions for AudioSessionManager streams
+  late final List<dynamic> _subscriptions = [];
+
   @override
   void initState() {
     super.initState();
-    _audioPlayer = AudioPlayer();
     _duration = widget.message.duration != null
         ? Duration(seconds: widget.message.duration!)
         : null;
 
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-        });
-      }
-    });
-
-    _audioPlayer.onPositionChanged.listen((position) {
-      if (mounted) {
-        setState(() {
-          _position = position;
-        });
-      }
-    });
-
-    _audioPlayer.onDurationChanged.listen((duration) {
-      if (mounted) {
-        setState(() {
-          _duration = duration;
-        });
-      }
-    });
+    final manager = widget.audioSessionManager;
+    if (manager != null) {
+      _subscriptions.add(manager.playerStateStream.listen((state) {
+        if (!mounted) return;
+        if (state.messageId == widget.message.id) {
+          setState(() {
+            _isPlaying = state.isPlaying;
+            if (state.isStopped) {
+              _position = Duration.zero;
+            }
+          });
+        } else if (_isPlaying) {
+          // Another message started playing — we should show as stopped
+          setState(() {
+            _isPlaying = false;
+            _position = Duration.zero;
+          });
+        }
+      }));
+      _subscriptions.add(manager.positionStream.listen((position) {
+        if (!mounted) return;
+        if (manager.currentMessageId == widget.message.id) {
+          setState(() => _position = position);
+        }
+      }));
+      _subscriptions.add(manager.durationStream.listen((duration) {
+        if (!mounted) return;
+        if (manager.currentMessageId == widget.message.id) {
+          setState(() => _duration = duration);
+        }
+      }));
+    }
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
@@ -140,13 +168,18 @@ class _AudioContentState extends State<_AudioContent> {
     if (widget.message.mediaUrl == null) return;
 
     try {
-      if (_isPlaying) {
-        await _audioPlayer.pause();
-      } else {
-        await _audioPlayer.play(UrlSource(widget.message.mediaUrl!));
+      final manager = widget.audioSessionManager;
+      if (manager != null) {
+        if (_isPlaying) {
+          await manager.pause();
+        } else {
+          await manager.play(
+            messageId: widget.message.id,
+            url: widget.message.mediaUrl!,
+          );
+        }
       }
     } catch (e) {
-      // Handle playback errors (network issues, invalid URL, etc.)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -356,8 +389,12 @@ class _StickerContent extends StatelessWidget {
 /// Video message content.
 class _VideoContent extends StatefulWidget {
   final Message message;
+  final AudioSessionManager? audioSessionManager;
 
-  const _VideoContent({required this.message});
+  const _VideoContent({
+    required this.message,
+    this.audioSessionManager,
+  });
 
   @override
   State<_VideoContent> createState() => _VideoContentState();
@@ -367,11 +404,25 @@ class _VideoContentState extends State<_VideoContent> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
+  StreamSubscription? _audioStateSub;
 
   @override
   void initState() {
     super.initState();
     _initializePlayer();
+
+    // Listen for audio playback from AudioSessionManager.
+    // If an audio message starts playing, pause this video.
+    final manager = widget.audioSessionManager;
+    if (manager != null) {
+      _audioStateSub = manager.playerStateStream.listen((state) {
+        if (!mounted) return;
+        if (state.isPlaying && _controller?.value.isPlaying == true) {
+          _controller!.pause();
+          if (mounted) setState(() {});
+        }
+      });
+    }
   }
 
   Future<void> _initializePlayer() async {
@@ -400,6 +451,7 @@ class _VideoContentState extends State<_VideoContent> {
 
   @override
   void dispose() {
+    _audioStateSub?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -411,6 +463,8 @@ class _VideoContentState extends State<_VideoContent> {
       if (_controller!.value.isPlaying) {
         _controller!.pause();
       } else {
+        // Stop any playing audio before starting video
+        widget.audioSessionManager?.stop();
         _controller!.play();
       }
     });

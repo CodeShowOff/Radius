@@ -9,6 +9,7 @@ import '../../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../../features/location_groups/presentation/bloc/location_group_bloc.dart';
+import '../../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../../features/random_groups/data/random_group_chat_preload_service.dart';
 import '../../../features/random_groups/presentation/bloc/random_group_bloc.dart';
@@ -29,6 +30,7 @@ import 'realtime_connection_service.dart';
 /// - Connections
 /// - Conversations
 /// - Location groups (user's groups)
+/// - Nearby groups (user's groups)
 /// - Random groups (active groups + user's memberships)
 ///
 /// This eliminates the loading-on-every-navigation anti-pattern and provides
@@ -43,6 +45,7 @@ class RealTimeDataManager {
   final DiscoveryBloc _discoveryBloc;
   final ConversationsBloc _conversationsBloc;
   final LocationGroupBloc _locationGroupBloc;
+  final NearbyGroupBloc _nearbyGroupBloc;
   final RandomGroupBloc _randomGroupBloc;
   final ProfileBloc _profileBloc;
   final Logger _logger;
@@ -58,6 +61,7 @@ class RealTimeDataManager {
     required DiscoveryBloc discoveryBloc,
     required ConversationsBloc conversationsBloc,
     required LocationGroupBloc locationGroupBloc,
+    required NearbyGroupBloc nearbyGroupBloc,
     required RandomGroupBloc randomGroupBloc,
     required ProfileBloc profileBloc,
     PresenceService? presenceService,
@@ -74,6 +78,7 @@ class RealTimeDataManager {
         _discoveryBloc = discoveryBloc,
         _conversationsBloc = conversationsBloc,
         _locationGroupBloc = locationGroupBloc,
+        _nearbyGroupBloc = nearbyGroupBloc,
         _randomGroupBloc = randomGroupBloc,
         _profileBloc = profileBloc,
         _logger = logger ?? Logger();
@@ -192,6 +197,10 @@ class RealTimeDataManager {
       // 4. Load user's groups (uses real-time Firestore streams)
       // NOTE: The LocationGroupBloc streams will also wait for auth token internally
       _locationGroupBloc.add(LoadUserGroups(userId: userId));
+
+      // 4b. Load user's nearby groups (uses real-time Firestore streams)
+      _nearbyGroupBloc.add(WatchUserNearbyGroups(userId));
+      _nearbyGroupBloc.add(LoadUserActiveGroup(userId));
 
       // 5. Load random groups (uses real-time Firestore streams)
       // Preload both active groups (for discovery) and user's memberships

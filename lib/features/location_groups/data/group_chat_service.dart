@@ -60,6 +60,7 @@ class GroupChatService {
     String? senderName,
     String? senderPhotoUrl,
     required String text,
+    String? localId,
   }) async {
     _logger.d('Sending message to group: $groupId');
 
@@ -89,6 +90,7 @@ class GroupChatService {
       senderName: senderName,
       senderPhotoUrl: senderPhotoUrl,
       text: sanitizedText,
+      localId: localId,
     );
     messageBatch.set(messageRef, messageData);
 
@@ -146,6 +148,7 @@ class GroupChatService {
       text: sanitizedText,
       type: GroupMessageType.text,
       sentAt: DateTime.now(),
+      localId: localId,
     );
   }
 

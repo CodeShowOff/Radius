@@ -88,6 +88,16 @@ class ClearGroupChatMessages extends GroupChatEvent {
   const ClearGroupChatMessages();
 }
 
+/// Retries sending a failed message.
+class RetryGroupMessage extends GroupChatEvent {
+  final String localId;
+
+  const RetryGroupMessage(this.localId);
+
+  @override
+  List<Object?> get props => [localId];
+}
+
 /// Internal event: unread info fetched for display.
 class _UnreadInfoReceived extends GroupChatEvent {
   final String firstUnreadMessageId;

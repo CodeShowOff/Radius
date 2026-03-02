@@ -279,6 +279,13 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   ) async {
     if (state.currentUserId == null) return;
 
+    // Optimistic removal — remove from list immediately for snappy UX.
+    // The Firestore stream will confirm the change shortly after.
+    final optimisticConversations = state.conversations
+        .where((c) => c.id != event.conversationId)
+        .toList();
+    emit(state.copyWith(conversations: optimisticConversations));
+
     try {
       await _chatService.archiveConversation(
         event.conversationId,
@@ -286,6 +293,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
         archive: event.archive,
       );
     } catch (e) {
+      // Revert — stream will restore the correct state, but show error
       emit(state.copyWith(
         errorMessage: 'Failed to archive conversation',
       ));
@@ -298,12 +306,19 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   ) async {
     if (state.currentUserId == null) return;
 
+    // Optimistic removal — remove from list immediately.
+    final optimisticConversations = state.conversations
+        .where((c) => c.id != event.conversationId)
+        .toList();
+    emit(state.copyWith(conversations: optimisticConversations));
+
     try {
       await _chatService.deleteConversation(
         event.conversationId,
         state.currentUserId!,
       );
     } catch (e) {
+      // Revert — stream will restore the correct state, but show error
       emit(state.copyWith(
         errorMessage: 'Failed to delete conversation',
       ));

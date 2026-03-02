@@ -81,22 +81,17 @@ class ChatState extends Equatable {
       messageMap[msg.id] = msg;
     }
 
-    // Add pending messages only if not already confirmed
+    // Add pending messages only if not already confirmed.
+    // Uses localId-only matching (v_chat_sdk pattern) — no fuzzy matching.
     for (final pending in pendingMessages.values) {
-      // Check if this pending message already exists in confirmed messages
-      final alreadyConfirmed = messages.any((m) {
-        // Match by localId
-        if (m.localId != null && m.localId == pending.localId) return true;
-        
-        // Fuzzy match: same sender, same text, within 5 seconds
-        return m.senderId == pending.senderId &&
-            m.text == pending.text &&
-            m.sentAt.difference(pending.sentAt).abs().inSeconds < 5;
-      });
+      final pendingLocalId = pending.localId;
+      final alreadyConfirmed = pendingLocalId != null &&
+          pendingLocalId.isNotEmpty &&
+          messages.any((m) =>
+              m.localId != null && m.localId == pendingLocalId);
 
-      // Only add pending message if it hasn't been confirmed yet
       if (!alreadyConfirmed) {
-        messageMap[pending.localId ?? pending.id] = pending;
+        messageMap[pendingLocalId ?? pending.id] = pending;
       }
     }
 
