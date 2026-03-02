@@ -53,12 +53,19 @@ class ConversationTile extends StatelessWidget {
     final isMuted = conversation.isMutedBy(currentUserId);
     final isMeSender = conversation.lastMessageSenderId == currentUserId;
 
-    return InkWell(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
           children: [
             // ── Avatar ──
             CachedAvatar(
@@ -123,9 +130,11 @@ class ConversationTile extends StatelessWidget {
                             : Row(
                                 children: [
                                   // Message status icon for sender's own messages
+                                  // Use single check (Icons.check) to match chat screen
+                                  // which shows sent status for messages from Firestore
                                   if (isMeSender && lastMessage != null) ...[
                                     Icon(
-                                      Icons.done_all,
+                                      Icons.check,
                                       size: 16,
                                       color: theme.colorScheme.outline,
                                     ),
@@ -192,6 +201,7 @@ class ConversationTile extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 

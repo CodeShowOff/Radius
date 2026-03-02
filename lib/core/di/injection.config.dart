@@ -17,7 +17,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:google_sign_in/google_sign_in.dart' as _i116;
 import 'package:injectable/injectable.dart' as _i526;
-import 'package:logger/logger.dart' as _i974;
+import 'package:logger/logger.dart' as _i497;
 
 import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
@@ -64,7 +64,7 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i457.FirebaseStorage>(
         () => firebaseModule.firebaseStorage);
     gh.lazySingleton<_i116.GoogleSignIn>(() => firebaseModule.googleSignIn);
-    gh.lazySingleton<_i974.Logger>(() => firebaseModule.logger);
+    gh.lazySingleton<_i497.Logger>(() => firebaseModule.logger);
     gh.lazySingleton<_i892.FirebaseMessaging>(
         () => notificationModule.firebaseMessaging);
     gh.lazySingleton<_i163.FlutterLocalNotificationsPlugin>(
@@ -72,7 +72,7 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i356.MediaUploadService>(
         () => chatModule.mediaUploadService(
               gh<_i457.FirebaseStorage>(),
-              gh<_i974.Logger>(),
+              gh<_i497.Logger>(),
             ));
     gh.lazySingleton<_i939.FirestoreService>(
         () => _i939.FirestoreService(firestore: gh<_i974.FirebaseFirestore>()));
@@ -80,14 +80,14 @@ extension GetItInjectableX on _i174.GetIt {
         _i51.DeviceSessionRepository(firestore: gh<_i974.FirebaseFirestore>()));
     gh.lazySingleton<_i621.ChatService>(() => chatModule.chatService(
           gh<_i974.FirebaseFirestore>(),
-          gh<_i974.Logger>(),
+          gh<_i497.Logger>(),
         ));
     gh.lazySingleton<_i125.ChatCacheService>(
-        () => chatModule.chatCacheService(gh<_i974.Logger>()));
+        () => chatModule.chatCacheService(gh<_i497.Logger>()));
     gh.lazySingleton<_i777.MessageRetryService>(
         () => chatModule.messageRetryService(
               gh<_i621.ChatService>(),
-              gh<_i974.Logger>(),
+              gh<_i497.Logger>(),
             ));
     gh.lazySingleton<_i346.ConversationsBloc>(
         () => chatModule.conversationsBloc(gh<_i621.ChatService>()));

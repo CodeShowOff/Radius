@@ -194,9 +194,8 @@ Future<void> configureDependencies() {
   }
 
   // Chat cache services - global in-memory caches for instant chat loading
-  if (!getIt.isRegistered<ChatCacheService>()) {
-    getIt.registerLazySingleton<ChatCacheService>(() => ChatCacheService());
-  }
+  // NOTE: ChatCacheService is registered via injection.config.dart (ChatModule)
+  // with proper Logger injection. Do NOT register it here to avoid duplicates.
 
   if (!getIt.isRegistered<GroupChatCacheService>()) {
     getIt.registerLazySingleton<GroupChatCacheService>(() => GroupChatCacheService());

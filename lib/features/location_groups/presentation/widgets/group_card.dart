@@ -65,37 +65,65 @@ class GroupCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Group name
-                    Text(
-                      group.name,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // Top row: Group name + Location tag
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            group.stateName,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     
-                    // Location
-                    Text(
-                      '${group.stateName}, ${group.countryName}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    
-                    // Last message preview
-                    Text(
-                      group.lastMessagePreview ?? 'No messages yet',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    // Bottom row: Last message + timestamp
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            group.lastMessagePreview ?? 'No messages yet',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (group.lastActivityAt != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatTimestamp(group.lastActivityAt!),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: unreadCount > 0
+                                  ? const Color(0xFF25D366) // WhatsApp green
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -103,25 +131,13 @@ class GroupCard extends StatelessWidget {
               
               const SizedBox(width: 8),
               
-              // Right side - timestamp and unread count
+              // Right side - unread count badge only
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Timestamp
-                  if (group.lastActivityAt != null)
-                    Text(
-                      _formatTimestamp(group.lastActivityAt!),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: unreadCount > 0
-                            ? const Color(0xFF25D366) // WhatsApp green
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  
                   // Unread count badge
-                  if (unreadCount > 0) ...[
-                    const SizedBox(height: 4),
+                  if (unreadCount > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -142,7 +158,6 @@ class GroupCard extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                     ),
-                  ],
                 ],
               ),
             ],

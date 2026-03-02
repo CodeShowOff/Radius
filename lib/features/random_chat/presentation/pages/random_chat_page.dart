@@ -790,6 +790,7 @@ class _RandomChatPageState extends State<RandomChatPage>
                     'Send',
                     style: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onPrimary,
                     ),
                   ),
                 ),

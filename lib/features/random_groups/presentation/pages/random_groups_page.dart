@@ -263,37 +263,64 @@ class _RandomGroupCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Group name
-                  Text(
-                    group.name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Top row: Group name + Topic tag
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          group.name,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (group.topic != null) ...[                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            group.topic!,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   
-                  // Topic
-                  Text(
-                    group.topic ?? 'No topic',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  
-                  // Last message or member info
-                  Text(
-                    group.lastMessagePreview ?? '${group.memberCount} members',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  // Bottom row: Last message + timestamp
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          group.lastMessagePreview ?? '${group.memberCount} members',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatTimestamp(lastActivity),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: unreadCount > 0
+                              ? const Color(0xFF25D366) // WhatsApp green
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -301,24 +328,13 @@ class _RandomGroupCard extends StatelessWidget {
             
             const SizedBox(width: 8),
             
-            // Right side - timestamp and unread count
+            // Right side - unread count badge only
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Timestamp
-                Text(
-                  _formatTimestamp(lastActivity),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: unreadCount > 0
-                        ? const Color(0xFF25D366) // WhatsApp green
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                
                 // Unread count badge
-                if (unreadCount > 0) ...[
-                  const SizedBox(height: 4),
+                if (unreadCount > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
@@ -339,7 +355,6 @@ class _RandomGroupCard extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                ],
               ],
             ),
           ],

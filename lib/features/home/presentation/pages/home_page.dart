@@ -382,42 +382,24 @@ class _HomePageState extends State<HomePage>
                 Row(
                   children: [
                     Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
-                          return _AnimatedSquareCard(
-                            onTap: () => context.push(Routes.nearby),
-                            label: 'Find\nNearby',
-                            color: isDark
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                : Theme.of(context).colorScheme.onSurface,
-                            backgroundColor: isDark
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-                            isSquare: true,
-                            animationType: _CardAnimationType.wave,
-                          );
-                        },
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.nearby),
+                        label: 'Find\nNearby',
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        isSquare: true,
+                        animationType: _CardAnimationType.wave,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
-                          return _AnimatedSquareCard(
-                            onTap: () => context.push(Routes.randomChat),
-                            label: 'Random\nChat',
-                            color: isDark
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                : Theme.of(context).colorScheme.onSurface,
-                            backgroundColor: isDark
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-                            isSquare: true,
-                            animationType: _CardAnimationType.personCycle,
-                          );
-                        },
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.randomChat),
+                        label: 'Random\nChat',
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        isSquare: true,
+                        animationType: _CardAnimationType.personCycle,
                       ),
                     ),
                   ],
@@ -491,36 +473,57 @@ class _HomePageState extends State<HomePage>
                 _AnimatedSquareCard(
                   onTap: () => context.push(Routes.nearbyHelp),
                   label: 'Nearby Help',
-                  color: Theme.of(context).colorScheme.onErrorContainer,
-                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                  color: Theme.of(context).colorScheme.onError,
+                  backgroundColor: Theme.of(context).colorScheme.error,
                   isSquare: false,
                   useVerticalLayout: false,
                   animationType: _CardAnimationType.sos,
                 ),
                 const SizedBox(height: 16),
 
-                // Location Based Groups section - Simple card design
-                _SimpleGroupCard(
-                  onTap: () => context.push(Routes.locationGroups),
-                  title: 'Location Based Groups',
-                  subtitle: 'Connect with people in your area',
-                  icon: Icons.location_on,
+                // Groups section - Square cards in rows
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.locationGroups),
+                        label: 'Location\nGroups',
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        isSquare: true,
+                        icon: Icons.location_on,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.discoverRandomGroups),
+                        label: 'Random\nGroups',
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        isSquare: true,
+                        icon: Icons.public,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-
-                // Discover Groups - Simple card design
-                _SimpleGroupCard(
-                  onTap: () => context.push(Routes.discoverRandomGroups),
-                  title: 'Discover Random Groups',
-                  subtitle: 'Join global communities worldwide',
-                  icon: Icons.public,
-                ),
-                const SizedBox(height: 16),
-                _SimpleGroupCard(
-                  onTap: () => context.push(Routes.discoverNearbyGroups),
-                  title: 'Discover Nearby Groups',
-                  subtitle: 'Find local communities around you',
-                  icon: Icons.all_inclusive,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AnimatedSquareCard(
+                        onTap: () => context.push(Routes.discoverNearbyGroups),
+                        label: 'Nearby\nGroups',
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        isSquare: true,
+                        icon: Icons.all_inclusive,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Empty spacer to maintain grid alignment
+                    const Expanded(child: SizedBox()),
+                  ],
                 ),
               ],
             ),
@@ -540,6 +543,7 @@ class _AnimatedSquareCard extends StatelessWidget {
   final bool isSquare;
   final bool useVerticalLayout;
   final _CardAnimationType animationType;
+  final IconData? icon;
 
   const _AnimatedSquareCard({
     required this.onTap,
@@ -549,9 +553,11 @@ class _AnimatedSquareCard extends StatelessWidget {
     this.isSquare = false,
     this.useVerticalLayout = false,
     this.animationType = _CardAnimationType.wave,
+    this.icon,
   });
 
   IconData _getIcon() {
+    if (icon != null) return icon!;
     switch (animationType) {
       case _CardAnimationType.wave:
         return Icons.radar;
@@ -588,13 +594,17 @@ class _AnimatedSquareCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.2),
+                        color: animationType == _CardAnimationType.sos
+                            ? theme.colorScheme.onError
+                            : theme.colorScheme.onPrimary,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         _getIcon(),
                         size: 28,
-                        color: color,
+                        color: animationType == _CardAnimationType.sos
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.primary,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -624,7 +634,11 @@ class _AnimatedSquareCard extends StatelessWidget {
     final double iconSize = 34;
     final double gap = 12;
 
-    final iconBgColor = color.withValues(alpha: 0.2);
+    // Use error colors for SOS, contrasting colors for others
+    // Icon circle should contrast with card background
+    final bool isSos = animationType == _CardAnimationType.sos;
+    final iconBgColor = isSos ? theme.colorScheme.onError : theme.colorScheme.onPrimary;
+    final iconColor = isSos ? theme.colorScheme.error : theme.colorScheme.primary;
 
     final content = Padding(
       padding: outerPadding,
@@ -641,7 +655,7 @@ class _AnimatedSquareCard extends StatelessWidget {
             child: Icon(
               _getIcon(),
               size: iconSize,
-              color: color,
+              color: iconColor,
             ),
           ),
           SizedBox(height: gap),
@@ -671,85 +685,6 @@ class _AnimatedSquareCard extends StatelessWidget {
 }
 
 enum _CardAnimationType { wave, personCycle, talking, sos }
-
-/// Simple card widget for group discovery on home page - consistent with app theme.
-class _SimpleGroupCard extends StatelessWidget {
-  final VoidCallback onTap;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  const _SimpleGroupCard({
-    required this.onTap,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Icon container - matches GroupCard avatar size
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 32,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Text content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Card button for received connection/discovery requests on home page.
 class _RequestButtonCard extends StatelessWidget {
@@ -786,13 +721,13 @@ class _RequestButtonCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
+                      color: theme.colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       icon,
                       size: 28,
-                      color: theme.colorScheme.onPrimaryContainer,
+                      color: theme.colorScheme.onPrimary,
                     ),
                   ),
                   Positioned(

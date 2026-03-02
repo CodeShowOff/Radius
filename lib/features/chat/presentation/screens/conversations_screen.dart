@@ -428,7 +428,7 @@ class _ConversationTileState extends State<_ConversationTile> {
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Icon(
-                    Icons.done_all,
+                    Icons.check,
                     size: 14,
                     color: theme.colorScheme.outline,
                   ),
