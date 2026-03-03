@@ -874,6 +874,13 @@ class _VibeSelector extends StatelessWidget {
     '🎨 Being creative': '🎨 Being creative',
   };
 
+  // Popular vibes to show upfront
+  static const popularVibes = [
+    '👋 Open to talk',
+    '🎧 Busy',
+    '🤝 Networking',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -921,11 +928,11 @@ class _VibeSelector extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
+            // Popular vibe chips
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                // Clear selection chip
                 FilterChip(
                   label: const Text('None'),
                   selected: selectedVibe == null,
@@ -936,13 +943,12 @@ class _VibeSelector extends StatelessWidget {
                       .colorScheme
                       .secondaryContainer,
                 ),
-                // Vibe chips
-                ...vibes.entries.map((entry) {
+                ...popularVibes.map((vibe) {
                   return FilterChip(
-                    label: Text(entry.key),
-                    selected: selectedVibe == entry.value,
+                    label: Text(vibe),
+                    selected: selectedVibe == vibe,
                     onSelected: (selected) {
-                      onChanged(selected ? entry.value : null);
+                      onChanged(selected ? vibe : null);
                     },
                     selectedColor: Theme.of(context)
                         .colorScheme
@@ -950,6 +956,37 @@ class _VibeSelector extends StatelessWidget {
                   );
                 }),
               ],
+            ),
+            const SizedBox(height: 12),
+            // Dropdown for all options
+            DropdownButtonFormField<String>(
+              initialValue: selectedVibe,
+              decoration: InputDecoration(
+                labelText: 'Or choose from all options',
+                hintText: 'Select a vibe',
+                prefixIcon: const Icon(Icons.expand_more),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.3),
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('None'),
+                ),
+                ...vibes.entries.map((entry) {
+                  return DropdownMenuItem<String>(
+                    value: entry.value,
+                    child: Text(entry.key),
+                  );
+                }),
+              ],
+              onChanged: onChanged,
             ),
           ],
         ),
