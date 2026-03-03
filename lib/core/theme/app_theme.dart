@@ -9,10 +9,10 @@ abstract class AppTheme {
   // ──────────────────────────── Brand Colors ────────────────────────────
 
   /// Primary purple accent.
-  static const Color primaryColor = Color(0xFF7B2FFF);
+  static const Color primaryColor = Color(0xFF8B2FC9);
 
   /// Secondary purple (lighter for gradients).
-  static const Color secondaryColor = Color(0xFFA855F7);
+  static const Color secondaryColor = Color(0xFFA040D8);
 
   /// Tertiary accent – electric cyan for highlights.
   static const Color accentColor = Color(0xFF00D9FF);
@@ -27,7 +27,7 @@ abstract class AppTheme {
 
   static const Color nearbyCloseColor = Color(0xFF22C55E); // < 3 m
   static const Color nearbyMediumColor = Color(0xFFFBBF24); // 3–7 m
-  static const Color nearbyFarColor = Color(0xFF7B2FFF); // 7–10 m
+  static const Color nearbyFarColor = Color(0xFF8B2FC9); // 7–10 m
 
   // ──────────────────────────── Surface palette ─────────────────────────
 
@@ -47,7 +47,7 @@ abstract class AppTheme {
 
   /// Vibrant purple gradient used for hero elements & CTA buttons.
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF7B2FFF), Color(0xFFB44AFF)],
+    colors: [Color(0xFF8B2FC9), Color(0xFFA040D8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -70,11 +70,11 @@ abstract class AppTheme {
       brightness: brightness,
       primary: primaryColor,
       onPrimary: Colors.white,
-      primaryContainer: const Color(0xFF5B1FCC),
+      primaryContainer: const Color(0xFF5C1A96),
       onPrimaryContainer: const Color(0xFFE8DEFF),
       secondary: secondaryColor,
       onSecondary: Colors.white,
-      secondaryContainer: const Color(0xFF7C3AED),
+      secondaryContainer: const Color(0xFF6B1FAA),
       onSecondaryContainer: const Color(0xFFF3E8FF),
       tertiary: accentColor,
       onTertiary: Colors.black,

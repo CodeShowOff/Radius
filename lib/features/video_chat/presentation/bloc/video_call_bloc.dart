@@ -31,6 +31,7 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
   String _myUserId = '';
   String _otherUserName = '';
   String? _otherUserPhotoUrl;
+  bool _iceConnected = false;
 
   StreamSubscription? _callStatusSub;
   StreamSubscription? _iceCandidateSub;
@@ -429,8 +430,8 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _WebRtcConnected event,
     Emitter<VideoCallState> emit,
   ) {
-    // Update Firestore status
-    if (_currentCallId.isNotEmpty) {
+    // Only mark as connected in Firestore once.
+    if (_currentCallId.isNotEmpty && state is! VideoCallConnected) {
       _callService.markConnected(_currentCallId);
     }
 
@@ -479,12 +480,17 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     };
 
     _webRtcService.onRemoteStream = (stream) {
-      if (state is VideoCallConnected) {
-        add(_WebRtcConnected());
+      // Always notify: if ICE already connected, re-emit so the UI
+      // picks up the remote stream. If ICE hasn't connected yet, the
+      // stream is stored in the service and will be included when
+      // onConnected fires.
+      if (_iceConnected && !isClosed) {
+        add(const _WebRtcConnected());
       }
     };
 
     _webRtcService.onConnected = () {
+      _iceConnected = true;
       add(const _WebRtcConnected());
     };
 
@@ -520,6 +526,7 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _callStatusSub = null;
     _iceCandidateSub?.cancel();
     _iceCandidateSub = null;
+    _iceConnected = false;
     await _webRtcService.dispose();
   }
 

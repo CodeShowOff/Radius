@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage>
           parent: _animationController,
           curve: Interval(
             index * 0.1,
-            0.6 + (index * 0.1),
+            (0.6 + (index * 0.1)).clamp(0.0, 1.0),
             curve: Curves.easeOut,
           ),
         ),

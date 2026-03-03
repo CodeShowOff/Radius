@@ -46,7 +46,9 @@ class ConversationTile extends StatelessWidget {
         otherParticipant?.displayName ??
         'Unknown';
     final photoUrl = overridePhotoUrl ?? otherParticipant?.photoUrl;
-    final lastMessage = conversation.lastMessageText;
+    final lastMessage = conversation.lastMessageText
+        ?.replaceAll(RegExp(r'[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+', unicode: true), '')
+        .trim();
     final lastMessageTime = conversation.lastMessageAt;
     final unreadCount = conversation.getUnreadCount(currentUserId);
     final hasUnread = unreadCount > 0;

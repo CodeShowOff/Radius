@@ -766,7 +766,7 @@ class _VisibilityToggle extends StatelessWidget {
               child: Icon(
                 isVisible ? Icons.visibility : Icons.visibility_off,
                 color: isVisible
-                    ? Theme.of(context).colorScheme.primary
+                    ? Theme.of(context).colorScheme.onPrimaryContainer
                     : Theme.of(context).colorScheme.outline,
               ),
             ),
@@ -1210,7 +1210,7 @@ class _DiscoveryUsernameField extends StatelessWidget {
                   ),
                   child: Icon(
                     Icons.alternate_email,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
                 ),
                 const SizedBox(width: 16),

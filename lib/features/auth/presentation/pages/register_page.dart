@@ -45,7 +45,7 @@ class _RegisterPageState extends State<RegisterPage>
           parent: _animationController,
           curve: Interval(
             index * 0.08,
-            0.5 + (index * 0.08),
+            (0.5 + (index * 0.08)).clamp(0.0, 1.0),
             curve: Curves.easeOut,
           ),
         ),

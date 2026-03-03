@@ -51,7 +51,7 @@ class _HeadphonesAdvisoryViewState extends State<HeadphonesAdvisoryView> {
 
             // Title
             Text(
-              'Use Headphones',
+              'Headphones Recommended',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -61,9 +61,7 @@ class _HeadphonesAdvisoryViewState extends State<HeadphonesAdvisoryView> {
 
             // Description
             Text(
-              'For the best experience and to protect your privacy, '
-              'we recommend using headphones.\n\n'
-              'This prevents echo and keeps your conversation private.',
+              'Strangers may use offensive\nor inappropriate language.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: isDark ? Colors.white70 : Colors.black54,

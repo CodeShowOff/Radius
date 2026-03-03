@@ -304,11 +304,17 @@ class _HomePageState extends State<HomePage>
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => context.push(Routes.discoverySearch),
-          heroTag: 'searchUsers',
-          tooltip: 'Find People',
-          child: const Icon(Icons.person_search),
+        floatingActionButton: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(23),
+            border: Border.all(color: Colors.white, width: 3),
+          ),
+          child: FloatingActionButton(
+            onPressed: () => context.push(Routes.discoverySearch),
+            heroTag: 'searchUsers',
+            tooltip: 'Find People',
+            child: const Icon(Icons.person_search),
+          ),
         ),
         body: SafeArea(
           bottom: true,

@@ -22,9 +22,15 @@ class VideoCallPage extends StatefulWidget {
 class _VideoCallPageState extends State<VideoCallPage> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  bool _renderersReady = false;
 
   Timer? _durationTimer;
   Duration _callDuration = Duration.zero;
+  bool _durationTimerStarted = false;
+
+  // Pending streams queued before renderers were ready.
+  MediaStream? _pendingLocalStream;
+  MediaStream? _pendingRemoteStream;
 
   @override
   void initState() {
@@ -35,6 +41,37 @@ class _VideoCallPageState extends State<VideoCallPage> {
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
+    if (!mounted) return;
+    _renderersReady = true;
+
+    // Apply any streams that arrived before renderers were ready.
+    if (_pendingLocalStream != null) {
+      _localRenderer.srcObject = _pendingLocalStream;
+      _pendingLocalStream = null;
+    }
+    if (_pendingRemoteStream != null) {
+      _remoteRenderer.srcObject = _pendingRemoteStream;
+      _pendingRemoteStream = null;
+    }
+    setState(() {});
+  }
+
+  void _assignLocal(MediaStream? stream) {
+    if (stream == null) return;
+    if (_renderersReady) {
+      _localRenderer.srcObject = stream;
+    } else {
+      _pendingLocalStream = stream;
+    }
+  }
+
+  void _assignRemote(MediaStream? stream) {
+    if (stream == null) return;
+    if (_renderersReady) {
+      _remoteRenderer.srcObject = stream;
+    } else {
+      _pendingRemoteStream = stream;
+    }
   }
 
   @override
@@ -74,22 +111,17 @@ class _VideoCallPageState extends State<VideoCallPage> {
       body: BlocConsumer<VideoCallBloc, VideoCallState>(
         listener: (context, state) {
           if (state is VideoCallConnected) {
-            // Attach streams to renderers
-            if (state.localStream != null) {
-              _localRenderer.srcObject = state.localStream;
+            // Attach streams to renderers.
+            _assignLocal(state.localStream);
+            _assignRemote(state.remoteStream);
+            if (!_durationTimerStarted) {
+              _durationTimerStarted = true;
+              _startDurationTimer();
             }
-            if (state.remoteStream != null) {
-              _remoteRenderer.srcObject = state.remoteStream;
-            }
-            _startDurationTimer();
           } else if (state is VideoCallConnecting) {
-            if (state.localStream != null) {
-              _localRenderer.srcObject = state.localStream;
-            }
+            _assignLocal(state.localStream);
           } else if (state is VideoCallRinging) {
-            if (state.localStream != null) {
-              _localRenderer.srcObject = state.localStream;
-            }
+            _assignLocal(state.localStream);
           } else if (state is VideoCallEndedState) {
             _durationTimer?.cancel();
             // Show end reason and pop after delay
@@ -132,7 +164,9 @@ class _VideoCallPageState extends State<VideoCallPage> {
   }
 
   Widget _buildRemoteVideo(VideoCallState state) {
-    if (state is VideoCallConnected && state.remoteStream != null) {
+    // Show the renderer whenever we potentially have a remote stream.
+    // The renderer shows black naturally when no srcObject is set.
+    if (state is VideoCallConnected) {
       return Positioned.fill(
         child: RTCVideoView(
           _remoteRenderer,

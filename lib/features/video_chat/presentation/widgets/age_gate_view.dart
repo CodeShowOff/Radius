@@ -57,11 +57,21 @@ class AgeGateView extends StatelessWidget {
 
             // Description
             Text(
-              'You must be 18 or older to use Random Video Chat.\n\n'
-              'By continuing, you confirm that you are at least 18 years of age.',
+              'You must be 18 or older to\nuse Random Video Chat.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: isDark ? Colors.white70 : Colors.black54,
+                height: 1.5,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              'Tapping below confirms you are 18+.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isDark ? Colors.white38 : Colors.black38,
                 height: 1.5,
               ),
             ),
