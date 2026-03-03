@@ -33,6 +33,12 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
   String? _otherUserPhotoUrl;
   bool _iceConnected = false;
 
+  /// Stored once on first ICE connection; not regenerated on re-emits.
+  DateTime? _connectedAt;
+
+  /// Timer for temporary ICE disconnection before tearing down.
+  Timer? _disconnectTimer;
+
   StreamSubscription? _callStatusSub;
   StreamSubscription? _iceCandidateSub;
 
@@ -58,6 +64,8 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     on<_IceCandidatesReceived>(_onIceCandidatesReceived);
     on<_WebRtcConnected>(_onWebRtcConnected);
     on<_WebRtcDisconnected>(_onWebRtcDisconnected);
+    on<_WebRtcTemporarilyDisconnected>(_onWebRtcTemporarilyDisconnected);
+    on<_RemoteStreamReceived>(_onRemoteStreamReceived);
   }
 
   /// Sets the current user's profile. Must be called before initiating/receiving calls.
@@ -65,6 +73,8 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _myProfile = profile;
     _myUserId = profile.userId;
   }
+
+  VideoChatProfile? get myProfile => _myProfile;
 
   // ════════════════════════════════════════════════════════════════════
   //  Outgoing Call Flow
@@ -197,7 +207,8 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
         },
       );
 
-      // Start listening for ICE candidates
+      // Start listening for ICE candidates and call status
+      _watchCallStatus(_currentCallId);
       _watchIceCandidates(_currentCallId);
 
       emit(VideoCallConnecting(
@@ -302,9 +313,12 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     // When found, dispatch an internal event so the work runs
     // inside a proper handler with a valid `emit`.
     _callStatusSub?.cancel();
-    _callStatusSub = _callService.watchIncomingCalls(_myUserId).listen(
+    _callStatusSub = _callService.watchIncomingCalls(
+      _myUserId,
+      fromCallerId: event.matchedUserId,
+    ).listen(
       (call) {
-        if (call != null && call.callerId == event.matchedUserId) {
+        if (call != null) {
           _logger.d('Incoming call detected from match: ${call.id}');
           _callStatusSub?.cancel();
           _callStatusSub = null;
@@ -417,10 +431,16 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     Emitter<VideoCallState> emit,
   ) {
     for (final candidateData in event.candidates) {
+      final candidateValue = candidateData['candidate'] as String?;
+      if (candidateValue == null || candidateValue.isEmpty) {
+        continue;
+      }
+
+      final sdpMLineIndex = (candidateData['sdpMLineIndex'] as num?)?.toInt();
       final candidate = RTCIceCandidate(
-        candidateData['candidate'] as String?,
+        candidateValue,
         candidateData['sdpMid'] as String?,
-        candidateData['sdpMLineIndex'] as int?,
+        sdpMLineIndex,
       );
       _webRtcService.addIceCandidate(candidate);
     }
@@ -430,10 +450,16 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _WebRtcConnected event,
     Emitter<VideoCallState> emit,
   ) {
+    // Cancel any pending disconnect timer — we've (re)connected.
+    _disconnectTimer?.cancel();
+    _disconnectTimer = null;
+
     // Only mark as connected in Firestore once.
     if (_currentCallId.isNotEmpty && state is! VideoCallConnected) {
       _callService.markConnected(_currentCallId);
     }
+
+    _connectedAt ??= DateTime.now();
 
     emit(VideoCallConnected(
       callId: _currentCallId,
@@ -443,14 +469,55 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
       remoteStream: _webRtcService.remoteStream,
       isMicMuted: _webRtcService.isMicMuted,
       isCameraOff: _webRtcService.isCameraOff,
-      connectedAt: DateTime.now(),
+      connectedAt: _connectedAt!,
     ));
+  }
+
+  /// Handles a remote stream being received/updated.
+  void _onRemoteStreamReceived(
+    _RemoteStreamReceived event,
+    Emitter<VideoCallState> emit,
+  ) {
+    _logger.d('Remote stream received in bloc');
+    if (_iceConnected) {
+      // Already connected — re-emit state with the new remote stream.
+      _connectedAt ??= DateTime.now();
+      emit(VideoCallConnected(
+        callId: _currentCallId,
+        otherUserName: _otherUserName,
+        otherUserPhotoUrl: _otherUserPhotoUrl,
+        localStream: _webRtcService.localStream,
+        remoteStream: _webRtcService.remoteStream,
+        isMicMuted: _webRtcService.isMicMuted,
+        isCameraOff: _webRtcService.isCameraOff,
+        connectedAt: _connectedAt!,
+      ));
+    }
+    // If ICE not yet connected, the stream is stored in the service
+    // and will be picked up when _WebRtcConnected fires.
+  }
+
+  /// Temporary ICE disconnection — give it time to recover.
+  void _onWebRtcTemporarilyDisconnected(
+    _WebRtcTemporarilyDisconnected event,
+    Emitter<VideoCallState> emit,
+  ) {
+    _logger.w('ICE temporarily disconnected — waiting 15s for recovery');
+    _disconnectTimer?.cancel();
+    _disconnectTimer = Timer(const Duration(seconds: 15), () {
+      if (!isClosed) {
+        _logger.e('ICE did not recover within 15s — tearing down');
+        add(const _WebRtcDisconnected());
+      }
+    });
   }
 
   Future<void> _onWebRtcDisconnected(
     _WebRtcDisconnected event,
     Emitter<VideoCallState> emit,
   ) async {
+    _disconnectTimer?.cancel();
+    _disconnectTimer = null;
     if (state is VideoCallConnected || state is VideoCallConnecting) {
       if (_currentCallId.isNotEmpty) {
         await _callService.endCall(_currentCallId);
@@ -466,7 +533,7 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
 
   void _setupWebRtcCallbacks() {
     _webRtcService.onIceCandidate = (candidate) {
-      if (_currentCallId.isNotEmpty) {
+      if (!isClosed && _currentCallId.isNotEmpty) {
         _callService.addIceCandidate(
           callId: _currentCallId,
           from: _myUserId,
@@ -480,21 +547,27 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     };
 
     _webRtcService.onRemoteStream = (stream) {
-      // Always notify: if ICE already connected, re-emit so the UI
-      // picks up the remote stream. If ICE hasn't connected yet, the
-      // stream is stored in the service and will be included when
-      // onConnected fires.
-      if (_iceConnected && !isClosed) {
-        add(const _WebRtcConnected());
+      // Always dispatch — the handler decides what to do.
+      if (!isClosed) {
+        add(const _RemoteStreamReceived());
       }
     };
 
     _webRtcService.onConnected = () {
+      if (isClosed) return;
       _iceConnected = true;
+      _disconnectTimer?.cancel();
+      _disconnectTimer = null;
       add(const _WebRtcConnected());
     };
 
+    _webRtcService.onTemporarilyDisconnected = () {
+      if (isClosed) return;
+      add(const _WebRtcTemporarilyDisconnected());
+    };
+
     _webRtcService.onDisconnected = () {
+      if (isClosed) return;
       add(const _WebRtcDisconnected());
     };
   }
@@ -522,16 +595,34 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
   }
 
   Future<void> _cleanup() async {
+    _disconnectTimer?.cancel();
+    _disconnectTimer = null;
     _callStatusSub?.cancel();
     _callStatusSub = null;
     _iceCandidateSub?.cancel();
     _iceCandidateSub = null;
     _iceConnected = false;
+    _connectedAt = null;
+    _currentCallId = '';
+    _otherUserName = '';
+    _otherUserPhotoUrl = null;
     await _webRtcService.dispose();
   }
 
   @override
   Future<void> close() async {
+    try {
+      if (_currentCallId.isNotEmpty) {
+        if (state is VideoCallIncomingState) {
+          await _callService.declineCall(_currentCallId);
+        } else if (state is! VideoCallEndedState) {
+          await _callService.endCall(_currentCallId);
+        }
+      }
+    } catch (e) {
+      _logger.w('Failed to finalize active call on close: $e');
+    }
+
     await _cleanup();
     return super.close();
   }

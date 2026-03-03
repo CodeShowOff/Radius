@@ -179,13 +179,21 @@ class VideoCallService {
 
   /// Watches for incoming calls (calls where current user is the receiver
   /// and status is 'ringing').
-  Stream<VideoCall?> watchIncomingCalls(String userId) {
-    return _callsRef
+  ///
+  /// If [fromCallerId] is provided, only calls from that caller are watched.
+  Stream<VideoCall?> watchIncomingCalls(
+    String userId, {
+    String? fromCallerId,
+  }) {
+    Query<Map<String, dynamic>> query = _callsRef
         .where('receiverId', isEqualTo: userId)
-        .where('status', isEqualTo: CallStatus.ringing.toFirestore())
-        .limit(1)
-        .snapshots()
-        .map((snapshot) {
+        .where('status', isEqualTo: CallStatus.ringing.toFirestore());
+
+    if (fromCallerId != null && fromCallerId.isNotEmpty) {
+      query = query.where('callerId', isEqualTo: fromCallerId);
+    }
+
+    return query.limit(1).snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) return null;
       final doc = snapshot.docs.first;
       return VideoCall.fromJson(doc.id, doc.data());

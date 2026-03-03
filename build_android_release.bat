@@ -42,8 +42,8 @@ exit /b 1
 
 :build_apk
 echo.
-echo Building APK...
-call flutter build apk --release
+echo Building APKs (split per ABI)...
+call flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 if %errorlevel% neq 0 (
     echo ERROR: APK build failed
     pause
@@ -51,8 +51,10 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo ========================================
-echo APK built successfully!
-echo Location: build\app\outputs\flutter-apk\app-release.apk
+echo APKs built successfully!
+echo Locations:
+echo - build\app\outputs\flutter-apk\app-armeabi-v7a-release.apk
+echo - build\app\outputs\flutter-apk\app-arm64-v8a-release.apk
 echo ========================================
 goto end
 
@@ -74,8 +76,8 @@ goto end
 
 :build_both
 echo.
-echo Building APK...
-call flutter build apk --release
+echo Building APKs (split per ABI)...
+call flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 if %errorlevel% neq 0 (
     echo ERROR: APK build failed
     pause
@@ -92,7 +94,9 @@ if %errorlevel% neq 0 (
 echo.
 echo ========================================
 echo Both builds completed successfully!
-echo APK: build\app\outputs\flutter-apk\app-release.apk
+echo APKs:
+echo - build\app\outputs\flutter-apk\app-armeabi-v7a-release.apk
+echo - build\app\outputs\flutter-apk\app-arm64-v8a-release.apk
 echo AAB: build\app\outputs\bundle\release\app-release.aab
 echo ========================================
 

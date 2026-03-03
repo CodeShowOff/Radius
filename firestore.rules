@@ -1174,7 +1174,11 @@ service cloud.firestore {
       // Both participants can update (answer, ICE candidates, status changes)
       allow update: if isAuthenticated()
         && (resource.data.callerId == request.auth.uid
-            || resource.data.receiverId == request.auth.uid);
+            || resource.data.receiverId == request.auth.uid)
+        // Core identity fields are immutable after create
+        && request.resource.data.callerId == resource.data.callerId
+        && request.resource.data.receiverId == resource.data.receiverId
+        && request.resource.data.createdAt == resource.data.createdAt;
 
       // Either participant can delete (cleanup)
       allow delete: if isAuthenticated()
@@ -1202,7 +1206,21 @@ service cloud.firestore {
       // Any authenticated user can update (needed for the matcher to mark
       // both docs as 'matched' in a single transaction)
       allow update: if isAuthenticated()
-        && request.resource.data.status in ['waiting', 'matched'];
+        && request.resource.data.status in ['waiting', 'matched']
+        // Queue identity is immutable
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          // Owner can update their own queue doc
+          isOwner(userId)
+          // Non-owner can only claim a waiting user as a receiver match
+          || (
+            resource.data.status == 'waiting'
+            && request.resource.data.status == 'matched'
+            && request.resource.data.matchedWith == request.auth.uid
+            && request.resource.data.callRole == 'receiver'
+          )
+        );
 
       // Only the owner can delete their queue entry (leave queue / cleanup)
       allow delete: if isOwner(userId);

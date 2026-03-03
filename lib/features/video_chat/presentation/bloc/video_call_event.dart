@@ -112,6 +112,16 @@ class _WebRtcDisconnected extends VideoCallEvent {
   const _WebRtcDisconnected();
 }
 
+/// Internal: ICE temporarily disconnected (may recover).
+class _WebRtcTemporarilyDisconnected extends VideoCallEvent {
+  const _WebRtcTemporarilyDisconnected();
+}
+
+/// Internal: Remote media stream received/updated.
+class _RemoteStreamReceived extends VideoCallEvent {
+  const _RemoteStreamReceived();
+}
+
 /// Internal: the receiver detected an incoming call from the matched caller.
 /// Triggers auto-accept (WebRTC init → answer → ICE).
 class _IncomingMatchCallFound extends VideoCallEvent {

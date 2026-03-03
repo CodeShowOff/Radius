@@ -128,12 +128,17 @@ class VideoMatchBloc extends Bloc<VideoMatchEvent, VideoMatchState> {
     }
 
     if (data['status'] == 'matched') {
+      final matchedUserId = data['matchedWith'] as String?;
+      if (matchedUserId == null || matchedUserId.isEmpty) {
+        _logger.w('Matched queue doc missing matchedWith for user $_userId');
+        return;
+      }
+
       _matchResolved = true;
       _cancelTimers();
       _queueSub?.cancel();
       _queueSub = null;
 
-      final matchedUserId = data['matchedWith'] as String;
       final matchedName = data['matchedName'] as String? ?? 'Anonymous';
       final matchedPhotoUrl = data['matchedPhotoUrl'] as String?;
       final callRole = data['callRole'] as String? ?? 'caller';

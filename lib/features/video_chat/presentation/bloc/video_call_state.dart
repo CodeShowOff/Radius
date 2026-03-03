@@ -33,7 +33,12 @@ class VideoCallRinging extends VideoCallState {
   });
 
   @override
-  List<Object?> get props => [callId, receiverName, receiverPhotoUrl];
+  List<Object?> get props => [
+        callId,
+        receiverName,
+        receiverPhotoUrl,
+        localStream?.id,
+      ];
 }
 
 /// Incoming call is being presented to the user.
@@ -63,7 +68,7 @@ class VideoCallConnecting extends VideoCallState {
   });
 
   @override
-  List<Object?> get props => [callId];
+  List<Object?> get props => [callId, localStream?.id];
 }
 
 /// Call is connected — both local and remote media are flowing.
@@ -106,8 +111,15 @@ class VideoCallConnected extends VideoCallState {
   }
 
   @override
-  List<Object?> get props =>
-      [callId, otherUserName, isMicMuted, isCameraOff, connectedAt];
+  List<Object?> get props => [
+        callId,
+        otherUserName,
+        isMicMuted,
+        isCameraOff,
+        connectedAt,
+        localStream?.id,
+        remoteStream?.id,
+      ];
 }
 
 /// The call has ended.

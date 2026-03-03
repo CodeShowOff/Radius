@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../bloc/video_call_bloc.dart';
 import '../widgets/call_controls.dart';
@@ -19,7 +22,8 @@ class VideoCallPage extends StatefulWidget {
   State<VideoCallPage> createState() => _VideoCallPageState();
 }
 
-class _VideoCallPageState extends State<VideoCallPage> {
+class _VideoCallPageState extends State<VideoCallPage>
+    with WidgetsBindingObserver {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _renderersReady = false;
@@ -32,10 +36,30 @@ class _VideoCallPageState extends State<VideoCallPage> {
   MediaStream? _pendingLocalStream;
   MediaStream? _pendingRemoteStream;
 
+  // Track last-seen streams so we can reassign on lifecycle resume.
+  MediaStream? _lastLocalStream;
+  MediaStream? _lastRemoteStream;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _enableWakeLock();
     _initRenderers();
+  }
+
+  Future<void> _enableWakeLock() async {
+    try {
+      await WakelockPlus.enable();
+    } catch (_) {
+      // Non-fatal — screen may sleep but call still works.
+    }
+  }
+
+  Future<void> _disableWakeLock() async {
+    try {
+      await WakelockPlus.disable();
+    } catch (_) {}
   }
 
   Future<void> _initRenderers() async {
@@ -47,10 +71,12 @@ class _VideoCallPageState extends State<VideoCallPage> {
     // Apply any streams that arrived before renderers were ready.
     if (_pendingLocalStream != null) {
       _localRenderer.srcObject = _pendingLocalStream;
+      _lastLocalStream = _pendingLocalStream;
       _pendingLocalStream = null;
     }
     if (_pendingRemoteStream != null) {
       _remoteRenderer.srcObject = _pendingRemoteStream;
+      _lastRemoteStream = _pendingRemoteStream;
       _pendingRemoteStream = null;
     }
     setState(() {});
@@ -58,8 +84,10 @@ class _VideoCallPageState extends State<VideoCallPage> {
 
   void _assignLocal(MediaStream? stream) {
     if (stream == null) return;
+    _lastLocalStream = stream;
     if (_renderersReady) {
       _localRenderer.srcObject = stream;
+      if (mounted) setState(() {});
     } else {
       _pendingLocalStream = stream;
     }
@@ -67,15 +95,35 @@ class _VideoCallPageState extends State<VideoCallPage> {
 
   void _assignRemote(MediaStream? stream) {
     if (stream == null) return;
+    _lastRemoteStream = stream;
     if (_renderersReady) {
       _remoteRenderer.srcObject = stream;
+      if (mounted) setState(() {});
     } else {
       _pendingRemoteStream = stream;
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && _renderersReady) {
+      // Reassign streams after returning from background —
+      // the native textures may have been released.
+      if (_lastLocalStream != null) {
+        _localRenderer.srcObject = _lastLocalStream;
+      }
+      if (_lastRemoteStream != null) {
+        _remoteRenderer.srcObject = _lastRemoteStream;
+      }
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _disableWakeLock();
     _durationTimer?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -164,9 +212,11 @@ class _VideoCallPageState extends State<VideoCallPage> {
   }
 
   Widget _buildRemoteVideo(VideoCallState state) {
-    // Show the renderer whenever we potentially have a remote stream.
-    // The renderer shows black naturally when no srcObject is set.
-    if (state is VideoCallConnected) {
+    final showRenderer =
+        (state is VideoCallConnected || state is VideoCallConnecting) &&
+            _remoteRenderer.srcObject != null;
+
+    if (showRenderer) {
       return Positioned.fill(
         child: RTCVideoView(
           _remoteRenderer,
@@ -174,8 +224,29 @@ class _VideoCallPageState extends State<VideoCallPage> {
         ),
       );
     }
-    return const Positioned.fill(
-      child: ColoredBox(color: Colors.black),
+    final waitingText = state is VideoCallConnected
+        ? 'Connected • Waiting for video...'
+        : state is VideoCallConnecting
+            ? 'Connecting video...'
+            : null;
+
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black,
+        child: waitingText == null
+            ? null
+            : Center(
+                child: Text(
+                  waitingText,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+      ),
     );
   }
 
@@ -397,6 +468,15 @@ class _VideoCallPageState extends State<VideoCallPage> {
             context.read<VideoCallBloc>().add(const VideoCallCameraToggled()),
         onSwitchCamera: () =>
             context.read<VideoCallBloc>().add(const VideoCallCameraSwitched()),
+        onNext: () {
+          final profile = context.read<VideoCallBloc>().myProfile;
+          if (profile == null) {
+            context.read<VideoCallBloc>().add(const VideoCallEnded());
+            return;
+          }
+
+          context.pushReplacement(Routes.videoMatch, extra: profile);
+        },
         onEndCall: () =>
             context.read<VideoCallBloc>().add(const VideoCallEnded()),
       ),

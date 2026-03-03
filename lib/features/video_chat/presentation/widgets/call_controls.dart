@@ -4,13 +4,14 @@ import '../../../../core/theme/app_theme.dart';
 
 /// Bottom control bar for an active video call.
 ///
-/// Provides buttons for: mute mic, toggle camera, switch camera, end call.
+/// Provides buttons for: mute mic, toggle camera, switch camera, next, end call.
 class CallControls extends StatelessWidget {
   final bool isMicMuted;
   final bool isCameraOff;
   final VoidCallback onToggleMic;
   final VoidCallback onToggleCamera;
   final VoidCallback onSwitchCamera;
+  final VoidCallback onNext;
   final VoidCallback onEndCall;
 
   const CallControls({
@@ -20,6 +21,7 @@ class CallControls extends StatelessWidget {
     required this.onToggleMic,
     required this.onToggleCamera,
     required this.onSwitchCamera,
+    required this.onNext,
     required this.onEndCall,
   });
 
@@ -64,6 +66,14 @@ class CallControls extends StatelessWidget {
             label: 'Flip',
             isActive: true,
             onPressed: onSwitchCamera,
+          ),
+
+          // Next Match
+          _ControlButton(
+            icon: Icons.skip_next_rounded,
+            label: 'Next',
+            isActive: true,
+            onPressed: onNext,
           ),
 
           // End Call

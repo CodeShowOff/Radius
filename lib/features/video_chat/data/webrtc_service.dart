@@ -33,7 +33,10 @@ class WebRtcService {
   /// Called when the peer connection is fully connected.
   void Function()? onConnected;
 
-  /// Called when the peer connection is disconnected/failed.
+  /// Called when ICE enters a temporary disconnected state (recoverable).
+  void Function()? onTemporarilyDisconnected;
+
+  /// Called when the peer connection is permanently disconnected/failed.
   void Function()? onDisconnected;
 
   WebRtcService({Logger? logger}) : _logger = logger ?? Logger();
@@ -104,6 +107,9 @@ class WebRtcService {
           onConnected?.call();
           break;
         case RTCIceConnectionState.RTCIceConnectionStateDisconnected:
+          // Transient — can recover automatically via ICE restart
+          onTemporarilyDisconnected?.call();
+          break;
         case RTCIceConnectionState.RTCIceConnectionStateFailed:
         case RTCIceConnectionState.RTCIceConnectionStateClosed:
           onDisconnected?.call();
@@ -118,7 +124,23 @@ class WebRtcService {
       if (event.streams.isNotEmpty) {
         _remoteStream = event.streams.first;
         onRemoteStream?.call(_remoteStream!);
+      } else {
+        // Unified-plan may deliver tracks without associated streams.
+        // Add the track to the existing remote stream or log a warning.
+        _logger.w('Remote track has no associated streams');
+        if (_remoteStream != null) {
+          _remoteStream!.addTrack(event.track);
+          onRemoteStream?.call(_remoteStream!);
+        }
       }
+    };
+
+    // Fallback for platforms/configurations where onTrack doesn't
+    // provide streams (deprecated in spec but reliable in flutter_webrtc).
+    _peerConnection!.onAddStream = (stream) {
+      _logger.d('Remote stream added (onAddStream fallback): ${stream.id}');
+      _remoteStream = stream;
+      onRemoteStream?.call(stream);
     };
 
     // Get local media stream
@@ -259,6 +281,7 @@ class WebRtcService {
     onRemoteStream = null;
     onConnectionStateChange = null;
     onConnected = null;
+    onTemporarilyDisconnected = null;
     onDisconnected = null;
   }
 }

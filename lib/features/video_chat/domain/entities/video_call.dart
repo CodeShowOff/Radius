@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'call_status.dart';
 
@@ -126,16 +127,21 @@ class VideoCall extends Equatable {
       status: CallStatusX.fromFirestore(json['status'] as String? ?? 'ended'),
       offer: json['offer'] as Map<String, dynamic>?,
       answer: json['answer'] as Map<String, dynamic>?,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      answeredAt: json['answeredAt'] != null
-          ? DateTime.tryParse(json['answeredAt'] as String)
-          : null,
-      endedAt: json['endedAt'] != null
-          ? DateTime.tryParse(json['endedAt'] as String)
-          : null,
+      createdAt: _parseDateTime(json['createdAt']) ?? DateTime.now(),
+      answeredAt: _parseDateTime(json['answeredAt']),
+      endedAt: _parseDateTime(json['endedAt']),
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    return null;
   }
 
   @override
