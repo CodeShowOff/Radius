@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import '../../../../core/di/injection.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/app_data_clearer.dart';
+import '../../../../core/services/notifications/notification_service.dart';
+import '../../../../core/services/realtime/realtime_data_manager.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
@@ -198,7 +201,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
-      // Clear ALL local app data (equivalent to Android's "Clear Data").
+      // === PRE-SIGN-OUT CLEANUP (while still authenticated) ===
+      // These operations require valid auth credentials, so they MUST
+      // run before Firebase Auth sign-out to avoid PERMISSION_DENIED.
+
+      // 1. Clean up real-time services (sets offline, cancels Firestore listeners)
+      try {
+        await getIt<RealTimeDataManager>().signOut();
+      } catch (_) {}
+
+      // 2. Remove notification token (needs Firestore write access)
+      try {
+        await getIt<NotificationService>().removeToken();
+      } catch (_) {}
+
+      // 3. Clear ALL local app data (equivalent to Android's "Clear Data").
       // This wipes Hive boxes, in-memory caches, image cache, temp files,
       // and notifications so the next session starts completely fresh.
       try {
@@ -207,6 +224,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // Data clearing is best-effort; don't block sign-out if it fails.
       }
 
+      // === NOW SIGN OUT (Firebase Auth) ===
       final result = await _authRepository.signOut();
 
       result.fold(

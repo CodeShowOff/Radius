@@ -308,44 +308,35 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
 
     // Signed out or unauthenticated.
     if (_currentUserId != null) {
+      // NOTE: RealTimeDataManager.signOut() and NotificationService.removeToken()
+      // are called in AuthBloc._onSignOutRequested BEFORE Firebase Auth signs out,
+      // so they still have valid credentials. Here we only do best-effort fallback
+      // cleanup for edge cases (e.g. token expiry, forced sign-out).
+
       // Clear ALL local app data (equivalent to Android's "Clear Data")
       // so no stale data from the previous account remains.
       AppDataClearer.clearAllAppData();
 
-      // Clean up real-time data manager
+      // Best-effort cleanup — these may already be done by AuthBloc
       try {
-        getIt<RealTimeDataManager>().signOut();
-      } catch (_) {
-        // Ignore if manager isn't available.
-      }
+        final rtdm = getIt<RealTimeDataManager>();
+        if (rtdm.isInitialized) rtdm.signOut();
+      } catch (_) {}
 
       // Clean up nearby groups BLoC to prevent stale subscriptions on account switch
       try {
         getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState());
-      } catch (_) {
-        // Ignore if BLoC isn't available.
-      }
+      } catch (_) {}
 
       // Clean up random groups BLoC to prevent stale subscriptions on account switch
       try {
         getIt<RandomGroupBloc>().add(const ResetRandomGroupState());
-      } catch (_) {
-        // Ignore if BLoC isn't available.
-      }
+      } catch (_) {}
 
       // Clean up random chat BLoC to prevent stale subscriptions on account switch
       try {
         getIt<RandomChatBloc>().add(const ResetRandomChatState());
-      } catch (_) {
-        // Ignore if BLoC isn't available.
-      }
-
-      // Clean up notifications on sign out
-      try {
-        getIt<NotificationService>().removeToken();
-      } catch (_) {
-        // Ignore if NotificationService isn't available.
-      }
+      } catch (_) {}
     }
     _currentUserId = null;
   }

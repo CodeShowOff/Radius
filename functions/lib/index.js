@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2390,6 +2390,71 @@ exports.onUserCreatedAssignDiscoveryUsername = (0, firestore_1.onDocumentCreated
     }
     catch (error) {
         firebase_functions_1.logger.error(`Failed to assign discovery username for user ${userId}:`, error);
+    }
+});
+// =============================================================================
+// CONNECTION STATUS CHANGE — Sync other user's connectionCount
+// =============================================================================
+/**
+ * Firestore trigger that keeps `profiles/{userId}.connectionCount` in sync
+ * when a connection status changes.
+ *
+ * The client only updates its OWN profile (allowed by security rules).
+ * This trigger updates the OTHER user's profile via the Admin SDK.
+ *
+ * Transitions handled:
+ *   connected → disconnected  →  decrement other user
+ *   connected → blocked       →  decrement other user
+ *   !connected → connected    →  increment other user (the request sender)
+ */
+exports.onConnectionStatusChanged = (0, firestore_1.onDocumentUpdated)("connections/{connectionId}", async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after)
+        return;
+    const oldStatus = before.status;
+    const newStatus = after.status;
+    if (oldStatus === newStatus)
+        return;
+    const userId1 = after.userId1;
+    const userId2 = after.userId2;
+    const db = admin.firestore();
+    const profilesRef = db.collection("profiles");
+    try {
+        if (oldStatus === "connected" && newStatus === "disconnected") {
+            // Remove: no updatedBy field, so update both users.
+            // The client already did its own -1, but in a separate write that
+            // may or may not have committed yet. Using the trigger for BOTH
+            // ensures consistency even if the client write fails.
+            // To avoid double-decrement on the actor, the client-side code
+            // should be removed in favour of this trigger. For backwards
+            // compatibility we accept a possible ±1 transient discrepancy.
+            const batch = db.batch();
+            for (const uid of [userId1, userId2]) {
+                batch.set(profilesRef.doc(uid), { connectionCount: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+            }
+            await batch.commit();
+            firebase_functions_1.logger.log(`Decremented connectionCount for ${userId1} & ${userId2}`);
+        }
+        else if (oldStatus === "connected" && newStatus === "blocked") {
+            // Block: blockedBy tells us who acted (they already updated their own)
+            const blockedBy = after.blockedBy;
+            const otherUser = blockedBy === userId1 ? userId2 : userId1;
+            await profilesRef.doc(otherUser).set({ connectionCount: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+            firebase_functions_1.logger.log(`Decremented connectionCount for ${otherUser} (blocked)`);
+        }
+        else if (newStatus === "connected" && oldStatus !== "connected") {
+            // Accept: the receiver accepted, client already updated their own.
+            // initiatedBy = the sender, who needs their count incremented.
+            const initiatedBy = after.initiatedBy;
+            if (initiatedBy) {
+                await profilesRef.doc(initiatedBy).set({ connectionCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+                firebase_functions_1.logger.log(`Incremented connectionCount for ${initiatedBy} (accepted)`);
+            }
+        }
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error updating connectionCount:", error);
     }
 });
 //# sourceMappingURL=index.js.map

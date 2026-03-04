@@ -38,11 +38,17 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     // Start listening to profile stream
     _profileSubscription = _profileRepository
         .profileStream(event.userId)
-        .listen((profile) {
-          if (!isClosed) {
-            add(ProfileStreamUpdated(profile));
-          }
-        });
+        .listen(
+          (profile) {
+            if (!isClosed) {
+              add(ProfileStreamUpdated(profile));
+            }
+          },
+          onError: (error) {
+            // Suppress permission-denied errors during sign-out
+            // (auth is revoked before the listener is cancelled)
+          },
+        );
 
     // Also do an immediate fetch
     final result = await _profileRepository.getProfile(event.userId);

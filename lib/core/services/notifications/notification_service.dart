@@ -514,15 +514,20 @@ class NotificationService {
       await _firestore.collection('users').doc(_currentUserId).update({
         'fcmTokens.$_fcmToken': FieldValue.delete(),
       });
-
-      await _messaging.deleteToken();
-      _fcmToken = null;
-      _currentUserId = null;
-
-      _logger.i('FCM token removed');
-    } catch (e, stack) {
-      _logger.e('Error removing FCM token', error: e, stackTrace: stack);
+    } catch (e) {
+      _logger.e('Error removing FCM token from Firestore', error: e);
     }
+
+    try {
+      await _messaging.deleteToken();
+    } catch (e) {
+      // FIS_AUTH_ERROR is expected if called after Firebase Auth sign-out
+      _logger.d('Could not delete FCM token (expected during sign-out)', error: e);
+    }
+
+    _fcmToken = null;
+    _currentUserId = null;
+    _logger.i('FCM token cleanup complete');
   }
 }
 

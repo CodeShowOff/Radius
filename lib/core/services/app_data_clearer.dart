@@ -183,11 +183,21 @@ class AppDataClearer {
     try {
       final supportDir = await getApplicationSupportDirectory();
       if (supportDir.existsSync()) {
-        // Delete all contents except system files
+        // Delete all contents except system files and the cache manager's
+        // SQLite database (libCachedImageData.db*). That DB is already
+        // emptied by DefaultCacheManager().emptyCache() in Phase 1; deleting
+        // the file here while the connection is still open causes
+        // SQLITE_READONLY_DBMOVED (code 1032).
         await for (final entity in supportDir.list()) {
           try {
             // Skip system/hidden files
             if (entity.path.contains('/.') || entity.path.contains('\\.')) {
+              continue;
+            }
+
+            // Skip the cache manager's SQLite database (still open)
+            final name = entity.uri.pathSegments.last;
+            if (name.startsWith('libCachedImageData')) {
               continue;
             }
             

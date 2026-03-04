@@ -317,15 +317,11 @@ class ConnectionService {
           'respondedAt': Timestamp.fromDate(now),
         });
 
-        // Increment connectionCount on both users' profile docs
-        final profilesRef = _firestore.collection('profiles');
+        // Increment connectionCount on current user's profile doc.
+        // The other user's count is updated by the onConnectionStatusChanged
+        // Cloud Function trigger.
         transaction.set(
-          profilesRef.doc(request.senderId),
-          {'connectionCount': FieldValue.increment(1)},
-          SetOptions(merge: true),
-        );
-        transaction.set(
-          profilesRef.doc(request.receiverId),
+          _firestore.collection('profiles').doc(currentUserId),
           {'connectionCount': FieldValue.increment(1)},
           SetOptions(merge: true),
         );
@@ -481,22 +477,8 @@ class ConnectionService {
         'updatedAt': Timestamp.fromDate(DateTime.now()),
       });
 
-      // Decrement connectionCount on both users' profile docs
-      if (connection.status == ConnectionStatus.connected) {
-        final profilesRef = _firestore.collection('profiles');
-        final batch = _firestore.batch();
-        batch.set(
-          profilesRef.doc(connection.userId1),
-          {'connectionCount': FieldValue.increment(-1)},
-          SetOptions(merge: true),
-        );
-        batch.set(
-          profilesRef.doc(connection.userId2),
-          {'connectionCount': FieldValue.increment(-1)},
-          SetOptions(merge: true),
-        );
-        await batch.commit();
-      }
+      // connectionCount for BOTH users is decremented by the
+      // onConnectionStatusChanged Cloud Function trigger.
 
       _logger.i('Connection removed: $connectionId');
       return const ConnectionSuccess(null);
@@ -545,16 +527,12 @@ class ConnectionService {
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         });
 
-        // Decrement connectionCount if the connection was active
+        // Decrement connectionCount on current user's profile doc.
+        // The other user's count is updated by the onConnectionStatusChanged
+        // Cloud Function trigger.
         if (wasConnected) {
-          final profilesRef = _firestore.collection('profiles');
           batch.set(
-            profilesRef.doc(blockerId),
-            {'connectionCount': FieldValue.increment(-1)},
-            SetOptions(merge: true),
-          );
-          batch.set(
-            profilesRef.doc(blockedId),
+            _firestore.collection('profiles').doc(blockerId),
             {'connectionCount': FieldValue.increment(-1)},
             SetOptions(merge: true),
           );

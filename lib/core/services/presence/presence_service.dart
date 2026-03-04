@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logger/logger.dart';
@@ -338,6 +339,9 @@ class PresenceService with WidgetsBindingObserver {
   /// Update Firestore when going offline.
   Future<void> _syncOfflineToFirestore() async {
     if (_currentUserId == null) return;
+
+    // Skip if user is no longer authenticated (e.g. sign-out already happened)
+    if (auth.FirebaseAuth.instance.currentUser == null) return;
 
     // Note: This is best-effort. The RTDB onDisconnect is the source of truth.
     // Firestore sync happens when the app can still communicate.
