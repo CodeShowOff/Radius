@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/widgets/linkified_text.dart';
 import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 import 'media_message_content.dart';
@@ -244,12 +245,15 @@ class _MessageText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      message.text,
+    return LinkifiedText(
+      text: message.text,
       style: theme.textTheme.bodyLarge?.copyWith(
         color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
         height: 1.3,
-      ),
+      ) ?? const TextStyle(),
+      linkColor: isMe
+          ? theme.colorScheme.onPrimary
+          : theme.colorScheme.primary,
     );
   }
 }
@@ -272,14 +276,17 @@ class _MessageTextWithTime extends StatelessWidget {
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.end,
       children: [
-        Text(
-          message.text,
+        LinkifiedText(
+          text: message.text,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: isMe
                 ? theme.colorScheme.onPrimary
                 : theme.colorScheme.onSurface,
             height: 1.3,
-          ),
+          ) ?? const TextStyle(),
+          linkColor: isMe
+              ? theme.colorScheme.onPrimary
+              : theme.colorScheme.primary,
         ),
         const SizedBox(width: 6),
         Padding(

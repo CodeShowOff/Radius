@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'linkified_text.dart';
+
 /// Status of a group chat message.
 ///
 /// Modeled after the v_chat_sdk VMessageEmitStatus pattern.
@@ -148,14 +150,17 @@ class GroupMessageBubble extends StatelessWidget {
                           alignment: WrapAlignment.end,
                           crossAxisAlignment: WrapCrossAlignment.end,
                           children: [
-                            Text(
-                              text,
+                            LinkifiedText(
+                              text: text,
                               style: theme.textTheme.bodyLarge?.copyWith(
                                 color: isMe
                                     ? theme.colorScheme.onPrimary
                                     : theme.colorScheme.onSurface,
                                 height: 1.3,
-                              ),
+                              ) ?? const TextStyle(),
+                              linkColor: isMe
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.primary,
                             ),
                             const SizedBox(width: 6),
                             Padding(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/linkified_text.dart';
 import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/chat_config.dart';
@@ -391,14 +392,17 @@ class SharedMessagesList extends StatelessWidget {
                     alignment: WrapAlignment.end,
                     crossAxisAlignment: WrapCrossAlignment.end,
                     children: [
-                      Text(
-                        message.text,
+                      LinkifiedText(
+                        text: message.text,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: isMe
                               ? theme.colorScheme.onPrimary
                               : theme.colorScheme.onSurface,
                           height: 1.3,
-                        ),
+                        ) ?? const TextStyle(),
+                        linkColor: isMe
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 6),
                       // Time and status indicator

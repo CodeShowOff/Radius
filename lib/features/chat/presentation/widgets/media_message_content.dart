@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
+import '../screens/photo_viewer_screen.dart';
 
 /// Widget for displaying media content in message bubbles.
 class MediaMessageContent extends StatelessWidget {
@@ -53,34 +54,61 @@ class _ImageContent extends StatelessWidget {
 
   const _ImageContent({required this.message});
 
+  void _openPhotoViewer(BuildContext context) {
+    final heroTag = 'chat_image_${message.id}';
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            PhotoViewerScreen(
+          imageUrl: message.mediaUrl!,
+          heroTag: heroTag,
+          caption: message.text.isNotEmpty ? message.text : null,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (message.mediaUrl == null) {
       return _LoadingPlaceholder(icon: Icons.image, uploadProgress: message.uploadProgress);
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: CachedNetworkImage(
-        imageUrl: message.mediaUrl!,
-        width: 250,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          width: 250,
-          height: 250,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-        errorWidget: (context, url, error) => Container(
-          width: 250,
-          height: 250,
-          color: Theme.of(context).colorScheme.errorContainer,
-          child: Icon(
-            Icons.broken_image,
-            size: 48,
-            color: Theme.of(context).colorScheme.error,
+    final heroTag = 'chat_image_${message.id}';
+
+    return GestureDetector(
+      onTap: () => _openPhotoViewer(context),
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CachedNetworkImage(
+            imageUrl: message.mediaUrl!,
+            width: 250,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              width: 250,
+              height: 250,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
+              width: 250,
+              height: 250,
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Icon(
+                Icons.broken_image,
+                size: 48,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
           ),
         ),
       ),
