@@ -212,7 +212,10 @@ function getOppositeGender(gender) {
 /**
  * Send push notification when a new message is sent.
  */
-exports.onMessageSent = (0, firestore_1.onDocumentCreated)("conversations/{conversationId}/messages/{messageId}", async (event) => {
+exports.onMessageSent = (0, firestore_1.onDocumentCreated)({
+    document: "conversations/{conversationId}/messages/{messageId}",
+    region: "asia-south1",
+}, async (event) => {
     const message = event.data?.data();
     if (!message)
         return;
@@ -351,7 +354,10 @@ exports.onMessageSent = (0, firestore_1.onDocumentCreated)("conversations/{conve
  * Notifies all active group members except the sender.
  * Groups notifications together per group on Android (tag) and iOS (threadId).
  */
-exports.onGroupMessageNotification = (0, firestore_1.onDocumentCreated)("location_groups/{groupId}/messages/{messageId}", async (event) => {
+exports.onGroupMessageNotification = (0, firestore_1.onDocumentCreated)({
+    document: "location_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+}, async (event) => {
     const message = event.data?.data();
     if (!message)
         return;
@@ -503,7 +509,10 @@ exports.onGroupMessageNotification = (0, firestore_1.onDocumentCreated)("locatio
  * Notifies all members except the sender.
  * Similar to location groups but for Bluetooth-based nearby groups.
  */
-exports.onNearbyGroupMessageNotification = (0, firestore_1.onDocumentCreated)("nearby_groups/{groupId}/messages/{messageId}", async (event) => {
+exports.onNearbyGroupMessageNotification = (0, firestore_1.onDocumentCreated)({
+    document: "nearby_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+}, async (event) => {
     const message = event.data?.data();
     if (!message)
         return;
@@ -654,7 +663,10 @@ exports.onNearbyGroupMessageNotification = (0, firestore_1.onDocumentCreated)("n
  * Notifies all members except the sender.
  * Random groups are internet-based, admin-approved communities.
  */
-exports.onRandomGroupMessageNotification = (0, firestore_1.onDocumentCreated)("random_groups/{groupId}/messages/{messageId}", async (event) => {
+exports.onRandomGroupMessageNotification = (0, firestore_1.onDocumentCreated)({
+    document: "random_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+}, async (event) => {
     const message = event.data?.data();
     if (!message)
         return;
@@ -802,7 +814,10 @@ exports.onRandomGroupMessageNotification = (0, firestore_1.onDocumentCreated)("r
 /**
  * Send push notification when a connection request is received.
  */
-exports.onConnectionRequestReceived = (0, firestore_1.onDocumentCreated)("connection_requests/{requestId}", async (event) => {
+exports.onConnectionRequestReceived = (0, firestore_1.onDocumentCreated)({
+    document: "connection_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const request = event.data?.data();
     if (!request)
         return;
@@ -897,7 +912,10 @@ exports.onConnectionRequestReceived = (0, firestore_1.onDocumentCreated)("connec
  * Send push notification to group admins when someone requests to join.
  * Only applies to private groups (requestToJoin visibility).
  */
-exports.onGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("location_groups/{groupId}/join_requests/{requestId}", async (event) => {
+exports.onGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)({
+    document: "location_groups/{groupId}/join_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const request = event.data?.data();
     if (!request)
         return;
@@ -1031,7 +1049,10 @@ exports.onGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("loc
  * Send push notification when a user requests to join a random group.
  * Notifies all admins of the group.
  */
-exports.onRandomGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)("random_groups/{groupId}/join_requests/{requestId}", async (event) => {
+exports.onRandomGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated)({
+    document: "random_groups/{groupId}/join_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const request = event.data?.data();
     if (!request)
         return;
@@ -1155,7 +1176,10 @@ exports.onRandomGroupJoinRequestNotification = (0, firestore_1.onDocumentCreated
  * Send push notification when connection request is accepted.
  * Notifies the original sender.
  */
-exports.onConnectionRequestAccepted = (0, firestore_1.onDocumentUpdated)("connection_requests/{requestId}", async (event) => {
+exports.onConnectionRequestAccepted = (0, firestore_1.onDocumentUpdated)({
+    document: "connection_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after)
@@ -1509,7 +1533,10 @@ function getApproximateDistance(distanceMeters) {
  * Now we query ALL users who have saved locations and check settings manually.
  * Users default to receiving alerts unless they explicitly opted out.
  */
-exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests/{requestId}", async (event) => {
+exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)({
+    document: "help_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const helpRequest = event.data?.data();
     if (!helpRequest)
         return;
@@ -1726,7 +1753,10 @@ exports.onHelpRequestCreated = (0, firestore_1.onDocumentCreated)("help_requests
  * Send push notification when a helper is assigned to a request.
  * Notifies the seeker that help is on the way.
  */
-exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)("help_requests/{requestId}", async (event) => {
+exports.onHelpRequestAssigned = (0, firestore_1.onDocumentUpdated)({
+    document: "help_requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
     if (!beforeData || !afterData)
@@ -2121,7 +2151,10 @@ exports.randomChatDailyReset = (0, scheduler_1.onSchedule)({
  * Cloud Function triggered when a random chat request is created.
  * Sends a push notification to the receiver.
  */
-exports.onRandomChatRequestCreated = (0, firestore_1.onDocumentCreated)("random_chat_daily/{dateKey}/requests/{requestId}", async (event) => {
+exports.onRandomChatRequestCreated = (0, firestore_1.onDocumentCreated)({
+    document: "random_chat_daily/{dateKey}/requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const request = event.data?.data();
     if (!request)
         return;
@@ -2180,7 +2213,10 @@ exports.onRandomChatRequestCreated = (0, firestore_1.onDocumentCreated)("random_
  * Cloud Function triggered when a random chat request is accepted.
  * Notifies the sender that their request was accepted.
  */
-exports.onRandomChatRequestAccepted = (0, firestore_1.onDocumentUpdated)("random_chat_daily/{dateKey}/requests/{requestId}", async (event) => {
+exports.onRandomChatRequestAccepted = (0, firestore_1.onDocumentUpdated)({
+    document: "random_chat_daily/{dateKey}/requests/{requestId}",
+    region: "asia-south1",
+}, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after)
@@ -2246,7 +2282,10 @@ exports.onRandomChatRequestAccepted = (0, firestore_1.onDocumentUpdated)("random
  * expire its own requests (Firestore rules), so this function handles
  * the other user's pending requests as well.
  */
-exports.onRandomChatConnectionCreated = (0, firestore_1.onDocumentCreated)("random_chat_daily/{dateKey}/connections/{connectionId}", async (event) => {
+exports.onRandomChatConnectionCreated = (0, firestore_1.onDocumentCreated)({
+    document: "random_chat_daily/{dateKey}/connections/{connectionId}",
+    region: "asia-south1",
+}, async (event) => {
     const connection = event.data?.data();
     if (!connection)
         return;
@@ -2341,7 +2380,10 @@ function generateBaseUsername(displayName) {
  * - Uses a batched write (index + user + profile) — fast, no deadlocks
  * - Runs async after signup, doesn't block the client
  */
-exports.onUserCreatedAssignDiscoveryUsername = (0, firestore_1.onDocumentCreated)("users/{userId}", async (event) => {
+exports.onUserCreatedAssignDiscoveryUsername = (0, firestore_1.onDocumentCreated)({
+    document: "users/{userId}",
+    region: "asia-south1",
+}, async (event) => {
     const snapshot = event.data;
     if (!snapshot)
         return;
@@ -2407,7 +2449,10 @@ exports.onUserCreatedAssignDiscoveryUsername = (0, firestore_1.onDocumentCreated
  *   connected → blocked       →  decrement other user
  *   !connected → connected    →  increment other user (the request sender)
  */
-exports.onConnectionStatusChanged = (0, firestore_1.onDocumentUpdated)("connections/{connectionId}", async (event) => {
+exports.onConnectionStatusChanged = (0, firestore_1.onDocumentUpdated)({
+    document: "connections/{connectionId}",
+    region: "asia-south1",
+}, async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
     if (!before || !after)

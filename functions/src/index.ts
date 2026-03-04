@@ -223,7 +223,10 @@ function getOppositeGender(gender: string): string {
  * Send push notification when a new message is sent.
  */
 export const onMessageSent = onDocumentCreated(
-  "conversations/{conversationId}/messages/{messageId}",
+  {
+    document: "conversations/{conversationId}/messages/{messageId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const message = event.data?.data();
     if (!message) return;
@@ -385,7 +388,10 @@ export const onMessageSent = onDocumentCreated(
  * Groups notifications together per group on Android (tag) and iOS (threadId).
  */
 export const onGroupMessageNotification = onDocumentCreated(
-  "location_groups/{groupId}/messages/{messageId}",
+  {
+    document: "location_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const message = event.data?.data();
     if (!message) return;
@@ -563,7 +569,10 @@ export const onGroupMessageNotification = onDocumentCreated(
  * Similar to location groups but for Bluetooth-based nearby groups.
  */
 export const onNearbyGroupMessageNotification = onDocumentCreated(
-  "nearby_groups/{groupId}/messages/{messageId}",
+  {
+    document: "nearby_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const message = event.data?.data();
     if (!message) return;
@@ -740,7 +749,10 @@ export const onNearbyGroupMessageNotification = onDocumentCreated(
  * Random groups are internet-based, admin-approved communities.
  */
 export const onRandomGroupMessageNotification = onDocumentCreated(
-  "random_groups/{groupId}/messages/{messageId}",
+  {
+    document: "random_groups/{groupId}/messages/{messageId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const message = event.data?.data();
     if (!message) return;
@@ -914,7 +926,10 @@ export const onRandomGroupMessageNotification = onDocumentCreated(
  * Send push notification when a connection request is received.
  */
 export const onConnectionRequestReceived = onDocumentCreated(
-  "connection_requests/{requestId}",
+  {
+    document: "connection_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const request = event.data?.data();
     if (!request) return;
@@ -1024,7 +1039,10 @@ export const onConnectionRequestReceived = onDocumentCreated(
  * Only applies to private groups (requestToJoin visibility).
  */
 export const onGroupJoinRequestNotification = onDocumentCreated(
-  "location_groups/{groupId}/join_requests/{requestId}",
+  {
+    document: "location_groups/{groupId}/join_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const request = event.data?.data();
     if (!request) return;
@@ -1182,7 +1200,10 @@ export const onGroupJoinRequestNotification = onDocumentCreated(
  * Notifies all admins of the group.
  */
 export const onRandomGroupJoinRequestNotification = onDocumentCreated(
-  "random_groups/{groupId}/join_requests/{requestId}",
+  {
+    document: "random_groups/{groupId}/join_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const request = event.data?.data();
     if (!request) return;
@@ -1328,7 +1349,10 @@ export const onRandomGroupJoinRequestNotification = onDocumentCreated(
  * Notifies the original sender.
  */
 export const onConnectionRequestAccepted = onDocumentUpdated(
-  "connection_requests/{requestId}",
+  {
+    document: "connection_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -1763,7 +1787,10 @@ function getApproximateDistance(distanceMeters: number): string {
  * Users default to receiving alerts unless they explicitly opted out.
  */
 export const onHelpRequestCreated = onDocumentCreated(
-  "help_requests/{requestId}",
+  {
+    document: "help_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const helpRequest = event.data?.data();
     if (!helpRequest) return;
@@ -2021,7 +2048,10 @@ export const onHelpRequestCreated = onDocumentCreated(
  * Notifies the seeker that help is on the way.
  */
 export const onHelpRequestAssigned = onDocumentUpdated(
-  "help_requests/{requestId}",
+  {
+    document: "help_requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
@@ -2489,7 +2519,10 @@ export const randomChatDailyReset = onSchedule(
  * Sends a push notification to the receiver.
  */
 export const onRandomChatRequestCreated = onDocumentCreated(
-  "random_chat_daily/{dateKey}/requests/{requestId}",
+  {
+    document: "random_chat_daily/{dateKey}/requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const request = event.data?.data();
     if (!request) return;
@@ -2555,7 +2588,10 @@ export const onRandomChatRequestCreated = onDocumentCreated(
  * Notifies the sender that their request was accepted.
  */
 export const onRandomChatRequestAccepted = onDocumentUpdated(
-  "random_chat_daily/{dateKey}/requests/{requestId}",
+  {
+    document: "random_chat_daily/{dateKey}/requests/{requestId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -2629,7 +2665,10 @@ export const onRandomChatRequestAccepted = onDocumentUpdated(
  * the other user's pending requests as well.
  */
 export const onRandomChatConnectionCreated = onDocumentCreated(
-  "random_chat_daily/{dateKey}/connections/{connectionId}",
+  {
+    document: "random_chat_daily/{dateKey}/connections/{connectionId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const connection = event.data?.data();
     if (!connection) return;
@@ -2739,7 +2778,10 @@ function generateBaseUsername(displayName: string | undefined | null): string {
  * - Runs async after signup, doesn't block the client
  */
 export const onUserCreatedAssignDiscoveryUsername = onDocumentCreated(
-  "users/{userId}",
+  {
+    document: "users/{userId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
@@ -2828,7 +2870,10 @@ export const onUserCreatedAssignDiscoveryUsername = onDocumentCreated(
  *   !connected → connected    →  increment other user (the request sender)
  */
 export const onConnectionStatusChanged = onDocumentUpdated(
-  "connections/{connectionId}",
+  {
+    document: "connections/{connectionId}",
+    region: "asia-south1",
+  },
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
