@@ -55,6 +55,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<ApproveAllJoinRequests>(_onApproveAllJoinRequests);
     on<RemoveRandomGroupMember>(_onRemoveRandomGroupMember);
     on<PromoteToAdmin>(_onPromoteToAdmin);
+    on<DemoteFromAdmin>(_onDemoteFromAdmin);
     on<LeaveRandomGroup>(_onLeaveRandomGroup);
     on<DeleteRandomGroup>(_onDeleteRandomGroup);
     on<UpdateRandomGroup>(_onUpdateRandomGroup);
@@ -435,6 +436,32 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to promote member: $msg');
+        emit(state.copyWith(
+          status: RandomGroupBlocStatus.error,
+          errorMessage: msg,
+        ));
+    }
+  }
+
+  Future<void> _onDemoteFromAdmin(
+    DemoteFromAdmin event,
+    Emitter<RandomGroupState> emit,
+  ) async {
+    _logger.d('Demoting admin: ${event.memberId} to regular member');
+
+    final result = await _groupService.demoteFromAdmin(
+      groupId: event.groupId,
+      memberId: event.memberId,
+      creatorId: event.creatorId,
+    );
+
+    switch (result) {
+      case RandomGroupSuccess():
+        _logger.i('Demoted admin: ${event.memberId}');
+      // State will update via stream
+
+      case RandomGroupFailure(message: final msg):
+        _logger.w('Failed to demote admin: $msg');
         emit(state.copyWith(
           status: RandomGroupBlocStatus.error,
           errorMessage: msg,

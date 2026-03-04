@@ -230,6 +230,22 @@ class PromoteToAdmin extends LocationGroupEvent {
   List<Object?> get props => [groupId, targetUserId, adminUserId];
 }
 
+/// Demote an admin back to regular member (creator only).
+class DemoteFromAdmin extends LocationGroupEvent {
+  final String groupId;
+  final String targetUserId;
+  final String creatorUserId;
+
+  const DemoteFromAdmin({
+    required this.groupId,
+    required this.targetUserId,
+    required this.creatorUserId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, targetUserId, creatorUserId];
+}
+
 /// Update group settings (admin).
 class UpdateGroupSettings extends LocationGroupEvent {
   final String groupId;

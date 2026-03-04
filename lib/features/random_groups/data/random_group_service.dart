@@ -502,6 +502,71 @@ class RandomGroupService {
     }
   }
 
+  /// Demotes an admin back to regular member (creator only).
+  Future<RandomGroupResult<void>> demoteFromAdmin({
+    required String groupId,
+    required String memberId,
+    required String creatorId,
+  }) async {
+    try {
+      final groupDoc = await _groupsRef.doc(groupId).get();
+      if (!groupDoc.exists) {
+        return const RandomGroupFailure(
+          'Group not found',
+          RandomGroupErrorType.notFound,
+        );
+      }
+
+      final group = RandomGroupModel.fromFirestore(groupDoc);
+      if (group.creatorId != creatorId) {
+        return const RandomGroupFailure(
+          'Only the group creator can remove admins',
+          RandomGroupErrorType.notAuthorized,
+        );
+      }
+
+      if (memberId == creatorId) {
+        return const RandomGroupFailure(
+          'Cannot demote yourself as creator',
+          RandomGroupErrorType.notAuthorized,
+        );
+      }
+
+      final batch = _firestore.batch();
+
+      // Remove from admin list
+      batch.update(_groupsRef.doc(groupId), {
+        'adminIds': FieldValue.arrayRemove([memberId]),
+      });
+
+      // Update member's admin status
+      batch.update(
+        _groupsRef.doc(groupId).collection('members').doc(memberId),
+        {'isAdmin': false},
+      );
+
+      await batch.commit();
+
+      _logger.i('Demoted admin $memberId to member in group $groupId');
+      return const RandomGroupSuccess(null);
+    } on FirebaseException catch (e, stack) {
+      _logger.e('Error demoting admin', error: e, stackTrace: stack);
+      final dbException = _mapFirestoreException(e);
+      return RandomGroupFailure(
+        dbException.message,
+        e.code == 'permission-denied'
+            ? RandomGroupErrorType.notAuthorized
+            : RandomGroupErrorType.networkError,
+      );
+    } catch (e, stack) {
+      _logger.e('Error demoting admin', error: e, stackTrace: stack);
+      return RandomGroupFailure(
+        'Failed to demote admin: $e',
+        RandomGroupErrorType.unknown,
+      );
+    }
+  }
+
   /// User leaves a group voluntarily.
   Future<RandomGroupResult<void>> leaveGroup({
     required String groupId,

@@ -784,15 +784,23 @@ class _GroupDetailPageState extends State<GroupDetailPage>
       itemCount: state.groupMembers.length,
       itemBuilder: (context, index) {
         final member = state.groupMembers[index];
+        final isCreator = state.currentGroup?.createdByUserId == _currentUserId;
         return _MemberTile(
           member: member,
           isCurrentUser: _isCurrentUser(member.userId),
           canManage: state.isAdmin && !_isCurrentUser(member.userId),
+          isCreator: isCreator,
           onPromote: () => _promoteMember(member),
+          onDemote: () => _demoteMember(member),
           onRemove: () => _removeMember(member),
         );
       },
     );
+  }
+
+  String? get _currentUserId {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated ? authState.user.id : null;
   }
 
   bool _isCurrentUser(String userId) {
@@ -829,6 +837,43 @@ class _GroupDetailPageState extends State<GroupDetailPage>
                   ));
             },
             child: const Text('Promote'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _demoteMember(GroupMembership member) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+    
+    final bloc = context.read<LocationGroupBloc>();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove Admin'),
+        content: Text(
+          'Remove ${member.userName ?? 'this user'} as admin? They will remain a regular member.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              bloc.add(DemoteFromAdmin(
+                    groupId: widget.groupId,
+                    targetUserId: member.userId,
+                    creatorUserId: authState.user.id,
+                  ));
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('Remove Admin'),
           ),
         ],
       ),
@@ -1114,14 +1159,18 @@ class _MemberTile extends StatelessWidget {
   final GroupMembership member;
   final bool isCurrentUser;
   final bool canManage;
+  final bool isCreator;
   final VoidCallback? onPromote;
+  final VoidCallback? onDemote;
   final VoidCallback? onRemove;
 
   const _MemberTile({
     required this.member,
     required this.isCurrentUser,
     required this.canManage,
+    required this.isCreator,
     this.onPromote,
+    this.onDemote,
     this.onRemove,
   });
 
@@ -1149,6 +1198,9 @@ class _MemberTile extends StatelessWidget {
         // ProfileBloc might not be available; fall back to membership data
       }
     }
+
+    // Show menu if canManage AND (member is not admin, OR current user is creator)
+    final showMenu = canManage && (!member.isAdmin || isCreator);
 
     return ListTile(
       onTap: !isCurrentUser
@@ -1196,12 +1248,15 @@ class _MemberTile extends StatelessWidget {
               ),
             )
           : null,
-      trailing: canManage
+      trailing: showMenu
           ? PopupMenuButton<String>(
               onSelected: (value) {
                 switch (value) {
                   case 'promote':
                     onPromote?.call();
+                    break;
+                  case 'demote':
+                    onDemote?.call();
                     break;
                   case 'remove':
                     onRemove?.call();
@@ -1213,6 +1268,14 @@ class _MemberTile extends StatelessWidget {
                   const PopupMenuItem(
                     value: 'promote',
                     child: Text('Make Admin'),
+                  ),
+                if (member.isAdmin && isCreator)
+                  PopupMenuItem(
+                    value: 'demote',
+                    child: Text(
+                      'Remove Admin',
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
                   ),
                 PopupMenuItem(
                   value: 'remove',

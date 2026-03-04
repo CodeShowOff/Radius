@@ -67,6 +67,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<ApproveAllJoinRequests>(_onApproveAllJoinRequests);
     on<RemoveMember>(_onRemoveMember);
     on<PromoteToAdmin>(_onPromoteToAdmin);
+    on<DemoteFromAdmin>(_onDemoteFromAdmin);
     on<UpdateGroupSettings>(_onUpdateGroupSettings);
     on<ClearGroupError>(_onClearGroupError);
     on<ClearGroupDeletionFlag>(_onClearGroupDeletionFlag);
@@ -734,6 +735,24 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
       groupId: event.groupId,
       targetUserId: event.targetUserId,
       adminUserId: event.adminUserId,
+    );
+
+    if (result is GroupFailure<void>) {
+      emit(state.copyWith(
+        status: GroupBlocStatus.error,
+        errorMessage: result.message,
+      ));
+    }
+  }
+
+  Future<void> _onDemoteFromAdmin(
+    DemoteFromAdmin event,
+    Emitter<LocationGroupState> emit,
+  ) async {
+    final result = await _groupService.demoteFromAdmin(
+      groupId: event.groupId,
+      targetUserId: event.targetUserId,
+      creatorUserId: event.creatorUserId,
     );
 
     if (result is GroupFailure<void>) {

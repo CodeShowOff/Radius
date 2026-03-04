@@ -1301,6 +1301,92 @@ class LocationGroupService {
     }
   }
 
+  /// Demotes an admin back to regular member (creator only).
+  Future<GroupResult<void>> demoteFromAdmin({
+    required String groupId,
+    required String targetUserId,
+    required String creatorUserId,
+  }) async {
+    try {
+      // Verify caller is the group creator
+      final groupDoc = await _groupsRef.doc(groupId).get();
+      if (!groupDoc.exists) {
+        return const GroupFailure(
+          'Group not found',
+          GroupErrorType.notFound,
+        );
+      }
+
+      final groupData = groupDoc.data() as Map<String, dynamic>;
+      if (groupData['createdByUserId'] != creatorUserId) {
+        return const GroupFailure(
+          'Only the group creator can remove admins',
+          GroupErrorType.notAuthorized,
+        );
+      }
+
+      // Verify target is an active admin member
+      final targetMembership = await _getMembership(groupId, targetUserId);
+      if (targetMembership == null || !targetMembership.isActive) {
+        return const GroupFailure(
+          'User is not an active member',
+          GroupErrorType.notFound,
+        );
+      }
+
+      if (!targetMembership.isAdmin) {
+        return const GroupFailure(
+          'User is not an admin',
+          GroupErrorType.invalidData,
+        );
+      }
+
+      // Update both membership and inverse index
+      final batch = _firestore.batch();
+      batch.update(
+        _groupsRef.doc(groupId).collection('members').doc(targetUserId),
+        {
+          'role': 'member',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      // Update inverse index
+      batch.update(
+        _firestore
+            .collection('users')
+            .doc(targetUserId)
+            .collection('group_memberships')
+            .doc(groupId),
+        {
+          'role': 'member',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      await batch.commit();
+
+      _logger.i('User $targetUserId demoted from admin in group $groupId');
+
+      // Send system message
+      try {
+        final displayName = targetMembership.userName ?? 'Someone';
+        await sendSystemMessage(
+          groupId: groupId,
+          text: '$displayName was removed as admin',
+        );
+      } catch (e) {
+        _logger.w('Failed to send demotion system message', error: e);
+      }
+
+      return const GroupSuccess(null);
+    } catch (e) {
+      _logger.e('Error demoting admin', error: e);
+      return const GroupFailure(
+        'Failed to demote admin',
+        GroupErrorType.unknown,
+      );
+    }
+  }
+
   /// Removes a member from the group (admin only).
   Future<GroupResult<void>> removeMember({
     required String groupId,

@@ -207,6 +207,22 @@ class PromoteToAdmin extends RandomGroupEvent {
   List<Object?> get props => [groupId, memberId, adminId];
 }
 
+/// Demote an admin back to regular member (creator only).
+class DemoteFromAdmin extends RandomGroupEvent {
+  final String groupId;
+  final String memberId;
+  final String creatorId;
+
+  const DemoteFromAdmin({
+    required this.groupId,
+    required this.memberId,
+    required this.creatorId,
+  });
+
+  @override
+  List<Object?> get props => [groupId, memberId, creatorId];
+}
+
 /// Leave a group voluntarily.
 class LeaveRandomGroup extends RandomGroupEvent {
   final String groupId;

@@ -355,6 +355,7 @@ class _RandomGroupDetailPageState extends State<RandomGroupDetailPage>
                       members: state.selectedGroupMembers,
                       pendingRequests: state.pendingRequests,
                       isAdmin: isAdmin,
+                      isCreator: state.membershipStatus == UserMembershipStatus.creator,
                       currentUserId: userId,
                     ),
                   ],
@@ -539,6 +540,7 @@ class _MembersTab extends StatelessWidget {
   final List<RandomGroupMember> members;
   final List<JoinRequest> pendingRequests;
   final bool isAdmin;
+  final bool isCreator;
   final String? currentUserId;
 
   const _MembersTab({
@@ -546,6 +548,7 @@ class _MembersTab extends StatelessWidget {
     required this.members,
     required this.pendingRequests,
     required this.isAdmin,
+    required this.isCreator,
     this.currentUserId,
   });
 
@@ -606,6 +609,7 @@ class _MembersTab extends StatelessWidget {
               member: member,
               groupId: groupId,
               isAdmin: isAdmin,
+              isCreator: isCreator,
               isCurrentUser: member.id == currentUserId,
             )),
       ],
@@ -693,18 +697,23 @@ class _MemberTile extends StatelessWidget {
   final RandomGroupMember member;
   final String groupId;
   final bool isAdmin;
+  final bool isCreator;
   final bool isCurrentUser;
 
   const _MemberTile({
     required this.member,
     required this.groupId,
     required this.isAdmin,
+    required this.isCreator,
     required this.isCurrentUser,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Show menu if: admin managing non-admin non-self members, OR creator managing non-self admin members
+    final showMenu = !isCurrentUser && isAdmin && (!member.isAdmin || isCreator);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -758,11 +767,11 @@ class _MemberTile extends StatelessWidget {
         ],
       ),
       subtitle: null,
-      trailing: isAdmin && !isCurrentUser && !member.isAdmin
+      trailing: showMenu
           ? PopupMenuButton<String>(
               onSelected: (value) {
                 final authState = context.read<AuthBloc>().state;
-                final adminId =
+                final currentUserId =
                     authState is AuthAuthenticated ? authState.user.id : '';
 
                 switch (value) {
@@ -770,30 +779,51 @@ class _MemberTile extends StatelessWidget {
                     context.read<RandomGroupBloc>().add(PromoteToAdmin(
                           groupId: groupId,
                           memberId: member.id,
-                          adminId: adminId,
+                          adminId: currentUserId,
+                        ));
+                    break;
+                  case 'demote':
+                    context.read<RandomGroupBloc>().add(DemoteFromAdmin(
+                          groupId: groupId,
+                          memberId: member.id,
+                          creatorId: currentUserId,
                         ));
                     break;
                   case 'remove':
                     context.read<RandomGroupBloc>().add(RemoveRandomGroupMember(
                           groupId: groupId,
                           memberId: member.id,
-                          adminId: adminId,
+                          adminId: currentUserId,
                           memberUsername: member.displayName ?? member.username,
                         ));
                     break;
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'promote',
-                  child: Row(
-                    children: [
-                      Icon(Icons.star),
-                      SizedBox(width: 8),
-                      Text('Make Admin'),
-                    ],
+                if (!member.isAdmin)
+                  const PopupMenuItem(
+                    value: 'promote',
+                    child: Row(
+                      children: [
+                        Icon(Icons.star),
+                        SizedBox(width: 8),
+                        Text('Make Admin'),
+                      ],
+                    ),
                   ),
-                ),
+                if (member.isAdmin && isCreator)
+                  PopupMenuItem(
+                    value: 'demote',
+                    child: Row(
+                      children: [
+                        Icon(Icons.star_border,
+                            color: theme.colorScheme.error),
+                        const SizedBox(width: 8),
+                        Text('Remove Admin',
+                            style: TextStyle(color: theme.colorScheme.error)),
+                      ],
+                    ),
+                  ),
                 PopupMenuItem(
                   value: 'remove',
                   child: Row(
