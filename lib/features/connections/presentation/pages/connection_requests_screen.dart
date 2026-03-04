@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/routes.dart';
 import '../bloc/connection_bloc.dart';
 import '../widgets/connection_request_card.dart';
 
@@ -182,6 +184,15 @@ class _ReceivedRequestsTab extends StatelessWidget {
                 request: request,
                 isIncoming: true,
                 isLoading: isLoading,
+                onTap: () {
+                  context.push(
+                    Routes.userProfileWith(request.senderId),
+                    extra: {
+                      'displayName': request.senderDisplayName,
+                      'photoUrl': request.senderPhotoUrl,
+                    },
+                  );
+                },
                 onAccept: () {
                   context.read<ConnectionBloc>().add(
                         ConnectionAcceptRequest(request.id),
@@ -267,6 +278,15 @@ class _SentRequestsTab extends StatelessWidget {
                 request: request,
                 isIncoming: false,
                 isLoading: isLoading,
+                onTap: () {
+                  context.push(
+                    Routes.userProfileWith(request.receiverId),
+                    extra: {
+                      'displayName': request.receiverDisplayName,
+                      'photoUrl': request.receiverPhotoUrl,
+                    },
+                  );
+                },
                 onCancel: () {
                   _confirmCancel(context, request.id);
                 },
