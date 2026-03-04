@@ -317,6 +317,19 @@ class ConnectionService {
           'respondedAt': Timestamp.fromDate(now),
         });
 
+        // Increment connectionCount on both users' profile docs
+        final profilesRef = _firestore.collection('profiles');
+        transaction.set(
+          profilesRef.doc(request.senderId),
+          {'connectionCount': FieldValue.increment(1)},
+          SetOptions(merge: true),
+        );
+        transaction.set(
+          profilesRef.doc(request.receiverId),
+          {'connectionCount': FieldValue.increment(1)},
+          SetOptions(merge: true),
+        );
+
         _logger.i(
             'Connection accepted: ${request.senderId} <-> ${request.receiverId}');
         return ConnectionSuccess(connection.toEntity());
@@ -468,6 +481,23 @@ class ConnectionService {
         'updatedAt': Timestamp.fromDate(DateTime.now()),
       });
 
+      // Decrement connectionCount on both users' profile docs
+      if (connection.status == ConnectionStatus.connected) {
+        final profilesRef = _firestore.collection('profiles');
+        final batch = _firestore.batch();
+        batch.set(
+          profilesRef.doc(connection.userId1),
+          {'connectionCount': FieldValue.increment(-1)},
+          SetOptions(merge: true),
+        );
+        batch.set(
+          profilesRef.doc(connection.userId2),
+          {'connectionCount': FieldValue.increment(-1)},
+          SetOptions(merge: true),
+        );
+        await batch.commit();
+      }
+
       _logger.i('Connection removed: $connectionId');
       return const ConnectionSuccess(null);
     } catch (e, stack) {
@@ -506,11 +536,29 @@ class ConnectionService {
       final connectionDoc = await _connectionsRef.doc(connectionId).get();
 
       if (connectionDoc.exists) {
+        final wasConnected = (connectionDoc.data()?['status'] as String?) ==
+            ConnectionStatus.connected.name;
+
         batch.update(_connectionsRef.doc(connectionId), {
           'status': ConnectionStatus.blocked.name,
           'blockedBy': blockerId,
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         });
+
+        // Decrement connectionCount if the connection was active
+        if (wasConnected) {
+          final profilesRef = _firestore.collection('profiles');
+          batch.set(
+            profilesRef.doc(blockerId),
+            {'connectionCount': FieldValue.increment(-1)},
+            SetOptions(merge: true),
+          );
+          batch.set(
+            profilesRef.doc(blockedId),
+            {'connectionCount': FieldValue.increment(-1)},
+            SetOptions(merge: true),
+          );
+        }
       }
 
       // Cancel any pending requests

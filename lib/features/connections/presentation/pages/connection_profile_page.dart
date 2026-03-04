@@ -7,8 +7,6 @@ import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../nearby_help/data/nearby_help_service.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
-import '../../data/connection_service.dart';
-import '../../domain/entities/connection.dart';
 import '../../domain/entities/connection_request.dart';
 import '../bloc/connection_bloc.dart';
 import '../bloc/discovery_bloc.dart';
@@ -113,6 +111,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           'gender': gender,
           'isOnline': isOnline,
           'lastSeen': lastSeen,
+          'connectionCount': (doc['connectionCount'] as int?) ?? 0,
         };
       }
 
@@ -415,16 +414,9 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              StreamBuilder<List<Connection>>(
-                stream: getIt<ConnectionService>()
-                    .getConnectionsStream(widget.otherUserId),
-                builder: (context, snapshot) {
-                  final count = snapshot.data?.length ?? 0;
-                  return _StatItem(
-                    label: 'Connections',
-                    value: count.toString(),
-                  );
-                },
+              _StatItem(
+                label: 'Connections',
+                value: (_profile?['connectionCount'] ?? 0).toString(),
               ),
               StreamBuilder<int>(
                 stream: getIt<NearbyHelpService>()
@@ -440,37 +432,6 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
             ],
           ),
           const SizedBox(height: 24),
-          // Profile Fields
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ProfileField(
-                    icon: Icons.mood,
-                    label: 'Vibe',
-                    value: vibe,
-                  ),
-                  const Divider(height: 24),
-                  _ProfileField(
-                    icon: Icons.sentiment_satisfied_alt,
-                    label: 'Mood',
-                    value: mood,
-                  ),
-                  const Divider(height: 24),
-                  _ProfileField(
-                    icon: Icons.person_outline,
-                    label: 'Gender',
-                    value: gender,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
           BlocConsumer<DiscoveryBloc, DiscoveryState>(
             listenWhen: (prev, curr) =>
                 (curr.errorMessage != null &&
@@ -538,6 +499,37 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                 },
               );
             },
+          ),
+          const SizedBox(height: 24),
+          // Profile Fields
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ProfileField(
+                    icon: Icons.mood,
+                    label: 'Vibe',
+                    value: vibe,
+                  ),
+                  const Divider(height: 24),
+                  _ProfileField(
+                    icon: Icons.sentiment_satisfied_alt,
+                    label: 'Mood',
+                    value: mood,
+                  ),
+                  const Divider(height: 24),
+                  _ProfileField(
+                    icon: Icons.person_outline,
+                    label: 'Gender',
+                    value: gender,
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
