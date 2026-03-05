@@ -318,8 +318,8 @@ class ConnectionService {
         });
 
         // Increment connectionCount on current user's profile doc.
-        // The other user's count is updated by the onConnectionStatusChanged
-        // Cloud Function trigger.
+        // The other user's count is updated by the onConnectionCreated /
+        // onConnectionStatusChanged Cloud Function triggers.
         transaction.set(
           _firestore.collection('profiles').doc(currentUserId),
           {'connectionCount': FieldValue.increment(1)},

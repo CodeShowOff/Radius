@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserProfileUpdated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onUserProfileUpdated = exports.onConnectionCreated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2500,6 +2500,42 @@ exports.onConnectionStatusChanged = (0, firestore_1.onDocumentUpdated)({
     }
     catch (error) {
         firebase_functions_1.logger.error("Error updating connectionCount:", error);
+    }
+});
+// =============================================================================
+// CONNECTION CREATED — Increment sender's connectionCount
+// =============================================================================
+/**
+ * Firestore trigger that increments the sender's `profiles/{userId}.connectionCount`
+ * when a new connection document is created with status "connected".
+ *
+ * The client increments the acceptor's count directly. This trigger handles
+ * the sender (initiatedBy), whose profile the client cannot write to due to
+ * security rules.
+ *
+ * This is needed because `onDocumentUpdated` does not fire on document
+ * creation — only on subsequent updates.
+ */
+exports.onConnectionCreated = (0, firestore_1.onDocumentCreated)({
+    document: "connections/{connectionId}",
+    region: "asia-south1",
+}, async (event) => {
+    const data = event.data?.data();
+    if (!data)
+        return;
+    const status = data.status;
+    if (status !== "connected")
+        return;
+    const initiatedBy = data.initiatedBy;
+    if (!initiatedBy)
+        return;
+    const db = admin.firestore();
+    try {
+        await db.collection("profiles").doc(initiatedBy).set({ connectionCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+        firebase_functions_1.logger.log(`Incremented connectionCount for ${initiatedBy} (new connection created)`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error("Error updating connectionCount on connection created:", error);
     }
 });
 // =============================================================================

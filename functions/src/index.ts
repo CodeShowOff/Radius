@@ -2934,6 +2934,51 @@ export const onConnectionStatusChanged = onDocumentUpdated(
 );
 
 // =============================================================================
+// CONNECTION CREATED — Increment sender's connectionCount
+// =============================================================================
+
+/**
+ * Firestore trigger that increments the sender's `profiles/{userId}.connectionCount`
+ * when a new connection document is created with status "connected".
+ *
+ * The client increments the acceptor's count directly. This trigger handles
+ * the sender (initiatedBy), whose profile the client cannot write to due to
+ * security rules.
+ *
+ * This is needed because `onDocumentUpdated` does not fire on document
+ * creation — only on subsequent updates.
+ */
+export const onConnectionCreated = onDocumentCreated(
+  {
+    document: "connections/{connectionId}",
+    region: "asia-south1",
+  },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const status = data.status as string;
+    if (status !== "connected") return;
+
+    const initiatedBy = data.initiatedBy as string | undefined;
+    if (!initiatedBy) return;
+
+    const db = admin.firestore();
+    try {
+      await db.collection("profiles").doc(initiatedBy).set(
+        {connectionCount: admin.firestore.FieldValue.increment(1)},
+        {merge: true}
+      );
+      logger.log(
+        `Incremented connectionCount for ${initiatedBy} (new connection created)`
+      );
+    } catch (error) {
+      logger.error("Error updating connectionCount on connection created:", error);
+    }
+  }
+);
+
+// =============================================================================
 // PROFILE UPDATE - Propagate displayName/photoUrl to conversations
 // =============================================================================
 

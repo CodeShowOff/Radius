@@ -809,7 +809,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Find people nearby and connect with them\nto start messaging.',
+              'Connect with people to start messaging.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
               ),

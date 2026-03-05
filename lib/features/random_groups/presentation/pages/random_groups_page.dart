@@ -394,7 +394,7 @@ class _EmptyGroupsView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'You haven\'t joined any random groups yet.\nDiscover groups to connect with people worldwide.',
+              'You haven\'t joined any random groups yet.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
