@@ -108,6 +108,23 @@ class VideoCallService {
     }
   }
 
+  /// Updates the offer in Firestore (used for ICE restart).
+  Future<void> updateOffer({
+    required String callId,
+    required Map<String, dynamic> offer,
+  }) async {
+    try {
+      await _callsRef.doc(callId).update({
+        'offer': offer,
+        'status': CallStatus.connecting.toFirestore(),
+      });
+      _logger.d('Updated offer for ICE restart: $callId');
+    } catch (e, st) {
+      _logger.e('Failed to update offer', error: e, stackTrace: st);
+      rethrow;
+    }
+  }
+
   /// Declines an incoming call.
   Future<void> declineCall(String callId) async {
     try {

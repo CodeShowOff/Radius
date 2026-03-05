@@ -36,6 +36,12 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
   /// Stored once on first ICE connection; not regenerated on re-emits.
   DateTime? _connectedAt;
 
+  /// Number of ICE restart attempts made for the current call.
+  int _iceRestartAttempts = 0;
+
+  /// Maximum ICE restart attempts before giving up.
+  static const int _maxIceRestartAttempts = 2;
+
   /// Timer for temporary ICE disconnection before tearing down.
   Timer? _disconnectTimer;
 
@@ -471,6 +477,40 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
       isCameraOff: _webRtcService.isCameraOff,
       connectedAt: _connectedAt!,
     ));
+
+    // If remote stream isn't available yet, schedule rechecks.
+    // The onTrack callback may fire slightly after ICE connects,
+    // or the _ensureRemoteStream fallback may need time.
+    if (_webRtcService.remoteStream == null) {
+      _scheduleRemoteStreamRecheck();
+    }
+  }
+
+  /// Periodically rechecks for the remote stream if it wasn't
+  /// available when ICE first connected.
+  void _scheduleRemoteStreamRecheck() {
+    var attempts = 0;
+    const maxAttempts = 10;
+    const interval = Duration(milliseconds: 500);
+
+    void check() {
+      if (isClosed || _webRtcService.isDisposed) return;
+      attempts++;
+
+      if (_webRtcService.remoteStream != null) {
+        _logger.d('Remote stream appeared after $attempts recheck(s)');
+        add(const _RemoteStreamReceived());
+        return;
+      }
+
+      if (attempts < maxAttempts) {
+        Future.delayed(interval, check);
+      } else {
+        _logger.w('Remote stream not available after $maxAttempts rechecks');
+      }
+    }
+
+    Future.delayed(interval, check);
   }
 
   /// Handles a remote stream being received/updated.
@@ -556,6 +596,7 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _webRtcService.onConnected = () {
       if (isClosed) return;
       _iceConnected = true;
+      _iceRestartAttempts = 0; // Reset on successful connection
       _disconnectTimer?.cancel();
       _disconnectTimer = null;
       add(const _WebRtcConnected());
@@ -568,7 +609,12 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
 
     _webRtcService.onDisconnected = () {
       if (isClosed) return;
-      add(const _WebRtcDisconnected());
+      // On ICE failure, attempt restart before giving up
+      if (!_iceConnected && _iceRestartAttempts < _maxIceRestartAttempts) {
+        _attemptIceRestart();
+      } else {
+        add(const _WebRtcDisconnected());
+      }
     };
   }
 
@@ -602,11 +648,36 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
     _iceCandidateSub?.cancel();
     _iceCandidateSub = null;
     _iceConnected = false;
+    _iceRestartAttempts = 0;
     _connectedAt = null;
     _currentCallId = '';
     _otherUserName = '';
     _otherUserPhotoUrl = null;
     await _webRtcService.dispose();
+  }
+
+  /// Attempts an ICE restart by creating a new offer and updating Firestore.
+  Future<void> _attemptIceRestart() async {
+    _iceRestartAttempts++;
+    _logger.w(
+      'ICE failed — attempting restart ($_iceRestartAttempts/$_maxIceRestartAttempts)',
+    );
+
+    final offer = await _webRtcService.restartIce();
+    if (offer == null || _currentCallId.isEmpty) {
+      add(const _WebRtcDisconnected());
+      return;
+    }
+
+    try {
+      await _callService.updateOffer(
+        callId: _currentCallId,
+        offer: {'type': offer.type, 'sdp': offer.sdp},
+      );
+    } catch (e) {
+      _logger.e('Failed to push ICE restart offer: $e');
+      add(const _WebRtcDisconnected());
+    }
   }
 
   @override

@@ -55,14 +55,40 @@ class WebRtcService {
   //  ICE Server Configuration
   // ════════════════════════════════════════════════════════════════════
 
-  /// Default ICE servers — Google's free STUN servers.
-  /// Sufficient for ~85% of P2P connections.
+  /// Default ICE servers — STUN + TURN for reliable connectivity.
+  ///
+  /// STUN alone covers ~85% of P2P connections. TURN relay servers
+  /// are required for peers behind symmetric NATs or restrictive
+  /// firewalls (common on mobile carrier networks).
   static const List<Map<String, dynamic>> _defaultIceServers = [
     {
       'urls': [
         'stun:stun.l.google.com:19302',
         'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302',
       ],
+    },
+    {
+      'urls': 'turn:openrelay.metered.ca:80',
+      'username': 'openrelayproject',
+      'credential': 'openrelayproject',
+    },
+    {
+      'urls': 'turn:openrelay.metered.ca:443',
+      'username': 'openrelayproject',
+      'credential': 'openrelayproject',
+    },
+    {
+      'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
+      'username': 'openrelayproject',
+      'credential': 'openrelayproject',
+    },
+    {
+      'urls': 'turns:openrelay.metered.ca:443',
+      'username': 'openrelayproject',
+      'credential': 'openrelayproject',
     },
   ];
 
@@ -87,6 +113,7 @@ class WebRtcService {
     final config = {
       'iceServers': iceServers ?? _defaultIceServers,
       'sdpSemantics': 'unified-plan',
+      'iceCandidatePoolSize': 1,
     };
 
     _peerConnection = await createPeerConnection(config);
@@ -104,6 +131,9 @@ class WebRtcService {
       switch (state) {
         case RTCIceConnectionState.RTCIceConnectionStateConnected:
         case RTCIceConnectionState.RTCIceConnectionStateCompleted:
+          // Actively query for remote stream — onTrack can be unreliable
+          // on some devices/flutter_webrtc versions.
+          _ensureRemoteStream();
           onConnected?.call();
           break;
         case RTCIceConnectionState.RTCIceConnectionStateDisconnected:
@@ -124,14 +154,19 @@ class WebRtcService {
       if (event.streams.isNotEmpty) {
         _remoteStream = event.streams.first;
         onRemoteStream?.call(_remoteStream!);
-      } else {
+      } else if (_remoteStream != null) {
         // Unified-plan may deliver tracks without associated streams.
-        // Add the track to the existing remote stream or log a warning.
-        _logger.w('Remote track has no associated streams');
-        if (_remoteStream != null) {
-          _remoteStream!.addTrack(event.track);
-          onRemoteStream?.call(_remoteStream!);
-        }
+        _logger.w('Remote track has no associated streams, adding to existing');
+        _remoteStream!.addTrack(event.track);
+        onRemoteStream?.call(_remoteStream!);
+      } else {
+        // No existing remote stream — create one for this orphan track.
+        _logger.w('Remote track has no streams and no existing remote stream, creating one');
+        createLocalMediaStream('remote_ontrack').then((stream) {
+          stream.addTrack(event.track);
+          _remoteStream = stream;
+          onRemoteStream?.call(stream);
+        });
       }
     };
 
@@ -161,6 +196,43 @@ class WebRtcService {
     }
 
     _logger.d('WebRTC initialized with local stream');
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  Remote Stream Fallback
+  // ════════════════════════════════════════════════════════════════════
+
+  /// Actively queries the peer connection for remote streams/receivers.
+  ///
+  /// Fallback for when [onTrack]/[onAddStream] callbacks don't fire
+  /// (known issue on some devices with flutter_webrtc).
+  void _ensureRemoteStream() {
+    if (_remoteStream != null || _peerConnection == null || _isDisposed) return;
+
+    // Try legacy getRemoteStreams() — matches our onAddStream fallback.
+    final streams = _peerConnection!.getRemoteStreams();
+    if (streams.isNotEmpty) {
+      _logger.d('Remote stream found via getRemoteStreams fallback');
+      _remoteStream = streams.first;
+      onRemoteStream?.call(_remoteStream!);
+      return;
+    }
+
+    // If still null, schedule a delayed retry — remote tracks may
+    // arrive slightly after ICE connects.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (_remoteStream != null || _peerConnection == null || _isDisposed) {
+        return;
+      }
+      final retryStreams = _peerConnection!.getRemoteStreams();
+      if (retryStreams.isNotEmpty) {
+        _logger.d('Remote stream found via delayed getRemoteStreams fallback');
+        _remoteStream = retryStreams.first;
+        onRemoteStream?.call(_remoteStream!);
+      } else {
+        _logger.w('No remote streams found after delayed retry');
+      }
+    });
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -203,6 +275,25 @@ class WebRtcService {
       await _peerConnection?.addCandidate(candidate);
     } catch (e) {
       _logger.w('Failed to add ICE candidate: $e');
+    }
+  }
+
+  /// Attempts an ICE restart to recover a failed connection.
+  ///
+  /// Returns the new offer SDP, or `null` if restart is not possible.
+  Future<RTCSessionDescription?> restartIce() async {
+    if (_peerConnection == null || _isDisposed) return null;
+
+    _logger.d('Attempting ICE restart');
+    try {
+      final offer = await _peerConnection!.createOffer({
+        'iceRestart': true,
+      });
+      await _peerConnection!.setLocalDescription(offer);
+      return offer;
+    } catch (e) {
+      _logger.e('ICE restart failed: $e');
+      return null;
     }
   }
 
