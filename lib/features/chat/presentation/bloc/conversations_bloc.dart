@@ -33,6 +33,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     on<ConversationsDelete>(_onDelete);
     on<ConversationsClear>(_onClear);
     on<ConversationsMuteToggle>(_onMuteToggle);
+    on<ConversationsReset>(_onReset);
     on<_ConversationsUpdated>(_onUpdated);
   }
 
@@ -360,6 +361,15 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
         errorMessage: 'Failed to update mute settings',
       ));
     }
+  }
+
+  Future<void> _onReset(
+    ConversationsReset event,
+    Emitter<ConversationsState> emit,
+  ) async {
+    await _conversationsSubscription?.cancel();
+    _conversationsSubscription = null;
+    emit(const ConversationsState());
   }
 
   @override

@@ -369,10 +369,23 @@ class RealTimeDataManager {
   }
 
   /// Clean up when user signs out.
+  ///
+  /// CRITICAL: This cancels all Firestore stream subscriptions in blocs
+  /// BEFORE Firebase Auth signs out, preventing PERMISSION_DENIED errors.
   Future<void> signOut() async {
     _logger.i('Signing out from RealTimeDataManager');
 
-    // Dispose presence service first (sets user offline)
+    // Cancel all Firestore stream subscriptions FIRST, before auth sign-out.
+    // These blocs hold active Firestore listeners that will throw
+    // PERMISSION_DENIED if the auth token is revoked while they're active.
+    _connectionBloc.add(const ConnectionReset());
+    _discoveryBloc.add(const DiscoveryReset());
+    _conversationsBloc.add(const ConversationsReset());
+    _locationGroupBloc.add(const ResetGroupState());
+    _nearbyGroupBloc.add(const ResetNearbyGroupState());
+    _randomGroupBloc.add(const ResetRandomGroupState());
+
+    // Dispose presence service (sets user offline)
     try {
       await _presenceService?.dispose();
     } catch (e) {
@@ -386,6 +399,7 @@ class RealTimeDataManager {
 
     _currentUserId = null;
     _isInitialized = false;
+    _isInitializing = false;
     await _reconnectionSubscription?.cancel();
     _reconnectionSubscription = null;
   }

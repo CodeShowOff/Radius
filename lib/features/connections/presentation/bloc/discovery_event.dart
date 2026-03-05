@@ -116,6 +116,12 @@ class DiscoveryCheckUsername extends DiscoveryEvent {
   List<Object?> get props => [username, currentUserId];
 }
 
+/// Reset discovery state and cancel all active Firestore streams.
+/// Used during sign-out to prevent PERMISSION_DENIED errors.
+class DiscoveryReset extends DiscoveryEvent {
+  const DiscoveryReset();
+}
+
 /// Internal: received requests updated from stream.
 class _DiscoveryReceivedRequestsUpdated extends DiscoveryEvent {
   final List<ConnectionRequest> requests;

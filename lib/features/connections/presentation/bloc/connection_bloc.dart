@@ -43,6 +43,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     on<ConnectionRemove>(_onRemove);
     on<ConnectionBlockUser>(_onBlockUser);
     on<ConnectionUnblockUser>(_onUnblockUser);
+    on<ConnectionReset>(_onReset);
     on<ConnectionForceRefresh>(_onForceRefresh);
     on<ConnectionCheckState>(_onCheckState);
     on<_ConnectionsUpdated>(_onConnectionsUpdated);
@@ -174,6 +175,20 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
         errorMessage: 'Failed to initialize connections. Please try again.',
       ));
     }
+  }
+
+  Future<void> _onReset(
+    ConnectionReset event,
+    Emitter<ConnectionBlocState> emit,
+  ) async {
+    await _connectionsSubscription?.cancel();
+    await _receivedRequestsSubscription?.cancel();
+    await _sentRequestsSubscription?.cancel();
+    _connectionsSubscription = null;
+    _receivedRequestsSubscription = null;
+    _sentRequestsSubscription = null;
+    _currentUserId = null;
+    emit(const ConnectionBlocState());
   }
 
   Future<void> _onSendRequest(

@@ -135,6 +135,12 @@ class _SentRequestsUpdated extends ConnectionEvent {
   List<Object?> get props => [requests];
 }
 
+/// Reset connection state and cancel all active Firestore streams.
+/// Used during sign-out to prevent PERMISSION_DENIED errors.
+class ConnectionReset extends ConnectionEvent {
+  const ConnectionReset();
+}
+
 /// Force refresh connections by re-subscribing to Firestore streams.
 /// Use when streams may have gone stale or after external actions
 /// (e.g., discovery accept) that should be reflected immediately.

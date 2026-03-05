@@ -94,6 +94,12 @@ final class ConversationsSetActiveChat extends ConversationsEvent {
   List<Object?> get props => [conversationId];
 }
 
+/// Reset conversations state and cancel all active Firestore streams.
+/// Used during sign-out to prevent PERMISSION_DENIED errors.
+final class ConversationsReset extends ConversationsEvent {
+  const ConversationsReset();
+}
+
 /// Internal event: Conversations updated from stream.
 final class _ConversationsUpdated extends ConversationsEvent {
   final List<Conversation> conversations;

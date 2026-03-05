@@ -50,6 +50,7 @@ class DiscoveryBloc extends Bloc<DiscoveryEvent, DiscoveryState> {
     on<DiscoveryCancelRequest>(_onCancelRequest);
     on<DiscoverySetUsername>(_onSetUsername);
     on<DiscoveryCheckUsername>(_onCheckUsername);
+    on<DiscoveryReset>(_onReset);
     on<_DiscoveryReceivedRequestsUpdated>(_onReceivedUpdated);
     on<_DiscoverySentRequestsUpdated>(_onSentUpdated);
   }
@@ -522,6 +523,18 @@ class DiscoveryBloc extends Bloc<DiscoveryEvent, DiscoveryState> {
         usernameError: 'Failed to check username.',
       ));
     }
+  }
+
+  Future<void> _onReset(
+    DiscoveryReset event,
+    Emitter<DiscoveryState> emit,
+  ) async {
+    await _receivedSubscription?.cancel();
+    await _sentSubscription?.cancel();
+    _receivedSubscription = null;
+    _sentSubscription = null;
+    _currentUserId = null;
+    emit(const DiscoveryState());
   }
 
   @override

@@ -323,17 +323,31 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
         if (rtdm.isInitialized) rtdm.signOut();
       } catch (_) {}
 
-      // Clean up nearby groups BLoC to prevent stale subscriptions on account switch
+      // Cancel all Firestore streams to prevent PERMISSION_DENIED errors
+      try {
+        getIt<ConnectionBloc>().add(const ConnectionReset());
+      } catch (_) {}
+
+      try {
+        getIt<DiscoveryBloc>().add(const DiscoveryReset());
+      } catch (_) {}
+
+      try {
+        getIt<ConversationsBloc>().add(const ConversationsReset());
+      } catch (_) {}
+
+      try {
+        getIt<LocationGroupBloc>().add(const ResetGroupState());
+      } catch (_) {}
+
       try {
         getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState());
       } catch (_) {}
 
-      // Clean up random groups BLoC to prevent stale subscriptions on account switch
       try {
         getIt<RandomGroupBloc>().add(const ResetRandomGroupState());
       } catch (_) {}
 
-      // Clean up random chat BLoC to prevent stale subscriptions on account switch
       try {
         getIt<RandomChatBloc>().add(const ResetRandomChatState());
       } catch (_) {}
