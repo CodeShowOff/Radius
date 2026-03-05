@@ -537,10 +537,21 @@ class DiscoveryBloc extends Bloc<DiscoveryEvent, DiscoveryState> {
     emit(const DiscoveryState());
   }
 
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [DiscoveryReset] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() async {
+    await _receivedSubscription?.cancel();
+    await _sentSubscription?.cancel();
+    _receivedSubscription = null;
+    _sentSubscription = null;
+  }
+
   @override
-  Future<void> close() {
-    _receivedSubscription?.cancel();
-    _sentSubscription?.cancel();
+  Future<void> close() async {
+    await cancelSubscriptions();
     return super.close();
   }
 }

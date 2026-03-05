@@ -198,9 +198,18 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     );
   }
 
+  /// Directly cancels the Firestore profile stream subscription.
+  ///
+  /// Call this during sign-out to prevent PERMISSION_DENIED errors
+  /// on the users/{uid} document listener.
+  Future<void> cancelSubscriptions() async {
+    await _profileSubscription?.cancel();
+    _profileSubscription = null;
+  }
+
   @override
-  Future<void> close() {
-    _profileSubscription?.cancel();
+  Future<void> close() async {
+    await cancelSubscriptions();
     return super.close();
   }
 }

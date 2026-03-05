@@ -531,6 +531,7 @@ class NearbyHelpService {
 
   /// Streams the count of successfully completed help requests where the user was the helper.
   Stream<int> streamHelpsDoneCount(String userId) {
+    if (userId.isEmpty) return Stream.value(0);
     return _helpRequestsRef
         .where('helperUserId', isEqualTo: userId)
         .where('status', isEqualTo: 'RESOLVED')

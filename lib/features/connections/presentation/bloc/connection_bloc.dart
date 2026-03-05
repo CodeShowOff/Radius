@@ -760,11 +760,23 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     ));
   }
 
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [ConnectionReset] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() async {
+    await _connectionsSubscription?.cancel();
+    await _receivedRequestsSubscription?.cancel();
+    await _sentRequestsSubscription?.cancel();
+    _connectionsSubscription = null;
+    _receivedRequestsSubscription = null;
+    _sentRequestsSubscription = null;
+  }
+
   @override
-  Future<void> close() {
-    _connectionsSubscription?.cancel();
-    _receivedRequestsSubscription?.cancel();
-    _sentRequestsSubscription?.cancel();
+  Future<void> close() async {
+    await cancelSubscriptions();
     return super.close();
   }
 }

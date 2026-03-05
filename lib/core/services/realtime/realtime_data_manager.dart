@@ -372,12 +372,27 @@ class RealTimeDataManager {
   ///
   /// CRITICAL: This cancels all Firestore stream subscriptions in blocs
   /// BEFORE Firebase Auth signs out, preventing PERMISSION_DENIED errors.
+  ///
+  /// Uses direct cancelSubscriptions() calls instead of BLoC events (add())
+  /// because events are processed asynchronously on the event queue and may
+  /// not complete before Firebase Auth revokes the token.
   Future<void> signOut() async {
     _logger.i('Signing out from RealTimeDataManager');
 
-    // Cancel all Firestore stream subscriptions FIRST, before auth sign-out.
-    // These blocs hold active Firestore listeners that will throw
-    // PERMISSION_DENIED if the auth token is revoked while they're active.
+    // Cancel all Firestore stream subscriptions DIRECTLY and AWAIT them.
+    // This ensures all listeners are truly cancelled before auth sign-out,
+    // preventing PERMISSION_DENIED errors from orphaned listeners.
+    await Future.wait([
+      _connectionBloc.cancelSubscriptions(),
+      _discoveryBloc.cancelSubscriptions(),
+      _conversationsBloc.cancelSubscriptions(),
+      _locationGroupBloc.cancelSubscriptions(),
+      _nearbyGroupBloc.cancelSubscriptions(),
+      _randomGroupBloc.cancelSubscriptions(),
+      _profileBloc.cancelSubscriptions(),
+    ]);
+
+    // Now dispatch reset events to clear BLoC state (safe since listeners are gone)
     _connectionBloc.add(const ConnectionReset());
     _discoveryBloc.add(const DiscoveryReset());
     _conversationsBloc.add(const ConversationsReset());

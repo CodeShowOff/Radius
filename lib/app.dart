@@ -323,34 +323,25 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
         if (rtdm.isInitialized) rtdm.signOut();
       } catch (_) {}
 
-      // Cancel all Firestore streams to prevent PERMISSION_DENIED errors
-      try {
-        getIt<ConnectionBloc>().add(const ConnectionReset());
-      } catch (_) {}
+      // Cancel all Firestore stream subscriptions directly (not via events)
+      // to prevent PERMISSION_DENIED errors from orphaned listeners.
+      // These are fire-and-forget since auth is already revoked in this fallback path.
+      try { getIt<ConnectionBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<DiscoveryBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<ConversationsBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<ProfileBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<LocationGroupBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<NearbyGroupBloc>().cancelSubscriptions(); } catch (_) {}
+      try { getIt<RandomGroupBloc>().cancelSubscriptions(); } catch (_) {}
 
-      try {
-        getIt<DiscoveryBloc>().add(const DiscoveryReset());
-      } catch (_) {}
-
-      try {
-        getIt<ConversationsBloc>().add(const ConversationsReset());
-      } catch (_) {}
-
-      try {
-        getIt<LocationGroupBloc>().add(const ResetGroupState());
-      } catch (_) {}
-
-      try {
-        getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState());
-      } catch (_) {}
-
-      try {
-        getIt<RandomGroupBloc>().add(const ResetRandomGroupState());
-      } catch (_) {}
-
-      try {
-        getIt<RandomChatBloc>().add(const ResetRandomChatState());
-      } catch (_) {}
+      // Dispatch reset events to clear BLoC state
+      try { getIt<ConnectionBloc>().add(const ConnectionReset()); } catch (_) {}
+      try { getIt<DiscoveryBloc>().add(const DiscoveryReset()); } catch (_) {}
+      try { getIt<ConversationsBloc>().add(const ConversationsReset()); } catch (_) {}
+      try { getIt<LocationGroupBloc>().add(const ResetGroupState()); } catch (_) {}
+      try { getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState()); } catch (_) {}
+      try { getIt<RandomGroupBloc>().add(const ResetRandomGroupState()); } catch (_) {}
+      try { getIt<RandomChatBloc>().add(const ResetRandomChatState()); } catch (_) {}
     }
     _currentUserId = null;
   }

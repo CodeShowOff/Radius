@@ -845,6 +845,13 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     _unreadCountsSubscription = null;
   }
 
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [ResetRandomGroupState] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() => _cleanupAllSubscriptions();
+
   @override
   Future<void> close() async {
     await _cleanupAllSubscriptions();

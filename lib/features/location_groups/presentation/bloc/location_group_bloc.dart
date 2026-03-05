@@ -926,6 +926,13 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     _userPendingRequestSubscription = null;
   }
 
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [ResetGroupState] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() => _cancelSubscriptions();
+
   @override
   Future<void> close() async {
     await _cancelSubscriptions();

@@ -372,10 +372,19 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     emit(const ConversationsState());
   }
 
-  @override
-  Future<void> close() async {
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [ConversationsReset] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() async {
     await _conversationsSubscription?.cancel();
     _conversationsSubscription = null;
+  }
+
+  @override
+  Future<void> close() async {
+    await cancelSubscriptions();
     return super.close();
   }
 }

@@ -579,9 +579,16 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _currentCreatorId = null;
   }
 
+  /// Directly cancels all Firestore stream subscriptions.
+  ///
+  /// Unlike [ResetNearbyGroupState] (which goes through the async event queue),
+  /// this method cancels subscriptions immediately and can be awaited.
+  /// Use this during sign-out to prevent PERMISSION_DENIED errors.
+  Future<void> cancelSubscriptions() => _cleanupAllSubscriptions();
+
   @override
-  Future<void> close() {
-    _cleanupAllSubscriptions();
+  Future<void> close() async {
+    await _cleanupAllSubscriptions();
     return super.close();
   }
 }
