@@ -20,8 +20,10 @@ class VideoChatSettingsService {
       } else {
         _box = await Hive.openBox(_boxName);
       }
-    } catch (_) {
+    } catch (e) {
       // Hive may not be initialized in some environments; fall back to memory.
+      // ignore: avoid_print
+      print('VideoChatSettingsService: Hive init failed, using memory fallback: $e');
     }
   }
 

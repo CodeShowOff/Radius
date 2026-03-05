@@ -52,7 +52,7 @@ class VideoCallService {
         'status': CallStatus.ringing.toFirestore(),
         'offer': offer,
         'answer': null,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': FieldValue.serverTimestamp(),
         'answeredAt': null,
         'endedAt': null,
       };
@@ -75,7 +75,7 @@ class VideoCallService {
       await _callsRef.doc(callId).update({
         'answer': answer,
         'status': CallStatus.connecting.toFirestore(),
-        'answeredAt': DateTime.now().toIso8601String(),
+        'answeredAt': FieldValue.serverTimestamp(),
       });
       _logger.d('Video call answered: $callId');
     } catch (e, st) {
@@ -100,7 +100,7 @@ class VideoCallService {
     try {
       await _callsRef.doc(callId).update({
         'status': CallStatus.ended.toFirestore(),
-        'endedAt': DateTime.now().toIso8601String(),
+        'endedAt': FieldValue.serverTimestamp(),
       });
       _logger.d('Video call ended: $callId');
     } catch (e, st) {
@@ -130,7 +130,7 @@ class VideoCallService {
     try {
       await _callsRef.doc(callId).update({
         'status': CallStatus.declined.toFirestore(),
-        'endedAt': DateTime.now().toIso8601String(),
+        'endedAt': FieldValue.serverTimestamp(),
       });
       _logger.d('Video call declined: $callId');
     } catch (e, st) {

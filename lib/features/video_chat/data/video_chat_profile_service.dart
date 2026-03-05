@@ -70,9 +70,17 @@ class VideoChatProfileService {
     try {
       final ref = _storage.ref('video_chat_photos/$userId/profile.jpg');
       final file = File(filePath);
+      final ext = filePath.split('.').last.toLowerCase();
+      final contentType = switch (ext) {
+        'png' => 'image/png',
+        'heic' || 'heif' => 'image/heic',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        _ => 'image/jpeg',
+      };
       final uploadTask = ref.putFile(
         file,
-        SettableMetadata(contentType: 'image/jpeg'),
+        SettableMetadata(contentType: contentType),
       );
       final snapshot = await uploadTask;
       final url = await snapshot.ref.getDownloadURL();

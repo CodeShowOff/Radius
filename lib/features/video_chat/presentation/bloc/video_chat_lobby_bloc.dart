@@ -155,9 +155,14 @@ class VideoChatLobbyBloc
     Emitter<VideoChatLobbyState> emit,
   ) async {
     if (_existingProfile != null) {
-      await _profileService.deleteProfilePhoto(_userId);
-      _existingProfile = _existingProfile!.copyWith(clearPhotoUrl: true);
-      await _profileService.saveProfile(_existingProfile!);
+      try {
+        await _profileService.deleteProfilePhoto(_userId);
+        _existingProfile = _existingProfile!.copyWith(clearPhotoUrl: true);
+        await _profileService.saveProfile(_existingProfile!);
+      } catch (e, st) {
+        _logger.e('Failed to remove profile photo', error: e, stackTrace: st);
+        emit(VideoChatLobbyError(message: 'Failed to remove photo: $e'));
+      }
     }
   }
 

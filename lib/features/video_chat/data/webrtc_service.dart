@@ -239,22 +239,21 @@ class WebRtcService {
   // ════════════════════════════════════════════════════════════════════
 
   /// Dumps transceiver and receiver info for debugging video track issues.
-  void _dumpPeerConnectionInfo() {
+  Future<void> _dumpPeerConnectionInfo() async {
     try {
-      final transceivers = _peerConnection?.getTransceivers();
-      _logger.d('Transceivers count: ${transceivers?.length}');
-      for (final t in transceivers ?? <RTCRtpTransceiver>[]) {
+      final transceivers = await _peerConnection?.getTransceivers() ?? <RTCRtpTransceiver>[];
+      _logger.d('Transceivers count: ${transceivers.length}');
+      for (final t in transceivers) {
         _logger.d(
           'transceiver mid=${t.mid}, '
           'kind=${t.receiver.track?.kind}, '
-          'direction=${t.direction}, '
           'trackEnabled=${t.receiver.track?.enabled}',
         );
       }
 
-      final receivers = _peerConnection?.receivers;
-      _logger.d('Receivers count: ${receivers?.length}');
-      for (final r in receivers ?? <RTCRtpReceiver>[]) {
+      final receivers = await _peerConnection?.getReceivers() ?? <RTCRtpReceiver>[];
+      _logger.d('Receivers count: ${receivers.length}');
+      for (final r in receivers) {
         _logger.d(
           'receiver track: kind=${r.track?.kind}, '
           'id=${r.track?.id}, enabled=${r.track?.enabled}',
