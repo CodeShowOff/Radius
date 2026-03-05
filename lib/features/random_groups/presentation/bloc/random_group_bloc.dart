@@ -823,25 +823,25 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
   /// Clean up all active subscriptions.
   Future<void> _cleanupAllSubscriptions() async {
-    await _activeGroupsSubscription?.cancel();
+    _activeGroupsSubscription?.cancel();
     _activeGroupsSubscription = null;
     
-    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription?.cancel();
     _userGroupsSubscription = null;
     
-    await _userCreatedGroupsSubscription?.cancel();
+    _userCreatedGroupsSubscription?.cancel();
     _userCreatedGroupsSubscription = null;
     
-    await _groupDetailsSubscription?.cancel();
+    _groupDetailsSubscription?.cancel();
     _groupDetailsSubscription = null;
     
-    await _pendingRequestsSubscription?.cancel();
+    _pendingRequestsSubscription?.cancel();
     _pendingRequestsSubscription = null;
     
-    await _membersSubscription?.cancel();
+    _membersSubscription?.cancel();
     _membersSubscription = null;
 
-    await _unreadCountsSubscription?.cancel();
+    _unreadCountsSubscription?.cancel();
     _unreadCountsSubscription = null;
   }
 

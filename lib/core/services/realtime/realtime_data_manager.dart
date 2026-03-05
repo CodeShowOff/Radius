@@ -379,18 +379,16 @@ class RealTimeDataManager {
   Future<void> signOut() async {
     _logger.i('Signing out from RealTimeDataManager');
 
-    // Cancel all Firestore stream subscriptions DIRECTLY and AWAIT them.
-    // This ensures all listeners are truly cancelled before auth sign-out,
-    // preventing PERMISSION_DENIED errors from orphaned listeners.
-    await Future.wait([
-      _connectionBloc.cancelSubscriptions(),
-      _discoveryBloc.cancelSubscriptions(),
-      _conversationsBloc.cancelSubscriptions(),
-      _locationGroupBloc.cancelSubscriptions(),
-      _nearbyGroupBloc.cancelSubscriptions(),
-      _randomGroupBloc.cancelSubscriptions(),
-      _profileBloc.cancelSubscriptions(),
-    ]);
+    // Cancel all Firestore stream subscriptions DIRECTLY.
+    // These now complete instantly (fire-and-forget .cancel(), null refs)
+    // so no timeout is needed.
+    _connectionBloc.cancelSubscriptions();
+    _discoveryBloc.cancelSubscriptions();
+    _conversationsBloc.cancelSubscriptions();
+    _locationGroupBloc.cancelSubscriptions();
+    _nearbyGroupBloc.cancelSubscriptions();
+    _randomGroupBloc.cancelSubscriptions();
+    _profileBloc.cancelSubscriptions();
 
     // Now dispatch reset events to clear BLoC state (safe since listeners are gone)
     _connectionBloc.add(const ConnectionReset());
@@ -400,11 +398,13 @@ class RealTimeDataManager {
     _nearbyGroupBloc.add(const ResetNearbyGroupState());
     _randomGroupBloc.add(const ResetRandomGroupState());
 
-    // Dispose presence service (sets user offline)
+    // Dispose presence service (sets user offline).
+    // Timeout prevents sign-out from hanging if RTDB/Firestore operations
+    // inside dispose() never complete (e.g., poor network conditions).
     try {
-      await _presenceService?.dispose();
+      await _presenceService?.dispose().timeout(const Duration(seconds: 5));
     } catch (e) {
-      _logger.e('Error disposing presence service', error: e);
+      _logger.e('Error or timeout disposing presence service', error: e);
     }
 
     // Clear chat preload tracking
@@ -415,7 +415,7 @@ class RealTimeDataManager {
     _currentUserId = null;
     _isInitialized = false;
     _isInitializing = false;
-    await _reconnectionSubscription?.cancel();
+    _reconnectionSubscription?.cancel();
     _reconnectionSubscription = null;
   }
 

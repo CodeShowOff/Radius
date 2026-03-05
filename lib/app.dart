@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
-import 'core/services/app_data_clearer.dart';
 import 'core/services/bluetooth/bluetooth_service.dart';
 import 'core/services/notifications/notification_service.dart';
 import 'core/services/realtime/realtime_data_manager.dart';
@@ -17,7 +16,6 @@ import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/bloc/discovery_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
-import 'features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import 'features/random_chat/presentation/bloc/random_chat_bloc.dart';
@@ -307,40 +305,30 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     }
 
     // Signed out or unauthenticated.
+    // Skip cleanup if AuthLoading — the AuthBloc._onSignOutRequested is still
+    // running its own cleanup. Only run fallback cleanup on final states.
+    if (state is AuthLoading) return;
+
     if (_currentUserId != null) {
-      // NOTE: RealTimeDataManager.signOut() and NotificationService.removeToken()
-      // are called in AuthBloc._onSignOutRequested BEFORE Firebase Auth signs out,
-      // so they still have valid credentials. Here we only do best-effort fallback
-      // cleanup for edge cases (e.g. token expiry, forced sign-out).
-
-      // Clear ALL local app data (equivalent to Android's "Clear Data")
-      // so no stale data from the previous account remains.
-      AppDataClearer.clearAllAppData();
-
-      // Best-effort cleanup — these may already be done by AuthBloc
+      // Normal sign-out path: AuthBloc._onSignOutRequested already called
+      // RealTimeDataManager.signOut() (which cancelled all 7 bloc subscriptions,
+      // dispatched reset events, disposed presence, and cleared preload caches),
+      // then removed FCM token and cleared local data — all BEFORE Firebase Auth
+      // signed out. So by the time we get here, cleanup is already complete.
+      //
+      // Edge-case fallback: If we arrive here WITHOUT AuthBloc having run
+      // (e.g., token expiry or forced server-side sign-out), RTDM will still
+      // be in "initialized" state. In that case, do a best-effort cleanup.
+      // Note: auth is already revoked in this path, so Firestore writes will
+      // fail — but cancelling local subscriptions and resetting state is safe.
       try {
         final rtdm = getIt<RealTimeDataManager>();
-        if (rtdm.isInitialized) rtdm.signOut();
+        if (rtdm.isInitialized) {
+          rtdm.signOut(); // fire-and-forget; auth is already gone
+        }
       } catch (_) {}
 
-      // Cancel all Firestore stream subscriptions directly (not via events)
-      // to prevent PERMISSION_DENIED errors from orphaned listeners.
-      // These are fire-and-forget since auth is already revoked in this fallback path.
-      try { getIt<ConnectionBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<DiscoveryBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<ConversationsBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<ProfileBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<LocationGroupBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<NearbyGroupBloc>().cancelSubscriptions(); } catch (_) {}
-      try { getIt<RandomGroupBloc>().cancelSubscriptions(); } catch (_) {}
-
-      // Dispatch reset events to clear BLoC state
-      try { getIt<ConnectionBloc>().add(const ConnectionReset()); } catch (_) {}
-      try { getIt<DiscoveryBloc>().add(const DiscoveryReset()); } catch (_) {}
-      try { getIt<ConversationsBloc>().add(const ConversationsReset()); } catch (_) {}
-      try { getIt<LocationGroupBloc>().add(const ResetGroupState()); } catch (_) {}
-      try { getIt<NearbyGroupBloc>().add(const ResetNearbyGroupState()); } catch (_) {}
-      try { getIt<RandomGroupBloc>().add(const ResetRandomGroupState()); } catch (_) {}
+      // Reset RandomChatBloc (not managed by RTDM)
       try { getIt<RandomChatBloc>().add(const ResetRandomChatState()); } catch (_) {}
     }
     _currentUserId = null;

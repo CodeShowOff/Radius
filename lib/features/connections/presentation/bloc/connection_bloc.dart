@@ -181,11 +181,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
     ConnectionReset event,
     Emitter<ConnectionBlocState> emit,
   ) async {
-    await _connectionsSubscription?.cancel();
-    await _receivedRequestsSubscription?.cancel();
-    await _sentRequestsSubscription?.cancel();
+    _connectionsSubscription?.cancel();
     _connectionsSubscription = null;
+    _receivedRequestsSubscription?.cancel();
     _receivedRequestsSubscription = null;
+    _sentRequestsSubscription?.cancel();
     _sentRequestsSubscription = null;
     _currentUserId = null;
     emit(const ConnectionBlocState());
@@ -766,11 +766,14 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionBlocState> {
   /// this method cancels subscriptions immediately and can be awaited.
   /// Use this during sign-out to prevent PERMISSION_DENIED errors.
   Future<void> cancelSubscriptions() async {
-    await _connectionsSubscription?.cancel();
-    await _receivedRequestsSubscription?.cancel();
-    await _sentRequestsSubscription?.cancel();
+    // Fire-and-forget: don't await .cancel() because Firestore's native
+    // listener cleanup can hang indefinitely on poor network. Nulling the
+    // reference immediately prevents the reset handler from re-cancelling.
+    _connectionsSubscription?.cancel();
     _connectionsSubscription = null;
+    _receivedRequestsSubscription?.cancel();
     _receivedRequestsSubscription = null;
+    _sentRequestsSubscription?.cancel();
     _sentRequestsSubscription = null;
   }
 

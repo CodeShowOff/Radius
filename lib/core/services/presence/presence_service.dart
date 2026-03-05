@@ -370,20 +370,30 @@ class PresenceService with WidgetsBindingObserver {
     // Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
 
-    // Set offline before disposing
-    await _setOffline();
-    await _syncOfflineToFirestore();
+    // Set offline before disposing (timeout to prevent hanging on RTDB write)
+    try {
+      await _setOffline().timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Best-effort: RTDB onDisconnect handler is the fallback
+    }
 
-    // Cancel all subscriptions
-    await _connectedSubscription?.cancel();
+    // Firestore sync is best-effort and non-critical — the RTDB onDisconnect
+    // handler is the source of truth for presence. Don't await this because
+    // the Firestore .get() query defaults to server-first and can hang
+    // indefinitely on slow/unreachable networks, blocking sign-out.
+    _syncOfflineToFirestore();
+
+    // Cancel all subscriptions (fire-and-forget to avoid hanging)
+    _connectedSubscription?.cancel();
+    _connectedSubscription = null;
     for (final sub in _presenceSubscriptions.values) {
-      await sub.cancel();
+      sub.cancel();
     }
     _presenceSubscriptions.clear();
     _presenceCache.clear();
 
     // Cancel onDisconnect if we're manually going offline
-    await _userStatusRef?.onDisconnect().cancel();
+    _userStatusRef?.onDisconnect().cancel();
 
     _currentUserId = null;
     _userStatusRef = null;

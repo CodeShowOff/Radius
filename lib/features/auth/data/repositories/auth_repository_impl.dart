@@ -379,10 +379,11 @@ class AuthRepositoryImpl implements IAuthRepository {
   Future<Either<Failure, void>> signOut() async {
     try {
       // Record device session logout before signing out (need uid while still authenticated)
+      // Fire-and-forget: collectDeviceSession makes an HTTP call (up to 5s timeout)
+      // so we must NOT await it — otherwise sign-out hangs.
       final uid = _authService.currentUser?.uid;
       if (uid != null) {
-        // Await the write so it completes before auth token is revoked
-        await _recordDeviceSessionAsync(uid, 'logout');
+        _recordDeviceSession(uid, 'logout');
       }
 
       await _authService.signOut();
@@ -641,20 +642,6 @@ class AuthRepositoryImpl implements IAuthRepository {
         // Silently swallow – crash reporting should handle this in production
       }
     });
-  }
-
-  /// Awaitable version of [_recordDeviceSession] for use during sign-out,
-  /// where the write must complete before the auth token is revoked.
-  Future<void> _recordDeviceSessionAsync(String userId, String sessionType) async {
-    try {
-      final session = await _deviceInfoService.collectDeviceSession(
-        userId,
-        sessionType,
-      );
-      await _deviceSessionRepository.saveDeviceSession(session);
-    } catch (_) {
-      // Silently swallow – crash reporting should handle this in production
-    }
   }
 
   /// Users whose profile migration has already been attempted this session.

@@ -557,20 +557,21 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _scanCycleTimer?.cancel();
     _scanCycleTimer = null;
 
-    // Cancel stream subscriptions
-    await _activeGroupsSubscription?.cancel();
+    // Cancel stream subscriptions (fire-and-forget — don't await .cancel()
+    // because Firestore/BLE native cleanup can hang indefinitely).
+    _activeGroupsSubscription?.cancel();
     _activeGroupsSubscription = null;
     
-    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription?.cancel();
     _userGroupsSubscription = null;
     
-    await _membersSubscription?.cancel();
+    _membersSubscription?.cancel();
     _membersSubscription = null;
     
-    await _nearbyUsersSubscription?.cancel();
+    _nearbyUsersSubscription?.cancel();
     _nearbyUsersSubscription = null;
     
-    await _proximityStateSubscription?.cancel();
+    _proximityStateSubscription?.cancel();
     _proximityStateSubscription = null;
 
     // Clear scanning state

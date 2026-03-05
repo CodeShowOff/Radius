@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/di/injection.dart';
@@ -210,27 +211,47 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await getIt<RealTimeDataManager>().signOut();
       } catch (_) {}
 
-      // 2. Remove notification token (needs Firestore write access)
+      // 2. Remove notification token (needs Firestore write access).
+      // Timeout: Firestore write + FCM deleteToken can hang on poor network.
       try {
-        await getIt<NotificationService>().removeToken();
+        await getIt<NotificationService>().removeToken()
+            .timeout(const Duration(seconds: 5));
       } catch (_) {}
 
       // 3. Clear ALL local app data (equivalent to Android's "Clear Data").
       // This wipes Hive boxes, in-memory caches, image cache, temp files,
       // and notifications so the next session starts completely fresh.
+      // Timeout: file I/O can stall on locked handles or slow storage.
       try {
-        await AppDataClearer.clearAllAppData();
+        await AppDataClearer.clearAllAppData()
+            .timeout(const Duration(seconds: 10));
       } catch (_) {
         // Data clearing is best-effort; don't block sign-out if it fails.
       }
 
-      // === NOW SIGN OUT (Firebase Auth) ===
-      final result = await _authRepository.signOut();
+      // === DISABLE FIRESTORE NETWORK ===
+      // The BLoC cancelSubscriptions() calls above fire-and-forget the
+      // native Firestore listener detachment. Those native listeners may
+      // still be active when Firebase Auth revokes the token, causing
+      // PERMISSION_DENIED errors. Disabling the network layer prevents
+      // ANY Firestore communication, so lingering listeners silently
+      // receive cache-only events (or nothing) instead of server errors.
+      await FirebaseFirestore.instance.disableNetwork();
 
-      result.fold(
-        (failure) => emit(AuthError(failure.message)),
-        (_) => emit(AuthUnauthenticated()),
-      );
+      // === NOW SIGN OUT (Firebase Auth) ===
+      try {
+        final result = await _authRepository.signOut();
+
+        result.fold(
+          (failure) => emit(AuthError(failure.message)),
+          (_) => emit(AuthUnauthenticated()),
+        );
+      } finally {
+        // Re-enable Firestore network for the next login session.
+        // Must always run — even if signOut throws — to avoid leaving
+        // Firestore permanently offline.
+        await FirebaseFirestore.instance.enableNetwork();
+      }
     } finally {
       _operationInProgress = false;
     }

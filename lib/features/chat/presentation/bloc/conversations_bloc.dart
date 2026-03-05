@@ -367,7 +367,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
     ConversationsReset event,
     Emitter<ConversationsState> emit,
   ) async {
-    await _conversationsSubscription?.cancel();
+    _conversationsSubscription?.cancel();
     _conversationsSubscription = null;
     emit(const ConversationsState());
   }
@@ -378,7 +378,7 @@ class ConversationsBloc extends Bloc<ConversationsEvent, ConversationsState> {
   /// this method cancels subscriptions immediately and can be awaited.
   /// Use this during sign-out to prevent PERMISSION_DENIED errors.
   Future<void> cancelSubscriptions() async {
-    await _conversationsSubscription?.cancel();
+    _conversationsSubscription?.cancel();
     _conversationsSubscription = null;
   }
 

@@ -910,19 +910,19 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   }
 
   Future<void> _cancelSubscriptions() async {
-    await _groupsSubscription?.cancel();
+    _groupsSubscription?.cancel();
     _groupsSubscription = null;
-    await _userGroupsSubscription?.cancel();
+    _userGroupsSubscription?.cancel();
     _userGroupsSubscription = null;
-    await _userGroupMembershipsSubscription?.cancel();
+    _userGroupMembershipsSubscription?.cancel();
     _userGroupMembershipsSubscription = null;
-    await _currentGroupSubscription?.cancel();
+    _currentGroupSubscription?.cancel();
     _currentGroupSubscription = null;
-    await _membersSubscription?.cancel();
+    _membersSubscription?.cancel();
     _membersSubscription = null;
-    await _requestsSubscription?.cancel();
+    _requestsSubscription?.cancel();
     _requestsSubscription = null;
-    await _userPendingRequestSubscription?.cancel();
+    _userPendingRequestSubscription?.cancel();
     _userPendingRequestSubscription = null;
   }
 

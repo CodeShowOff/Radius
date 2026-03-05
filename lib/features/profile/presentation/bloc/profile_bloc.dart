@@ -203,7 +203,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   /// Call this during sign-out to prevent PERMISSION_DENIED errors
   /// on the users/{uid} document listener.
   Future<void> cancelSubscriptions() async {
-    await _profileSubscription?.cancel();
+    _profileSubscription?.cancel();
     _profileSubscription = null;
   }
 

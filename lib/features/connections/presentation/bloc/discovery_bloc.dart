@@ -529,9 +529,9 @@ class DiscoveryBloc extends Bloc<DiscoveryEvent, DiscoveryState> {
     DiscoveryReset event,
     Emitter<DiscoveryState> emit,
   ) async {
-    await _receivedSubscription?.cancel();
-    await _sentSubscription?.cancel();
+    _receivedSubscription?.cancel();
     _receivedSubscription = null;
+    _sentSubscription?.cancel();
     _sentSubscription = null;
     _currentUserId = null;
     emit(const DiscoveryState());
@@ -543,9 +543,9 @@ class DiscoveryBloc extends Bloc<DiscoveryEvent, DiscoveryState> {
   /// this method cancels subscriptions immediately and can be awaited.
   /// Use this during sign-out to prevent PERMISSION_DENIED errors.
   Future<void> cancelSubscriptions() async {
-    await _receivedSubscription?.cancel();
-    await _sentSubscription?.cancel();
+    _receivedSubscription?.cancel();
     _receivedSubscription = null;
+    _sentSubscription?.cancel();
     _sentSubscription = null;
   }
 
