@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onUserProfileUpdated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2500,6 +2500,126 @@ exports.onConnectionStatusChanged = (0, firestore_1.onDocumentUpdated)({
     }
     catch (error) {
         firebase_functions_1.logger.error("Error updating connectionCount:", error);
+    }
+});
+// =============================================================================
+// PROFILE UPDATE - Propagate displayName/photoUrl to conversations
+// =============================================================================
+/**
+ * Cloud Function triggered when a user document is updated.
+ *
+ * When displayName or photoUrl changes, propagates the update to:
+ * 1. All conversation documents (participantInfo & participantNames)
+ * 2. Location group member docs (userName & userPhotoUrl)
+ * 3. Nearby group member docs (displayName & photoUrl)
+ * 4. Random group member docs (displayName & photoUrl)
+ *
+ * This keeps all denormalized user info in sync across the app.
+ * Historical messages are intentionally NOT updated (showing the name
+ * at send time is standard chat behavior).
+ */
+exports.onUserProfileUpdated = (0, firestore_1.onDocumentUpdated)({
+    document: "users/{userId}",
+    region: "asia-south1",
+}, async (event) => {
+    const userId = event.params.userId;
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after)
+        return;
+    const oldDisplayName = before.displayName;
+    const newDisplayName = after.displayName;
+    const oldPhotoUrl = before.photoUrl;
+    const newPhotoUrl = after.photoUrl;
+    // Only proceed if displayName or photoUrl actually changed
+    if (oldDisplayName === newDisplayName && oldPhotoUrl === newPhotoUrl) {
+        return;
+    }
+    const nameChanged = oldDisplayName !== newDisplayName && !!newDisplayName;
+    const photoChanged = oldPhotoUrl !== newPhotoUrl;
+    firebase_functions_1.logger.log(`Profile updated for ${userId}: ` +
+        `name: "${oldDisplayName}" → "${newDisplayName}", ` +
+        `photo: "${oldPhotoUrl}" → "${newPhotoUrl}"`);
+    const db = admin.firestore();
+    const BATCH_LIMIT = 500;
+    let batch = db.batch();
+    let operationCount = 0;
+    /** Commits the current batch if it has operations, and resets it. */
+    const flushBatch = async () => {
+        if (operationCount > 0) {
+            await batch.commit();
+            batch = db.batch();
+            operationCount = 0;
+        }
+    };
+    /** Adds an update to the batch and flushes if the limit is reached. */
+    const addToBatch = async (ref, data) => {
+        batch.update(ref, data);
+        operationCount++;
+        if (operationCount >= BATCH_LIMIT) {
+            await flushBatch();
+        }
+    };
+    try {
+        // --- 1. Update conversations (1:1 chats) ---
+        const conversationsSnapshot = await db
+            .collection("conversations")
+            .where("participantIds", "array-contains", userId)
+            .select()
+            .get();
+        for (const doc of conversationsSnapshot.docs) {
+            const updateData = {};
+            if (nameChanged) {
+                updateData[`participantInfo.${userId}.displayName`] = newDisplayName;
+                updateData[`participantNames.${userId}`] = newDisplayName;
+            }
+            if (photoChanged) {
+                updateData[`participantInfo.${userId}.photoUrl`] = newPhotoUrl ?? null;
+            }
+            if (Object.keys(updateData).length > 0) {
+                await addToBatch(doc.ref, updateData);
+            }
+        }
+        // --- 2. Update group member docs across all group types ---
+        // Uses collectionGroup query (indexed on members.userId COLLECTION_GROUP)
+        // to find all member docs for this user in one query.
+        // Location groups use: userName, userPhotoUrl
+        // Nearby/Random groups use: displayName, photoUrl
+        const groupMembersSnapshot = await db
+            .collectionGroup("members")
+            .where("userId", "==", userId)
+            .get();
+        for (const doc of groupMembersSnapshot.docs) {
+            const parentCollection = doc.ref.parent.parent?.parent.id;
+            const updateData = {};
+            if (parentCollection === "location_groups") {
+                if (nameChanged)
+                    updateData["userName"] = newDisplayName;
+                if (photoChanged)
+                    updateData["userPhotoUrl"] = newPhotoUrl ?? null;
+            }
+            else if (parentCollection === "nearby_groups" ||
+                parentCollection === "random_groups") {
+                if (nameChanged)
+                    updateData["displayName"] = newDisplayName;
+                if (photoChanged)
+                    updateData["photoUrl"] = newPhotoUrl ?? null;
+            }
+            else {
+                continue; // Skip unrelated "members" subcollections
+            }
+            if (Object.keys(updateData).length > 0) {
+                await addToBatch(doc.ref, updateData);
+            }
+        }
+        // Flush any remaining operations
+        await flushBatch();
+        firebase_functions_1.logger.log(`Profile propagation complete for ${userId}: ` +
+            `${conversationsSnapshot.size} conversations, ` +
+            `${groupMembersSnapshot.size} group memberships`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error propagating profile update for ${userId}:`, error);
     }
 });
 //# sourceMappingURL=index.js.map
