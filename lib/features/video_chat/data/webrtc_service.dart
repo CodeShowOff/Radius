@@ -20,6 +20,10 @@ class WebRtcService {
   bool _isCameraOff = false;
   bool _isDisposed = false;
 
+  /// Tracks that arrived via onTrack without an associated stream,
+  /// queued until the fallback remote MediaStream is created.
+  final List<MediaStreamTrack> _pendingRemoteTracks = [];
+
   /// Called when a new ICE candidate is generated locally.
   /// The caller must send this to the remote peer via Firestore.
   void Function(RTCIceCandidate candidate)? onIceCandidate;
@@ -134,6 +138,7 @@ class WebRtcService {
           // Actively query for remote stream — onTrack can be unreliable
           // on some devices/flutter_webrtc versions.
           _ensureRemoteStream();
+          _dumpPeerConnectionInfo();
           onConnected?.call();
           break;
         case RTCIceConnectionState.RTCIceConnectionStateDisconnected:
@@ -150,9 +155,17 @@ class WebRtcService {
     };
 
     _peerConnection!.onTrack = (event) {
-      _logger.d('Remote track received: ${event.track.kind}');
+      _logger.d(
+        'onTrack: kind=${event.track.kind}, id=${event.track.id}, '
+        'enabled=${event.track.enabled}, streams=${event.streams.length}',
+      );
       if (event.streams.isNotEmpty) {
         _remoteStream = event.streams.first;
+        _logger.d(
+          'onTrack -> stream.id=${_remoteStream!.id}, '
+          'videoTracks=${_remoteStream!.getVideoTracks().length}, '
+          'audioTracks=${_remoteStream!.getAudioTracks().length}',
+        );
         onRemoteStream?.call(_remoteStream!);
       } else if (_remoteStream != null) {
         // Unified-plan may deliver tracks without associated streams.
@@ -160,20 +173,32 @@ class WebRtcService {
         _remoteStream!.addTrack(event.track);
         onRemoteStream?.call(_remoteStream!);
       } else {
-        // No existing remote stream — create one for this orphan track.
-        _logger.w('Remote track has no streams and no existing remote stream, creating one');
-        createLocalMediaStream('remote_ontrack').then((stream) {
-          stream.addTrack(event.track);
-          _remoteStream = stream;
-          onRemoteStream?.call(stream);
-        });
+        // No existing remote stream — buffer the track.
+        // If this is the first orphan, kick off async stream creation;
+        // subsequent orphans are added once the stream is ready.
+        _pendingRemoteTracks.add(event.track);
+        if (_pendingRemoteTracks.length == 1) {
+          _logger.w('No streams in onTrack, creating fallback remote stream');
+          createLocalMediaStream('remote_ontrack').then((stream) {
+            for (final t in _pendingRemoteTracks) {
+              stream.addTrack(t);
+            }
+            _pendingRemoteTracks.clear();
+            _remoteStream = stream;
+            onRemoteStream?.call(stream);
+          });
+        }
       }
     };
 
     // Fallback for platforms/configurations where onTrack doesn't
     // provide streams (deprecated in spec but reliable in flutter_webrtc).
     _peerConnection!.onAddStream = (stream) {
-      _logger.d('Remote stream added (onAddStream fallback): ${stream.id}');
+      _logger.d(
+        'onAddStream: stream.id=${stream.id}, '
+        'videoTracks=${stream.getVideoTracks().length}, '
+        'audioTracks=${stream.getAudioTracks().length}',
+      );
       _remoteStream = stream;
       onRemoteStream?.call(stream);
     };
@@ -190,6 +215,17 @@ class WebRtcService {
           : false,
     });
 
+    // Validate that we actually got a video track.
+    final videoTracks = _localStream!.getVideoTracks();
+    if (enableVideo && videoTracks.isEmpty) {
+      _logger.w(
+        'getUserMedia returned no video tracks — camera may have been '
+        'denied or is unavailable. Remote side will receive audio only.',
+      );
+    } else if (enableVideo) {
+      _logger.d('Local video track: ${videoTracks.first.label}');
+    }
+
     // Add local tracks to the peer connection
     for (final track in _localStream!.getTracks()) {
       await _peerConnection!.addTrack(track, _localStream!);
@@ -202,6 +238,33 @@ class WebRtcService {
   //  Remote Stream Fallback
   // ════════════════════════════════════════════════════════════════════
 
+  /// Dumps transceiver and receiver info for debugging video track issues.
+  void _dumpPeerConnectionInfo() {
+    try {
+      final transceivers = _peerConnection?.getTransceivers();
+      _logger.d('Transceivers count: ${transceivers?.length}');
+      for (final t in transceivers ?? <RTCRtpTransceiver>[]) {
+        _logger.d(
+          'transceiver mid=${t.mid}, '
+          'kind=${t.receiver.track?.kind}, '
+          'direction=${t.direction}, '
+          'trackEnabled=${t.receiver.track?.enabled}',
+        );
+      }
+
+      final receivers = _peerConnection?.receivers;
+      _logger.d('Receivers count: ${receivers?.length}');
+      for (final r in receivers ?? <RTCRtpReceiver>[]) {
+        _logger.d(
+          'receiver track: kind=${r.track?.kind}, '
+          'id=${r.track?.id}, enabled=${r.track?.enabled}',
+        );
+      }
+    } catch (e) {
+      _logger.w('Failed to dump peer connection info: $e');
+    }
+  }
+
   /// Actively queries the peer connection for remote streams/receivers.
   ///
   /// Fallback for when [onTrack]/[onAddStream] callbacks don't fire
@@ -212,8 +275,12 @@ class WebRtcService {
     // Try legacy getRemoteStreams() — matches our onAddStream fallback.
     final streams = _peerConnection!.getRemoteStreams();
     if (streams.isNotEmpty) {
-      _logger.d('Remote stream found via getRemoteStreams fallback');
       _remoteStream = streams.first;
+      final hasVideo = _remoteStream!.getVideoTracks().isNotEmpty;
+      _logger.d(
+        'Remote stream found via getRemoteStreams fallback '
+        '(hasVideo=$hasVideo)',
+      );
       onRemoteStream?.call(_remoteStream!);
       return;
     }
@@ -226,8 +293,12 @@ class WebRtcService {
       }
       final retryStreams = _peerConnection!.getRemoteStreams();
       if (retryStreams.isNotEmpty) {
-        _logger.d('Remote stream found via delayed getRemoteStreams fallback');
         _remoteStream = retryStreams.first;
+        final hasVideo = _remoteStream!.getVideoTracks().isNotEmpty;
+        _logger.d(
+          'Remote stream found via delayed getRemoteStreams fallback '
+          '(hasVideo=$hasVideo)',
+        );
         onRemoteStream?.call(_remoteStream!);
       } else {
         _logger.w('No remote streams found after delayed retry');

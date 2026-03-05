@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -97,6 +98,12 @@ class _VideoCallPageState extends State<VideoCallPage>
     if (stream == null) return;
     _lastRemoteStream = stream;
     if (_renderersReady) {
+      // Force renderer refresh — reassigning the same stream object
+      // reference may not trigger an update on some flutter_webrtc
+      // versions (e.g. when a new track is added to an existing stream).
+      if (_remoteRenderer.srcObject?.id == stream.id) {
+        _remoteRenderer.srcObject = null;
+      }
       _remoteRenderer.srcObject = stream;
       if (mounted) setState(() {});
     } else {
@@ -212,15 +219,46 @@ class _VideoCallPageState extends State<VideoCallPage>
   }
 
   Widget _buildRemoteVideo(VideoCallState state) {
+    final hasSrcObject = _remoteRenderer.srcObject != null;
+    final hasRemoteVideoTrack = hasSrcObject &&
+        _remoteRenderer.srcObject!.getVideoTracks().isNotEmpty;
     final showRenderer =
         (state is VideoCallConnected || state is VideoCallConnecting) &&
-            _remoteRenderer.srcObject != null;
+            hasSrcObject;
 
     if (showRenderer) {
       return Positioned.fill(
-        child: RTCVideoView(
-          _remoteRenderer,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+        child: Stack(
+          children: [
+            RTCVideoView(
+              _remoteRenderer,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            ),
+            // Overlay when connected but no video tracks in stream
+            if (!hasRemoteVideoTrack && state is VideoCallConnected)
+              const Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black87,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam_off, color: Colors.white54, size: 48),
+                        SizedBox(height: 12),
+                        Text(
+                          'No video from other side',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       );
     }

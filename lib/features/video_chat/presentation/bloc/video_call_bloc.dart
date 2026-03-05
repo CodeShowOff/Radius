@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -108,6 +109,7 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
 
       // Create SDP offer
       final offer = await _webRtcService.createOffer();
+      _logger.d('Local offer SDP (truncated): ${offer.sdp?.substring(0, min(200, offer.sdp?.length ?? 0))}');
 
       // Create call document in Firestore
       _currentCallId = await _callService.createCall(
@@ -197,12 +199,17 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
         return;
       }
 
-      // Create answer from the offer
-      final remoteOffer = RTCSessionDescription(
-        call!.offer!['sdp'] as String?,
-        call.offer!['type'] as String?,
-      );
+      // Validate and create answer from the offer
+      final sdp = call!.offer!['sdp'] as String?;
+      final type = call.offer!['type'] as String?;
+      if (sdp == null || type == null) {
+        _logger.e('Invalid offer: missing sdp or type');
+        emit(const VideoCallError(message: 'Invalid call offer data'));
+        return;
+      }
+      final remoteOffer = RTCSessionDescription(sdp, type);
       final answer = await _webRtcService.createAnswer(remoteOffer);
+      _logger.d('Local answer SDP (truncated): ${answer.sdp?.substring(0, min(200, answer.sdp?.length ?? 0))}');
 
       // Send answer to Firestore
       await _callService.answerCall(
@@ -355,11 +362,16 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
         return;
       }
 
-      final remoteOffer = RTCSessionDescription(
-        call.offer!['sdp'] as String?,
-        call.offer!['type'] as String?,
-      );
+      final sdp = call.offer!['sdp'] as String?;
+      final type = call.offer!['type'] as String?;
+      if (sdp == null || type == null) {
+        _logger.e('Invalid offer from match: missing sdp or type');
+        emit(const VideoCallError(message: 'Invalid call offer data'));
+        return;
+      }
+      final remoteOffer = RTCSessionDescription(sdp, type);
       final answer = await _webRtcService.createAnswer(remoteOffer);
+      _logger.d('Local answer SDP (truncated): ${answer.sdp?.substring(0, min(200, answer.sdp?.length ?? 0))}');
 
       await _callService.answerCall(
         callId: _currentCallId,
@@ -400,10 +412,14 @@ class VideoCallBloc extends Bloc<VideoCallEvent, VideoCallState> {
         // Caller receives the answer — set remote description
         if (call.answer != null && state is VideoCallRinging) {
           try {
-            final remoteAnswer = RTCSessionDescription(
-              call.answer!['sdp'] as String?,
-              call.answer!['type'] as String?,
-            );
+            final sdp = call.answer!['sdp'] as String?;
+            final type = call.answer!['type'] as String?;
+            if (sdp == null || type == null) {
+              _logger.e('Invalid answer: missing sdp or type');
+              emit(const VideoCallError(message: 'Invalid call answer data'));
+              return;
+            }
+            final remoteAnswer = RTCSessionDescription(sdp, type);
             await _webRtcService.setRemoteDescription(remoteAnswer);
             emit(VideoCallConnecting(
               callId: _currentCallId,

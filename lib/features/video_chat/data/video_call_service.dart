@@ -169,15 +169,17 @@ class VideoCallService {
     required String callId,
     required String myUserId,
   }) {
+    // Use client-side filtering instead of Firestore != query to avoid
+    // missing candidates when the 'from' field is absent or empty.
     return _callsRef
         .doc(callId)
         .collection('candidates')
-        .where('from', isNotEqualTo: myUserId)
         .snapshots()
         .map((snapshot) {
       return snapshot.docChanges
           .where((change) => change.type == DocumentChangeType.added)
           .map((change) => change.doc.data()!)
+          .where((data) => (data['from'] as String?) != myUserId)
           .toList();
     });
   }
