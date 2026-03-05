@@ -236,22 +236,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // PERMISSION_DENIED errors. Disabling the network layer prevents
       // ANY Firestore communication, so lingering listeners silently
       // receive cache-only events (or nothing) instead of server errors.
+      //
+      // IMPORTANT: enableNetwork() is NOT called here after sign-out.
+      // It is deferred to RealTimeDataManager.initializeForUser() on next
+      // login. Calling enableNetwork() immediately after sign-out caused
+      // a race condition: fire-and-forget listener cancellations hadn't
+      // completed yet, so re-enabling the network resurrected those
+      // orphaned native Firestore listeners which then received
+      // PERMISSION_DENIED errors from the server.
+      // The disabled state is in-memory only and resets on app restart.
       await FirebaseFirestore.instance.disableNetwork();
 
       // === NOW SIGN OUT (Firebase Auth) ===
-      try {
-        final result = await _authRepository.signOut();
+      final result = await _authRepository.signOut();
 
-        result.fold(
-          (failure) => emit(AuthError(failure.message)),
-          (_) => emit(AuthUnauthenticated()),
-        );
-      } finally {
-        // Re-enable Firestore network for the next login session.
-        // Must always run — even if signOut throws — to avoid leaving
-        // Firestore permanently offline.
-        await FirebaseFirestore.instance.enableNetwork();
-      }
+      result.fold(
+        (failure) => emit(AuthError(failure.message)),
+        (_) => emit(AuthUnauthenticated()),
+      );
     } finally {
       _operationInProgress = false;
     }

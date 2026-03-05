@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 
@@ -139,6 +140,16 @@ class RealTimeDataManager {
 
       _logger.i('Initializing RealTimeDataManager for user $userId');
       _currentUserId = userId;
+
+      // Re-enable Firestore network if it was disabled during sign-out.
+      // disableNetwork() is called in AuthBloc._onSignOutRequested to prevent
+      // PERMISSION_DENIED errors from lingering listeners during the sign-out
+      // window. By the time we reach here (next login), all old listeners are
+      // long gone, so it's safe to re-enable. This is idempotent — calling it
+      // when already enabled is a no-op.
+      try {
+        await FirebaseFirestore.instance.enableNetwork();
+      } catch (_) {}
 
       // CRITICAL: Wait for auth token to be ready before starting Firestore streams
       // This prevents race conditions where queries run before token propagation

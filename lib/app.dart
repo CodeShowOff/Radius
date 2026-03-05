@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -360,6 +361,11 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
 
     try {
       locationGroupBloc = context.read<LocationGroupBloc>();
+    } catch (_) {}
+
+    // Re-enable Firestore network if it was disabled during sign-out.
+    try {
+      await FirebaseFirestore.instance.enableNetwork();
     } catch (_) {}
 
     // CRITICAL: Wait for auth token to be ready before starting Firestore streams

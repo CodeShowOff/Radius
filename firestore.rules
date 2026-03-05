@@ -919,12 +919,12 @@ service cloud.firestore {
       // RULE: Users can only read their own device sessions
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // RULE: System creates device sessions during login/register
+      // RULE: System creates device sessions during login/register/logout
       // Users can create their own session records
       allow create: if isAuthenticated()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasAll(['sessionId', 'userId', 'timestamp', 'sessionType'])
-        && request.resource.data.sessionType in ['login', 'register'];
+        && request.resource.data.sessionType in ['login', 'register', 'logout'];
       
       // RULE: No updates or deletes from clients - data integrity for security logs
       allow update, delete: if false;

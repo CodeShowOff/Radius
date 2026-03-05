@@ -378,13 +378,10 @@ class AuthRepositoryImpl implements IAuthRepository {
   @override
   Future<Either<Failure, void>> signOut() async {
     try {
-      // Record device session logout before signing out (need uid while still authenticated)
-      // Fire-and-forget: collectDeviceSession makes an HTTP call (up to 5s timeout)
-      // so we must NOT await it — otherwise sign-out hangs.
-      final uid = _authService.currentUser?.uid;
-      if (uid != null) {
-        _recordDeviceSession(uid, 'logout');
-      }
+      // NOTE: Device session logout recording is handled by AuthBloc BEFORE
+      // Firestore network is disabled. Do NOT record here — this method runs
+      // after disableNetwork(), so Firestore writes would be queued and only
+      // sent after enableNetwork(), by which time auth is already revoked.
 
       await _authService.signOut();
       return const Right(null);
