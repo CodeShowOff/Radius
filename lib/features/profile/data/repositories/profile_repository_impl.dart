@@ -1,4 +1,5 @@
 import 'package:dartz/dartz.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../core/error/failures.dart';
 import '../../../../core/services/firebase/profile_service.dart';
@@ -52,6 +53,16 @@ class ProfileRepositoryImpl implements IProfileRepository {
         );
       } else {
         await _profileService.createProfile(profileModel);
+      }
+
+      // Sync displayName to Firebase Auth so it stays consistent
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && user.displayName != profile.name) {
+          await user.updateDisplayName(profile.name);
+        }
+      } catch (_) {
+        // Best-effort — don't fail profile save if Auth sync fails
       }
 
       return const Right(null);
