@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// - Tapping a URL opens it in the external browser.
 /// - Tapping an email opens the default mail client.
 /// - Links are underlined and use [linkColor].
-class LinkifiedText extends StatelessWidget {
+class LinkifiedText extends StatefulWidget {
   final String text;
   final TextStyle style;
   final Color linkColor;
@@ -26,53 +26,9 @@ class LinkifiedText extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final matches = _linkRegex.allMatches(text).toList();
-    if (matches.isEmpty) {
-      return Text(text, style: style);
-    }
-    return Text.rich(
-      TextSpan(children: _buildSpans(matches)),
-      style: style,
-    );
-  }
+  State<LinkifiedText> createState() => _LinkifiedTextState();
 
-  List<InlineSpan> _buildSpans(List<RegExpMatch> matches) {
-    final spans = <InlineSpan>[];
-    int lastEnd = 0;
-
-    for (final match in matches) {
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
-      }
-
-      final linkText = match.group(0)!;
-      final isEmail = linkText.contains('@') && !linkText.contains('://');
-
-      spans.add(
-        TextSpan(
-          text: linkText,
-          style: TextStyle(
-            color: linkColor,
-            decoration: TextDecoration.underline,
-            decorationColor: linkColor,
-          ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => _openLink(linkText, isEmail),
-        ),
-      );
-
-      lastEnd = match.end;
-    }
-
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastEnd)));
-    }
-
-    return spans;
-  }
-
-  static Future<void> _openLink(String link, bool isEmail) async {
+  static Future<void> openLink(String link, bool isEmail) async {
     try {
       final Uri uri;
       if (isEmail) {
@@ -89,5 +45,73 @@ class LinkifiedText extends StatelessWidget {
     } catch (e) {
       debugPrint('Failed to open link: $e');
     }
+  }
+}
+
+class _LinkifiedTextState extends State<LinkifiedText> {
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  @override
+  void dispose() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Dispose old recognizers before rebuilding
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+
+    final matches = LinkifiedText._linkRegex.allMatches(widget.text).toList();
+    if (matches.isEmpty) {
+      return Text(widget.text, style: widget.style);
+    }
+    return Text.rich(
+      TextSpan(children: _buildSpans(matches)),
+      style: widget.style,
+    );
+  }
+
+  List<InlineSpan> _buildSpans(List<RegExpMatch> matches) {
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: widget.text.substring(lastEnd, match.start)));
+      }
+
+      final linkText = match.group(0)!;
+      final isEmail = linkText.contains('@') && !linkText.contains('://');
+
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () => LinkifiedText.openLink(linkText, isEmail);
+      _recognizers.add(recognizer);
+
+      spans.add(
+        TextSpan(
+          text: linkText,
+          style: TextStyle(
+            color: widget.linkColor,
+            decoration: TextDecoration.underline,
+            decorationColor: widget.linkColor,
+          ),
+          recognizer: recognizer,
+        ),
+      );
+
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < widget.text.length) {
+      spans.add(TextSpan(text: widget.text.substring(lastEnd)));
+    }
+
+    return spans;
   }
 }

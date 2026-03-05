@@ -85,5 +85,13 @@
 	<!-- Google Maps API Key for iOS - injected from Keys.xcconfig -->
 	<key>MAPS_API_KEY_IOS</key>
 	<string>$(MAPS_API_KEY_IOS)</string>
+	
+	<!-- URL schemes for url_launcher (canLaunchUrl) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>mailto</string>
+	</array>
 </dict>
 </plist>
