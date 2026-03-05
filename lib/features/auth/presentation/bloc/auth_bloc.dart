@@ -108,6 +108,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
+      // Re-enable Firestore network if it was disabled during sign-out.
+      // Sign-in needs Firestore to fetch the user profile document.
+      try { await FirebaseFirestore.instance.enableNetwork(); } catch (_) {}
+
       final result = await _authRepository.signInWithEmail(
         email: event.email,
         password: event.password,
@@ -157,6 +161,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
+      // Re-enable Firestore network if it was disabled during sign-out.
+      try { await FirebaseFirestore.instance.enableNetwork(); } catch (_) {}
+
       final result = await _authRepository.signInWithGoogle();
 
       result.fold(
@@ -176,6 +183,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     try {
+      // Re-enable Firestore network if it was disabled during sign-out.
+      try { await FirebaseFirestore.instance.enableNetwork(); } catch (_) {}
+
       final result = await _authRepository.registerWithEmail(
         email: event.email,
         password: event.password,

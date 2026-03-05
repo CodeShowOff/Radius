@@ -193,7 +193,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'You haven\'t joined any location groups yet.\nDiscover groups near you to connect with people in your area.',
+                        'You haven\'t joined any location groups yet.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

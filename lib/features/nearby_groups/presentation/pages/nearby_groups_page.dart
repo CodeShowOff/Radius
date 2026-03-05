@@ -498,7 +498,7 @@ class _EmptyGroupsView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'You haven\'t joined any nearby groups yet.\nDiscover groups around you or create your own.',
+              'You haven\'t joined any nearby groups yet.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
