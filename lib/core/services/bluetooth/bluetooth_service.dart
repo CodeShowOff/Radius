@@ -45,6 +45,11 @@ class BluetoothService {
   String? _lastError;
   String? _currentUsername;
 
+  /// Guards against concurrent permission requests.
+  /// Android only allows one permission dialog at a time; a second request
+  /// gets silently dropped, causing a spurious "denied" result.
+  Completer<bool>? _permissionCompleter;
+
   BluetoothService({
     BlePermissionHandler? permissionHandler,
     BleScanner? scanner,
@@ -170,26 +175,47 @@ class BluetoothService {
   // ============== Permission Handling ==============
 
   /// Checks and requests BLE permissions.
+  ///
+  /// Serializes concurrent calls so only one OS permission dialog is shown
+  /// at a time. Subsequent callers wait for the in-flight request to finish
+  /// and share its result.
   Future<bool> checkAndRequestPermissions() async {
-    final status = await _permissionHandler.checkAndRequestPermissions(
-      needsScan: true,
-      needsAdvertise: true,
-    );
-
-    if (status == BlePermissionStatus.granted) {
-      return true;
+    // If a permission request is already in flight, wait for it.
+    if (_permissionCompleter != null) {
+      return _permissionCompleter!.future;
     }
 
-    if (status == BlePermissionStatus.permanentlyDenied ||
-        status == BlePermissionStatus.permissionDeniedShowSettings) {
+    _permissionCompleter = Completer<bool>();
+
+    try {
+      final status = await _permissionHandler.checkAndRequestPermissions(
+        needsScan: true,
+        needsAdvertise: true,
+      );
+
+      if (status == BlePermissionStatus.granted) {
+        _permissionCompleter!.complete(true);
+        return true;
+      }
+
+      if (status == BlePermissionStatus.permanentlyDenied ||
+          status == BlePermissionStatus.permissionDeniedShowSettings) {
+        _setState(BluetoothServiceState.permissionDenied);
+        _setError('Bluetooth permissions permanently denied');
+        _permissionCompleter!.complete(false);
+        return false;
+      }
+
       _setState(BluetoothServiceState.permissionDenied);
-      _setError('Bluetooth permissions permanently denied');
+      _setError('Bluetooth permissions not granted');
+      _permissionCompleter!.complete(false);
       return false;
+    } catch (e) {
+      _permissionCompleter!.complete(false);
+      rethrow;
+    } finally {
+      _permissionCompleter = null;
     }
-
-    _setState(BluetoothServiceState.permissionDenied);
-    _setError('Bluetooth permissions not granted');
-    return false;
   }
 
   /// Opens app settings for permission management.
