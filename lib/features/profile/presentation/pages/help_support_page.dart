@@ -1064,7 +1064,7 @@ class _UserGuidePage extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.tips_and_updates,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                     size: 32,
                   ),
                   const SizedBox(height: 12),
@@ -1073,7 +1073,7 @@ class _UserGuidePage extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1154,7 +1154,7 @@ class _GuideSection extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
                           ),
                         ),
                       ),

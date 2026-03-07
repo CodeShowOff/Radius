@@ -638,7 +638,7 @@ class _ProfilePhotoSection extends StatelessWidget {
                   ? Icon(
                       Icons.person,
                       size: 60,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
                     )
                   : null,
             ),
@@ -896,12 +896,12 @@ class _VibeSelector extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
-                        .tertiaryContainer,
+                        .primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.mood,
-                    color: Theme.of(context).colorScheme.tertiary,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -1097,7 +1097,7 @@ class _GenderSelector extends StatelessWidget {
                     isLocked ? Icons.lock : Icons.person_outline,
                     color: isLocked
                         ? theme.colorScheme.outline
-                        : theme.colorScheme.primary,
+                        : theme.colorScheme.onPrimaryContainer,
                   ),
                 ),
                 const SizedBox(width: 16),
