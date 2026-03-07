@@ -166,6 +166,15 @@ class _ChatInputState extends State<ChatInput> {
           Navigator.pop(context);
           _pickDocument();
         },
+        onVideoPressed: () {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Video sharing is coming soon!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
       ),
     );
   }
@@ -321,12 +330,14 @@ class AttachmentPicker extends StatelessWidget {
   final VoidCallback? onImagePressed;
   final VoidCallback? onCameraPressed;
   final VoidCallback? onFilePressed;
+  final VoidCallback? onVideoPressed;
 
   const AttachmentPicker({
     super.key,
     this.onImagePressed,
     this.onCameraPressed,
     this.onFilePressed,
+    this.onVideoPressed,
   });
 
   @override
@@ -366,6 +377,13 @@ class AttachmentPicker extends StatelessWidget {
                 color: theme.colorScheme.tertiary,
                 onTap: onFilePressed,
               ),
+              _AttachmentOption(
+                icon: Icons.videocam_outlined,
+                label: 'Video',
+                color: Colors.orange,
+                onTap: onVideoPressed,
+                isUpcoming: true,
+              ),
             ],
           ),
           SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
@@ -380,12 +398,14 @@ class _AttachmentOption extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback? onTap;
+  final bool isUpcoming;
 
   const _AttachmentOption({
     required this.icon,
     required this.label,
     required this.color,
     this.onTap,
+    this.isUpcoming = false,
   });
 
   @override
@@ -397,14 +417,40 @@ class _AttachmentOption extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              if (isUpcoming)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Soon',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(

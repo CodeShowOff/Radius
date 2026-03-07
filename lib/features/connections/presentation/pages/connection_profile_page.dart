@@ -79,6 +79,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           'vibe': '',
           'mood': '',
           'gender': null,
+          'discoveryUsername': null,
           'isOnline': false,
           'lastSeen': null,
         };
@@ -96,10 +97,8 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         final vibe = (doc['vibe'] as String?)?.trim();
         final mood = (doc['mood'] as String?)?.trim();
         final gender = (doc['gender'] as String?)?.trim();
-        final isOnline = (doc['isOnline'] as bool?) ?? false;
-        final lastSeenRaw = doc['lastSeen'];
-        final lastSeen =
-            lastSeenRaw is DateTime ? lastSeenRaw : lastSeenRaw?.toDate();
+        final discoveryUsername =
+            (doc['discoveryUsername'] as String?)?.trim();
 
         normalized = {
           'id': widget.otherUserId,
@@ -109,8 +108,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           'vibe': vibe,
           'mood': mood,
           'gender': gender,
-          'isOnline': isOnline,
-          'lastSeen': lastSeen,
+          'discoveryUsername': discoveryUsername,
           'connectionCount': (doc['connectionCount'] as int?) ?? 0,
         };
       }
@@ -325,227 +323,271 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
     final vibe = profile['vibe'] as String?;
     final mood = profile['mood'] as String?;
     final gender = profile['gender'] as String?;
-    final isOnline = (profile['isOnline'] as bool?) ?? false;
-    final lastSeen = profile['lastSeen'] as DateTime?;
+    final discoveryUsername = profile['discoveryUsername'] as String?;
+    final connectionCount = (profile['connectionCount'] as int?) ?? 0;
+
+    final usernameDisplay = (discoveryUsername != null &&
+            discoveryUsername.isNotEmpty)
+        ? discoveryUsername
+        : displayName;
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: false,
+        titleSpacing: 0,
         title: Text(
-          displayName,
+          '@$usernameDisplay',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Center(
-            child: CircleAvatar(
-              radius: 60,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              backgroundImage: photoUrl != null
-                  ? CachedNetworkImageProvider(photoUrl)
-                  : null,
-              child: photoUrl == null
-                  ? Text(
-                      displayName.isNotEmpty
-                          ? displayName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 40,
-                      ),
-                    )
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              displayName,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: Text(
-              isOnline
-                  ? 'Online'
-                  : lastSeen != null
-                      ? 'Last seen ${_formatLastSeen(lastSeen)}'
-                      : 'Offline',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: isOnline
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-                fontWeight: isOnline ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (bio?.isNotEmpty == true)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  bio!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          else
-            Center(
-              child: Text(
-                'No bio set',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          const SizedBox(height: 32),
-          // Stats — Connections count & Helps Done count
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _StatItem(
-                label: 'Connections',
-                value: (_profile?['connectionCount'] ?? 0).toString(),
-              ),
-              StreamBuilder<int>(
-                stream: getIt<NearbyHelpService>()
-                    .streamHelpsDoneCount(widget.otherUserId),
-                builder: (context, snapshot) {
-                  final helpsDone = snapshot.data ?? 0;
-                  return _StatItem(
-                    label: 'Helps Done',
-                    value: helpsDone.toString(),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          BlocConsumer<DiscoveryBloc, DiscoveryState>(
-            listenWhen: (prev, curr) =>
-                (curr.errorMessage != null &&
-                    prev.errorMessage != curr.errorMessage) ||
-                (curr.successMessage != null &&
-                    prev.successMessage != curr.successMessage),
-            listener: (context, state) {
-              if (state.successMessage != null) {
-                setState(() => _isSendingRequest = false);
-                ScaffoldMessenger.of(context).clearSnackBars();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.successMessage!),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-              if (state.errorMessage != null) {
-                setState(() => _isSendingRequest = false);
-                ScaffoldMessenger.of(context).clearSnackBars();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.errorMessage!),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-            builder: (context, discoveryState) {
-              return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-                builder: (context, connectionState) {
-                  final isConnected =
-                      connectionState.isConnectedWith(widget.otherUserId);
-                  final existingSentRequest =
-                      discoveryState.getSentRequestTo(widget.otherUserId) ??
-                          connectionState.getSentRequestTo(widget.otherUserId);
-                  final existingReceivedRequest =
-                      discoveryState.getReceivedRequestFrom(widget.otherUserId) ??
-                          connectionState.getReceivedRequestFrom(widget.otherUserId);
-
-                  return Row(
+      body: DefaultTabController(
+        length: 2,
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header row: avatar + stats ──
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: _buildConnectionButton(
-                          context,
-                          isConnected: isConnected,
-                          existingSentRequest: existingSentRequest,
-                          existingReceivedRequest: existingReceivedRequest,
+                      // Profile photo – left aligned with purple border
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.purple,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 42,
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          backgroundImage: photoUrl != null
+                              ? CachedNetworkImageProvider(photoUrl)
+                              : null,
+                          child: photoUrl == null
+                              ? Text(
+                                  displayName.isNotEmpty
+                                      ? displayName[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color:
+                                        theme.colorScheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 32,
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 24),
+                      // Stats
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _confirmBlock(context),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: theme.colorScheme.error,
-                          ),
-                          icon: const Icon(Icons.block),
-                          label: const Text('Block'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _StatItem(
+                              label: 'Connections',
+                              value: connectionCount.toString(),
+                            ),
+                            StreamBuilder<int>(
+                              stream: getIt<NearbyHelpService>()
+                                  .streamHelpsDoneCount(widget.otherUserId),
+                              builder: (context, snapshot) {
+                                final helpsDone = snapshot.data ?? 0;
+                                return _StatItem(
+                                  label: 'Helps Done',
+                                  value: helpsDone.toString(),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          // Profile Fields
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ProfileField(
-                    icon: Icons.mood,
-                    label: 'Vibe',
-                    value: vibe,
                   ),
-                  const Divider(height: 24),
-                  _ProfileField(
-                    icon: Icons.sentiment_satisfied_alt,
-                    label: 'Mood',
-                    value: mood,
+                ),
+
+                // ── Name ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    displayName,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const Divider(height: 24),
-                  _ProfileField(
-                    icon: Icons.person_outline,
-                    label: 'Gender',
-                    value: gender,
+                ),
+
+                // ── Bio ──
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    bio?.isNotEmpty == true ? bio! : 'No bio yet',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: bio?.isNotEmpty == true
+                          ? theme.colorScheme.onSurface
+                          : theme.colorScheme.onSurfaceVariant,
+                      fontStyle: bio?.isNotEmpty == true
+                          ? FontStyle.normal
+                          : FontStyle.italic,
+                    ),
                   ),
-                ],
-              ),
+                ),
+
+                // ── Vibe & Mood & Gender ──
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  child: Text(
+                    'Vibe: ${vibe?.isNotEmpty == true ? vibe! : 'Not set'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  child: Text(
+                    'Mood: ${mood?.isNotEmpty == true ? mood! : 'Not set'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  child: Text(
+                    'Gender: ${gender?.isNotEmpty == true ? gender! : 'Not set'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ── Connect & Block buttons ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: BlocConsumer<DiscoveryBloc, DiscoveryState>(
+                    listenWhen: (prev, curr) =>
+                        (curr.errorMessage != null &&
+                            prev.errorMessage != curr.errorMessage) ||
+                        (curr.successMessage != null &&
+                            prev.successMessage != curr.successMessage),
+                    listener: (context, state) {
+                      if (state.successMessage != null) {
+                        setState(() => _isSendingRequest = false);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(state.successMessage!),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                      if (state.errorMessage != null) {
+                        setState(() => _isSendingRequest = false);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(state.errorMessage!),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    builder: (context, discoveryState) {
+                      return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                        builder: (context, connectionState) {
+                          final isConnected = connectionState
+                              .isConnectedWith(widget.otherUserId);
+                          final existingSentRequest =
+                              discoveryState
+                                      .getSentRequestTo(widget.otherUserId) ??
+                                  connectionState
+                                      .getSentRequestTo(widget.otherUserId);
+                          final existingReceivedRequest =
+                              discoveryState.getReceivedRequestFrom(
+                                      widget.otherUserId) ??
+                                  connectionState.getReceivedRequestFrom(
+                                      widget.otherUserId);
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _buildConnectionButton(
+                                  context,
+                                  isConnected: isConnected,
+                                  existingSentRequest: existingSentRequest,
+                                  existingReceivedRequest:
+                                      existingReceivedRequest,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _confirmBlock(context),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: theme.colorScheme.error,
+                                  ),
+                                  icon: const Icon(Icons.block, size: 18),
+                                  label: const Text('Block'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Tab bar (Photos / Videos) ──
+                TabBar(
+                  labelColor: theme.colorScheme.onSurface,
+                  unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                  indicatorColor: theme.colorScheme.primary,
+                  tabs: const [
+                    Tab(icon: Icon(Icons.photo_library_outlined)),
+                    Tab(icon: Icon(Icons.videocam_outlined)),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
+          ],
+          body: TabBarView(
+            children: [
+              // Photos placeholder
+              _UpcomingFeaturePlaceholder(
+                icon: Icons.photo_library_outlined,
+                title: 'Photos',
+                subtitle: 'This feature is coming soon!',
+              ),
+              // Videos placeholder
+              _UpcomingFeaturePlaceholder(
+                icon: Icons.videocam_outlined,
+                title: 'Videos',
+                subtitle: 'This feature is coming soon!',
+              ),
+            ],
+          ),
+        ),
       ),
     );
-  }
-
-  String _formatLastSeen(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-
-    return '${time.day}/${time.month}/${time.year}';
   }
 }
 
@@ -561,17 +603,18 @@ class _StatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
               ),
         ),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
@@ -580,55 +623,50 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _ProfileField extends StatelessWidget {
+class _UpcomingFeaturePlaceholder extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String? value;
+  final String title;
+  final String subtitle;
 
-  const _ProfileField({
+  const _UpcomingFeaturePlaceholder({
     required this.icon,
-    required this.label,
-    this.value,
+    required this.title,
+    required this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasValue = value?.isNotEmpty == true;
-
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 20,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 64,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 4),
-              Text(
-                hasValue ? value! : 'Not set',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: hasValue
-                      ? theme.colorScheme.onSurface
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
-                ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
