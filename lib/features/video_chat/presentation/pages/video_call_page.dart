@@ -97,14 +97,21 @@ class _VideoCallPageState extends State<VideoCallPage>
     if (stream == null) return;
     _lastRemoteStream = stream;
     if (_renderersReady) {
-      // Force renderer refresh — reassigning the same stream object
-      // reference may not trigger an update on some flutter_webrtc
-      // versions (e.g. when a new track is added to an existing stream).
+      // When the same stream is reassigned (e.g. new track added),
+      // set to null first, wait a frame for the native texture to
+      // release, then reassign. Direct null→set in the same sync
+      // frame can cause the texture to never re-acquire.
       if (_remoteRenderer.srcObject?.id == stream.id) {
         _remoteRenderer.srcObject = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _remoteRenderer.srcObject = stream;
+          setState(() {});
+        });
+      } else {
+        _remoteRenderer.srcObject = stream;
+        if (mounted) setState(() {});
       }
-      _remoteRenderer.srcObject = stream;
-      if (mounted) setState(() {});
     } else {
       _pendingRemoteStream = stream;
     }
@@ -292,7 +299,7 @@ class _VideoCallPageState extends State<VideoCallPage>
         state is VideoCallConnecting ||
         state is VideoCallRinging;
 
-    if (!hasLocalStream) return const SizedBox.shrink();
+    if (!hasLocalStream || !_renderersReady) return const SizedBox.shrink();
 
     return Positioned(
       right: 16,

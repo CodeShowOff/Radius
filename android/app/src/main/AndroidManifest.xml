@@ -30,6 +30,10 @@
     <!-- Microphone permission for voice messages and video chat -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     
+    <!-- WebRTC networking & audio routing -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    
     <!-- Location permissions for Nearby Help feature -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
