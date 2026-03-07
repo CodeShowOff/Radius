@@ -171,7 +171,7 @@ class NotificationService {
     );
 
     await _localNotifications.initialize(
-      initializationSettings,
+      settings: initializationSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
   }
@@ -327,10 +327,10 @@ class NotificationService {
       // Also show system notification banner
       // Using Importance.max and Priority.max for heads-up notifications
       await _localNotifications.show(
-        notificationId,
-        notification.title,
-        notification.body,
-        NotificationDetails(
+        id: notificationId,
+        title: notification.title,
+        body: notification.body,
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             channelId,
             channelName,
@@ -496,14 +496,14 @@ class NotificationService {
     final ids = _activeNotificationIds.remove(sourceId);
     if (ids != null && ids.isNotEmpty) {
       for (final id in ids) {
-        await _localNotifications.cancel(id);
+        await _localNotifications.cancel(id: id);
       }
       _logger
           .d('Cancelled ${ids.length} notification(s) for source: $sourceId');
     }
     // Also cancel by deterministic ID in case tracked set was lost (e.g. app restart)
     final deterministicId = sourceId.hashCode & 0x7FFFFFFF;
-    await _localNotifications.cancel(deterministicId);
+    await _localNotifications.cancel(id: deterministicId);
   }
 
   /// Remove FCM token on sign out.
