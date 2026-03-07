@@ -87,16 +87,16 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
               onPressed: _refreshGroups,
               tooltip: 'Refresh',
             ),
-          IconButton(
-            onPressed: () => context.push(Routes.createLocationGroup),
-            icon: const Icon(Icons.add),
-            tooltip: 'Create Group',
-          ),
         ],
       ),
       body: _showLocationSelector
           ? _buildLocationSelector(theme)
           : _buildGroupList(theme),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(Routes.createLocationGroup),
+        icon: const Icon(Icons.add),
+        label: const Text('Create Group'),
+      ),
     );
   }
 

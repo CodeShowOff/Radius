@@ -112,7 +112,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
         actions: [
           IconButton(
             onPressed: () => context.push(Routes.locationGroups),
-            icon: const Icon(Icons.search),
+            icon: const Icon(Icons.explore),
             tooltip: 'Discover Groups',
           ),
           IconButton(
