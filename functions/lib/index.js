@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onPostCommentDeleted = exports.onPostCommentCreated = exports.onPostLikeDeleted = exports.onPostLikeCreated = exports.syncPostAuthorProfile = exports.cleanupDeletedPostMedia = exports.onPostConnectionSync = exports.onUserProfileUpdated = exports.onConnectionCreated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onLocalNewsPostDeleted = exports.onLocalNewsCommentDeleted = exports.onLocalNewsCommentCreated = exports.onLocalNewsLikeDeleted = exports.onLocalNewsLikeCreated = exports.onPostCommentDeleted = exports.onPostCommentCreated = exports.onPostLikeDeleted = exports.onPostLikeCreated = exports.syncPostAuthorProfile = exports.cleanupDeletedPostMedia = exports.onPostConnectionSync = exports.onUserProfileUpdated = exports.onConnectionCreated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2985,5 +2985,147 @@ exports.onPostCommentDeleted = (0, firestore_1.onDocumentDeleted)("posts/{postId
     catch (error) {
         firebase_functions_1.logger.error(`Error decrementing commentCount on post ${postId}:`, error);
     }
+});
+// =============================================================================
+// LOCAL NEWS POSTS — Like & Comment Counter Maintenance
+// =============================================================================
+/**
+ * Increments likeCount on the parent local news post when a like is created.
+ *
+ * Trigger: local_news_posts/{postId}/likes/{userId} — onCreate
+ */
+exports.onLocalNewsLikeCreated = (0, firestore_1.onDocumentCreated)("local_news_posts/{postId}/likes/{userId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("local_news_posts").doc(postId).update({
+            likeCount: admin.firestore.FieldValue.increment(1),
+        });
+        firebase_functions_1.logger.log(`Incremented likeCount on local news post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error incrementing likeCount on local news post ${postId}:`, error);
+    }
+});
+/**
+ * Decrements likeCount on the parent local news post when a like is deleted.
+ *
+ * Trigger: local_news_posts/{postId}/likes/{userId} — onDelete
+ */
+exports.onLocalNewsLikeDeleted = (0, firestore_1.onDocumentDeleted)("local_news_posts/{postId}/likes/{userId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("local_news_posts").doc(postId).update({
+            likeCount: admin.firestore.FieldValue.increment(-1),
+        });
+        firebase_functions_1.logger.log(`Decremented likeCount on local news post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error decrementing likeCount on local news post ${postId}:`, error);
+    }
+});
+/**
+ * Increments commentCount on the parent local news post when a comment is created.
+ *
+ * Trigger: local_news_posts/{postId}/comments/{commentId} — onCreate
+ */
+exports.onLocalNewsCommentCreated = (0, firestore_1.onDocumentCreated)("local_news_posts/{postId}/comments/{commentId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("local_news_posts").doc(postId).update({
+            commentCount: admin.firestore.FieldValue.increment(1),
+        });
+        firebase_functions_1.logger.log(`Incremented commentCount on local news post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error incrementing commentCount on local news post ${postId}:`, error);
+    }
+});
+/**
+ * Decrements commentCount on the parent local news post when a comment is deleted.
+ *
+ * Trigger: local_news_posts/{postId}/comments/{commentId} — onDelete
+ */
+exports.onLocalNewsCommentDeleted = (0, firestore_1.onDocumentDeleted)("local_news_posts/{postId}/comments/{commentId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("local_news_posts").doc(postId).update({
+            commentCount: admin.firestore.FieldValue.increment(-1),
+        });
+        firebase_functions_1.logger.log(`Decremented commentCount on local news post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error decrementing commentCount on local news post ${postId}:`, error);
+    }
+});
+/**
+ * Cleans up Firebase Storage media when a local news post is deleted.
+ *
+ * Trigger: local_news_posts/{postId} — onDelete
+ *
+ * Storage path pattern: local_news_media/{images|videos|thumbnails}/{authorId}/{postId}/
+ */
+exports.onLocalNewsPostDeleted = (0, firestore_1.onDocumentDeleted)("local_news_posts/{postId}", async (event) => {
+    const postId = event.params.postId;
+    const postData = event.data?.data();
+    if (!postData)
+        return;
+    const authorId = postData.authorId;
+    const mediaItems = (postData.mediaItems || []);
+    if (mediaItems.length === 0) {
+        firebase_functions_1.logger.log(`No media to clean up for local news post ${postId}`);
+        return;
+    }
+    const bucket = admin.storage().bucket();
+    const prefixes = [
+        `local_news_media/images/${authorId}/${postId}/`,
+        `local_news_media/videos/${authorId}/${postId}/`,
+        `local_news_media/thumbnails/${authorId}/${postId}/`,
+    ];
+    let totalDeleted = 0;
+    for (const prefix of prefixes) {
+        try {
+            const [files] = await bucket.getFiles({ prefix });
+            for (const file of files) {
+                await file.delete();
+                totalDeleted++;
+            }
+        }
+        catch (error) {
+            firebase_functions_1.logger.error(`Error deleting files at ${prefix}:`, error);
+        }
+    }
+    // Also delete likes and comments subcollections
+    const db = admin.firestore();
+    const subcollections = ["likes", "comments"];
+    for (const subcol of subcollections) {
+        try {
+            let snapshot = await db
+                .collection("local_news_posts")
+                .doc(postId)
+                .collection(subcol)
+                .limit(500)
+                .get();
+            while (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                await batch.commit();
+                snapshot = await db
+                    .collection("local_news_posts")
+                    .doc(postId)
+                    .collection(subcol)
+                    .limit(500)
+                    .get();
+            }
+        }
+        catch (error) {
+            firebase_functions_1.logger.error(`Error deleting ${subcol} subcollection for post ${postId}:`, error);
+        }
+    }
+    firebase_functions_1.logger.log(`Cleaned up ${totalDeleted} media files and subcollections ` +
+        `for local news post ${postId}`);
 });
 //# sourceMappingURL=index.js.map

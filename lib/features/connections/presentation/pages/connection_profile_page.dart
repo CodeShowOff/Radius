@@ -6,6 +6,7 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../nearby_help/data/nearby_help_service.dart';
+import '../../../local_news/presentation/widgets/user_news_posts_grid.dart';
 import '../../../posts/presentation/bloc/user_posts_bloc.dart';
 import '../../../posts/presentation/widgets/user_posts_grid.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
@@ -343,7 +344,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         ),
       ),
       body: DefaultTabController(
-        length: 1,
+        length: 2,
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverToBoxAdapter(
@@ -567,6 +568,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                   indicatorColor: theme.colorScheme.primary,
                   tabs: const [
                     Tab(icon: Icon(Icons.grid_on_outlined)),
+                    Tab(icon: Icon(Icons.newspaper_outlined)),
                   ],
                 ),
               ],
@@ -594,6 +596,8 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                       )),
                     child: const UserPostsGrid(),
                   ),
+                  // News tab
+                  UserNewsPostsGrid(userId: widget.otherUserId),
                 ],
               );
             },
