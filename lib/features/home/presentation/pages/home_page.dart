@@ -499,6 +499,18 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
+                // Local News
+                _AnimatedSquareCard(
+                  onTap: () => context.push(Routes.localNews),
+                  label: 'Local News',
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  isSquare: false,
+                  useVerticalLayout: false,
+                  icon: Icons.newspaper,
+                ),
+                const SizedBox(height: 16),
+
                 // Groups section - Square cards in rows
                 Row(
                   children: [

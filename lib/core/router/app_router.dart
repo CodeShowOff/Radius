@@ -59,6 +59,14 @@ import '../../features/posts/presentation/bloc/create_post_bloc.dart';
 import '../../features/posts/presentation/bloc/post_feed_bloc.dart';
 import '../../features/posts/presentation/pages/create_post_page.dart';
 import '../../features/posts/presentation/pages/post_feed_page.dart';
+import '../../features/local_news/presentation/bloc/create_news_post_bloc.dart';
+import '../../features/local_news/presentation/bloc/news_feed_bloc.dart';
+import '../../features/local_news/presentation/bloc/news_location_bloc.dart';
+import '../../features/local_news/presentation/pages/create_news_post_page.dart';
+import '../../features/local_news/presentation/pages/local_news_feed_page.dart';
+import '../../features/local_news/presentation/pages/news_location_setup_page.dart';
+import '../../features/local_news/presentation/pages/news_post_detail_page.dart';
+import '../../features/local_news/domain/repositories/i_news_post_repository.dart';
 import '../../features/profile/presentation/pages/bluetooth_settings_page.dart';
 import '../../features/profile/presentation/pages/location_settings_page.dart';
 import '../../features/profile/presentation/pages/appearance_settings_page.dart';
@@ -266,6 +274,51 @@ GoRouter get appRouter {
           create: (_) => getIt<CreatePostBloc>(),
           child: const CreatePostPage(),
         ),
+      ),
+
+      // Local News routes
+      GoRoute(
+        path: Routes.localNews,
+        name: 'localNews',
+        builder: (context, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => getIt<NewsFeedBloc>()),
+            BlocProvider.value(value: getIt<NewsLocationBloc>()),
+          ],
+          child: const LocalNewsFeedPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.localNewsSetup,
+        name: 'localNewsSetup',
+        builder: (context, state) {
+          final authState = context.read<AuthBloc>().state;
+          final userId =
+              authState is AuthAuthenticated ? authState.user.id : '';
+          return BlocProvider.value(
+            value: getIt<NewsLocationBloc>(),
+            child: NewsLocationSetupPage(userId: userId),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.localNewsCreate,
+        name: 'localNewsCreate',
+        builder: (context, state) => BlocProvider(
+          create: (_) => getIt<CreateNewsPostBloc>(),
+          child: const CreateNewsPostPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.localNewsPost,
+        name: 'localNewsPost',
+        builder: (context, state) {
+          final postId = state.pathParameters['postId']!;
+          return RepositoryProvider.value(
+            value: getIt<INewsPostRepository>(),
+            child: NewsPostDetailPage(postId: postId),
+          );
+        },
       ),
       GoRoute(
         path: Routes.bluetoothSettings,

@@ -109,6 +109,16 @@ abstract class Routes {
   static const String postFeed = '/posts';
   static const String createPost = '/posts/create';
 
+  // Local News routes
+  static const String localNews = '/local-news';
+  static const String localNewsSetup = '/local-news/setup';
+  static const String localNewsCreate = '/local-news/create';
+  static const String localNewsPost = '/local-news/post/:postId';
+
+  /// Helper to build a local news post detail route with post ID.
+  static String localNewsPostWith(String postId) =>
+      '/local-news/post/$postId';
+
   // Video Chat routes (anonymous random video calling)
   static const String videoChat = '/video-chat';
   static const String videoMatch = '/video-match';

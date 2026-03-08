@@ -1288,6 +1288,85 @@ service cloud.firestore {
       }
     }
 
+    // ============================================================
+    // LOCAL NEWS POSTS - Location-based news feed
+    // ============================================================
+
+    match /local_news_posts/{postId} {
+      // Any authenticated user can read local news posts
+      allow read: if isAuthenticated();
+
+      // Only the author can create a post
+      allow create: if isAuthenticated()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'country', 'district', 'latitude', 'longitude', 'createdAt', 'updatedAt'])
+        && request.resource.data.country is string
+        && request.resource.data.country.size() > 0
+        && request.resource.data.district is string
+        && request.resource.data.district.size() > 0
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && (
+          // Text is optional but if present, enforce max length
+          !('text' in request.resource.data.keys())
+          || request.resource.data.text == null
+          || request.resource.data.text.size() <= 2000
+        )
+        && (
+          // Must have either text or media
+          (request.resource.data.text != null && request.resource.data.text.size() > 0)
+          || (request.resource.data.mediaItems is list && request.resource.data.mediaItems.size() > 0)
+        );
+
+      // Only the author can update (e.g., edit caption)
+      allow update: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.country == resource.data.country
+        && request.resource.data.district == resource.data.district;
+
+      // Only the author can delete
+      allow delete: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid;
+
+      // ── Likes subcollection ──────────────────────────────────────────
+      match /likes/{userId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated()
+          && request.auth.uid == userId
+          && request.resource.data.userId == userId
+          && request.resource.data.keys().hasAll(['userId', 'userName', 'createdAt']);
+
+        allow update: if false;
+
+        allow delete: if isAuthenticated()
+          && request.auth.uid == userId;
+      }
+
+      // ── Comments subcollection ────────────────────────────────────────
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.keys().hasAll(['authorId', 'authorName', 'text', 'createdAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000;
+
+        allow update: if false;
+
+        // Comment author or post author can delete
+        allow delete: if isAuthenticated()
+          && (
+            resource.data.authorId == request.auth.uid
+            || get(/databases/$(database)/documents/local_news_posts/$(postId)).data.authorId == request.auth.uid
+          );
+      }
+    }
+
     // Video chat matching queue (ephemeral waiting-room documents)
     match /video_chat_queue/{userId} {
       // Anyone authenticated can read the queue (needed for match queries)

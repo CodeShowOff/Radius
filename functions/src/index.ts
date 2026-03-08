@@ -3513,3 +3513,173 @@ export const onPostCommentDeleted = onDocumentDeleted(
     }
   }
 );
+
+// =============================================================================
+// LOCAL NEWS POSTS — Like & Comment Counter Maintenance
+// =============================================================================
+
+/**
+ * Increments likeCount on the parent local news post when a like is created.
+ *
+ * Trigger: local_news_posts/{postId}/likes/{userId} — onCreate
+ */
+export const onLocalNewsLikeCreated = onDocumentCreated(
+  "local_news_posts/{postId}/likes/{userId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("local_news_posts").doc(postId).update({
+        likeCount: admin.firestore.FieldValue.increment(1),
+      });
+      logger.log(`Incremented likeCount on local news post ${postId}`);
+    } catch (error) {
+      logger.error(`Error incrementing likeCount on local news post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Decrements likeCount on the parent local news post when a like is deleted.
+ *
+ * Trigger: local_news_posts/{postId}/likes/{userId} — onDelete
+ */
+export const onLocalNewsLikeDeleted = onDocumentDeleted(
+  "local_news_posts/{postId}/likes/{userId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("local_news_posts").doc(postId).update({
+        likeCount: admin.firestore.FieldValue.increment(-1),
+      });
+      logger.log(`Decremented likeCount on local news post ${postId}`);
+    } catch (error) {
+      logger.error(`Error decrementing likeCount on local news post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Increments commentCount on the parent local news post when a comment is created.
+ *
+ * Trigger: local_news_posts/{postId}/comments/{commentId} — onCreate
+ */
+export const onLocalNewsCommentCreated = onDocumentCreated(
+  "local_news_posts/{postId}/comments/{commentId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("local_news_posts").doc(postId).update({
+        commentCount: admin.firestore.FieldValue.increment(1),
+      });
+      logger.log(`Incremented commentCount on local news post ${postId}`);
+    } catch (error) {
+      logger.error(`Error incrementing commentCount on local news post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Decrements commentCount on the parent local news post when a comment is deleted.
+ *
+ * Trigger: local_news_posts/{postId}/comments/{commentId} — onDelete
+ */
+export const onLocalNewsCommentDeleted = onDocumentDeleted(
+  "local_news_posts/{postId}/comments/{commentId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("local_news_posts").doc(postId).update({
+        commentCount: admin.firestore.FieldValue.increment(-1),
+      });
+      logger.log(`Decremented commentCount on local news post ${postId}`);
+    } catch (error) {
+      logger.error(`Error decrementing commentCount on local news post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Cleans up Firebase Storage media when a local news post is deleted.
+ *
+ * Trigger: local_news_posts/{postId} — onDelete
+ *
+ * Storage path pattern: local_news_media/{images|videos|thumbnails}/{authorId}/{postId}/
+ */
+export const onLocalNewsPostDeleted = onDocumentDeleted(
+  "local_news_posts/{postId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const postData = event.data?.data();
+
+    if (!postData) return;
+
+    const authorId = postData.authorId as string;
+    const mediaItems = (postData.mediaItems || []) as Array<Record<string, unknown>>;
+
+    if (mediaItems.length === 0) {
+      logger.log(`No media to clean up for local news post ${postId}`);
+      return;
+    }
+
+    const bucket = admin.storage().bucket();
+    const prefixes = [
+      `local_news_media/images/${authorId}/${postId}/`,
+      `local_news_media/videos/${authorId}/${postId}/`,
+      `local_news_media/thumbnails/${authorId}/${postId}/`,
+    ];
+
+    let totalDeleted = 0;
+
+    for (const prefix of prefixes) {
+      try {
+        const [files] = await bucket.getFiles({prefix});
+        for (const file of files) {
+          await file.delete();
+          totalDeleted++;
+        }
+      } catch (error) {
+        logger.error(`Error deleting files at ${prefix}:`, error);
+      }
+    }
+
+    // Also delete likes and comments subcollections
+    const db = admin.firestore();
+    const subcollections = ["likes", "comments"];
+
+    for (const subcol of subcollections) {
+      try {
+        let snapshot = await db
+          .collection("local_news_posts")
+          .doc(postId)
+          .collection(subcol)
+          .limit(500)
+          .get();
+
+        while (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+
+          snapshot = await db
+            .collection("local_news_posts")
+            .doc(postId)
+            .collection(subcol)
+            .limit(500)
+            .get();
+        }
+      } catch (error) {
+        logger.error(`Error deleting ${subcol} subcollection for post ${postId}:`, error);
+      }
+    }
+
+    logger.log(`Cleaned up ${totalDeleted} media files and subcollections for local news post ${postId}`);
+  }
+);

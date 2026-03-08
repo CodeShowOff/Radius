@@ -66,6 +66,18 @@ import '../../features/video_chat/data/webrtc_service.dart';
 import '../../features/video_chat/presentation/bloc/video_call_bloc.dart';
 import '../../features/video_chat/presentation/bloc/video_chat_lobby_bloc.dart';
 import '../../features/video_chat/presentation/bloc/video_match_bloc.dart';
+import '../../features/local_news/data/services/geocoding_service.dart';
+import '../../features/local_news/data/services/news_interaction_service.dart';
+import '../../features/local_news/data/services/news_location_service.dart';
+import '../../features/local_news/data/services/news_media_service.dart';
+import '../../features/local_news/data/services/news_post_service.dart';
+import '../../features/local_news/data/repositories/news_interaction_repository_impl.dart';
+import '../../features/local_news/data/repositories/news_post_repository_impl.dart';
+import '../../features/local_news/domain/repositories/i_news_interaction_repository.dart';
+import '../../features/local_news/domain/repositories/i_news_post_repository.dart';
+import '../../features/local_news/presentation/bloc/create_news_post_bloc.dart';
+import '../../features/local_news/presentation/bloc/news_feed_bloc.dart';
+import '../../features/local_news/presentation/bloc/news_location_bloc.dart';
 import '../settings/app_settings_store.dart';
 import '../theme/theme_cubit.dart';
 
@@ -457,6 +469,55 @@ Future<void> configureDependencies() {
     getIt.registerFactory<VideoMatchBloc>(
       () => VideoMatchBloc(
         matchService: getIt<VideoMatchService>(),
+      ),
+    );
+  }
+
+  // Local News feature
+  if (!getIt.isRegistered<GeocodingService>()) {
+    getIt.registerLazySingleton<GeocodingService>(() => GeocodingService());
+  }
+  if (!getIt.isRegistered<NewsLocationService>()) {
+    getIt.registerLazySingleton<NewsLocationService>(
+      () => NewsLocationService(geocodingService: getIt<GeocodingService>()),
+    );
+  }
+  if (!getIt.isRegistered<NewsPostService>()) {
+    getIt.registerLazySingleton<NewsPostService>(() => NewsPostService());
+  }
+  if (!getIt.isRegistered<NewsMediaService>()) {
+    getIt.registerLazySingleton<NewsMediaService>(() => NewsMediaService());
+  }
+  if (!getIt.isRegistered<NewsInteractionService>()) {
+    getIt.registerLazySingleton<NewsInteractionService>(() => NewsInteractionService());
+  }
+  if (!getIt.isRegistered<INewsPostRepository>()) {
+    getIt.registerLazySingleton<INewsPostRepository>(
+      () => NewsPostRepositoryImpl(postService: getIt<NewsPostService>()),
+    );
+  }
+  if (!getIt.isRegistered<INewsInteractionRepository>()) {
+    getIt.registerLazySingleton<INewsInteractionRepository>(
+      () => NewsInteractionRepositoryImpl(service: getIt<NewsInteractionService>()),
+    );
+  }
+  if (!getIt.isRegistered<NewsLocationBloc>()) {
+    getIt.registerLazySingleton<NewsLocationBloc>(
+      () => NewsLocationBloc(locationService: getIt<NewsLocationService>()),
+    );
+  }
+  if (!getIt.isRegistered<NewsFeedBloc>()) {
+    getIt.registerFactory<NewsFeedBloc>(
+      () => NewsFeedBloc(repository: getIt<INewsPostRepository>()),
+    );
+  }
+  if (!getIt.isRegistered<CreateNewsPostBloc>()) {
+    getIt.registerFactory<CreateNewsPostBloc>(
+      () => CreateNewsPostBloc(
+        repository: getIt<INewsPostRepository>(),
+        mediaService: getIt<NewsMediaService>(),
+        locationService: getIt<NewsLocationService>(),
+        mediaOptimizer: getIt<MediaOptimizer>(),
       ),
     );
   }

@@ -16,6 +16,7 @@ import 'features/chat/presentation/bloc/conversations_bloc.dart';
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/bloc/discovery_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
+import 'features/local_news/presentation/bloc/news_location_bloc.dart';
 import 'features/location_groups/presentation/bloc/location_group_bloc.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/proximity/presentation/bloc/nearby_users_bloc.dart';
@@ -76,6 +77,11 @@ class RadiusApp extends StatelessWidget {
           // Random Groups BLoC (app-wide for preloading)
           BlocProvider<RandomGroupBloc>(
             create: (_) => getIt<RandomGroupBloc>(),
+          ),
+
+          // News Location BLoC (app-wide — shared across feed, setup, create)
+          BlocProvider<NewsLocationBloc>(
+            create: (_) => getIt<NewsLocationBloc>(),
           ),
 
           // Theme settings
