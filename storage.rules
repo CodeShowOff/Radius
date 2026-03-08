@@ -101,6 +101,49 @@ service firebase.storage {
     }
     
     // ============================================================
+    // POST MEDIA FILES
+    // ============================================================
+
+    // Post images in post_media/images/{authorId}/{postId}/{uuid}.ext
+    match /post_media/images/{authorId}/{postId}/{fileName} {
+      // Only the author can upload images for their posts
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && isImage()
+        && isValidSize(20) // 20MB max
+        && resource == null; // Only allow creating new files, not overwriting
+
+      // Any authenticated user can read (visibility enforced at Firestore level)
+      allow read: if isAuthenticated();
+    }
+
+    // Post videos in post_media/videos/{authorId}/{postId}/{uuid}.ext
+    match /post_media/videos/{authorId}/{postId}/{fileName} {
+      // Only the author can upload videos for their posts
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && request.resource.contentType.matches('video/.*')
+        && isValidSize(100) // 100MB max
+        && resource == null;
+
+      // Any authenticated user can read
+      allow read: if isAuthenticated();
+    }
+
+    // Post video thumbnails in post_media/thumbnails/{authorId}/{postId}/{uuid}.ext
+    match /post_media/thumbnails/{authorId}/{postId}/{fileName} {
+      // Only the author can upload thumbnails for their posts
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && isImage()
+        && isValidSize(5) // 5MB max
+        && resource == null;
+
+      // Any authenticated user can read
+      allow read: if isAuthenticated();
+    }
+
+    // ============================================================
     // VIDEO CHAT PROFILE PHOTOS
     // ============================================================
 

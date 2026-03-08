@@ -1193,6 +1193,51 @@ service cloud.firestore {
       }
     }
 
+    // ============================================================
+    // POSTS - User-created content (text, images, videos)
+    // ============================================================
+
+    match /posts/{postId} {
+      // Anyone authenticated can read public posts.
+      // Author can always read their own posts.
+      // Connections can read connections-only posts (via authorConnections array).
+      allow read: if isAuthenticated()
+        && (
+          resource.data.visibility == 'public'
+          || resource.data.authorId == request.auth.uid
+          || request.auth.uid in resource.data.authorConnections
+        );
+
+      // Only the author can create a post
+      allow create: if isAuthenticated()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.keys().hasAll(['authorId', 'visibility', 'authorName', 'createdAt', 'updatedAt', 'mediaItems', 'authorConnections'])
+        && request.resource.data.visibility in ['public', 'connections']
+        && request.resource.data.mediaItems.size() <= 10
+        && (
+          // Text is optional but if present, enforce max length
+          !('text' in request.resource.data.keys())
+          || request.resource.data.text == null
+          || request.resource.data.text.size() <= 2000
+        )
+        && (
+          // Must have either text or media
+          (request.resource.data.text != null && request.resource.data.text.size() > 0)
+          || request.resource.data.mediaItems.size() > 0
+        );
+
+      // Only the author can update (e.g., edit caption)
+      // authorConnections can be updated by Cloud Function (admin SDK bypasses rules)
+      allow update: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      // Only the author can delete
+      allow delete: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid;
+    }
+
     // Video chat matching queue (ephemeral waiting-room documents)
     match /video_chat_queue/{userId} {
       // Anyone authenticated can read the queue (needed for match queries)

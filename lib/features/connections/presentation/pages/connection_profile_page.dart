@@ -6,6 +6,8 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../nearby_help/data/nearby_help_service.dart';
+import '../../../posts/presentation/bloc/user_posts_bloc.dart';
+import '../../../posts/presentation/widgets/user_posts_grid.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/connection_request.dart';
 import '../bloc/connection_bloc.dart';
@@ -341,7 +343,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
         ),
       ),
       body: DefaultTabController(
-        length: 2,
+        length: 1,
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverToBoxAdapter(
@@ -555,35 +557,43 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
                 const SizedBox(height: 16),
 
-                // ── Tab bar (Photos / Videos) ──
+                // ── Tab bar (Posts) ──
                 TabBar(
                   labelColor: theme.colorScheme.onSurface,
                   unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
                   indicatorColor: theme.colorScheme.primary,
                   tabs: const [
-                    Tab(icon: Icon(Icons.photo_library_outlined)),
-                    Tab(icon: Icon(Icons.videocam_outlined)),
+                    Tab(icon: Icon(Icons.grid_on_outlined)),
                   ],
                 ),
               ],
             ),
           ),
           ],
-          body: TabBarView(
-            children: [
-              // Photos placeholder
-              _UpcomingFeaturePlaceholder(
-                icon: Icons.photo_library_outlined,
-                title: 'Photos',
-                subtitle: 'This feature is coming soon!',
-              ),
-              // Videos placeholder
-              _UpcomingFeaturePlaceholder(
-                icon: Icons.videocam_outlined,
-                title: 'Videos',
-                subtitle: 'This feature is coming soon!',
-              ),
-            ],
+          body: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+            builder: (context, connectionState) {
+              final isConnected =
+                  connectionState.isConnectedWith(widget.otherUserId);
+              final authState = context.read<AuthBloc>().state;
+              final viewerId = authState is AuthAuthenticated
+                  ? authState.user.id
+                  : '';
+
+              return TabBarView(
+                children: [
+                  // Posts tab
+                  BlocProvider(
+                    create: (_) => getIt<UserPostsBloc>()
+                      ..add(UserPostsLoadRequested(
+                        userId: widget.otherUserId,
+                        viewerUserId: viewerId,
+                        isConnection: isConnected,
+                      )),
+                    child: const UserPostsGrid(),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -619,54 +629,6 @@ class _StatItem extends StatelessWidget {
               ),
         ),
       ],
-    );
-  }
-}
-
-class _UpcomingFeaturePlaceholder extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _UpcomingFeaturePlaceholder({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
