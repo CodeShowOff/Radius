@@ -1,4 +1,4 @@
-import {onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
+import {onDocumentCreated, onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -3115,6 +3115,307 @@ export const onUserProfileUpdated = onDocumentUpdated(
     } catch (error) {
       logger.error(
         `Error propagating profile update for ${userId}:`, error
+      );
+    }
+  }
+);
+
+// =============================================================================
+// POSTS — Sync authorConnections when connection status changes
+// =============================================================================
+
+/**
+ * When a connection status changes, update the `authorConnections` array
+ * on all "connections" visibility posts by the affected users.
+ *
+ * - connected → add the other user to authorConnections on all
+ *   connections-only posts by each user.
+ * - disconnected/blocked → remove the other user from authorConnections
+ *   on all connections-only posts by each user.
+ *
+ * Uses batched writes (max 500 per batch).
+ */
+export const onPostConnectionSync = onDocumentUpdated(
+  {
+    document: "connections/{connectionId}",
+    region: "asia-south1",
+  },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+
+    const oldStatus = before.status as string;
+    const newStatus = after.status as string;
+    if (oldStatus === newStatus) return;
+
+    const userId1 = after.userId1 as string;
+    const userId2 = after.userId2 as string;
+    const db = admin.firestore();
+
+    const BATCH_LIMIT = 500;
+    let batch = db.batch();
+    let operationCount = 0;
+
+    const flushBatch = async () => {
+      if (operationCount > 0) {
+        await batch.commit();
+        batch = db.batch();
+        operationCount = 0;
+      }
+    };
+
+    try {
+      if (newStatus === "connected" && oldStatus !== "connected") {
+        // New connection: add each user to the other's connections-only posts
+        // User1's connections-only posts → add userId2
+        const user1Posts = await db
+          .collection("posts")
+          .where("authorId", "==", userId1)
+          .where("visibility", "==", "connections")
+          .select()
+          .get();
+
+        for (const doc of user1Posts.docs) {
+          batch.update(doc.ref, {
+            authorConnections: admin.firestore.FieldValue.arrayUnion(userId2),
+          });
+          operationCount++;
+          if (operationCount >= BATCH_LIMIT) {
+            await flushBatch();
+          }
+        }
+
+        // User2's connections-only posts → add userId1
+        const user2Posts = await db
+          .collection("posts")
+          .where("authorId", "==", userId2)
+          .where("visibility", "==", "connections")
+          .select()
+          .get();
+
+        for (const doc of user2Posts.docs) {
+          batch.update(doc.ref, {
+            authorConnections: admin.firestore.FieldValue.arrayUnion(userId1),
+          });
+          operationCount++;
+          if (operationCount >= BATCH_LIMIT) {
+            await flushBatch();
+          }
+        }
+
+        await flushBatch();
+        logger.log(
+          `Post authorConnections synced (connected): ` +
+          `${user1Posts.size} posts for ${userId1}, ` +
+          `${user2Posts.size} posts for ${userId2}`
+        );
+      } else if (
+        oldStatus === "connected" &&
+        (newStatus === "disconnected" || newStatus === "blocked")
+      ) {
+        // Disconnected/blocked: remove each user from the other's posts
+        const user1Posts = await db
+          .collection("posts")
+          .where("authorId", "==", userId1)
+          .where("visibility", "==", "connections")
+          .select()
+          .get();
+
+        for (const doc of user1Posts.docs) {
+          batch.update(doc.ref, {
+            authorConnections: admin.firestore.FieldValue.arrayRemove(userId2),
+          });
+          operationCount++;
+          if (operationCount >= BATCH_LIMIT) {
+            await flushBatch();
+          }
+        }
+
+        const user2Posts = await db
+          .collection("posts")
+          .where("authorId", "==", userId2)
+          .where("visibility", "==", "connections")
+          .select()
+          .get();
+
+        for (const doc of user2Posts.docs) {
+          batch.update(doc.ref, {
+            authorConnections: admin.firestore.FieldValue.arrayRemove(userId1),
+          });
+          operationCount++;
+          if (operationCount >= BATCH_LIMIT) {
+            await flushBatch();
+          }
+        }
+
+        await flushBatch();
+        logger.log(
+          `Post authorConnections synced (${newStatus}): ` +
+          `${user1Posts.size} posts for ${userId1}, ` +
+          `${user2Posts.size} posts for ${userId2}`
+        );
+      }
+    } catch (error) {
+      logger.error("Error syncing post authorConnections:", error);
+    }
+  }
+);
+
+// =============================================================================
+// POSTS — Cleanup Storage files when a post is deleted
+// =============================================================================
+
+/**
+ * Firestore trigger that cleans up Firebase Storage files when a post
+ * document is deleted. Reads the `mediaItems` array from the deleted
+ * snapshot and deletes each `storagePath`.
+ */
+export const cleanupDeletedPostMedia = onDocumentDeleted(
+  {
+    document: "posts/{postId}",
+    region: "asia-south1",
+  },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const mediaItems = data.mediaItems as Array<Record<string, unknown>> | undefined;
+    if (!mediaItems || mediaItems.length === 0) {
+      logger.log(`Post ${event.params.postId} deleted — no media to clean up`);
+      return;
+    }
+
+    const bucket = admin.storage().bucket();
+    let deleted = 0;
+    let failed = 0;
+
+    for (const item of mediaItems) {
+      const storagePath = item.storagePath as string | undefined;
+      if (!storagePath) continue;
+
+      try {
+        await bucket.file(storagePath).delete();
+        deleted++;
+      } catch (err: unknown) {
+        // File may already be deleted — log and continue
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logger.warn(
+          `Failed to delete ${storagePath}: ${errorMessage}`
+        );
+        failed++;
+      }
+
+      // Also try to delete the thumbnail if it's a video
+      const thumbnailUrl = item.thumbnailUrl as string | undefined;
+      const type = item.type as string | undefined;
+      if (type === "video" && thumbnailUrl) {
+        // Thumbnail storagePath follows the pattern:
+        // post_media/thumbnails/{authorId}/{postId}/{uuid}.jpg
+        // Derive from the video storagePath:
+        // post_media/videos/{authorId}/{postId}/{uuid}.mp4
+        //  → post_media/thumbnails/{authorId}/{postId}/{uuid}.jpg
+        const thumbPath = storagePath
+          .replace("/videos/", "/thumbnails/")
+          .replace(/\.[^.]+$/, ".jpg");
+        try {
+          await bucket.file(thumbPath).delete();
+          deleted++;
+        } catch {
+          // Thumbnail may not exist or already deleted — ignore
+        }
+      }
+    }
+
+    logger.log(
+      `Post ${event.params.postId} media cleanup: ` +
+      `${deleted} deleted, ${failed} failed`
+    );
+  }
+);
+
+// =============================================================================
+// POSTS — Sync denormalized author info when profile changes
+// =============================================================================
+
+/**
+ * When a user's profile (displayName or photoUrl) changes, update all
+ * posts authored by that user to keep the denormalized `authorName`
+ * and `authorPhotoUrl` fields in sync.
+ *
+ * This is a separate trigger from `onUserProfileUpdated` because it
+ * targets the `posts` collection specifically. It fires on the same
+ * `users/{userId}` document update.
+ */
+export const syncPostAuthorProfile = onDocumentUpdated(
+  {
+    document: "users/{userId}",
+    region: "asia-south1",
+  },
+  async (event) => {
+    const userId = event.params.userId;
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const oldDisplayName = before.displayName as string | undefined;
+    const newDisplayName = after.displayName as string | undefined;
+    const oldPhotoUrl = before.photoUrl as string | undefined;
+    const newPhotoUrl = after.photoUrl as string | undefined;
+
+    // Only proceed if displayName or photoUrl actually changed
+    if (oldDisplayName === newDisplayName && oldPhotoUrl === newPhotoUrl) {
+      return;
+    }
+
+    const nameChanged = oldDisplayName !== newDisplayName && !!newDisplayName;
+    const photoChanged = oldPhotoUrl !== newPhotoUrl;
+
+    if (!nameChanged && !photoChanged) return;
+
+    const db = admin.firestore();
+
+    try {
+      const postsSnapshot = await db
+        .collection("posts")
+        .where("authorId", "==", userId)
+        .select()
+        .get();
+
+      if (postsSnapshot.empty) {
+        logger.log(`No posts to update for user ${userId}`);
+        return;
+      }
+
+      const BATCH_LIMIT = 500;
+      let batch = db.batch();
+      let operationCount = 0;
+
+      for (const doc of postsSnapshot.docs) {
+        const updateData: Record<string, string | null> = {};
+        if (nameChanged) updateData["authorName"] = newDisplayName!;
+        if (photoChanged) updateData["authorPhotoUrl"] = newPhotoUrl ?? null;
+
+        batch.update(doc.ref, updateData);
+        operationCount++;
+
+        if (operationCount >= BATCH_LIMIT) {
+          await batch.commit();
+          batch = db.batch();
+          operationCount = 0;
+        }
+      }
+
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+
+      logger.log(
+        `Synced author info on ${postsSnapshot.size} posts for user ${userId}`
+      );
+    } catch (error) {
+      logger.error(
+        `Error syncing post author profile for ${userId}:`, error
       );
     }
   }

@@ -7,6 +7,8 @@ import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../nearby_help/data/nearby_help_service.dart';
+import '../../../posts/presentation/bloc/user_posts_bloc.dart';
+import '../../../posts/presentation/widgets/user_posts_grid.dart';
 import '../bloc/profile_bloc.dart';
 
 /// User profile page.
@@ -164,6 +166,51 @@ class _ProfilePageState extends State<ProfilePage> {
                             );
                           },
                         ),
+                        const SizedBox(height: 24),
+
+                        // My Posts section
+                        if (user != null)
+                          BlocProvider(
+                            create: (_) => getIt<UserPostsBloc>()
+                              ..add(UserPostsLoadRequested(
+                                userId: user.id,
+                                viewerUserId: user.id,
+                                isConnection: true, // own profile — see all
+                              )),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'My Posts',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            context.push(Routes.postFeed),
+                                        child: const Text('See All'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 300,
+                                  child: const UserPostsGrid(),
+                                ),
+                              ],
+                            ),
+                          ),
                         const SizedBox(height: 24),
 
                         // Profile Info Card

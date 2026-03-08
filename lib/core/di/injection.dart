@@ -11,6 +11,14 @@ import '../services/presence/presence_service.dart';
 import '../services/realtime/realtime_connection_service.dart';
 import '../services/realtime/realtime_data_manager.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/posts/data/services/post_service.dart';
+import '../../features/posts/data/services/post_media_service.dart';
+import '../../features/posts/data/services/media_optimizer.dart';
+import '../../features/posts/data/repositories/post_repository_impl.dart';
+import '../../features/posts/domain/repositories/i_post_repository.dart';
+import '../../features/posts/presentation/bloc/create_post_bloc.dart';
+import '../../features/posts/presentation/bloc/post_feed_bloc.dart';
+import '../../features/posts/presentation/bloc/user_posts_bloc.dart';
 import '../../features/chat/data/chat_cache_service.dart';
 import '../../features/chat/data/chat_preload_service.dart';
 import '../../features/chat/data/chat_service.dart';
@@ -131,6 +139,54 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<IProfileRepository>()) {
     getIt.registerLazySingleton<IProfileRepository>(
       () => ProfileRepositoryImpl(profileService: getIt<ProfileService>()),
+    );
+  }
+
+  // Posts feature
+  if (!getIt.isRegistered<PostService>()) {
+    getIt.registerLazySingleton<PostService>(() => PostService());
+  }
+
+  if (!getIt.isRegistered<PostMediaService>()) {
+    getIt.registerLazySingleton<PostMediaService>(() => PostMediaService());
+  }
+
+  if (!getIt.isRegistered<MediaOptimizer>()) {
+    getIt.registerLazySingleton<MediaOptimizer>(() => MediaOptimizer());
+  }
+
+  if (!getIt.isRegistered<IPostRepository>()) {
+    getIt.registerLazySingleton<IPostRepository>(
+      () => PostRepositoryImpl(postService: getIt<PostService>()),
+    );
+  }
+
+  // CreatePostBloc — factory (new instance per create-post page)
+  if (!getIt.isRegistered<CreatePostBloc>()) {
+    getIt.registerFactory<CreatePostBloc>(
+      () => CreatePostBloc(
+        postRepository: getIt<IPostRepository>(),
+        mediaService: getIt<PostMediaService>(),
+        mediaOptimizer: getIt<MediaOptimizer>(),
+      ),
+    );
+  }
+
+  // PostFeedBloc — factory (new instance per feed page visit)
+  if (!getIt.isRegistered<PostFeedBloc>()) {
+    getIt.registerFactory<PostFeedBloc>(
+      () => PostFeedBloc(
+        postRepository: getIt<IPostRepository>(),
+      ),
+    );
+  }
+
+  // UserPostsBloc — factory (new instance per profile page)
+  if (!getIt.isRegistered<UserPostsBloc>()) {
+    getIt.registerFactory<UserPostsBloc>(
+      () => UserPostsBloc(
+        postRepository: getIt<IPostRepository>(),
+      ),
     );
   }
 

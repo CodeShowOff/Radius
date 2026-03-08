@@ -487,6 +487,18 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
+                // Posts feed
+                _AnimatedSquareCard(
+                  onTap: () => context.push(Routes.postFeed),
+                  label: 'Posts Feed',
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  isSquare: false,
+                  useVerticalLayout: false,
+                  icon: Icons.dynamic_feed,
+                ),
+                const SizedBox(height: 16),
+
                 // Groups section - Square cards in rows
                 Row(
                   children: [

@@ -105,6 +105,10 @@ abstract class Routes {
   // Random Chat routes (daily random user discovery & chat)
   static const String randomChat = '/random-chat';
 
+  // Posts routes
+  static const String postFeed = '/posts';
+  static const String createPost = '/posts/create';
+
   // Video Chat routes (anonymous random video calling)
   static const String videoChat = '/video-chat';
   static const String videoMatch = '/video-match';
