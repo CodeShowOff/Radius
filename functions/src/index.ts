@@ -3680,6 +3680,9 @@ export const onLocalNewsPostDeleted = onDocumentDeleted(
       }
     }
 
-    logger.log(`Cleaned up ${totalDeleted} media files and subcollections for local news post ${postId}`);
+    logger.log(
+      `Cleaned up ${totalDeleted} media files and subcollections ` +
+      `for local news post ${postId}`
+    );
   }
 );
