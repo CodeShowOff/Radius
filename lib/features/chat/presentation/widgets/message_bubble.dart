@@ -272,32 +272,28 @@ class _MessageTextWithTime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      children: [
-        LinkifiedText(
-          text: message.text,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: isMe
-                ? theme.colorScheme.onPrimary
-                : theme.colorScheme.onSurface,
-            height: 1.3,
-          ) ?? const TextStyle(),
-          linkColor: isMe
-              ? theme.colorScheme.onPrimary
-              : theme.colorScheme.primary,
-        ),
-        const SizedBox(width: 6),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 1),
+    return LinkifiedText(
+      text: message.text,
+      style: theme.textTheme.bodyLarge?.copyWith(
+        color: isMe
+            ? theme.colorScheme.onPrimary
+            : theme.colorScheme.onSurface,
+        height: 1.3,
+      ) ?? const TextStyle(),
+      linkColor: isMe
+          ? theme.colorScheme.onPrimary
+          : theme.colorScheme.primary,
+      trailingSpan: WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 6),
           child: _MessageMeta(
             message: message,
             isMe: isMe,
             theme: theme,
           ),
         ),
-      ],
+      ),
     );
   }
 }

@@ -477,7 +477,10 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
                 const SizedBox(height: 12),
 
-                // ── Connect & Block buttons ──
+                // ── Connect & Block buttons (hide for own profile) ──
+                if (context.read<AuthBloc>().state
+                    case AuthAuthenticated(:final user)
+                    when user.id != widget.otherUserId)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: BlocConsumer<DiscoveryBloc, DiscoveryState>(

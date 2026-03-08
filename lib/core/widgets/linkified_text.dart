@@ -11,6 +11,7 @@ class LinkifiedText extends StatefulWidget {
   final String text;
   final TextStyle style;
   final Color linkColor;
+  final InlineSpan? trailingSpan;
 
   /// Matches URLs (http/https/www) and email addresses.
   static final _linkRegex = RegExp(
@@ -23,6 +24,7 @@ class LinkifiedText extends StatefulWidget {
     required this.text,
     required this.style,
     required this.linkColor,
+    this.trailingSpan,
   });
 
   @override
@@ -68,11 +70,17 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     _recognizers.clear();
 
     final matches = LinkifiedText._linkRegex.allMatches(widget.text).toList();
-    if (matches.isEmpty) {
+    if (matches.isEmpty && widget.trailingSpan == null) {
       return Text(widget.text, style: widget.style);
     }
+    final spans = matches.isEmpty
+        ? <InlineSpan>[TextSpan(text: widget.text)]
+        : _buildSpans(matches);
+    if (widget.trailingSpan != null) {
+      spans.add(widget.trailingSpan!);
+    }
     return Text.rich(
-      TextSpan(children: _buildSpans(matches)),
+      TextSpan(children: spans),
       style: widget.style,
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/post.dart';
 import '../bloc/user_posts_bloc.dart';
+import 'post_card.dart';
 import 'post_shimmer.dart';
 
 /// Grid view of a user's posts (Instagram-style thumbnails).
@@ -13,6 +14,30 @@ import 'post_shimmer.dart';
 /// Shows media thumbnails in a 3-column grid, or a text icon for text-only posts.
 class UserPostsGrid extends StatelessWidget {
   const UserPostsGrid({super.key});
+
+  static void _showPostDetail(BuildContext context, Post post) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 40),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Material(
+            color: Theme.of(dialogContext).colorScheme.surface,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(dialogContext).size.height * 0.8,
+              ),
+              child: SingleChildScrollView(
+                child: PostCard(post: post),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +105,11 @@ class UserPostsGrid extends StatelessWidget {
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                        return _PostGridTile(post: state.posts[index]);
+                        final post = state.posts[index];
+                        return GestureDetector(
+                          onTap: () => _showPostDetail(context, post),
+                          child: _PostGridTile(post: post),
+                        );
                       },
                       childCount: state.posts.length,
                     ),

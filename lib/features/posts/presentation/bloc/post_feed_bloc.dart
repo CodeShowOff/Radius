@@ -118,7 +118,8 @@ class PostFeedBloc extends Bloc<PostFeedEvent, PostFeedState> {
     result.fold(
       (failure) {
         _logger.e('Failed to refresh feed: ${failure.message}');
-        // Keep existing posts on refresh failure
+        // Keep existing posts on refresh failure, but emit so UI knows refresh is done
+        emit(state.copyWith(status: PostFeedStatus.loaded));
       },
       (posts) {
         emit(state.copyWith(

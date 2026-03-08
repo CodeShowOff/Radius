@@ -69,10 +69,8 @@ class _PostFeedPageState extends State<PostFeedPage> {
 
   Future<void> _onRefresh() async {
     context.read<PostFeedBloc>().add(const PostFeedRefreshRequested());
-    // Wait for the state to change from loading
-    await context.read<PostFeedBloc>().stream.firstWhere(
-          (state) => !state.isLoadingMore,
-        );
+    // Wait for the bloc to emit any new state after processing the refresh
+    await context.read<PostFeedBloc>().stream.first;
   }
 
   Future<void> _navigateToCreatePost() async {

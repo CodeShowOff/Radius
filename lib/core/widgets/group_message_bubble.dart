@@ -222,32 +222,11 @@ class GroupMessageBubble extends StatelessWidget {
 
                         // Text-only message with inline time (WhatsApp style)
                         if (!_isMediaMessage && text.isNotEmpty)
-                          Wrap(
-                            alignment: WrapAlignment.end,
-                            crossAxisAlignment: WrapCrossAlignment.end,
-                            children: [
-                              LinkifiedText(
-                                text: text,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: isMe
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurface,
-                                  height: 1.3,
-                                ) ?? const TextStyle(),
-                                linkColor: isMe
-                                    ? theme.colorScheme.onPrimary
-                                    : theme.colorScheme.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 1),
-                                child: _MessageMeta(
-                                  sentAt: sentAt,
-                                  status: status,
-                                  isMe: isMe,
-                                ),
-                              ),
-                            ],
+                          _GroupTextWithTime(
+                            text: text,
+                            sentAt: sentAt,
+                            status: status,
+                            isMe: isMe,
                           ),
 
                         // For media messages, show time separately below
@@ -351,6 +330,49 @@ class GroupMessageBubble extends StatelessWidget {
                 },
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Text message with inline time (WhatsApp style) for group bubbles.
+class _GroupTextWithTime extends StatelessWidget {
+  final String text;
+  final DateTime sentAt;
+  final GroupMessageStatus status;
+  final bool isMe;
+
+  const _GroupTextWithTime({
+    required this.text,
+    required this.sentAt,
+    required this.status,
+    required this.isMe,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LinkifiedText(
+      text: text,
+      style: theme.textTheme.bodyLarge?.copyWith(
+        color: isMe
+            ? theme.colorScheme.onPrimary
+            : theme.colorScheme.onSurface,
+        height: 1.3,
+      ) ?? const TextStyle(),
+      linkColor: isMe
+          ? theme.colorScheme.onPrimary
+          : theme.colorScheme.primary,
+      trailingSpan: WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: _MessageMeta(
+            sentAt: sentAt,
+            status: status,
+            isMe: isMe,
+          ),
         ),
       ),
     );
