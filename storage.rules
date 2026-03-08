@@ -77,6 +77,14 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/nearby_groups/$(groupId)/members/$(request.auth.uid));
     }
     
+    /// Check if user is a member of ANY group type with the given groupId.
+    /// Uses short-circuit evaluation: stops at the first match (1-3 Firestore reads).
+    function isAnyGroupMember(groupId) {
+      return isLocationGroupMember(groupId)
+        || isRandomGroupMember(groupId)
+        || isNearbyGroupMember(groupId);
+    }
+    
     // ============================================================
     // CHAT MEDIA FILES
     // ============================================================
@@ -147,17 +155,19 @@ service firebase.storage {
     
     // Group images in group_media/images/{groupId}/{uuid}.ext
     match /group_media/images/{groupId}/{fileName} {
-      allow write: if isAuthenticated()
+      // Only group members can upload images
+      allow write: if isAnyGroupMember(groupId)
         && isImage()
         && isValidSize(20) // 20MB max
         && resource == null;
       
+      // Any authenticated user can read (ex-members retain access to viewed media)
       allow read: if isAuthenticated();
     }
     
     // Group audio in group_media/audio/{groupId}/{uuid}.ext
     match /group_media/audio/{groupId}/{fileName} {
-      allow write: if isAuthenticated()
+      allow write: if isAnyGroupMember(groupId)
         && isAudio()
         && isValidSize(50) // 50MB max for audio
         && resource == null;
@@ -167,7 +177,7 @@ service firebase.storage {
     
     // Group documents in group_media/documents/{groupId}/{uuid}.ext
     match /group_media/documents/{groupId}/{fileName} {
-      allow write: if isAuthenticated()
+      allow write: if isAnyGroupMember(groupId)
         && isDocument()
         && isValidSize(100) // 100MB max for documents
         && resource == null;
@@ -177,7 +187,7 @@ service firebase.storage {
     
     // Group videos in group_media/videos/{groupId}/{uuid}.ext
     match /group_media/videos/{groupId}/{fileName} {
-      allow write: if isAuthenticated()
+      allow write: if isAnyGroupMember(groupId)
         && isVideo()
         && isValidSize(100) // 100MB max for videos
         && resource == null;
