@@ -40,6 +40,7 @@ class MediaUploadService {
   static const String _audioPath = 'chat_media/audio';
   static const String _documentsPath = 'chat_media/documents';
   static const String _stickersPath = 'chat_media/stickers';
+  static const String _videosPath = 'chat_media/videos';
 
   static const _uuid = Uuid();
 
@@ -111,6 +112,24 @@ class MediaUploadService {
       storagePath: _stickersPath,
       conversationId: conversationId,
       senderId: senderId,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Uploads a video file and returns the download URL.
+  Future<UploadResult> uploadVideo({
+    required File file,
+    required String conversationId,
+    required String senderId,
+    int? duration,
+    void Function(double progress)? onProgress,
+  }) async {
+    return _uploadFile(
+      file: file,
+      storagePath: _videosPath,
+      conversationId: conversationId,
+      senderId: senderId,
+      duration: duration,
       onProgress: onProgress,
     );
   }
@@ -333,6 +352,7 @@ class MediaUploadService {
     const int maxAudioSize = 50 * 1024 * 1024; // 50MB
     const int maxDocumentSize = 100 * 1024 * 1024; // 100MB
     const int maxStickerSize = 5 * 1024 * 1024; // 5MB
+    const int maxVideoSize = 100 * 1024 * 1024; // 100MB
 
     int maxSize;
     String fileType;
@@ -349,6 +369,9 @@ class MediaUploadService {
     } else if (storagePath.contains('stickers')) {
       maxSize = maxStickerSize;
       fileType = 'Sticker';
+    } else if (storagePath.contains('videos')) {
+      maxSize = maxVideoSize;
+      fileType = 'Video';
     } else {
       return; // Unknown type, skip validation
     }
@@ -380,6 +403,7 @@ class MediaUploadService {
       '.txt'
     ];
     const stickerExtensions = ['.png', '.webp', '.gif'];
+    const videoExtensions = ['.mp4', '.mov', '.avi'];
 
     List<String> allowedExtensions;
     String fileType;
@@ -396,6 +420,9 @@ class MediaUploadService {
     } else if (storagePath.contains('stickers')) {
       allowedExtensions = stickerExtensions;
       fileType = 'Sticker';
+    } else if (storagePath.contains('videos')) {
+      allowedExtensions = videoExtensions;
+      fileType = 'Video';
     } else {
       return; // Unknown type, skip validation
     }

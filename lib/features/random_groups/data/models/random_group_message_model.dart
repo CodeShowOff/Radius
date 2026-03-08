@@ -14,7 +14,12 @@ import '../../domain/entities/random_group_message.dart';
 ///   - senderName: string?
 ///   - senderPhotoUrl: string?
 ///   - text: string
-///   - type: string ('text' | 'system')
+///   - type: string ('text' | 'system' | 'image' | 'audio' | 'document' | 'video')
+///   - mediaUrl: string?
+///   - mediaFileName: string?
+///   - mediaFileSize: int?
+///   - duration: int?
+///   - thumbnailUrl: string?
 ///   - sentAt: timestamp
 /// ```
 class RandomGroupMessageModel extends RandomGroupMessage {
@@ -27,6 +32,11 @@ class RandomGroupMessageModel extends RandomGroupMessage {
     super.senderPhotoUrl,
     required super.text,
     required super.type,
+    super.mediaUrl,
+    super.mediaFileName,
+    super.mediaFileSize,
+    super.duration,
+    super.thumbnailUrl,
     required super.sentAt,
     super.isDeleted,
     super.localId,
@@ -46,6 +56,11 @@ class RandomGroupMessageModel extends RandomGroupMessage {
       senderPhotoUrl: data['senderPhotoUrl'] as String?,
       text: data['text'] as String,
       type: _typeFromString(data['type'] as String?),
+      mediaUrl: data['mediaUrl'] as String?,
+      mediaFileName: data['mediaFileName'] as String?,
+      mediaFileSize: data['mediaFileSize'] as int?,
+      duration: data['duration'] as int?,
+      thumbnailUrl: data['thumbnailUrl'] as String?,
       sentAt: _parseTimestamp(data['sentAt']),
       isDeleted: data['isDeleted'] as bool? ?? false,
       localId: data['localId'] as String?,
@@ -64,6 +79,11 @@ class RandomGroupMessageModel extends RandomGroupMessage {
       senderPhotoUrl: data['senderPhotoUrl'] as String?,
       text: data['text'] as String,
       type: _typeFromString(data['type'] as String?),
+      mediaUrl: data['mediaUrl'] as String?,
+      mediaFileName: data['mediaFileName'] as String?,
+      mediaFileSize: data['mediaFileSize'] as int?,
+      duration: data['duration'] as int?,
+      thumbnailUrl: data['thumbnailUrl'] as String?,
       sentAt: _parseTimestamp(data['sentAt']),
       isDeleted: data['isDeleted'] as bool? ?? false,
       localId: data['localId'] as String?,
@@ -79,6 +99,12 @@ class RandomGroupMessageModel extends RandomGroupMessage {
     String? senderName,
     String? senderPhotoUrl,
     required String text,
+    RandomGroupMessageType type = RandomGroupMessageType.text,
+    String? mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    int? duration,
+    String? thumbnailUrl,
     String? localId,
   }) {
     return {
@@ -88,7 +114,12 @@ class RandomGroupMessageModel extends RandomGroupMessage {
       if (senderName != null) 'senderName': senderName,
       if (senderPhotoUrl != null) 'senderPhotoUrl': senderPhotoUrl,
       'text': text,
-      'type': 'text',
+      'type': type.name,
+      'mediaUrl': mediaUrl,
+      'mediaFileName': mediaFileName,
+      'mediaFileSize': mediaFileSize,
+      'duration': duration,
+      'thumbnailUrl': thumbnailUrl,
       'sentAt': FieldValue.serverTimestamp(),
       'isDeleted': false,
       if (localId != null) 'localId': localId,
@@ -124,6 +155,11 @@ class RandomGroupMessageModel extends RandomGroupMessage {
       senderPhotoUrl: senderPhotoUrl,
       text: text,
       type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
       sentAt: sentAt,
       isDeleted: isDeleted,
       localId: localId,
@@ -132,14 +168,11 @@ class RandomGroupMessageModel extends RandomGroupMessage {
   }
 
   static RandomGroupMessageType _typeFromString(String? type) {
-    switch (type) {
-      case 'text':
-        return RandomGroupMessageType.text;
-      case 'system':
-        return RandomGroupMessageType.system;
-      default:
-        return RandomGroupMessageType.text;
-    }
+    if (type == null) return RandomGroupMessageType.text;
+    return RandomGroupMessageType.values.firstWhere(
+      (t) => t.name == type,
+      orElse: () => RandomGroupMessageType.text,
+    );
   }
 
   static DateTime _parseTimestamp(dynamic value) {

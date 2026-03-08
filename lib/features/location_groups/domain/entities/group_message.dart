@@ -10,6 +10,15 @@ enum GroupMessageType {
   /// Image message.
   image,
 
+  /// Audio/voice message.
+  audio,
+
+  /// Document file.
+  document,
+
+  /// Video message.
+  video,
+
   /// System message (e.g., "X joined the group").
   system,
 }
@@ -37,8 +46,20 @@ class GroupMessage extends Equatable {
   /// Type of message.
   final GroupMessageType type;
 
-  /// URL to media file (for image messages).
+  /// URL to media file (for media messages).
   final String? mediaUrl;
+
+  /// Original filename of uploaded media.
+  final String? mediaFileName;
+
+  /// Size of media file in bytes.
+  final int? mediaFileSize;
+
+  /// Duration in seconds (for audio/video messages).
+  final int? duration;
+
+  /// Thumbnail URL for videos/documents.
+  final String? thumbnailUrl;
 
   /// When the message was sent.
   final DateTime sentAt;
@@ -52,6 +73,12 @@ class GroupMessage extends Equatable {
   /// Message send status (pending, sent, error).
   final GroupMessageStatus status;
 
+  /// Upload progress (0.0 to 1.0) for media uploads.
+  final double? uploadProgress;
+
+  /// Error description when status == GroupMessageStatus.error.
+  final String? errorReason;
+
   const GroupMessage({
     required this.id,
     required this.groupId,
@@ -61,10 +88,16 @@ class GroupMessage extends Equatable {
     required this.text,
     this.type = GroupMessageType.text,
     this.mediaUrl,
+    this.mediaFileName,
+    this.mediaFileSize,
+    this.duration,
+    this.thumbnailUrl,
     required this.sentAt,
     this.isDeleted = false,
     this.localId,
     this.status = GroupMessageStatus.sent,
+    this.uploadProgress,
+    this.errorReason,
   });
 
   /// Whether this message is from the given user.
@@ -75,6 +108,10 @@ class GroupMessage extends Equatable {
 
   /// Whether this message has media attached.
   bool get hasMedia => mediaUrl != null && mediaUrl!.isNotEmpty;
+
+  /// Whether this is a media message (non-text, non-system).
+  bool get isMediaMessage =>
+      type != GroupMessageType.text && type != GroupMessageType.system;
 
   /// Whether this message can be retried (failed to send).
   bool get canRetry => status == GroupMessageStatus.error;
@@ -91,10 +128,16 @@ class GroupMessage extends Equatable {
     String? text,
     GroupMessageType? type,
     String? mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    int? duration,
+    String? thumbnailUrl,
     DateTime? sentAt,
     bool? isDeleted,
     String? localId,
     GroupMessageStatus? status,
+    double? uploadProgress,
+    String? errorReason,
   }) {
     return GroupMessage(
       id: id ?? this.id,
@@ -105,10 +148,16 @@ class GroupMessage extends Equatable {
       text: text ?? this.text,
       type: type ?? this.type,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaFileName: mediaFileName ?? this.mediaFileName,
+      mediaFileSize: mediaFileSize ?? this.mediaFileSize,
+      duration: duration ?? this.duration,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       sentAt: sentAt ?? this.sentAt,
       isDeleted: isDeleted ?? this.isDeleted,
       localId: localId ?? this.localId,
       status: status ?? this.status,
+      uploadProgress: uploadProgress ?? this.uploadProgress,
+      errorReason: errorReason ?? this.errorReason,
     );
   }
 
@@ -122,9 +171,15 @@ class GroupMessage extends Equatable {
         text,
         type,
         mediaUrl,
+        mediaFileName,
+        mediaFileSize,
+        duration,
+        thumbnailUrl,
         sentAt,
         isDeleted,
         localId,
         status,
+        uploadProgress,
+        errorReason,
       ];
 }

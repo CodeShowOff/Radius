@@ -80,6 +80,51 @@ class RetryRandomGroupMessage extends RandomGroupChatEvent {
   List<Object?> get props => [localId];
 }
 
+/// Send an image message to the random group.
+class SendRandomGroupImage extends RandomGroupChatEvent {
+  final File file;
+  final String? caption;
+
+  const SendRandomGroupImage(this.file, {this.caption});
+
+  @override
+  List<Object?> get props => [file, caption];
+}
+
+/// Send an audio/voice message to the random group.
+class SendRandomGroupAudio extends RandomGroupChatEvent {
+  final File file;
+  final int duration;
+
+  const SendRandomGroupAudio(this.file, {required this.duration});
+
+  @override
+  List<Object?> get props => [file, duration];
+}
+
+/// Send a document to the random group.
+class SendRandomGroupDocument extends RandomGroupChatEvent {
+  final File file;
+  final String? caption;
+
+  const SendRandomGroupDocument(this.file, {this.caption});
+
+  @override
+  List<Object?> get props => [file, caption];
+}
+
+/// Send a video message to the random group.
+class SendRandomGroupVideo extends RandomGroupChatEvent {
+  final File file;
+  final String? caption;
+  final int? duration;
+
+  const SendRandomGroupVideo(this.file, {this.caption, this.duration});
+
+  @override
+  List<Object?> get props => [file, caption, duration];
+}
+
 // Internal events for stream updates
 class _MessagesReceived extends RandomGroupChatEvent {
   final List<RandomGroupMessage> messages;

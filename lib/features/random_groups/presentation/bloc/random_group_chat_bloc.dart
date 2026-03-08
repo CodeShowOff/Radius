@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
@@ -72,6 +73,10 @@ class RandomGroupChatBloc
     on<ClearRandomGroupChatMessages>(_onClearRandomGroupChatMessages);
     on<_UnreadInfoReceived>(_onUnreadInfoReceived);
     on<RetryRandomGroupMessage>(_onRetryRandomGroupMessage);
+    on<SendRandomGroupImage>(_onSendRandomGroupImage);
+    on<SendRandomGroupAudio>(_onSendRandomGroupAudio);
+    on<SendRandomGroupDocument>(_onSendRandomGroupDocument);
+    on<SendRandomGroupVideo>(_onSendRandomGroupVideo);
   }
 
   /// Check if membership is cached and still valid.
@@ -688,5 +693,57 @@ class RandomGroupChatBloc
   Future<void> close() {
     _cancelSubscriptions();
     return super.close();
+  }
+
+  // ===========================================================================
+  // Media handlers — stubs returning "coming soon"
+  // ===========================================================================
+
+  Future<void> _onSendRandomGroupImage(
+    SendRandomGroupImage event,
+    Emitter<RandomGroupChatState> emit,
+  ) async {
+    if (state.currentGroupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '📷 Photo sharing in groups is coming soon!',
+    ));
+  }
+
+  Future<void> _onSendRandomGroupAudio(
+    SendRandomGroupAudio event,
+    Emitter<RandomGroupChatState> emit,
+  ) async {
+    if (state.currentGroupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '🎤 Voice messages in groups are coming soon!',
+    ));
+  }
+
+  Future<void> _onSendRandomGroupDocument(
+    SendRandomGroupDocument event,
+    Emitter<RandomGroupChatState> emit,
+  ) async {
+    if (state.currentGroupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '📄 Document sharing in groups is coming soon!',
+    ));
+  }
+
+  Future<void> _onSendRandomGroupVideo(
+    SendRandomGroupVideo event,
+    Emitter<RandomGroupChatState> emit,
+  ) async {
+    if (state.currentGroupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '🎬 Video sharing in groups is coming soon!',
+    ));
   }
 }

@@ -152,6 +152,97 @@ class GroupChatService {
     );
   }
 
+  /// Sends a media message to a group.
+  Future<GroupMessage> sendMediaMessage({
+    required String groupId,
+    required String senderId,
+    String? senderName,
+    String? senderPhotoUrl,
+    required GroupMessageType type,
+    required String mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    String text = '',
+    int? duration,
+    String? thumbnailUrl,
+    String? localId,
+  }) async {
+    _logger.d('Sending media message to group: $groupId (type: ${type.name})');
+
+    final messageBatch = _firestore.batch();
+
+    final messageRef = _messagesRef(groupId).doc();
+    final messageData = GroupMessageModel.toCreateData(
+      groupId: groupId,
+      senderId: senderId,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
+      localId: localId,
+    );
+    messageBatch.set(messageRef, messageData);
+
+    // Build preview based on type
+    final preview = switch (type) {
+      GroupMessageType.image => '📷 Photo',
+      GroupMessageType.audio => '🎤 Voice message',
+      GroupMessageType.document => '📄 ${mediaFileName ?? 'Document'}',
+      GroupMessageType.video => '🎬 Video',
+      _ => text.isNotEmpty ? text : '📎 Media',
+    };
+
+    messageBatch.update(_groupRef(groupId), {
+      'lastActivityAt': FieldValue.serverTimestamp(),
+      'lastMessagePreview': preview,
+    });
+
+    final senderMemberRef = _groupRef(groupId).collection('members').doc(senderId);
+    messageBatch.set(senderMemberRef, {
+      'lastReadAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    final senderInverseRef = _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('group_memberships')
+        .doc(groupId);
+    messageBatch.set(
+      senderInverseRef,
+      {'updatedAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    );
+
+    await messageBatch.commit();
+
+    _updateMemberUnreadCounts(groupId, senderId);
+
+    _logger.d('Media message sent: ${messageRef.id}');
+
+    return GroupMessage(
+      id: messageRef.id,
+      groupId: groupId,
+      senderId: senderId,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
+      sentAt: DateTime.now(),
+      localId: localId,
+    );
+  }
+
   /// Fire-and-forget: increment unreadCount for all active members except sender.
   ///
   /// Each member needs 2 operations (member update + inverse index update),

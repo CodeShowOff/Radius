@@ -119,6 +119,18 @@ class ChatSendSticker extends ChatEvent {
   List<Object?> get props => [file];
 }
 
+/// Send a video message.
+class ChatSendVideo extends ChatEvent {
+  final File file;
+  final String? caption;
+  final int? duration;
+
+  const ChatSendVideo(this.file, {this.caption, this.duration});
+
+  @override
+  List<Object?> get props => [file, caption, duration];
+}
+
 /// Load more (older) messages.
 class ChatLoadMore extends ChatEvent {
   const ChatLoadMore();

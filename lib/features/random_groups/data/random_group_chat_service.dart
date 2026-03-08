@@ -148,6 +148,90 @@ class RandomGroupChatService {
     );
   }
 
+  /// Sends a media message to a random group.
+  Future<RandomGroupMessage> sendMediaMessage({
+    required String groupId,
+    required String senderId,
+    required String senderUsername,
+    String? senderName,
+    String? senderPhotoUrl,
+    required RandomGroupMessageType type,
+    required String mediaUrl,
+    String? mediaFileName,
+    int? mediaFileSize,
+    String text = '',
+    int? duration,
+    String? thumbnailUrl,
+    String? localId,
+  }) async {
+    _logger.d('Sending media message to random group: $groupId (type: ${type.name})');
+
+    final messageBatch = _firestore.batch();
+
+    final messageRef = _messagesRef(groupId).doc();
+    final messageData = RandomGroupMessageModel.toCreateData(
+      groupId: groupId,
+      senderId: senderId,
+      senderUsername: senderUsername,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
+      localId: localId,
+    );
+    messageBatch.set(messageRef, messageData);
+
+    // Build preview based on type
+    final preview = switch (type) {
+      RandomGroupMessageType.image => '📷 Photo',
+      RandomGroupMessageType.audio => '🎤 Voice message',
+      RandomGroupMessageType.document => '📄 ${mediaFileName ?? 'Document'}',
+      RandomGroupMessageType.video => '🎬 Video',
+      _ => text.isNotEmpty ? text : '📎 Media',
+    };
+
+    messageBatch.update(_groupRef(groupId), {
+      'lastMessagePreview': preview,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    });
+
+    final senderMemberRef = _groupRef(groupId).collection('members').doc(senderId);
+    messageBatch.set(senderMemberRef, {
+      'lastReadAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await messageBatch.commit();
+
+    _updateMemberUnreadCounts(groupId, senderId);
+
+    _logger.d('Media message sent: ${messageRef.id}');
+
+    return RandomGroupMessage(
+      id: messageRef.id,
+      groupId: groupId,
+      senderId: senderId,
+      senderUsername: senderUsername,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      text: text,
+      type: type,
+      mediaUrl: mediaUrl,
+      mediaFileName: mediaFileName,
+      mediaFileSize: mediaFileSize,
+      duration: duration,
+      thumbnailUrl: thumbnailUrl,
+      sentAt: DateTime.now(),
+      localId: localId,
+    );
+  }
+
   /// Fire-and-forget: increment unreadCount for all members except sender.
   ///
   /// Processes in batches of 450 to stay under Firestore's 500-op limit.

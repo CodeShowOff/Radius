@@ -332,6 +332,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollToBottom();
   }
 
+  void _onVideoSelected(File file) {
+    context.read<ChatBloc>().add(ChatSendVideo(file));
+    _scrollToBottom();
+  }
+
   void _onVoiceRecorded(File file, int duration) {
     context.read<ChatBloc>().add(ChatSendAudio(file, duration: duration));
     _scrollToBottom();
@@ -589,6 +594,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 onCameraImageSelected: (file) =>
                     _onImageSelected(file, ImageSource.camera),
                 onDocumentSelected: _onDocumentSelected,
+                onVideoSelected: _onVideoSelected,
                 onVoiceRecorded: _onVoiceRecorded,
               )
             else

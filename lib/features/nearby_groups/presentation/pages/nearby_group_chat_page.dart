@@ -424,6 +424,7 @@ class _NearbyGroupChatPageState extends State<NearbyGroupChatPage>
         final showSenderInfo = !isMe && _shouldShowSenderInfo(messages, index);
 
         return GroupMessageBubble(
+          messageId: message.id,
           text: message.text,
           isMe: isMe,
           isSystemMessage: message.isSystemMessage,

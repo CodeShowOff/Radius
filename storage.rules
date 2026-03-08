@@ -48,6 +48,35 @@ service firebase.storage {
       ];
     }
     
+    /// Check if file is a video
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+    
+    /// Check if user is a member of a location group.
+    /// Uses a cross-service Firestore read to verify membership.
+    function isLocationGroupMember(groupId) {
+      return isAuthenticated()
+        && firestore.exists(/databases/(default)/documents/location_groups/$(groupId)/members/$(request.auth.uid))
+        && firestore.get(
+          /databases/(default)/documents/location_groups/$(groupId)/members/$(request.auth.uid)
+        ).data.status == 'active';
+    }
+    
+    /// Check if user is a member of a random group.
+    function isRandomGroupMember(groupId) {
+      return isAuthenticated()
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/random_groups/$(groupId)
+        ).data.memberIds;
+    }
+    
+    /// Check if user is a member of a nearby group.
+    function isNearbyGroupMember(groupId) {
+      return isAuthenticated()
+        && firestore.exists(/databases/(default)/documents/nearby_groups/$(groupId)/members/$(request.auth.uid));
+    }
+    
     // ============================================================
     // CHAT MEDIA FILES
     // ============================================================
@@ -98,6 +127,62 @@ service firebase.storage {
       
       // Allow reading stickers only to conversation participants
       allow read: if isConversationParticipant(conversationId);
+    }
+    
+    // Videos in chat_media/videos/{conversationId}/{uuid}.ext
+    match /chat_media/videos/{conversationId}/{fileName} {
+      // Allow conversation participants to upload videos
+      allow write: if isConversationParticipant(conversationId)
+        && isVideo()
+        && isValidSize(100) // 100MB max for videos
+        && resource == null;
+      
+      // Allow reading videos only to conversation participants
+      allow read: if isConversationParticipant(conversationId);
+    }
+    
+    // ============================================================
+    // GROUP MEDIA FILES (location_groups, random_groups, nearby_groups)
+    // ============================================================
+    
+    // Group images in group_media/images/{groupId}/{uuid}.ext
+    match /group_media/images/{groupId}/{fileName} {
+      allow write: if isAuthenticated()
+        && isImage()
+        && isValidSize(20) // 20MB max
+        && resource == null;
+      
+      allow read: if isAuthenticated();
+    }
+    
+    // Group audio in group_media/audio/{groupId}/{uuid}.ext
+    match /group_media/audio/{groupId}/{fileName} {
+      allow write: if isAuthenticated()
+        && isAudio()
+        && isValidSize(50) // 50MB max for audio
+        && resource == null;
+      
+      allow read: if isAuthenticated();
+    }
+    
+    // Group documents in group_media/documents/{groupId}/{uuid}.ext
+    match /group_media/documents/{groupId}/{fileName} {
+      allow write: if isAuthenticated()
+        && isDocument()
+        && isValidSize(100) // 100MB max for documents
+        && resource == null;
+      
+      allow read: if isAuthenticated();
+    }
+    
+    // Group videos in group_media/videos/{groupId}/{uuid}.ext
+    match /group_media/videos/{groupId}/{fileName} {
+      allow write: if isAuthenticated()
+        && isVideo()
+        && isValidSize(100) // 100MB max for videos
+        && resource == null;
+      
+      allow read: if isAuthenticated();
     }
     
     // ============================================================

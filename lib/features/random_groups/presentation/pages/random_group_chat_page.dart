@@ -8,6 +8,10 @@ import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/widgets/group_message_bubble.dart';
 import '../../../../core/widgets/pending_requests_sheet.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../chat/data/audio_session_manager.dart';
+import '../../../chat/presentation/widgets/chat_input.dart';
+import '../../../location_groups/domain/entities/group_message.dart';
+import '../../domain/entities/random_group_message.dart';
 import '../bloc/random_group_bloc.dart';
 import '../bloc/random_group_chat_bloc.dart';
 
@@ -31,9 +35,8 @@ class RandomGroupChatPage extends StatefulWidget {
 
 class _RandomGroupChatPageState extends State<RandomGroupChatPage>
     with WidgetsBindingObserver {
-  final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
+  final AudioSessionManager _audioSessionManager = AudioSessionManager();
   bool _isLoadingMore = false;
   RandomGroupChatBloc? _chatBloc;
   bool _hasScrolledToUnread = false;
@@ -119,10 +122,9 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   void dispose() {
     // CRITICAL: Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
-    _messageController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _focusNode.dispose();
+    _audioSessionManager.dispose();
 
     // Notify notification service that user left this group
     try {
@@ -149,25 +151,6 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             .add(const LoadMoreRandomGroupMessages());
       }
     }
-  }
-
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-
-    context.read<RandomGroupChatBloc>().add(SendRandomGroupMessage(text));
-    _messageController.clear();
-
-    // Scroll to bottom after sending
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   /// Scrolls to the first unread message position.
@@ -608,6 +591,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             if (isFirstUnread)
               GroupUnreadDivider(count: state.unreadCountAtOpen),
             GroupMessageBubble(
+              messageId: message.id,
               text: message.text,
               isMe: isMe,
               isSystemMessage: message.isSystemMessage,
@@ -617,6 +601,14 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
               sentAt: message.sentAt,
               status: message.status,
               isDeleted: message.isDeleted,
+              messageType: _mapMessageType(message.type),
+              mediaUrl: message.mediaUrl,
+              mediaFileName: message.mediaFileName,
+              mediaFileSize: message.mediaFileSize,
+              duration: message.duration,
+              thumbnailUrl: message.thumbnailUrl,
+              uploadProgress: message.uploadProgress,
+              audioSessionManager: _audioSessionManager,
               onSenderTap: message.senderId != null
                   ? () => context.push(
                         Routes.userProfileWith(message.senderId!),
@@ -656,56 +648,54 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
   }
 
   Widget _buildInputArea(ThemeData theme, RandomGroupChatState state) {
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                focusNode: _focusNode,
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                  ),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                minLines: 1,
-                maxLines: 5,
-                textCapitalization: TextCapitalization.sentences,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _sendMessage(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: _sendMessage,
-              icon: const Icon(Icons.send),
-            ),
-          ],
-        ),
-      ),
+    return ChatInput(
+      onSend: (text) {
+        context.read<RandomGroupChatBloc>().add(SendRandomGroupMessage(text));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      },
+      onImageSelected: (file) {
+        context.read<RandomGroupChatBloc>().add(SendRandomGroupImage(file));
+      },
+      onCameraImageSelected: (file) {
+        context.read<RandomGroupChatBloc>().add(SendRandomGroupImage(file));
+      },
+      onDocumentSelected: (file) {
+        context.read<RandomGroupChatBloc>().add(SendRandomGroupDocument(file));
+      },
+      onVideoSelected: (file) {
+        context.read<RandomGroupChatBloc>().add(SendRandomGroupVideo(file));
+      },
+      onVoiceRecorded: (file, duration) {
+        context
+            .read<RandomGroupChatBloc>()
+            .add(SendRandomGroupAudio(file, duration: duration));
+      },
     );
+  }
+
+  /// Maps [RandomGroupMessageType] to [GroupMessageType] for the shared bubble widget.
+  static GroupMessageType _mapMessageType(RandomGroupMessageType type) {
+    switch (type) {
+      case RandomGroupMessageType.text:
+        return GroupMessageType.text;
+      case RandomGroupMessageType.system:
+        return GroupMessageType.system;
+      case RandomGroupMessageType.image:
+        return GroupMessageType.image;
+      case RandomGroupMessageType.audio:
+        return GroupMessageType.audio;
+      case RandomGroupMessageType.document:
+        return GroupMessageType.document;
+      case RandomGroupMessageType.video:
+        return GroupMessageType.video;
+    }
   }
 }

@@ -41,6 +41,51 @@ class SendGroupMessage extends GroupChatEvent {
   List<Object?> get props => [text];
 }
 
+/// Send an image message to the group.
+class SendGroupImage extends GroupChatEvent {
+  final File file;
+  final String? caption;
+
+  const SendGroupImage(this.file, {this.caption});
+
+  @override
+  List<Object?> get props => [file, caption];
+}
+
+/// Send an audio/voice message to the group.
+class SendGroupAudio extends GroupChatEvent {
+  final File file;
+  final int duration;
+
+  const SendGroupAudio(this.file, {required this.duration});
+
+  @override
+  List<Object?> get props => [file, duration];
+}
+
+/// Send a document to the group.
+class SendGroupDocument extends GroupChatEvent {
+  final File file;
+  final String? caption;
+
+  const SendGroupDocument(this.file, {this.caption});
+
+  @override
+  List<Object?> get props => [file, caption];
+}
+
+/// Send a video message to the group.
+class SendGroupVideo extends GroupChatEvent {
+  final File file;
+  final String? caption;
+  final int? duration;
+
+  const SendGroupVideo(this.file, {this.caption, this.duration});
+
+  @override
+  List<Object?> get props => [file, caption, duration];
+}
+
 /// Loads more (older) messages for pagination.
 class LoadMoreGroupMessages extends GroupChatEvent {
   const LoadMoreGroupMessages();

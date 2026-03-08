@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
@@ -72,6 +73,10 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<OpenGroupChat>(_onOpenGroupChat);
     on<CloseGroupChat>(_onCloseGroupChat);
     on<SendGroupMessage>(_onSendGroupMessage);
+    on<SendGroupImage>(_onSendGroupImage);
+    on<SendGroupAudio>(_onSendGroupAudio);
+    on<SendGroupDocument>(_onSendGroupDocument);
+    on<SendGroupVideo>(_onSendGroupVideo);
     on<LoadMoreGroupMessages>(_onLoadMoreGroupMessages);
     on<ResyncGroupChat>(_onResyncGroupChat);
     on<_GroupMessagesReceived>(_onGroupMessagesReceived);
@@ -363,6 +368,54 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
         pendingMessages: errorPending,
       ));
     }
+  }
+
+  Future<void> _onSendGroupImage(
+    SendGroupImage event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    if (state.groupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '📷 Photo sharing in groups is coming soon!',
+    ));
+  }
+
+  Future<void> _onSendGroupAudio(
+    SendGroupAudio event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    if (state.groupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '🎤 Voice messages in groups are coming soon!',
+    ));
+  }
+
+  Future<void> _onSendGroupDocument(
+    SendGroupDocument event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    if (state.groupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '📄 Document sharing in groups is coming soon!',
+    ));
+  }
+
+  Future<void> _onSendGroupVideo(
+    SendGroupVideo event,
+    Emitter<GroupChatState> emit,
+  ) async {
+    if (state.groupId == null || state.currentUserId == null) return;
+    if (!state.membershipVerified) return;
+
+    emit(state.copyWith(
+      errorMessage: '🎬 Video sharing in groups is coming soon!',
+    ));
   }
 
   Future<void> _onLoadMoreGroupMessages(

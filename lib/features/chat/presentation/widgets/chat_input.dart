@@ -13,6 +13,7 @@ class ChatInput extends StatefulWidget {
   final ValueChanged<File>? onImageSelected;
   final ValueChanged<File>? onCameraImageSelected;
   final ValueChanged<File>? onDocumentSelected;
+  final ValueChanged<File>? onVideoSelected;
   final void Function(File file, int duration)? onVoiceRecorded;
   final bool enabled;
   final String? hintText;
@@ -24,6 +25,7 @@ class ChatInput extends StatefulWidget {
     this.onImageSelected,
     this.onCameraImageSelected,
     this.onDocumentSelected,
+    this.onVideoSelected,
     this.onVoiceRecorded,
     this.enabled = true,
     this.hintText,

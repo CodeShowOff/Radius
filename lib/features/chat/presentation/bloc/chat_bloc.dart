@@ -74,6 +74,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSendAudio>(_onSendAudio);
     on<ChatSendDocument>(_onSendDocument);
     on<ChatSendSticker>(_onSendSticker);
+    on<ChatSendVideo>(_onSendVideo);
     on<ChatLoadMore>(_onLoadMore);
     on<ChatSetTyping>(_onSetTyping);
     on<ChatDeleteMessage>(_onDeleteMessage);
@@ -596,6 +597,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         },
       ),
     ));
+  }
+
+  Future<void> _onSendVideo(
+    ChatSendVideo event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.conversationId == null || state.currentUserId == null) {
+      return;
+    }
+
+    // Video uploads are not enabled yet
+    emit(state.copyWith(
+      errorMessage:
+          '🎬 Video sharing is coming soon! Stay tuned.',
+    ));
+    return;
   }
 
   /// Performs the actual media upload and sends the message to Firestore.
