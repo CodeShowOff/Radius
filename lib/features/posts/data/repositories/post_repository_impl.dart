@@ -32,7 +32,12 @@ class PostRepositoryImpl implements IPostRepository {
       final parsedMedia = mediaItems
           .map((m) => MediaItem(
                 url: m['url'] as String,
-                type: m['type'] as PostMediaType,
+                type: m['type'] is PostMediaType
+                    ? m['type'] as PostMediaType
+                    : PostMediaType.values.firstWhere(
+                        (e) => e.name == m['type'],
+                        orElse: () => PostMediaType.image,
+                      ),
                 thumbnailUrl: m['thumbnailUrl'] as String?,
                 width: m['width'] as int?,
                 height: m['height'] as int?,

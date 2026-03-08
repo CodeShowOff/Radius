@@ -104,11 +104,11 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
     Emitter<NewsLocationState> emit,
   ) async {
     final location = NewsLocation(
-      latitude: 0.0, // Manual entry doesn't have GPS coords
-      longitude: 0.0,
+      latitude: event.latitude,
+      longitude: event.longitude,
       district: event.district,
       city: event.city,
-      locality: '', // Not available from manual selection
+      locality: event.locality,
       country: event.country,
       source: LocationSource.manual,
     );

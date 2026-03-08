@@ -50,6 +50,7 @@ class CreateNewsPostBloc
     on<CreateNewsPostMediaRemoved>(_onMediaRemoved);
     on<CreateNewsPostTextChanged>(_onTextChanged);
     on<CreateNewsPostSubmitted>(_onSubmitted);
+    on<CreateNewsPostLocationRetry>(_onLocationRetry);
   }
 
   // ─── User context (set before submitting) ──────────────────────────
@@ -179,6 +180,7 @@ class CreateNewsPostBloc
       emit(state.copyWith(
         status: CreateNewsPostStatus.error,
         errorMessage: e.message,
+        locationFailureReason: e.reason,
       ));
       return;
     } on GeocodingException catch (e) {
@@ -364,6 +366,42 @@ class CreateNewsPostBloc
       ));
     } finally {
       _mediaOptimizer.dispose();
+    }
+  }
+
+  /// Retries only the GPS location detection (no submission).
+  /// Used after the user enables location services or grants permission.
+  Future<void> _onLocationRetry(
+    CreateNewsPostLocationRetry event,
+    Emitter<CreateNewsPostState> emit,
+  ) async {
+    emit(state.copyWith(
+      status: CreateNewsPostStatus.detectingLocation,
+      clearError: true,
+    ));
+
+    try {
+      final location = await _locationService.detectCurrentLocation();
+      _logger.i('Location retry succeeded: ${location.shortDisplayString}');
+
+      if (isClosed) return;
+      emit(state.copyWith(
+        status: CreateNewsPostStatus.idle,
+        detectedLocation: location,
+      ));
+    } on LocationServiceException catch (e) {
+      _logger.w('Location retry failed: ${e.message}');
+      emit(state.copyWith(
+        status: CreateNewsPostStatus.error,
+        errorMessage: e.message,
+        locationFailureReason: e.reason,
+      ));
+    } catch (e, stack) {
+      _logger.e('Location retry unexpected error', error: e, stackTrace: stack);
+      emit(state.copyWith(
+        status: CreateNewsPostStatus.error,
+        errorMessage: 'Failed to detect location. Please try again.',
+      ));
     }
   }
 }

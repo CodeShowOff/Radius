@@ -94,6 +94,7 @@ class NewsPostService {
     return _postsRef
         .where('country', isEqualTo: country)
         .where('district', isEqualTo: district)
+        .where('postType', isEqualTo: 'post')
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
@@ -120,6 +121,7 @@ class NewsPostService {
       Query<Map<String, dynamic>> query = _postsRef
           .where('country', isEqualTo: country)
           .where('district', isEqualTo: district)
+          .where('postType', isEqualTo: 'post')
           .orderBy('createdAt', descending: true)
           .limit(limit);
 

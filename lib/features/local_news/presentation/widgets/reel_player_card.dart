@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../../posts/domain/entities/media_item.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/news_post.dart';
+import '../bloc/news_interaction_cubit.dart';
+import 'news_comments_bottom_sheet.dart';
 
 /// Full-screen reel video player card.
 ///
-/// Plays the first video media item from the [NewsPost].
+/// Receives an externally-managed [VideoPlayerController] from the parent
+/// feed widget which handles pre-caching and lifecycle.
 /// Supports tap-to-pause, mute toggle, and displays an overlay
 /// with author info and caption.
 class ReelPlayerCard extends StatefulWidget {
   final NewsPost reel;
   final bool isActive;
 
+  /// Externally managed controller (may be null while initializing).
+  final VideoPlayerController? controller;
+
+  /// Whether the external controller had an initialization error.
+  final bool controllerError;
+
   const ReelPlayerCard({
     super.key,
     required this.reel,
     this.isActive = false,
+    this.controller,
+    this.controllerError = false,
   });
 
   @override
@@ -24,69 +36,30 @@ class ReelPlayerCard extends StatefulWidget {
 }
 
 class _ReelPlayerCardState extends State<ReelPlayerCard> {
-  VideoPlayerController? _controller;
   bool _isMuted = false;
   bool _showPauseIcon = false;
-  bool _initError = false;
 
-  MediaItem? get _videoItem {
-    final items = widget.reel.mediaItems;
-    if (items.isEmpty) return null;
-    return items.firstWhere(
-      (m) => m.type == PostMediaType.video,
-      orElse: () => items.first,
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initPlayer();
-  }
+  VideoPlayerController? get _controller => widget.controller;
 
   @override
   void didUpdateWidget(covariant ReelPlayerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !(_controller?.value.isPlaying ?? false)) {
-      _controller?.play();
-    } else if (!widget.isActive && (_controller?.value.isPlaying ?? false)) {
-      _controller?.pause();
+
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+
+    if (widget.isActive && !c.value.isPlaying) {
+      c.seekTo(Duration.zero);
+      c.play();
+      _showPauseIcon = false;
+    } else if (!widget.isActive && c.value.isPlaying) {
+      c.pause();
     }
-  }
-
-  Future<void> _initPlayer() async {
-    final video = _videoItem;
-    if (video == null) return;
-
-    final controller =
-        VideoPlayerController.networkUrl(Uri.parse(video.url));
-
-    try {
-      await controller.initialize();
-      controller.setLooping(true);
-      if (widget.isActive) {
-        await controller.play();
-      }
-      if (mounted) {
-        setState(() => _controller = controller);
-      } else {
-        controller.dispose();
-      }
-    } catch (_) {
-      controller.dispose();
-      if (mounted) setState(() => _initError = true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
   }
 
   void _togglePlayPause() {
     final c = _controller;
-    if (c == null) return;
+    if (c == null || !c.value.isInitialized) return;
 
     setState(() {
       if (c.value.isPlaying) {
@@ -106,6 +79,35 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
       _isMuted = !_isMuted;
       c.setVolume(_isMuted ? 0 : 1);
     });
+  }
+
+  void _onLikeTap(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    context.read<NewsInteractionCubit>().toggleLike(
+          userName: authState.user.displayName ?? authState.user.username,
+          userPhotoUrl: authState.user.avatarUrl,
+        );
+  }
+
+  void _onCommentTap(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    NewsCommentsBottomSheet.show(
+      context: context,
+      currentUserId: authState.user.id,
+      currentUserName: authState.user.displayName ?? authState.user.username,
+      currentUserPhotoUrl: authState.user.avatarUrl,
+    );
+  }
+
+  static String _formatCount(int count) {
+    if (count == 0) return '';
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return count.toString();
   }
 
   @override
@@ -234,16 +236,52 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
               ),
             ),
 
-            // Right side — mute button
+            // Right side — interaction buttons + mute
             Positioned(
-              right: 12,
-              bottom: 24,
-              child: IconButton(
-                onPressed: _toggleMute,
-                icon: Icon(
-                  _isMuted ? Icons.volume_off : Icons.volume_up,
-                  color: Colors.white,
-                ),
+              right: 8,
+              bottom: 80,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Like button
+                  BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
+                    buildWhen: (prev, curr) =>
+                        prev.isLiked != curr.isLiked ||
+                        prev.likeCount != curr.likeCount,
+                    builder: (context, state) {
+                      return _ReelActionButton(
+                        icon: state.isLiked
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        label: _formatCount(state.likeCount),
+                        color: state.isLiked ? Colors.red : Colors.white,
+                        onTap: () => _onLikeTap(context),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Comment button
+                  BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
+                    buildWhen: (prev, curr) =>
+                        prev.commentCount != curr.commentCount,
+                    builder: (context, state) {
+                      return _ReelActionButton(
+                        icon: Icons.chat_bubble_outline,
+                        label: _formatCount(state.commentCount),
+                        color: Colors.white,
+                        onTap: () => _onCommentTap(context),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Mute button
+                  _ReelActionButton(
+                    icon: _isMuted ? Icons.volume_off : Icons.volume_up,
+                    label: '',
+                    color: Colors.white,
+                    onTap: _toggleMute,
+                  ),
+                ],
               ),
             ),
 
@@ -271,7 +309,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
   }
 
   Widget _buildVideoLayer(ThemeData theme) {
-    if (_initError) {
+    if (widget.controllerError) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -290,10 +328,11 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
     final c = _controller;
     if (c == null || !c.value.isInitialized) {
       // Show thumbnail while loading
-      final video = _videoItem;
-      if (video?.thumbnailUrl != null) {
+      final items = widget.reel.mediaItems;
+      final thumbnailUrl = items.isNotEmpty ? items.first.thumbnailUrl : null;
+      if (thumbnailUrl != null) {
         return Image.network(
-          video!.thumbnailUrl!,
+          thumbnailUrl,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) =>
               const Center(child: CircularProgressIndicator()),
@@ -308,6 +347,48 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
         width: c.value.size.width,
         height: c.value.size.height,
         child: VideoPlayer(c),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reusable action button for the reel overlay (TikTok-style)
+// ---------------------------------------------------------------------------
+class _ReelActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ReelActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 28, color: color),
+          if (label.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

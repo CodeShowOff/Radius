@@ -42,3 +42,8 @@ class CreateNewsPostTextChanged extends CreateNewsPostEvent {
 class CreateNewsPostSubmitted extends CreateNewsPostEvent {
   const CreateNewsPostSubmitted();
 }
+
+/// User returned from settings — re-check location only (no submission).
+class CreateNewsPostLocationRetry extends CreateNewsPostEvent {
+  const CreateNewsPostLocationRetry();
+}

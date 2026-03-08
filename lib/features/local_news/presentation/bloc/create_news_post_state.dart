@@ -64,6 +64,9 @@ class CreateNewsPostState extends Equatable {
   /// Error message if status is error.
   final String? errorMessage;
 
+  /// Reason for location failure, if the error is location-related.
+  final LocationFailureReason? locationFailureReason;
+
   const CreateNewsPostState({
     this.selectedMedia = const [],
     this.text = '',
@@ -71,11 +74,13 @@ class CreateNewsPostState extends Equatable {
     this.status = CreateNewsPostStatus.idle,
     this.detectedLocation,
     this.errorMessage,
+    this.locationFailureReason,
   });
 
-  /// Whether the post can be submitted (has text or media, and is idle).
+  /// Whether the post can be submitted (has text or media, and is idle or in error).
   bool get canSubmit =>
-      status == CreateNewsPostStatus.idle &&
+      (status == CreateNewsPostStatus.idle ||
+          status == CreateNewsPostStatus.error) &&
       (text.trim().isNotEmpty || selectedMedia.isNotEmpty);
 
   /// Whether media can still be added (max 10).
@@ -95,6 +100,7 @@ class CreateNewsPostState extends Equatable {
     CreateNewsPostStatus? status,
     NewsLocation? detectedLocation,
     String? errorMessage,
+    LocationFailureReason? locationFailureReason,
     bool clearLocation = false,
     bool clearError = false,
   }) {
@@ -106,6 +112,9 @@ class CreateNewsPostState extends Equatable {
       detectedLocation:
           clearLocation ? null : (detectedLocation ?? this.detectedLocation),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      locationFailureReason: clearError
+          ? null
+          : (locationFailureReason ?? this.locationFailureReason),
     );
   }
 
@@ -117,5 +126,6 @@ class CreateNewsPostState extends Equatable {
         status,
         detectedLocation,
         errorMessage,
+        locationFailureReason,
       ];
 }

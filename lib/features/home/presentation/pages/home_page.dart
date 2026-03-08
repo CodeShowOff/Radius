@@ -502,7 +502,7 @@ class _HomePageState extends State<HomePage>
                 // Local News
                 _AnimatedSquareCard(
                   onTap: () => context.push(Routes.localNews),
-                  label: 'Local News',
+                  label: 'Local',
                   color: Theme.of(context).colorScheme.onPrimary,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   isSquare: false,

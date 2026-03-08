@@ -1,14 +1,18 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
 import '../../domain/entities/news_post.dart';
+import '../bloc/news_interaction_cubit.dart';
+import 'news_comments_bottom_sheet.dart';
 
 /// Card widget displaying a single local news post in the feed.
 ///
 /// Shows author info, location badge, text, media carousel, and
-/// read-only like/comment counts. Interactive engagement is added in Phase 6.
+/// interactive like/comment buttons.
 class NewsPostCard extends StatelessWidget {
   final NewsPost post;
   final bool isOwnPost;
@@ -61,11 +65,8 @@ class NewsPostCard extends StatelessWidget {
                 ),
               ),
 
-            // Like / Comment counts (read-only in Phase 4)
-            _ActionBar(
-              likeCount: post.likeCount,
-              commentCount: post.commentCount,
-            ),
+            // Like / Comment actions
+            const _ActionBar(),
           ],
         ),
       ),
@@ -184,61 +185,110 @@ class _NewsPostHeader extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Read-only action bar with like/comment counts
+// Interactive action bar with like/comment buttons
 // ---------------------------------------------------------------------------
 class _ActionBar extends StatelessWidget {
-  final int likeCount;
-  final int commentCount;
-
-  const _ActionBar({
-    required this.likeCount,
-    required this.commentCount,
-  });
+  const _ActionBar();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (likeCount == 0 && commentCount == 0) {
-      return const SizedBox(height: 8);
-    }
+    return BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
+      builder: (context, state) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: Row(
+            children: [
+              // Like button
+              InkWell(
+                onTap: () => _onLikeTap(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        state.isLiked
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        size: 22,
+                        color: state.isLiked
+                            ? Colors.red
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      if (state.likeCount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatCount(state.likeCount),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
-        children: [
-          if (likeCount > 0) ...[
-            Icon(
-              Icons.favorite,
-              size: 16,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              _formatCount(likeCount),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+              const SizedBox(width: 8),
+
+              // Comment button
+              InkWell(
+                onTap: () => _onCommentTap(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 22,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      if (state.commentCount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatCount(state.commentCount),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
-          if (likeCount > 0 && commentCount > 0)
-            const SizedBox(width: 16),
-          if (commentCount > 0) ...[
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 16,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              _formatCount(commentCount),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
-          ],
-        ],
-      ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _onLikeTap(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    context.read<NewsInteractionCubit>().toggleLike(
+          userName: authState.user.displayName ?? authState.user.username,
+          userPhotoUrl: authState.user.avatarUrl,
+        );
+  }
+
+  void _onCommentTap(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    NewsCommentsBottomSheet.show(
+      context: context,
+      currentUserId: authState.user.id,
+      currentUserName: authState.user.displayName ?? authState.user.username,
+      currentUserPhotoUrl: authState.user.avatarUrl,
     );
   }
 

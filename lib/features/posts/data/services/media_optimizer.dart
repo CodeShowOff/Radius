@@ -25,8 +25,8 @@ class OptimizedMedia {
 /// - **Images**: compresses to JPEG, enforces max 10 MB, resizes to fit 1920px.
 /// - **Videos**: enforces max ~60 s duration, compresses via re‑encoding,
 ///   enforces max 50 MB after compression.
-/// - **Reels**: enforces max 30 s duration, validates 9:16 aspect ratio,
-///   same compression pipeline, max 50 MB.
+/// - **Reels**: enforces max 30 s duration, same compression pipeline,
+///   max 50 MB. Any aspect ratio is accepted.
 class MediaOptimizer {
   final Logger _logger;
 
@@ -41,12 +41,6 @@ class MediaOptimizer {
 
   /// Max reel duration in seconds.
   static const int maxReelDurationSeconds = 30;
-
-  /// Expected reel aspect ratio (9:16 = 0.5625).
-  static const double reelAspectRatio = 9 / 16;
-
-  /// Tolerance for reel aspect ratio validation (±5%).
-  static const double reelAspectRatioTolerance = 0.05;
 
   /// Target image dimension (longest side).
   static const int imageMaxDimension = 1920;
@@ -217,11 +211,9 @@ class MediaOptimizer {
   ///
   /// Enforces:
   /// - Max duration: 30 seconds
-  /// - Aspect ratio: 9:16 (vertical, ±5% tolerance)
   /// - Max file size: 50 MB after compression
   ///
-  /// Throws [DatabaseException] if the video exceeds limits or has an
-  /// invalid aspect ratio.
+  /// Throws [DatabaseException] if the video exceeds limits.
   Future<OptimizedMedia> optimizeReelVideo(File file) async {
     final originalSize = await file.length();
     _logger.d('Optimizing reel video: ${_mb(originalSize)} MB');
@@ -236,31 +228,6 @@ class MediaOptimizer {
             'Reel is too long (${durationSec.toStringAsFixed(0)}s). '
             'Maximum duration is $maxReelDurationSeconds seconds.',
         code: 'reel-too-long',
-      );
-    }
-
-    // Validate aspect ratio (9:16 portrait)
-    final width = info.width?.toDouble() ?? 0;
-    final height = info.height?.toDouble() ?? 0;
-
-    if (width <= 0 || height <= 0) {
-      throw const DatabaseException(
-        message: 'Could not determine video dimensions.',
-        code: 'reel-invalid-dimensions',
-      );
-    }
-
-    final aspectRatio = width / height;
-    final lowerBound = reelAspectRatio * (1 - reelAspectRatioTolerance);
-    final upperBound = reelAspectRatio * (1 + reelAspectRatioTolerance);
-
-    if (aspectRatio < lowerBound || aspectRatio > upperBound) {
-      throw DatabaseException(
-        message:
-            'Reel must be in 9:16 vertical format. '
-            'Current ratio is ${width.toInt()}×${height.toInt()}. '
-            'Please record or crop your video in portrait mode.',
-        code: 'reel-invalid-aspect-ratio',
       );
     }
 

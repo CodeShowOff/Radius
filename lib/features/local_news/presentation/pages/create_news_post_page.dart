@@ -2,12 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
 import '../../../posts/presentation/widgets/media_picker_sheet.dart';
+import '../../data/services/news_location_service.dart';
 import '../bloc/create_news_post_bloc.dart';
 
 /// Page for creating a local news post or reel with mandatory GPS verification.
@@ -21,9 +23,17 @@ class CreateNewsPostPage extends StatefulWidget {
   State<CreateNewsPostPage> createState() => _CreateNewsPostPageState();
 }
 
-class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
+class _CreateNewsPostPageState extends State<CreateNewsPostPage>
+    with WidgetsBindingObserver {
   final _textController = TextEditingController();
   bool _initialized = false;
+  bool _waitingForSettingsReturn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
@@ -48,8 +58,88 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _waitingForSettingsReturn) {
+      _waitingForSettingsReturn = false;
+      context
+          .read<CreateNewsPostBloc>()
+          .add(const CreateNewsPostLocationRetry());
+    }
+  }
+
+  void _showLocationErrorDialog(
+      BuildContext context, LocationFailureReason reason) {
+    final String title;
+    final String message;
+    final String actionLabel;
+    final VoidCallback onAction;
+
+    switch (reason) {
+      case LocationFailureReason.serviceDisabled:
+        title = 'Location Disabled';
+        message =
+            'Your device location (GPS) is turned off. Posting local news '
+            'requires your live location to ensure accuracy.\n\n'
+            'Please turn on location services and try again.';
+        actionLabel = 'Open Location Settings';
+        onAction = () {
+          Navigator.of(context).pop();
+          _waitingForSettingsReturn = true;
+          Geolocator.openLocationSettings();
+        };
+      case LocationFailureReason.permissionDenied:
+        title = 'Location Permission Needed';
+        message =
+            'This app needs location permission to tag your news post with '
+            'an accurate location.\n\n'
+            'Please grant location access and try again.';
+        actionLabel = 'Grant Permission';
+        onAction = () {
+          Navigator.of(context).pop();
+          // Only retry location detection — user will press Post manually
+          context
+              .read<CreateNewsPostBloc>()
+              .add(const CreateNewsPostLocationRetry());
+        };
+      case LocationFailureReason.permissionDeniedForever:
+        title = 'Location Permission Blocked';
+        message =
+            'Location permission has been permanently denied. You need to '
+            'enable it from your device\'s app settings.\n\n'
+            'Go to Settings → Apps → Radius → Permissions → Location '
+            'and allow access.';
+        actionLabel = 'Open App Settings';
+        onAction = () {
+          Navigator.of(context).pop();
+          _waitingForSettingsReturn = true;
+          Geolocator.openAppSettings();
+        };
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.location_off, size: 36),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: onAction,
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -62,13 +152,17 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
           );
           context.pop(true);
         } else if (state.status == CreateNewsPostStatus.error) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text(state.errorMessage ?? 'Failed to create news post'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
+          if (state.locationFailureReason != null) {
+            _showLocationErrorDialog(context, state.locationFailureReason!);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text(state.errorMessage ?? 'Failed to create news post'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          }
         }
       },
       builder: (context, state) {
@@ -476,7 +570,6 @@ class _ReelGuidelines extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '\u2022 Maximum 30 seconds\n'
-            '\u2022 Vertical video (9:16 aspect ratio)\n'
             '\u2022 One video per reel',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

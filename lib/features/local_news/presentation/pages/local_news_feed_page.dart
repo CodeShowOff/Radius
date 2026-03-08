@@ -2,19 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../data/services/geocoding_service.dart';
 import '../../domain/entities/news_location.dart';
+import '../../domain/repositories/i_news_interaction_repository.dart';
 import '../bloc/news_feed_bloc.dart';
+import '../bloc/news_interaction_cubit.dart';
 import '../bloc/news_location_bloc.dart';
 import '../bloc/reels_feed_bloc.dart';
+import '../widgets/location_search_picker.dart';
 import '../widgets/news_post_card.dart';
 import '../widgets/reels_feed_view.dart';
 
 /// Main news feed page showing location-scoped news posts.
 ///
-/// Shows a header with the current location and a change-location button.
-/// Supports infinite-scroll pagination and pull-to-refresh.
+/// On first open, checks for a saved location. If none is found,
+/// displays a location setup flow (GPS or manual search). Once a
+/// location is set, shows the feed with posts filtered by that location.
 class LocalNewsFeedPage extends StatefulWidget {
   const LocalNewsFeedPage({super.key});
 
@@ -27,18 +33,59 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
   final _scrollController = ScrollController();
   late final TabController _tabController;
 
+  /// Whether the manual search picker is shown (within setup flow).
+  bool _showManualSearch = false;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
+
+    // Check for saved location after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLocation();
+    });
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    // Rebuild so the FAB reflects the current tab.
+    // Guard with indexIsChanging to avoid double rebuild during animation.
+    if (!_tabController.indexIsChanging) {
+      setState(() {});
+    }
+  }
+
+  /// Gets the current user's ID from AuthBloc, or empty string if not signed in.
+  String get _userId {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated ? authState.user.id : '';
+  }
+
+  /// Checks whether the user already has a saved location.
+  /// If the bloc is still in initial state, dispatches the check event.
+  /// If a location is already ready, loads the feed directly.
+  void _checkLocation() {
+    final locState = context.read<NewsLocationBloc>().state;
+    if (locState.status == NewsLocationStatus.initial) {
+      final uid = _userId;
+      if (uid.isNotEmpty) {
+        context.read<NewsLocationBloc>().add(
+              NewsLocationCheckRequested(userId: uid),
+            );
+      }
+    } else if (locState.hasLocation) {
+      _loadFeed(locState.location!);
+    }
   }
 
   void _loadFeed(NewsLocation location) {
@@ -58,7 +105,6 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
 
-    // Load more when reaching 70% of scroll
     if (currentScroll >= maxScroll * 0.7) {
       final state = context.read<NewsFeedBloc>().state;
       if (state.hasMore && !state.isLoadingMore) {
@@ -102,45 +148,51 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
 
   @override
   Widget build(BuildContext context) {
+    return BlocConsumer<NewsLocationBloc, NewsLocationState>(
+      listener: (context, locationState) {
+        if (locationState.status == NewsLocationStatus.ready &&
+            locationState.location != null) {
+          _loadFeed(locationState.location!);
+          setState(() => _showManualSearch = false);
+        }
+      },
+      builder: (context, locationState) {
+        if (locationState.hasLocation) {
+          return _buildFeedScaffold(context, locationState);
+        }
+        return _buildSetupScaffold(context, locationState);
+      },
+    );
+  }
+
+  // ─── Feed scaffold (location is ready) ─────────────────────────────
+
+  Widget _buildFeedScaffold(
+      BuildContext context, NewsLocationState locationState) {
     final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: BlocBuilder<NewsLocationBloc, NewsLocationState>(
-          builder: (context, locationState) {
-            if (locationState.location != null) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Local News'),
-                  Text(
-                    locationState.location!.shortDisplayString,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              );
-            }
-            return const Text('Local News');
-          },
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Local'),
+            Text(
+              locationState.location!.shortDisplayString,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
         actions: [
-          // Change location button
-          BlocBuilder<NewsLocationBloc, NewsLocationState>(
-            builder: (context, locationState) {
-              if (locationState.hasLocation) {
-                return IconButton(
-                  icon: const Icon(Icons.edit_location_alt_outlined),
-                  tooltip: 'Change Location',
-                  onPressed: () {
-                    context.read<NewsLocationBloc>().add(
-                          const NewsLocationChangeRequested(),
-                        );
-                  },
-                );
-              }
-              return const SizedBox.shrink();
+          IconButton(
+            icon: const Icon(Icons.edit_location_alt_outlined),
+            tooltip: 'Change Location',
+            onPressed: () {
+              context.read<NewsLocationBloc>().add(
+                    const NewsLocationChangeRequested(),
+                  );
             },
           ),
         ],
@@ -163,27 +215,572 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
         tooltip: _tabController.index == 1 ? 'Create Reel' : 'Post News',
         child: const Icon(Icons.add),
       ),
-      body: BlocListener<NewsLocationBloc, NewsLocationState>(
-        listener: (context, locationState) {
-          // When location becomes ready, load the feed
-          if (locationState.status == NewsLocationStatus.ready &&
-              locationState.location != null) {
-            _loadFeed(locationState.location!);
-          }
-        },
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            // Tab 1: News Feed
-            _NewsFeedTab(
-              scrollController: _scrollController,
-              onRefresh: _onRefresh,
-              onConfirmDelete: _confirmDelete,
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _NewsFeedTab(
+            scrollController: _scrollController,
+            onRefresh: _onRefresh,
+            onConfirmDelete: _confirmDelete,
+          ),
+          const ReelsFeedView(),
+        ],
+      ),
+    );
+  }
+
+  // ─── Setup scaffold (location not yet configured) ──────────────────
+
+  Widget _buildSetupScaffold(
+      BuildContext context, NewsLocationState locationState) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Local News')),
+      body: SafeArea(
+        child: _buildSetupBody(context, locationState),
+      ),
+    );
+  }
+
+  Widget _buildSetupBody(
+      BuildContext context, NewsLocationState locationState) {
+    return switch (locationState.status) {
+      NewsLocationStatus.initial || NewsLocationStatus.loading =>
+        const _CheckingLocationView(),
+      NewsLocationStatus.needsSetup => _showManualSearch
+          ? _ManualSearchView(
+              onBack: () => setState(() => _showManualSearch = false),
+            )
+          : _SetupChoiceView(
+              onManualTap: () => setState(() => _showManualSearch = true),
             ),
-            // Tab 2: Reels Feed
-            const ReelsFeedView(),
-          ],
+      NewsLocationStatus.detecting => const _DetectingGpsView(),
+      NewsLocationStatus.detected => _ConfirmLocationView(
+          location: locationState.location!,
+          userId: _userId,
         ),
+      NewsLocationStatus.saving => const _SavingLocationView(),
+      NewsLocationStatus.error => _SetupErrorView(
+          message: locationState.errorMessage ?? 'An unknown error occurred.',
+          onManualTap: () => setState(() => _showManualSearch = true),
+        ),
+      NewsLocationStatus.ready =>
+        const _CheckingLocationView(), // brief flash before rebuild
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Checking / Loading location indicator
+// ---------------------------------------------------------------------------
+class _CheckingLocationView extends StatelessWidget {
+  const _CheckingLocationView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Checking location...'),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Setup Choice — GPS vs Manual Search
+// ---------------------------------------------------------------------------
+class _SetupChoiceView extends StatelessWidget {
+  final VoidCallback onManualTap;
+
+  const _SetupChoiceView({required this.onManualTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            size: 72,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Set Your Location',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'To show you local news and updates from your area, '
+            'we need to know your location. You can change this anytime.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+
+          // GPS option
+          _SetupOptionCard(
+            icon: Icons.my_location,
+            title: 'Use GPS',
+            subtitle: 'Automatically detect your location',
+            recommended: true,
+            onTap: () {
+              context.read<NewsLocationBloc>().add(
+                    const NewsLocationGpsRequested(),
+                  );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Manual search option
+          _SetupOptionCard(
+            icon: Icons.search,
+            title: 'Search Location',
+            subtitle: 'Search for your city or area',
+            onTap: onManualTap,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Setup option card
+// ---------------------------------------------------------------------------
+class _SetupOptionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool recommended;
+  final VoidCallback onTap;
+
+  const _SetupOptionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.recommended = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: recommended ? 2 : 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: recommended
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline,
+          width: recommended ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Icon(icon, size: 32, color: theme.colorScheme.primary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (recommended) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Recommended',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GPS detecting view
+// ---------------------------------------------------------------------------
+class _DetectingGpsView extends StatelessWidget {
+  const _DetectingGpsView();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 24),
+          Text(
+            'Detecting your location...',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'This may take a moment.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Confirm detected / selected location
+// ---------------------------------------------------------------------------
+class _ConfirmLocationView extends StatelessWidget {
+  final NewsLocation location;
+  final String userId;
+
+  const _ConfirmLocationView({
+    required this.location,
+    required this.userId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 72,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Location Found',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'You will see news from:',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+
+          // Location display card
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    location.displayString,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    location.country,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (location.source == LocationSource.gps) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.gps_fixed,
+                          size: 14,
+                          color: theme.colorScheme.outline,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Detected via GPS',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Confirm button
+          FilledButton.icon(
+            onPressed: () {
+              context.read<NewsLocationBloc>().add(
+                    NewsLocationSaveRequested(userId: userId),
+                  );
+            },
+            icon: const Icon(Icons.check),
+            label: const Text('Confirm Location'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Choose different location
+          OutlinedButton(
+            onPressed: () {
+              context.read<NewsLocationBloc>().add(
+                    const NewsLocationChangeRequested(),
+                  );
+            },
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Choose Different Location'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Saving location indicator
+// ---------------------------------------------------------------------------
+class _SavingLocationView extends StatelessWidget {
+  const _SavingLocationView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Saving your location...'),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error view (setup context)
+// ---------------------------------------------------------------------------
+class _SetupErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onManualTap;
+
+  const _SetupErrorView({
+    required this.message,
+    required this.onManualTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 72,
+            color: theme.colorScheme.error,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Something went wrong',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          FilledButton.icon(
+            onPressed: () {
+              context.read<NewsLocationBloc>().add(
+                    const NewsLocationGpsRequested(),
+                  );
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try GPS Again'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: onManualTap,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Search Location Manually'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manual search view — wraps LocationSearchPicker
+// ---------------------------------------------------------------------------
+class _ManualSearchView extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const _ManualSearchView({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Search Location',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Search for your city or area. Select from the suggestions below.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 24),
+          LocationSearchPicker(
+            geocodingService: getIt<GeocodingService>(),
+            onLocationSelected: (location) {
+              context.read<NewsLocationBloc>().add(
+                    NewsLocationManualSelected(
+                      district: location.district,
+                      city: location.city,
+                      country: location.country,
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      locality: location.locality,
+                    ),
+                  );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -268,14 +865,24 @@ class _NewsFeedTab extends StatelessWidget {
           final post = state.posts[index];
           final isOwn = post.authorId == currentUserId;
 
-          return NewsPostCard(
-            post: post,
-            isOwnPost: isOwn,
-            onDelete: isOwn
-                ? () => onConfirmDelete(context, post.id)
-                : null,
-            onTap: () => context.push(
-              Routes.localNewsPostWith(post.id),
+          return BlocProvider(
+            create: (_) => NewsInteractionCubit(
+              repository: getIt<INewsInteractionRepository>(),
+            )..loadInteractionInfo(
+                postId: post.id,
+                userId: currentUserId,
+                initialLikeCount: post.likeCount,
+                initialCommentCount: post.commentCount,
+              ),
+            child: NewsPostCard(
+              post: post,
+              isOwnPost: isOwn,
+              onDelete: isOwn
+                  ? () => onConfirmDelete(context, post.id)
+                  : null,
+              onTap: () => context.push(
+                Routes.localNewsPostWith(post.id),
+              ),
             ),
           );
         },

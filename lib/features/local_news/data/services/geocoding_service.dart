@@ -96,6 +96,53 @@ class GeocodingService {
     return '';
   }
 
+  /// Forward-geocodes a query string into potential [NewsLocation] suggestions.
+  ///
+  /// Uses platform-native geocoding to convert an address string to coordinates,
+  /// then reverse-geocodes each result for standardized place names.
+  /// Returns an empty list if no results are found or on error.
+  Future<List<NewsLocation>> searchLocations(String query) async {
+    if (query.trim().length < 2) return [];
+
+    try {
+      _logger.d('Forward geocoding: "$query"');
+
+      final locations = await locationFromAddress(query);
+
+      if (locations.isEmpty) return [];
+
+      final results = <NewsLocation>[];
+      for (final loc in locations.take(5)) {
+        try {
+          final newsLocation = await reverseGeocode(
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            source: LocationSource.manual,
+          );
+
+          // Avoid duplicates based on district+city+country
+          final isDuplicate = results.any((r) =>
+              r.district == newsLocation.district &&
+              r.city == newsLocation.city &&
+              r.country == newsLocation.country);
+
+          if (!isDuplicate) {
+            results.add(newsLocation);
+          }
+        } catch (e) {
+          _logger.w('Failed to reverse-geocode search result', error: e);
+        }
+      }
+
+      _logger.i('Found ${results.length} locations for "$query"');
+      return results;
+    } catch (e) {
+      _logger.w('Forward geocoding returned no results for "$query"',
+          error: e);
+      return [];
+    }
+  }
+
   /// Resolves locality/neighborhood from placemark with fallbacks.
   ///
   /// Priority: subLocality → thoroughfare → locality

@@ -37,6 +37,7 @@ class NewsLocationService {
     if (!serviceEnabled) {
       throw const LocationServiceException(
         'Location services are disabled. Please enable them in settings.',
+        reason: LocationFailureReason.serviceDisabled,
       );
     }
 
@@ -46,6 +47,7 @@ class NewsLocationService {
       if (permission == LocationPermission.denied) {
         throw const LocationServiceException(
           'Location permission denied. Please grant location access.',
+          reason: LocationFailureReason.permissionDenied,
         );
       }
     }
@@ -54,6 +56,7 @@ class NewsLocationService {
       throw const LocationServiceException(
         'Location permission is permanently denied. '
         'Please enable it from app settings.',
+        reason: LocationFailureReason.permissionDeniedForever,
       );
     }
 
@@ -192,11 +195,27 @@ class NewsLocationService {
   }
 }
 
+/// Reason why location acquisition failed.
+enum LocationFailureReason {
+  /// Device location services (GPS) are turned off.
+  serviceDisabled,
+
+  /// User denied the location permission prompt.
+  permissionDenied,
+
+  /// User permanently denied location permission.
+  permissionDeniedForever,
+}
+
 /// Exception thrown when location services or permissions are unavailable.
 class LocationServiceException implements Exception {
   final String message;
+  final LocationFailureReason reason;
 
-  const LocationServiceException(this.message);
+  const LocationServiceException(
+    this.message, {
+    this.reason = LocationFailureReason.serviceDisabled,
+  });
 
   @override
   String toString() => 'LocationServiceException: $message';

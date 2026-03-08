@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/di/injection.dart';
+import '../../data/services/geocoding_service.dart';
 import '../../domain/entities/news_location.dart';
 import '../bloc/news_location_bloc.dart';
-import '../widgets/manual_location_picker.dart';
+import '../widgets/location_search_picker.dart';
 
 /// Page for setting up the user's news location.
 ///
@@ -152,9 +154,9 @@ class _SetupChoiceViewState extends State<_SetupChoiceView> {
 
           // Manual option
           _OptionCard(
-            icon: Icons.edit_location_alt_outlined,
-            title: 'Enter Manually',
-            subtitle: 'Select your country and region',
+            icon: Icons.search,
+            title: 'Search Location',
+            subtitle: 'Search for your city or area',
             onTap: () {
               setState(() => _showManualPicker = true);
             },
@@ -533,7 +535,7 @@ class _ErrorView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Manual entry view — wraps ManualLocationPicker
+// Manual entry view — wraps LocationSearchPicker
 // ---------------------------------------------------------------------------
 class _ManualEntryView extends StatelessWidget {
   final VoidCallback onBack;
@@ -557,7 +559,7 @@ class _ManualEntryView extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Select Location',
+                'Search Location',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -566,19 +568,23 @@ class _ManualEntryView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Choose your country and region to see local news.',
+            'Search for your city or area. Select from the suggestions below.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
-          ManualLocationPicker(
-            onLocationSelected: (country, state) {
+          LocationSearchPicker(
+            geocodingService: getIt<GeocodingService>(),
+            onLocationSelected: (location) {
               context.read<NewsLocationBloc>().add(
                     NewsLocationManualSelected(
-                      district: state,
-                      city: state, // Use state/region as city for manual entry
-                      country: country,
+                      district: location.district,
+                      city: location.city,
+                      country: location.country,
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      locality: location.locality,
                     ),
                   );
             },
