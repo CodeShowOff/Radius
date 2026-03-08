@@ -25,6 +25,7 @@ class NewsUploadResult {
 /// Storage paths:
 /// - `local_news_media/images/{authorId}/{postId}/{uuid}.ext` (max 10MB)
 /// - `local_news_media/videos/{authorId}/{postId}/{uuid}.ext` (max 50MB)
+/// - `local_news_media/reels/{authorId}/{postId}/{uuid}.ext` (max 50MB)
 /// - `local_news_media/thumbnails/{authorId}/{postId}/{uuid}.jpg` (max 5MB)
 class NewsMediaService {
   final FirebaseStorage _storage;
@@ -32,6 +33,7 @@ class NewsMediaService {
 
   static const String _imagesPath = 'local_news_media/images';
   static const String _videosPath = 'local_news_media/videos';
+  static const String _reelsPath = 'local_news_media/reels';
   static const String _thumbnailsPath = 'local_news_media/thumbnails';
 
   static const _uuid = Uuid();
@@ -84,6 +86,22 @@ class NewsMediaService {
     return _uploadFile(
       file: file,
       storagePath: _thumbnailsPath,
+      authorId: authorId,
+      postId: postId,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Uploads a reel video and returns the download URL + storage path.
+  Future<NewsUploadResult> uploadReel({
+    required File file,
+    required String authorId,
+    required String postId,
+    void Function(double progress)? onProgress,
+  }) async {
+    return _uploadFile(
+      file: file,
+      storagePath: _reelsPath,
       authorId: authorId,
       postId: postId,
       onProgress: onProgress,
@@ -198,6 +216,7 @@ class NewsMediaService {
     final paths = [
       '$_imagesPath/$authorId/$postId',
       '$_videosPath/$authorId/$postId',
+      '$_reelsPath/$authorId/$postId',
       '$_thumbnailsPath/$authorId/$postId',
     ];
 
@@ -232,6 +251,9 @@ class NewsMediaService {
     if (storagePath.contains('images')) {
       maxSize = maxImageSize;
       fileType = 'Image';
+    } else if (storagePath.contains('reels')) {
+      maxSize = maxVideoSize;
+      fileType = 'Reel';
     } else if (storagePath.contains('videos')) {
       maxSize = maxVideoSize;
       fileType = 'Video';
@@ -266,6 +288,9 @@ class NewsMediaService {
     if (storagePath.contains('images')) {
       allowedExtensions = imageExtensions;
       fileType = 'Image';
+    } else if (storagePath.contains('reels')) {
+      allowedExtensions = videoExtensions;
+      fileType = 'Reel';
     } else if (storagePath.contains('videos')) {
       allowedExtensions = videoExtensions;
       fileType = 'Video';

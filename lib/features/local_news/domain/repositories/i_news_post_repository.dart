@@ -19,6 +19,7 @@ abstract class INewsPostRepository {
     required String city,
     required String locality,
     required String country,
+    String postType = 'post',
   });
 
   /// Gets a single post by ID.
@@ -54,4 +55,19 @@ abstract class INewsPostRepository {
 
   /// Streams real-time updates for a single post.
   Stream<NewsPost?> postStream(String postId);
+
+  /// Gets the reels feed for a specific location (district + country).
+  Future<Either<Failure, List<NewsPost>>> getReelsFeed({
+    required String country,
+    required String district,
+    int limit = 10,
+    DocumentSnapshot? startAfter,
+  });
+
+  /// Watches the real-time reels feed for a location.
+  Stream<List<NewsPost>> watchReelsFeed({
+    required String country,
+    required String district,
+    int limit = 10,
+  });
 }

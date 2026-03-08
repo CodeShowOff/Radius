@@ -138,6 +138,72 @@ class NewsPostService {
     }
   }
 
+  // ==================== REELS FEED QUERIES ====================
+
+  /// Default page size for reels feed (smaller than posts since videos are heavier).
+  static const int defaultReelsPageSize = 10;
+
+  /// Watches the reels feed for a specific district, ordered by creation time.
+  ///
+  /// Only returns posts with `postType == 'reel'`.
+  /// Requires composite index: country ASC, district ASC, postType ASC, createdAt DESC.
+  Stream<List<NewsPostModel>> watchReelsFeed({
+    required String country,
+    required String district,
+    int limit = defaultReelsPageSize,
+  }) {
+    return _postsRef
+        .where('country', isEqualTo: country)
+        .where('district', isEqualTo: district)
+        .where('postType', isEqualTo: 'reel')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        try {
+          return NewsPostModel.fromFirestore(doc);
+        } catch (e) {
+          _logger.e('Error parsing reel ${doc.id}', error: e);
+          return null;
+        }
+      }).whereType<NewsPostModel>().toList();
+    });
+  }
+
+  /// Fetches a page of reels for a district (for pagination).
+  ///
+  /// Only returns posts with `postType == 'reel'`.
+  /// Requires composite index: country ASC, district ASC, postType ASC, createdAt DESC.
+  Future<List<NewsPostModel>> getReelsFeed({
+    required String country,
+    required String district,
+    int limit = defaultReelsPageSize,
+    DocumentSnapshot? startAfter,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _postsRef
+          .where('country', isEqualTo: country)
+          .where('district', isEqualTo: district)
+          .where('postType', isEqualTo: 'reel')
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
+
+      if (startAfter != null) {
+        query = query.startAfterDocument(startAfter);
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs
+          .map((doc) => NewsPostModel.fromFirestore(doc))
+          .toList();
+    } catch (e, stack) {
+      _logger.e('Error fetching reels feed for $district, $country',
+          error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
   /// Gets posts by a specific author, ordered by creation time.
   Future<List<NewsPostModel>> getPostsByAuthor({
     required String authorId,

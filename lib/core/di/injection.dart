@@ -78,6 +78,7 @@ import '../../features/local_news/domain/repositories/i_news_post_repository.dar
 import '../../features/local_news/presentation/bloc/create_news_post_bloc.dart';
 import '../../features/local_news/presentation/bloc/news_feed_bloc.dart';
 import '../../features/local_news/presentation/bloc/news_location_bloc.dart';
+import '../../features/local_news/presentation/bloc/reels_feed_bloc.dart';
 import '../settings/app_settings_store.dart';
 import '../theme/theme_cubit.dart';
 
@@ -509,6 +510,11 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<NewsFeedBloc>()) {
     getIt.registerFactory<NewsFeedBloc>(
       () => NewsFeedBloc(repository: getIt<INewsPostRepository>()),
+    );
+  }
+  if (!getIt.isRegistered<ReelsFeedBloc>()) {
+    getIt.registerFactory<ReelsFeedBloc>(
+      () => ReelsFeedBloc(repository: getIt<INewsPostRepository>()),
     );
   }
   if (!getIt.isRegistered<CreateNewsPostBloc>()) {

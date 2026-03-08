@@ -62,6 +62,7 @@ import '../../features/posts/presentation/pages/post_feed_page.dart';
 import '../../features/local_news/presentation/bloc/create_news_post_bloc.dart';
 import '../../features/local_news/presentation/bloc/news_feed_bloc.dart';
 import '../../features/local_news/presentation/bloc/news_location_bloc.dart';
+import '../../features/local_news/presentation/bloc/reels_feed_bloc.dart';
 import '../../features/local_news/presentation/pages/create_news_post_page.dart';
 import '../../features/local_news/presentation/pages/local_news_feed_page.dart';
 import '../../features/local_news/presentation/pages/news_location_setup_page.dart';
@@ -283,6 +284,7 @@ GoRouter get appRouter {
         builder: (context, state) => MultiBlocProvider(
           providers: [
             BlocProvider(create: (_) => getIt<NewsFeedBloc>()),
+            BlocProvider(create: (_) => getIt<ReelsFeedBloc>()),
             BlocProvider.value(value: getIt<NewsLocationBloc>()),
           ],
           child: const LocalNewsFeedPage(),
@@ -307,6 +309,20 @@ GoRouter get appRouter {
         builder: (context, state) => BlocProvider(
           create: (_) => getIt<CreateNewsPostBloc>(),
           child: const CreateNewsPostPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.localNewsCreateReel,
+        name: 'localNewsCreateReel',
+        builder: (context, state) => BlocProvider(
+          create: (_) => CreateNewsPostBloc(
+            repository: getIt<INewsPostRepository>(),
+            mediaService: getIt(),
+            locationService: getIt(),
+            mediaOptimizer: getIt(),
+            postType: 'reel',
+          ),
+          child: const CreateNewsPostPage(isReel: true),
         ),
       ),
       GoRoute(

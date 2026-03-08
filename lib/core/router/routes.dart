@@ -113,6 +113,7 @@ abstract class Routes {
   static const String localNews = '/local-news';
   static const String localNewsSetup = '/local-news/setup';
   static const String localNewsCreate = '/local-news/create';
+  static const String localNewsCreateReel = '/local-news/create-reel';
   static const String localNewsPost = '/local-news/post/:postId';
 
   /// Helper to build a local news post detail route with post ID.

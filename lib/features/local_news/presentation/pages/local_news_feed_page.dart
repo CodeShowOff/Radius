@@ -7,7 +7,9 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/news_location.dart';
 import '../bloc/news_feed_bloc.dart';
 import '../bloc/news_location_bloc.dart';
+import '../bloc/reels_feed_bloc.dart';
 import '../widgets/news_post_card.dart';
+import '../widgets/reels_feed_view.dart';
 
 /// Main news feed page showing location-scoped news posts.
 ///
@@ -20,23 +22,31 @@ class LocalNewsFeedPage extends StatefulWidget {
   State<LocalNewsFeedPage> createState() => _LocalNewsFeedPageState();
 }
 
-class _LocalNewsFeedPageState extends State<LocalNewsFeedPage> {
+class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
+    with TickerProviderStateMixin {
   final _scrollController = ScrollController();
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
   void _loadFeed(NewsLocation location) {
     context.read<NewsFeedBloc>().add(NewsFeedLoadRequested(
+          country: location.country,
+          district: location.district,
+        ));
+    context.read<ReelsFeedBloc>().add(ReelsFeedLoadRequested(
           country: location.country,
           district: location.district,
         ));
@@ -134,11 +144,23 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage> {
             },
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Feed'),
+            Tab(text: 'Reels'),
+          ],
+        ),
       ),
-      // FAB to create a new news post (wired in Phase 5)
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(Routes.localNewsCreate),
-        tooltip: 'Post News',
+        onPressed: () {
+          if (_tabController.index == 1) {
+            context.push(Routes.localNewsCreateReel);
+          } else {
+            context.push(Routes.localNewsCreate);
+          }
+        },
+        tooltip: _tabController.index == 1 ? 'Create Reel' : 'Post News',
         child: const Icon(Icons.add),
       ),
       body: BlocListener<NewsLocationBloc, NewsLocationState>(
@@ -149,34 +171,68 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage> {
             _loadFeed(locationState.location!);
           }
         },
-        child: BlocBuilder<NewsFeedBloc, NewsFeedState>(
-          builder: (context, state) {
-            if (state.status == NewsFeedStatus.initial ||
-                state.status == NewsFeedStatus.loading) {
-              return _buildLoadingView();
-            }
-
-            if (state.status == NewsFeedStatus.error && state.posts.isEmpty) {
-              return _ErrorView(
-                message: state.errorMessage ?? 'Failed to load news',
-                onRetry: () {
-                  final loc =
-                      context.read<NewsLocationBloc>().state.location;
-                  if (loc != null) _loadFeed(loc);
-                },
-              );
-            }
-
-            if (state.posts.isEmpty) {
-              return _EmptyFeedView(
-                locationLabel: state.locationLabel,
-              );
-            }
-
-            return _buildFeedList(context, state);
-          },
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            // Tab 1: News Feed
+            _NewsFeedTab(
+              scrollController: _scrollController,
+              onRefresh: _onRefresh,
+              onConfirmDelete: _confirmDelete,
+            ),
+            // Tab 2: Reels Feed
+            const ReelsFeedView(),
+          ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// News Feed tab content (extracted from the original body)
+// ---------------------------------------------------------------------------
+class _NewsFeedTab extends StatelessWidget {
+  final ScrollController scrollController;
+  final Future<void> Function() onRefresh;
+  final void Function(BuildContext, String) onConfirmDelete;
+
+  const _NewsFeedTab({
+    required this.scrollController,
+    required this.onRefresh,
+    required this.onConfirmDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<NewsFeedBloc, NewsFeedState>(
+      builder: (context, state) {
+        if (state.status == NewsFeedStatus.initial ||
+            state.status == NewsFeedStatus.loading) {
+          return _buildLoadingView();
+        }
+
+        if (state.status == NewsFeedStatus.error && state.posts.isEmpty) {
+          return _ErrorView(
+            message: state.errorMessage ?? 'Failed to load news',
+            onRetry: () {
+              final loc = context.read<NewsLocationBloc>().state.location;
+              if (loc != null) {
+                context.read<NewsFeedBloc>().add(NewsFeedLoadRequested(
+                      country: loc.country,
+                      district: loc.district,
+                    ));
+              }
+            },
+          );
+        }
+
+        if (state.posts.isEmpty) {
+          return _EmptyFeedView(locationLabel: state.locationLabel);
+        }
+
+        return _buildFeedList(context, state);
+      },
     );
   }
 
@@ -197,9 +253,9 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage> {
         authState is AuthAuthenticated ? authState.user.id : '';
 
     return RefreshIndicator(
-      onRefresh: _onRefresh,
+      onRefresh: onRefresh,
       child: ListView.builder(
-        controller: _scrollController,
+        controller: scrollController,
         itemCount: state.posts.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= state.posts.length) {
@@ -216,7 +272,7 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage> {
             post: post,
             isOwnPost: isOwn,
             onDelete: isOwn
-                ? () => _confirmDelete(context, post.id)
+                ? () => onConfirmDelete(context, post.id)
                 : null,
             onTap: () => context.push(
               Routes.localNewsPostWith(post.id),

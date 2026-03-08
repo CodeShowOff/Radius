@@ -1307,6 +1307,11 @@ service cloud.firestore {
         && request.resource.data.latitude is number
         && request.resource.data.longitude is number
         && (
+          // postType is optional but if present, must be 'post' or 'reel'
+          !('postType' in request.resource.data.keys())
+          || request.resource.data.postType in ['post', 'reel']
+        )
+        && (
           // Text is optional but if present, enforce max length
           !('text' in request.resource.data.keys())
           || request.resource.data.text == null
@@ -1324,7 +1329,12 @@ service cloud.firestore {
         && request.resource.data.authorId == resource.data.authorId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.country == resource.data.country
-        && request.resource.data.district == resource.data.district;
+        && request.resource.data.district == resource.data.district
+        && (
+          // postType is immutable after creation
+          !('postType' in request.resource.data.keys())
+          || request.resource.data.postType == resource.data.postType
+        );
 
       // Only the author can delete
       allow delete: if isAuthenticated()

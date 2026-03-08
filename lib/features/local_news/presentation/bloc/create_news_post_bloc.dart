@@ -30,11 +30,15 @@ class CreateNewsPostBloc
   final MediaOptimizer _mediaOptimizer;
   final Logger _logger;
 
+  /// The type of post being created: 'post' or 'reel'.
+  final String postType;
+
   CreateNewsPostBloc({
     required INewsPostRepository repository,
     required NewsMediaService mediaService,
     required NewsLocationService locationService,
     required MediaOptimizer mediaOptimizer,
+    this.postType = 'post',
     Logger? logger,
   })  : _repository = repository,
         _mediaService = mediaService,
@@ -67,11 +71,40 @@ class CreateNewsPostBloc
 
   // ─── Event handlers ────────────────────────────────────────────────
 
+  /// Whether this BLoC is creating a reel.
+  bool get isReel => postType == 'reel';
+
   void _onMediaAdded(
     CreateNewsPostMediaAdded event,
     Emitter<CreateNewsPostState> emit,
   ) {
     final currentMedia = List<SelectedNewsMedia>.from(state.selectedMedia);
+
+    // Reels allow exactly 1 video
+    if (isReel) {
+      if (currentMedia.isNotEmpty) return;
+
+      final file = event.files.first;
+      final ext = file.path.split('.').last.toLowerCase();
+      final type = ['mp4', 'mov', 'avi'].contains(ext)
+          ? PostMediaType.video
+          : PostMediaType.image;
+
+      if (type != PostMediaType.video) {
+        emit(state.copyWith(
+          status: CreateNewsPostStatus.error,
+          errorMessage: 'Reels only support video files.',
+        ));
+        return;
+      }
+
+      emit(state.copyWith(
+        selectedMedia: [SelectedNewsMedia(file: file, type: type)],
+        status: CreateNewsPostStatus.idle,
+      ));
+      return;
+    }
+
     final remaining = 10 - currentMedia.length;
     if (remaining <= 0) return;
 
@@ -111,6 +144,18 @@ class CreateNewsPostBloc
     Emitter<CreateNewsPostState> emit,
   ) async {
     if (!state.canSubmit || _authorId == null) return;
+
+    // Reel-specific pre-validation
+    if (isReel) {
+      if (state.selectedMedia.length != 1 ||
+          state.selectedMedia.first.type != PostMediaType.video) {
+        emit(state.copyWith(
+          status: CreateNewsPostStatus.error,
+          errorMessage: 'A reel requires exactly one video.',
+        ));
+        return;
+      }
+    }
 
     // ─── Step 1: Detect live GPS location ─────────────────────────
     emit(state.copyWith(
@@ -172,6 +217,12 @@ class CreateNewsPostBloc
               file: result.file,
               type: media.type,
             ));
+          } else if (isReel) {
+            final result = await _mediaOptimizer.optimizeReelVideo(media.file);
+            optimizedMedia.add(SelectedNewsMedia(
+              file: result.file,
+              type: media.type,
+            ));
           } else {
             final result = await _mediaOptimizer.optimizeVideo(media.file);
             optimizedMedia.add(SelectedNewsMedia(
@@ -215,11 +266,19 @@ class CreateNewsPostBloc
         String? thumbnailUrl;
 
         if (media.type == PostMediaType.video) {
-          result = await _mediaService.uploadVideo(
-            file: media.file,
-            authorId: _authorId!,
-            postId: postId,
-          );
+          if (isReel) {
+            result = await _mediaService.uploadReel(
+              file: media.file,
+              authorId: _authorId!,
+              postId: postId,
+            );
+          } else {
+            result = await _mediaService.uploadVideo(
+              file: media.file,
+              authorId: _authorId!,
+              postId: postId,
+            );
+          }
 
           // Generate & upload video thumbnail
           final thumbFile =
@@ -278,6 +337,7 @@ class CreateNewsPostBloc
         city: location.city,
         locality: location.locality,
         country: location.country,
+        postType: postType,
       );
 
       createResult.fold(

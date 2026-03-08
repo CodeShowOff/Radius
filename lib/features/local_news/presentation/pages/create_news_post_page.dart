@@ -1,15 +1,21 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
 import '../../../posts/presentation/widgets/media_picker_sheet.dart';
 import '../bloc/create_news_post_bloc.dart';
 
-/// Page for creating a local news post with mandatory GPS verification.
+/// Page for creating a local news post or reel with mandatory GPS verification.
 class CreateNewsPostPage extends StatefulWidget {
-  const CreateNewsPostPage({super.key});
+  /// When true, the page is in reel-creation mode (single video, 30s max).
+  final bool isReel;
+
+  const CreateNewsPostPage({super.key, this.isReel = false});
 
   @override
   State<CreateNewsPostPage> createState() => _CreateNewsPostPageState();
@@ -68,7 +74,7 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
       builder: (context, state) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Post News'),
+            title: Text(widget.isReel ? 'Create Reel' : 'Post News'),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -87,7 +93,7 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Post'),
+                      : Text(widget.isReel ? 'Post' : 'Post'),
                 ),
               ),
             ],
@@ -113,11 +119,13 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
                         TextField(
                           controller: _textController,
                           maxLines: null,
-                          minLines: 4,
+                          minLines: widget.isReel ? 2 : 4,
                           maxLength: 2000,
                           textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            hintText: 'What\'s happening in your area?',
+                          decoration: InputDecoration(
+                            hintText: widget.isReel
+                                ? 'Add a caption...'
+                                : 'What\'s happening in your area?',
                             border: InputBorder.none,
                             counterText: '',
                           ),
@@ -127,6 +135,10 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
                         ),
 
                         const SizedBox(height: 16),
+
+                        // Reel guidelines
+                        if (widget.isReel && state.selectedMedia.isEmpty)
+                          _ReelGuidelines(),
 
                         // Media preview strip
                         if (state.selectedMedia.isNotEmpty) ...[
@@ -143,10 +155,14 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
                         if (state.canAddMedia)
                           OutlinedButton.icon(
                             onPressed: () => _addMedia(context, state),
-                            icon: const Icon(Icons.add_photo_alternate),
-                            label: Text(state.selectedMedia.isEmpty
-                                ? 'Add Photos or Video'
-                                : 'Add More (${state.selectedMedia.length}/10)'),
+                            icon: Icon(widget.isReel
+                                ? Icons.videocam
+                                : Icons.add_photo_alternate),
+                            label: Text(widget.isReel
+                                ? 'Select Video'
+                                : state.selectedMedia.isEmpty
+                                    ? 'Add Photos or Video'
+                                    : 'Add More (${state.selectedMedia.length}/10)'),
                           ),
                       ],
                     ),
@@ -162,14 +178,39 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
 
   Future<void> _addMedia(
       BuildContext context, CreateNewsPostState state) async {
-    final remaining = 10 - state.selectedMedia.length;
-    final files = await MediaPickerSheet.show(
-      context,
-      maxItems: remaining,
-    );
+    if (widget.isReel) {
+      // For reels: pick a single video
+      final files = await _pickReelVideo(context);
+      if (files != null && files.isNotEmpty && context.mounted) {
+        context
+            .read<CreateNewsPostBloc>()
+            .add(CreateNewsPostMediaAdded(files));
+      }
+    } else {
+      final remaining = 10 - state.selectedMedia.length;
+      final files = await MediaPickerSheet.show(
+        context,
+        maxItems: remaining,
+      );
+      if (files != null && files.isNotEmpty && context.mounted) {
+        context
+            .read<CreateNewsPostBloc>()
+            .add(CreateNewsPostMediaAdded(files));
+      }
+    }
+  }
 
-    if (files != null && files.isNotEmpty && context.mounted) {
-      context.read<CreateNewsPostBloc>().add(CreateNewsPostMediaAdded(files));
+  Future<List<File>?> _pickReelVideo(BuildContext context) async {
+    final picker = ImagePicker();
+    try {
+      final picked = await picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(seconds: 30),
+      );
+      if (picked != null) return [File(picked.path)];
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }
@@ -393,6 +434,55 @@ class _MediaThumbnail extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Reel guidelines notice ───────────────────────────────────────────
+
+class _ReelGuidelines extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 18,
+                color: theme.colorScheme.tertiary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Reel Guidelines',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '\u2022 Maximum 30 seconds\n'
+            '\u2022 Vertical video (9:16 aspect ratio)\n'
+            '\u2022 One video per reel',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

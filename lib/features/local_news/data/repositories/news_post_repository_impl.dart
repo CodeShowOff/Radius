@@ -28,6 +28,7 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
     required String city,
     required String locality,
     required String country,
+    String postType = 'post',
   }) async {
     try {
       final now = DateTime.now();
@@ -62,6 +63,7 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
         country: country,
         createdAt: now,
         updatedAt: now,
+        postType: postType,
       );
 
       final created = await _postService.createPost(post);
@@ -188,5 +190,41 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
   @override
   Stream<NewsPost?> postStream(String postId) {
     return _postService.postStream(postId).map((model) => model?.toEntity());
+  }
+
+  @override
+  Future<Either<Failure, List<NewsPost>>> getReelsFeed({
+    required String country,
+    required String district,
+    int limit = 10,
+    DocumentSnapshot? startAfter,
+  }) async {
+    try {
+      final reels = await _postService.getReelsFeed(
+        country: country,
+        district: district,
+        limit: limit,
+        startAfter: startAfter,
+      );
+      return Right(reels.map((r) => r.toEntity()).toList());
+    } on FirebaseException catch (e) {
+      return Left(DatabaseFailure(
+        message: e.message ?? 'Failed to get reels feed',
+        code: e.code,
+      ));
+    } catch (e) {
+      return Left(DatabaseFailure(message: 'Failed to get reels feed: $e'));
+    }
+  }
+
+  @override
+  Stream<List<NewsPost>> watchReelsFeed({
+    required String country,
+    required String district,
+    int limit = 10,
+  }) {
+    return _postService
+        .watchReelsFeed(country: country, district: district, limit: limit)
+        .map((models) => models.map((m) => m.toEntity()).toList());
   }
 }

@@ -59,6 +59,9 @@ class NewsPost extends Equatable {
   /// Denormalized comment count (maintained by Cloud Functions).
   final int commentCount;
 
+  /// Post type: 'post' for regular news posts, 'reel' for short-form videos.
+  final String postType;
+
   const NewsPost({
     required this.id,
     required this.authorId,
@@ -77,7 +80,11 @@ class NewsPost extends Equatable {
     required this.updatedAt,
     this.likeCount = 0,
     this.commentCount = 0,
+    this.postType = 'post',
   });
+
+  /// Whether this post is a reel (short-form video).
+  bool get isReel => postType == 'reel';
 
   /// Whether the post has any media.
   bool get hasMedia => mediaItems.isNotEmpty;
@@ -117,6 +124,7 @@ class NewsPost extends Equatable {
     DateTime? updatedAt,
     int? likeCount,
     int? commentCount,
+    String? postType,
   }) {
     return NewsPost(
       id: id ?? this.id,
@@ -138,6 +146,7 @@ class NewsPost extends Equatable {
       updatedAt: updatedAt ?? this.updatedAt,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
+      postType: postType ?? this.postType,
     );
   }
 
@@ -160,5 +169,6 @@ class NewsPost extends Equatable {
         updatedAt,
         likeCount,
         commentCount,
+        postType,
       ];
 }

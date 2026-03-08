@@ -258,6 +258,54 @@ service firebase.storage {
         && request.auth.uid == userId;
     }
 
+    // ============================================================
+    // LOCAL NEWS MEDIA
+    // ============================================================
+
+    // Local news images in local_news_media/images/{authorId}/{postId}/{uuid}.ext
+    match /local_news_media/images/{authorId}/{postId}/{fileName} {
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && isImage()
+        && isValidSize(10) // 10MB max
+        && resource == null;
+
+      allow read: if isAuthenticated();
+    }
+
+    // Local news videos in local_news_media/videos/{authorId}/{postId}/{uuid}.ext
+    match /local_news_media/videos/{authorId}/{postId}/{fileName} {
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && request.resource.contentType.matches('video/.*')
+        && isValidSize(50) // 50MB max
+        && resource == null;
+
+      allow read: if isAuthenticated();
+    }
+
+    // Local news reels in local_news_media/reels/{authorId}/{postId}/{uuid}.ext
+    match /local_news_media/reels/{authorId}/{postId}/{fileName} {
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && request.resource.contentType.matches('video/.*')
+        && isValidSize(50) // 50MB max
+        && resource == null;
+
+      allow read: if isAuthenticated();
+    }
+
+    // Local news thumbnails in local_news_media/thumbnails/{authorId}/{postId}/{uuid}.ext
+    match /local_news_media/thumbnails/{authorId}/{postId}/{fileName} {
+      allow write: if isAuthenticated()
+        && request.auth.uid == authorId
+        && isImage()
+        && isValidSize(5) // 5MB max
+        && resource == null;
+
+      allow read: if isAuthenticated();
+    }
+
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

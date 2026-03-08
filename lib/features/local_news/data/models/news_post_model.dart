@@ -19,6 +19,7 @@ import '../../domain/entities/news_post.dart';
 ///   - city: string
 ///   - locality: string
 ///   - country: string
+///   - postType: string ('post' | 'reel', default 'post')
 ///   - likeCount: number
 ///   - commentCount: number
 ///   - createdAt: timestamp
@@ -43,6 +44,7 @@ class NewsPostModel extends NewsPost {
     required super.updatedAt,
     super.likeCount,
     super.commentCount,
+    super.postType,
   });
 
   /// Creates model from Firestore document.
@@ -95,6 +97,7 @@ class NewsPostModel extends NewsPost {
       updatedAt: updatedAt.toDate(),
       likeCount: (data['likeCount'] as int?) ?? 0,
       commentCount: (data['commentCount'] as int?) ?? 0,
+      postType: data['postType'] as String? ?? 'post',
     );
   }
 
@@ -118,6 +121,7 @@ class NewsPostModel extends NewsPost {
       updatedAt: post.updatedAt,
       likeCount: post.likeCount,
       commentCount: post.commentCount,
+      postType: post.postType,
     );
   }
 
@@ -136,6 +140,7 @@ class NewsPostModel extends NewsPost {
       'city': city,
       'locality': locality,
       'country': country,
+      'postType': postType,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -161,6 +166,7 @@ class NewsPostModel extends NewsPost {
       updatedAt: updatedAt,
       likeCount: likeCount,
       commentCount: commentCount,
+      postType: postType,
     );
   }
 
