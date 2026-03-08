@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncPostAuthorProfile = exports.cleanupDeletedPostMedia = exports.onPostConnectionSync = exports.onUserProfileUpdated = exports.onConnectionCreated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
+exports.onPostCommentDeleted = exports.onPostCommentCreated = exports.onPostLikeDeleted = exports.onPostLikeCreated = exports.syncPostAuthorProfile = exports.cleanupDeletedPostMedia = exports.onPostConnectionSync = exports.onUserProfileUpdated = exports.onConnectionCreated = exports.onConnectionStatusChanged = exports.onUserCreatedAssignDiscoveryUsername = exports.onRandomChatConnectionCreated = exports.onRandomChatRequestAccepted = exports.onRandomChatRequestCreated = exports.randomChatDailyReset = exports.expireOldHelpRequests = exports.onHelpRequestAssigned = exports.onHelpRequestCreated = exports.findNearbyHelpers = exports.cleanupOldGroupJoinRequests = exports.cleanupOldConnectionRequests = exports.onConnectionRequestAccepted = exports.onRandomGroupJoinRequestNotification = exports.onGroupJoinRequestNotification = exports.onConnectionRequestReceived = exports.onRandomGroupMessageNotification = exports.onNearbyGroupMessageNotification = exports.onGroupMessageNotification = exports.onMessageSent = exports.generateRandomChatSuggestions = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -2909,6 +2909,81 @@ exports.syncPostAuthorProfile = (0, firestore_1.onDocumentUpdated)({
     }
     catch (error) {
         firebase_functions_1.logger.error(`Error syncing post author profile for ${userId}:`, error);
+    }
+});
+// =============================================================================
+// POST LIKES & COMMENTS — Counter Maintenance
+// =============================================================================
+/**
+ * Increments likeCount on the parent post when a like document is created.
+ *
+ * Trigger: posts/{postId}/likes/{userId} — onCreate
+ */
+exports.onPostLikeCreated = (0, firestore_1.onDocumentCreated)("posts/{postId}/likes/{userId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("posts").doc(postId).update({
+            likeCount: admin.firestore.FieldValue.increment(1),
+        });
+        firebase_functions_1.logger.log(`Incremented likeCount on post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error incrementing likeCount on post ${postId}:`, error);
+    }
+});
+/**
+ * Decrements likeCount on the parent post when a like document is deleted.
+ *
+ * Trigger: posts/{postId}/likes/{userId} — onDelete
+ */
+exports.onPostLikeDeleted = (0, firestore_1.onDocumentDeleted)("posts/{postId}/likes/{userId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("posts").doc(postId).update({
+            likeCount: admin.firestore.FieldValue.increment(-1),
+        });
+        firebase_functions_1.logger.log(`Decremented likeCount on post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error decrementing likeCount on post ${postId}:`, error);
+    }
+});
+/**
+ * Increments commentCount on the parent post when a comment is created.
+ *
+ * Trigger: posts/{postId}/comments/{commentId} — onCreate
+ */
+exports.onPostCommentCreated = (0, firestore_1.onDocumentCreated)("posts/{postId}/comments/{commentId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("posts").doc(postId).update({
+            commentCount: admin.firestore.FieldValue.increment(1),
+        });
+        firebase_functions_1.logger.log(`Incremented commentCount on post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error incrementing commentCount on post ${postId}:`, error);
+    }
+});
+/**
+ * Decrements commentCount on the parent post when a comment is deleted.
+ *
+ * Trigger: posts/{postId}/comments/{commentId} — onDelete
+ */
+exports.onPostCommentDeleted = (0, firestore_1.onDocumentDeleted)("posts/{postId}/comments/{commentId}", async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+    try {
+        await db.collection("posts").doc(postId).update({
+            commentCount: admin.firestore.FieldValue.increment(-1),
+        });
+        firebase_functions_1.logger.log(`Decremented commentCount on post ${postId}`);
+    }
+    catch (error) {
+        firebase_functions_1.logger.error(`Error decrementing commentCount on post ${postId}:`, error);
     }
 });
 //# sourceMappingURL=index.js.map
