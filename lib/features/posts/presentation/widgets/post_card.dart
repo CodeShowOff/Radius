@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -316,7 +317,18 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
   VideoPlayerController? _controller;
   bool _isPlaying = false;
   bool _isInitialized = false;
+  bool _isLoading = false;
   bool _hasError = false;
+  bool _preloadStarted = false;
+
+  /// Shared cache manager for post videos.
+  static final _cacheManager = CacheManager(
+    Config(
+      'post_videos',
+      stalePeriod: const Duration(days: 7),
+      maxNrOfCacheObjects: 50,
+    ),
+  );
 
   @override
   void dispose() {
@@ -325,6 +337,16 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
   }
 
   void _onVisibilityChanged(VisibilityInfo info) {
+    // Preload the video file into cache when >50% visible
+    if (info.visibleFraction > 0.5 && !_preloadStarted) {
+      _preloadStarted = true;
+      _cacheManager.getFileFromCache(widget.mediaItem.url).then((fileInfo) {
+        if (fileInfo == null) {
+          _cacheManager.downloadFile(widget.mediaItem.url);
+        }
+      });
+    }
+
     if (_controller == null || !_isInitialized) return;
     // Pause when less than 50% visible
     if (info.visibleFraction < 0.5 && _controller!.value.isPlaying) {
@@ -346,20 +368,29 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
       return;
     }
 
+    setState(() => _isLoading = true);
+
     try {
-      _controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.mediaItem.url),
-      );
+      // Get video from cache (downloads if not cached)
+      final file = await _cacheManager.getSingleFile(widget.mediaItem.url);
+
+      _controller = VideoPlayerController.file(file);
       await _controller!.initialize();
       _controller!.addListener(_onVideoStateChanged);
       if (mounted) {
-        setState(() => _isInitialized = true);
+        setState(() {
+          _isInitialized = true;
+          _isLoading = false;
+        });
         _controller!.play();
         setState(() => _isPlaying = true);
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _hasError = true);
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -450,8 +481,10 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
                 errorWidget: (_, __, ___) => const SizedBox.shrink(),
               ),
 
-            // Play button or error overlay
-            if (_hasError)
+            // Loading / Play / Error overlay
+            if (_isLoading)
+              const CircularProgressIndicator(color: Colors.white)
+            else if (_hasError)
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
