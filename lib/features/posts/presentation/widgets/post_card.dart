@@ -388,8 +388,11 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
     if (_isInitialized && _controller != null) {
       return GestureDetector(
         onTap: _initializeAndPlay,
-        child: ConstrainedBox(
+        child: Container(
+          width: double.infinity,
+          color: Colors.black,
           constraints: const BoxConstraints(maxHeight: 400),
+          alignment: Alignment.center,
           child: AspectRatio(
             aspectRatio: _controller!.value.aspectRatio,
             child: Stack(

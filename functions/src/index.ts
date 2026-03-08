@@ -1,4 +1,5 @@
-import {onDocumentCreated, onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
+import {onDocumentCreated, onDocumentDeleted, onDocumentUpdated} 
+  from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -3206,7 +3207,7 @@ export const onPostConnectionSync = onDocumentUpdated(
 
         await flushBatch();
         logger.log(
-          `Post authorConnections synced (connected): ` +
+          "Post authorConnections synced (connected): " +
           `${user1Posts.size} posts for ${userId1}, ` +
           `${user2Posts.size} posts for ${userId2}`
         );

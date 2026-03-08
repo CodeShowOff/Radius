@@ -73,31 +73,88 @@ class PostService {
 
   /// Gets posts by a specific author, ordered by creation time.
   ///
-  /// When [includeConnectionsVisibility] is true, returns both public and
-  /// connections-only posts. Otherwise returns only public posts.
+  /// When [viewerUserId] equals [authorId] (own profile), a single query is
+  /// used because Firestore rules allow reading all own posts.
+  ///
+  /// When [includeConnectionsVisibility] is true and the viewer is someone
+  /// else, two parallel queries are run to satisfy Firestore security rules:
+  ///   1. Public posts by the author
+  ///   2. Connections-only posts where the viewer is in authorConnections
+  ///
+  /// When [includeConnectionsVisibility] is false, only public posts are returned.
   Future<List<PostModel>> getPostsByAuthor({
     required String authorId,
     bool includeConnectionsVisibility = false,
+    String? viewerUserId,
     int limit = 10,
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      Query<Map<String, dynamic>> query;
-
-      if (includeConnectionsVisibility) {
-        // Author viewing own posts, or a connection viewing profile
-        query = _postsRef
+      // Own profile — single query is allowed by Firestore rules
+      // (authorId == request.auth.uid satisfies the read rule)
+      if (viewerUserId != null && viewerUserId == authorId) {
+        Query<Map<String, dynamic>> query = _postsRef
             .where('authorId', isEqualTo: authorId)
             .orderBy('createdAt', descending: true)
             .limit(limit);
-      } else {
-        // Non-connection viewing profile — public only
-        query = _postsRef
+        if (startAfter != null) {
+          query = query.startAfterDocument(startAfter);
+        }
+        final snapshot = await query.get();
+        return snapshot.docs
+            .map((doc) => PostModel.fromFirestore(doc))
+            .toList();
+      }
+
+      // Connected viewer — two parallel queries to satisfy Firestore rules:
+      //   Query 1: visibility == 'public'  →  rule condition 1
+      //   Query 2: arrayContains viewer    →  rule condition 3
+      if (includeConnectionsVisibility && viewerUserId != null) {
+        Query<Map<String, dynamic>> publicQuery = _postsRef
             .where('authorId', isEqualTo: authorId)
             .where('visibility', isEqualTo: 'public')
             .orderBy('createdAt', descending: true)
             .limit(limit);
+
+        Query<Map<String, dynamic>> connectionsQuery = _postsRef
+            .where('authorId', isEqualTo: authorId)
+            .where('authorConnections', arrayContains: viewerUserId)
+            .orderBy('createdAt', descending: true)
+            .limit(limit);
+
+        if (startAfter != null) {
+          publicQuery = publicQuery.startAfterDocument(startAfter);
+          connectionsQuery = connectionsQuery.startAfterDocument(startAfter);
+        }
+
+        final results = await Future.wait([
+          publicQuery.get(),
+          connectionsQuery.get(),
+        ]);
+
+        // Merge & deduplicate
+        final postMap = <String, PostModel>{};
+        for (final doc in results[0].docs) {
+          final post = PostModel.fromFirestore(doc);
+          postMap[post.id] = post;
+        }
+        for (final doc in results[1].docs) {
+          final post = PostModel.fromFirestore(doc);
+          postMap[post.id] = post;
+        }
+
+        final merged = postMap.values.toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        return merged.take(limit).toList();
       }
+
+      // Non-connected viewer — public only
+      Query<Map<String, dynamic>> query = _postsRef
+          .where('authorId', isEqualTo: authorId)
+          .where('visibility', isEqualTo: 'public')
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
 
       if (startAfter != null) {
         query = query.startAfterDocument(startAfter);

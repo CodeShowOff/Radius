@@ -2733,7 +2733,7 @@ exports.onPostConnectionSync = (0, firestore_1.onDocumentUpdated)({
                 }
             }
             await flushBatch();
-            firebase_functions_1.logger.log(`Post authorConnections synced (connected): ` +
+            firebase_functions_1.logger.log("Post authorConnections synced (connected): " +
                 `${user1Posts.size} posts for ${userId1}, ` +
                 `${user2Posts.size} posts for ${userId2}`);
         }

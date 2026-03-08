@@ -158,6 +158,7 @@ class PostRepositoryImpl implements IPostRepository {
       final posts = await _postService.getPostsByAuthor(
         authorId: userId,
         includeConnectionsVisibility: includeConnections,
+        viewerUserId: viewerUserId,
         limit: limit,
         startAfter: startAfter,
       );
@@ -181,36 +182,41 @@ class PostRepositoryImpl implements IPostRepository {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      if (connectionIds.isEmpty) {
-        return const Right([]);
-      }
+      // Three parallel queries:
+      // 1. User's own posts (all visibilities)
+      // 2. Public posts from connections
+      // 3. Connections-only posts visible to this user
+      final futures = <Future<List<PostModel>>>[
+        _postService.getPostsByAuthor(
+          authorId: userId,
+          includeConnectionsVisibility: true,
+          viewerUserId: userId,
+          limit: limit,
+          startAfter: startAfter,
+        ),
+      ];
 
-      // Two parallel queries:
-      // 1. Public posts from connections
-      // 2. Connections-only posts visible to this user
-      final results = await Future.wait([
-        _postService.getPublicPostsByAuthors(
+      if (connectionIds.isNotEmpty) {
+        futures.add(_postService.getPublicPostsByAuthors(
           authorIds: connectionIds,
           limit: limit,
           startAfter: startAfter,
-        ),
-        _postService.getConnectionsPostsForUser(
+        ));
+        futures.add(_postService.getConnectionsPostsForUser(
           userId: userId,
           limit: limit,
           startAfter: startAfter,
-        ),
-      ]);
+        ));
+      }
 
-      final publicPosts = results[0];
-      final connectionsPosts = results[1];
+      final results = await Future.wait(futures);
 
       // Merge and deduplicate
       final postMap = <String, PostModel>{};
-      for (final post in publicPosts) {
-        postMap[post.id] = post;
-      }
-      for (final post in connectionsPosts) {
-        postMap[post.id] = post;
+      for (final batch in results) {
+        for (final post in batch) {
+          postMap[post.id] = post;
+        }
       }
 
       // Sort by createdAt descending
