@@ -1,10 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/post.dart';
+import '../../domain/repositories/i_post_interaction_repository.dart';
+import '../bloc/post_interaction_cubit.dart';
 import '../bloc/user_posts_bloc.dart';
+import 'comments_bottom_sheet.dart';
 import 'post_card.dart';
 import 'post_shimmer.dart';
 
@@ -16,6 +21,15 @@ class UserPostsGrid extends StatelessWidget {
   const UserPostsGrid({super.key});
 
   static void _showPostDetail(BuildContext context, Post post) {
+    final authState = context.read<AuthBloc>().state;
+    final currentUserId =
+        authState is AuthAuthenticated ? authState.user.id : '';
+    final currentUserName = authState is AuthAuthenticated
+        ? (authState.user.displayName ?? authState.user.username)
+        : '';
+    final currentUserPhoto =
+        authState is AuthAuthenticated ? authState.user.avatarUrl : null;
+
     showDialog(
       context: context,
       builder: (dialogContext) => Dialog(
@@ -30,7 +44,39 @@ class UserPostsGrid extends StatelessWidget {
                 maxHeight: MediaQuery.of(dialogContext).size.height * 0.8,
               ),
               child: SingleChildScrollView(
-                child: PostCard(post: post),
+                child: BlocProvider(
+                  create: (_) => PostInteractionCubit(
+                    repository:
+                        GetIt.instance<IPostInteractionRepository>(),
+                  )..loadInteractionInfo(
+                      postId: post.id,
+                      userId: currentUserId,
+                      initialLikeCount: post.likeCount,
+                      initialCommentCount: post.commentCount,
+                    ),
+                  child: Builder(
+                    builder: (cardContext) => PostCard(
+                      post: post,
+                      onLikeTap: () {
+                        cardContext
+                            .read<PostInteractionCubit>()
+                            .toggleLike(
+                              userName: currentUserName,
+                              userPhotoUrl: currentUserPhoto,
+                            );
+                      },
+                      onCommentTap: () {
+                        CommentsBottomSheet.show(
+                          context: cardContext,
+                          postId: post.id,
+                          currentUserId: currentUserId,
+                          currentUserName: currentUserName,
+                          currentUserPhotoUrl: currentUserPhoto,
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

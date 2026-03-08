@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../domain/entities/post.dart';
+import '../../domain/repositories/i_post_interaction_repository.dart';
 import '../bloc/post_feed_bloc.dart';
+import '../bloc/post_interaction_cubit.dart';
+import '../widgets/comments_bottom_sheet.dart';
 import '../widgets/post_card.dart';
 import '../widgets/post_shimmer.dart';
 
@@ -209,20 +213,55 @@ class _PostFeedPageState extends State<PostFeedPage> {
                 final currentUserId = authState is AuthAuthenticated
                     ? authState.user.id
                     : '';
+                final currentUserName = authState is AuthAuthenticated
+                    ? (authState.user.displayName ?? authState.user.username)
+                    : '';
+                final currentUserPhoto = authState is AuthAuthenticated
+                    ? authState.user.avatarUrl
+                    : null;
                 final isOwn = post.authorId == currentUserId;
 
-                return PostCard(
-                  post: post,
-                  isOwnPost: isOwn,
-                  onAuthorTap: () {
-                    context.push(Routes.userProfileWith(post.authorId));
-                  },
-                  onDelete: isOwn
-                      ? () => _confirmDelete(context, post.id)
-                      : null,
-                  onVisibilityChange: isOwn
-                      ? (v) => _changeVisibility(context, post.id, v)
-                      : null,
+                return BlocProvider(
+                  key: ValueKey('interaction_${post.id}'),
+                  create: (_) => PostInteractionCubit(
+                    repository:
+                        GetIt.instance<IPostInteractionRepository>(),
+                  )..loadInteractionInfo(
+                      postId: post.id,
+                      userId: currentUserId,
+                      initialLikeCount: post.likeCount,
+                      initialCommentCount: post.commentCount,
+                    ),
+                  child: Builder(
+                    builder: (cardContext) => PostCard(
+                      post: post,
+                      isOwnPost: isOwn,
+                      onAuthorTap: () {
+                        context.push(Routes.userProfileWith(post.authorId));
+                      },
+                      onDelete: isOwn
+                          ? () => _confirmDelete(context, post.id)
+                          : null,
+                      onVisibilityChange: isOwn
+                          ? (v) => _changeVisibility(context, post.id, v)
+                          : null,
+                      onLikeTap: () {
+                        cardContext.read<PostInteractionCubit>().toggleLike(
+                              userName: currentUserName,
+                              userPhotoUrl: currentUserPhoto,
+                            );
+                      },
+                      onCommentTap: () {
+                        CommentsBottomSheet.show(
+                          context: cardContext,
+                          postId: post.id,
+                          currentUserId: currentUserId,
+                          currentUserName: currentUserName,
+                          currentUserPhotoUrl: currentUserPhoto,
+                        );
+                      },
+                    ),
+                  ),
                 );
               },
             ),

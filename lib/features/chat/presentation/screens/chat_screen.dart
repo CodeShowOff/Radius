@@ -684,8 +684,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Clear Chat?'),
         content: const Text(
-          'This will delete all messages in this chat. '
-          'This action cannot be undone.',
+          'This will permanently delete all messages for both users.',
         ),
         actions: [
           TextButton(

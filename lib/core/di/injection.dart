@@ -14,8 +14,11 @@ import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/posts/data/services/post_service.dart';
 import '../../features/posts/data/services/post_media_service.dart';
 import '../../features/posts/data/services/media_optimizer.dart';
+import '../../features/posts/data/services/post_interaction_service.dart';
 import '../../features/posts/data/repositories/post_repository_impl.dart';
+import '../../features/posts/data/repositories/post_interaction_repository_impl.dart';
 import '../../features/posts/domain/repositories/i_post_repository.dart';
+import '../../features/posts/domain/repositories/i_post_interaction_repository.dart';
 import '../../features/posts/presentation/bloc/create_post_bloc.dart';
 import '../../features/posts/presentation/bloc/post_feed_bloc.dart';
 import '../../features/posts/presentation/bloc/user_posts_bloc.dart';
@@ -158,6 +161,21 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<IPostRepository>()) {
     getIt.registerLazySingleton<IPostRepository>(
       () => PostRepositoryImpl(postService: getIt<PostService>()),
+    );
+  }
+
+  // Post interactions (likes & comments)
+  if (!getIt.isRegistered<PostInteractionService>()) {
+    getIt.registerLazySingleton<PostInteractionService>(
+      () => PostInteractionService(),
+    );
+  }
+
+  if (!getIt.isRegistered<IPostInteractionRepository>()) {
+    getIt.registerLazySingleton<IPostInteractionRepository>(
+      () => PostInteractionRepositoryImpl(
+        service: getIt<PostInteractionService>(),
+      ),
     );
   }
 

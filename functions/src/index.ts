@@ -3421,3 +3421,95 @@ export const syncPostAuthorProfile = onDocumentUpdated(
     }
   }
 );
+
+// =============================================================================
+// POST LIKES & COMMENTS — Counter Maintenance
+// =============================================================================
+
+/**
+ * Increments likeCount on the parent post when a like document is created.
+ *
+ * Trigger: posts/{postId}/likes/{userId} — onCreate
+ */
+export const onPostLikeCreated = onDocumentCreated(
+  "posts/{postId}/likes/{userId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("posts").doc(postId).update({
+        likeCount: admin.firestore.FieldValue.increment(1),
+      });
+      logger.log(`Incremented likeCount on post ${postId}`);
+    } catch (error) {
+      logger.error(`Error incrementing likeCount on post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Decrements likeCount on the parent post when a like document is deleted.
+ *
+ * Trigger: posts/{postId}/likes/{userId} — onDelete
+ */
+export const onPostLikeDeleted = onDocumentDeleted(
+  "posts/{postId}/likes/{userId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("posts").doc(postId).update({
+        likeCount: admin.firestore.FieldValue.increment(-1),
+      });
+      logger.log(`Decremented likeCount on post ${postId}`);
+    } catch (error) {
+      logger.error(`Error decrementing likeCount on post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Increments commentCount on the parent post when a comment is created.
+ *
+ * Trigger: posts/{postId}/comments/{commentId} — onCreate
+ */
+export const onPostCommentCreated = onDocumentCreated(
+  "posts/{postId}/comments/{commentId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("posts").doc(postId).update({
+        commentCount: admin.firestore.FieldValue.increment(1),
+      });
+      logger.log(`Incremented commentCount on post ${postId}`);
+    } catch (error) {
+      logger.error(`Error incrementing commentCount on post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Decrements commentCount on the parent post when a comment is deleted.
+ *
+ * Trigger: posts/{postId}/comments/{commentId} — onDelete
+ */
+export const onPostCommentDeleted = onDocumentDeleted(
+  "posts/{postId}/comments/{commentId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const db = admin.firestore();
+
+    try {
+      await db.collection("posts").doc(postId).update({
+        commentCount: admin.firestore.FieldValue.increment(-1),
+      });
+      logger.log(`Decremented commentCount on post ${postId}`);
+    } catch (error) {
+      logger.error(`Error decrementing commentCount on post ${postId}:`, error);
+    }
+  }
+);

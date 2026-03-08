@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -7,6 +8,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/post.dart';
+import '../bloc/post_interaction_cubit.dart';
 
 /// Card widget displaying a single post in the feed.
 ///
@@ -17,6 +19,8 @@ class PostCard extends StatelessWidget {
   final bool isOwnPost;
   final VoidCallback? onDelete;
   final ValueChanged<PostVisibility>? onVisibilityChange;
+  final VoidCallback? onLikeTap;
+  final VoidCallback? onCommentTap;
 
   const PostCard({
     super.key,
@@ -25,6 +29,8 @@ class PostCard extends StatelessWidget {
     this.isOwnPost = false,
     this.onDelete,
     this.onVisibilityChange,
+    this.onLikeTap,
+    this.onCommentTap,
   });
 
   @override
@@ -66,9 +72,11 @@ class PostCard extends StatelessWidget {
               ),
             ),
 
-          // Bottom spacing
-          if (post.text == null || post.text!.isEmpty)
-            const SizedBox(height: 8),
+          // Like / Comment action bar
+          _PostActionBar(
+            onLikeTap: onLikeTap,
+            onCommentTap: onCommentTap,
+          ),
 
           // Divider
           Divider(
@@ -76,6 +84,158 @@ class PostCard extends StatelessWidget {
             color: theme.dividerColor.withValues(alpha: 0.3),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Post Action Bar (Like / Comment) ─────────────────────────────────────
+
+class _PostActionBar extends StatelessWidget {
+  final VoidCallback? onLikeTap;
+  final VoidCallback? onCommentTap;
+
+  const _PostActionBar({
+    this.onLikeTap,
+    this.onCommentTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return BlocBuilder<PostInteractionCubit, PostInteractionState>(
+      buildWhen: (prev, curr) =>
+          prev.isLiked != curr.isLiked ||
+          prev.likeCount != curr.likeCount ||
+          prev.commentCount != curr.commentCount,
+      builder: (context, state) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Action buttons row
+              Row(
+                children: [
+                  // Like button
+                  _AnimatedLikeButton(
+                    isLiked: state.isLiked,
+                    onTap: onLikeTap,
+                  ),
+                  const SizedBox(width: 4),
+                  // Comment button
+                  IconButton(
+                    icon: Icon(
+                      Icons.chat_bubble_outline,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    onPressed: onCommentTap,
+                    tooltip: 'Comment',
+                  ),
+                ],
+              ),
+              // Like count
+              if (state.likeCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, bottom: 4),
+                  child: Text(
+                    state.likeCount == 1
+                        ? '1 like'
+                        : '${_formatCount(state.likeCount)} likes',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              // Comment count as tappable text
+              if (state.commentCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, bottom: 4),
+                  child: GestureDetector(
+                    onTap: onCommentTap,
+                    child: Text(
+                      state.commentCount == 1
+                          ? 'View 1 comment'
+                          : 'View all ${_formatCount(state.commentCount)} comments',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _formatCount(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return count.toString();
+  }
+}
+
+// ─── Animated Like Button ─────────────────────────────────────────────────
+
+class _AnimatedLikeButton extends StatefulWidget {
+  final bool isLiked;
+  final VoidCallback? onTap;
+
+  const _AnimatedLikeButton({
+    required this.isLiked,
+    this.onTap,
+  });
+
+  @override
+  State<_AnimatedLikeButton> createState() => _AnimatedLikeButtonState();
+}
+
+class _AnimatedLikeButtonState extends State<_AnimatedLikeButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.3), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.3, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedLikeButton old) {
+    super.didUpdateWidget(old);
+    if (widget.isLiked && !old.isLiked) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: IconButton(
+        icon: Icon(
+          widget.isLiked ? Icons.favorite : Icons.favorite_border,
+          color: widget.isLiked ? Colors.red : Theme.of(context).colorScheme.onSurface,
+        ),
+        onPressed: widget.onTap,
+        tooltip: widget.isLiked ? 'Unlike' : 'Like',
       ),
     );
   }

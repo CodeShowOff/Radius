@@ -1239,6 +1239,53 @@ service cloud.firestore {
       // Only the author can delete
       allow delete: if isAuthenticated()
         && resource.data.authorId == request.auth.uid;
+
+      // ── Likes subcollection ──────────────────────────────────────────
+      // One document per like, keyed by the liker's userId.
+      // Counter field (likeCount) on the post doc is maintained by Cloud Functions.
+      match /likes/{userId} {
+        // Any authenticated user can read likes (for checking own like status)
+        allow read: if isAuthenticated();
+
+        // Users can only create their own like
+        allow create: if isAuthenticated()
+          && request.auth.uid == userId
+          && request.resource.data.userId == userId
+          && request.resource.data.keys().hasAll(['userId', 'userName', 'createdAt']);
+
+        // Likes are immutable — no updates allowed
+        allow update: if false;
+
+        // Users can only remove their own like
+        allow delete: if isAuthenticated()
+          && request.auth.uid == userId;
+      }
+
+      // ── Comments subcollection ────────────────────────────────────────
+      // Auto-ID documents for each comment.
+      // Counter field (commentCount) on the post doc is maintained by Cloud Functions.
+      match /comments/{commentId} {
+        // Any authenticated user can read comments
+        allow read: if isAuthenticated();
+
+        // Any authenticated user can create a comment
+        allow create: if isAuthenticated()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.keys().hasAll(['authorId', 'authorName', 'text', 'createdAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000;
+
+        // Comments are immutable — no edits
+        allow update: if false;
+
+        // Only the comment author or the post author can delete a comment
+        allow delete: if isAuthenticated()
+          && (
+            resource.data.authorId == request.auth.uid
+            || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid
+          );
+      }
     }
 
     // Video chat matching queue (ephemeral waiting-room documents)

@@ -40,6 +40,12 @@ class Post extends Equatable {
   /// When the post was last updated.
   final DateTime updatedAt;
 
+  /// Denormalized like count (maintained by Cloud Functions).
+  final int likeCount;
+
+  /// Denormalized comment count (maintained by Cloud Functions).
+  final int commentCount;
+
   const Post({
     required this.id,
     required this.authorId,
@@ -50,6 +56,8 @@ class Post extends Equatable {
     this.authorPhotoUrl,
     required this.createdAt,
     required this.updatedAt,
+    this.likeCount = 0,
+    this.commentCount = 0,
   });
 
   /// Whether the post has any media.
@@ -74,6 +82,8 @@ class Post extends Equatable {
     Object? authorPhotoUrl = _sentinel,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? likeCount,
+    int? commentCount,
   }) {
     return Post(
       id: id ?? this.id,
@@ -87,6 +97,8 @@ class Post extends Equatable {
           : authorPhotoUrl as String?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
     );
   }
 
@@ -101,5 +113,7 @@ class Post extends Equatable {
         authorPhotoUrl,
         createdAt,
         updatedAt,
+        likeCount,
+        commentCount,
       ];
 }
