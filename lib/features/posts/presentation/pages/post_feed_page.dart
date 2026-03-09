@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -72,9 +74,9 @@ class _PostFeedPageState extends State<PostFeedPage> {
   }
 
   Future<void> _onRefresh() async {
-    context.read<PostFeedBloc>().add(const PostFeedRefreshRequested());
-    // Wait for the bloc to emit any new state after processing the refresh
-    await context.read<PostFeedBloc>().stream.first;
+    final completer = Completer<void>();
+    context.read<PostFeedBloc>().add(PostFeedRefreshRequested(completer: completer));
+    await completer.future;
   }
 
   Future<void> _navigateToCreatePost() async {

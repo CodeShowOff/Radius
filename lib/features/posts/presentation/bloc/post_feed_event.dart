@@ -29,7 +29,12 @@ class PostFeedLoadMore extends PostFeedEvent {
 
 /// Pull-to-refresh the feed.
 class PostFeedRefreshRequested extends PostFeedEvent {
-  const PostFeedRefreshRequested();
+  final Completer<void>? completer;
+
+  const PostFeedRefreshRequested({this.completer});
+
+  @override
+  List<Object?> get props => [];
 }
 
 /// Delete a post from the feed.

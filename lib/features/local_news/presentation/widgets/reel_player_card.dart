@@ -274,6 +274,21 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  // Share button
+                  _ReelActionButton(
+                    icon: Icons.share_outlined,
+                    label: '',
+                    color: Colors.white,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Share will be available soon!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   // Mute button
                   _ReelActionButton(
                     icon: _isMuted ? Icons.volume_off : Icons.volume_up,

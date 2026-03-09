@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
@@ -129,6 +131,8 @@ class PostFeedBloc extends Bloc<PostFeedEvent, PostFeedState> {
         ));
       },
     );
+
+    event.completer?.complete();
   }
 
   Future<void> _onDeleteRequested(

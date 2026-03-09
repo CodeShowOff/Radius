@@ -133,6 +133,23 @@ class _PostActionBar extends StatelessWidget {
                     onPressed: onCommentTap,
                     tooltip: 'Comment',
                   ),
+                  const SizedBox(width: 4),
+                  // Share button
+                  IconButton(
+                    icon: Icon(
+                      Icons.share_outlined,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Share will be available soon!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    tooltip: 'Share',
+                  ),
                 ],
               ),
               // Like count
