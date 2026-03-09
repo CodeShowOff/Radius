@@ -174,7 +174,6 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     return Scaffold(
       appBar: AppBar(
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Local'),
             Text(
@@ -199,7 +198,7 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Feed'),
+            Tab(text: 'News'),
             Tab(text: 'Reels'),
           ],
         ),
@@ -880,9 +879,6 @@ class _NewsFeedTab extends StatelessWidget {
               onDelete: isOwn
                   ? () => onConfirmDelete(context, post.id)
                   : null,
-              onTap: () => context.push(
-                Routes.localNewsPostWith(post.id),
-              ),
             ),
           );
         },

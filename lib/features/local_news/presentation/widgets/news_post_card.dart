@@ -42,7 +42,6 @@ class NewsPostCard extends StatelessWidget {
               authorName: post.authorName,
               authorPhotoUrl: post.authorPhotoUrl,
               createdAt: post.createdAt,
-              locationLabel: post.locationLabel,
               isOwnPost: isOwnPost,
               onDelete: onDelete,
             ),
@@ -81,7 +80,6 @@ class _NewsPostHeader extends StatelessWidget {
   final String authorName;
   final String? authorPhotoUrl;
   final DateTime createdAt;
-  final String locationLabel;
   final bool isOwnPost;
   final VoidCallback? onDelete;
 
@@ -89,7 +87,6 @@ class _NewsPostHeader extends StatelessWidget {
     required this.authorName,
     this.authorPhotoUrl,
     required this.createdAt,
-    required this.locationLabel,
     this.isOwnPost = false,
     this.onDelete,
   });
@@ -121,36 +118,7 @@ class _NewsPostHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  children: [
-                    _TimeAgoText(dateTime: createdAt),
-                    const SizedBox(width: 6),
-                    Text(
-                      '·',
-                      style: TextStyle(
-                        color: theme.colorScheme.outline,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      Icons.location_on,
-                      size: 13,
-                      color: theme.colorScheme.outline,
-                    ),
-                    const SizedBox(width: 2),
-                    Flexible(
-                      child: Text(
-                        locationLabel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+                _TimeAgoText(dateTime: createdAt),
               ],
             ),
           ),

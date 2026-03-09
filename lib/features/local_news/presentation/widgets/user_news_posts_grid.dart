@@ -1,12 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/di/injection.dart';
-import '../../../../core/router/routes.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
 import '../../data/services/news_post_service.dart';
 import '../../domain/entities/news_post.dart';
+import '../../domain/repositories/i_news_interaction_repository.dart';
+import '../bloc/news_interaction_cubit.dart';
+import 'news_post_card.dart';
 
 /// Grid view of a user's local news posts (Instagram-style thumbnails).
 ///
@@ -56,6 +59,44 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
         });
       }
     }
+  }
+
+  void _showNewsPostDetail(BuildContext context, NewsPost post) {
+    final authState = context.read<AuthBloc>().state;
+    final currentUserId =
+        authState is AuthAuthenticated ? authState.user.id : '';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 40),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Material(
+            color: Theme.of(dialogContext).colorScheme.surface,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(dialogContext).size.height * 0.8,
+              ),
+              child: SingleChildScrollView(
+                child: BlocProvider(
+                  create: (_) => NewsInteractionCubit(
+                    repository: getIt<INewsInteractionRepository>(),
+                  )..loadInteractionInfo(
+                      postId: post.id,
+                      userId: currentUserId,
+                      initialLikeCount: post.likeCount,
+                      initialCommentCount: post.commentCount,
+                    ),
+                  child: NewsPostCard(post: post),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -136,9 +177,7 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
             (context, index) {
               final post = _posts[index];
               return GestureDetector(
-                onTap: () => context.push(
-                  Routes.localNewsPostWith(post.id),
-                ),
+                onTap: () => _showNewsPostDetail(context, post),
                 child: _NewsGridTile(post: post),
               );
             },

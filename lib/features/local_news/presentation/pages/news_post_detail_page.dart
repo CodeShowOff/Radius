@@ -88,28 +88,6 @@ class _DetailScaffold extends StatelessWidget {
             // Author header
             _DetailHeader(post: post),
 
-            // Location badge
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    post.locationLabel,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             const SizedBox(height: 12),
 
             // Media
