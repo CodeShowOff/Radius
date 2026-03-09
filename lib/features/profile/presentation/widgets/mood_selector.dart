@@ -16,10 +16,17 @@ class MoodSelector extends StatelessWidget {
   });
 
   static const moods = {
-    '😊 Chill': '😊 Chill',
-    '🤓 Focused': '🤓 Focused',
-    '🧠 Deep talk': '🧠 Deep talk',
-    '😂 Fun': '😂 Fun',
+    '😊 Chill': 'Chill',
+    '🤓 Focused': 'Focused',
+    '🧠 Deep talk': 'Deep talk',
+    '😂 Fun': 'Fun',
+  };
+
+  static const _moodIcons = {
+    '😊 Chill': Icons.sentiment_satisfied_alt,
+    '🤓 Focused': Icons.psychology,
+    '🧠 Deep talk': Icons.forum,
+    '😂 Fun': Icons.celebration,
   };
 
   void _updateMood(BuildContext context, String? mood) {
@@ -54,7 +61,12 @@ class MoodSelector extends StatelessWidget {
 
   Widget _buildCompactSelector(BuildContext context, String? currentMood) {
     final theme = Theme.of(context);
-    
+    final displayLabel = currentMood != null
+        ? (moods[currentMood] ?? currentMood)
+        : 'Set Mood';
+    final icon = currentMood != null
+        ? (_moodIcons[currentMood] ?? Icons.mood)
+        : Icons.mood_outlined;
     return PopupMenuButton<String?>(
       icon: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -68,7 +80,7 @@ class MoodSelector extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.sentiment_satisfied_alt,
+              icon,
               size: 18,
               color: currentMood != null
                   ? theme.colorScheme.secondary
@@ -76,7 +88,7 @@ class MoodSelector extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              currentMood ?? '😊 Chill',
+              displayLabel,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: currentMood != null
                     ? theme.colorScheme.onSecondaryContainer
@@ -90,17 +102,24 @@ class MoodSelector extends StatelessWidget {
       onSelected: (mood) => _updateMood(context, mood),
       itemBuilder: (context) => [
         ...moods.entries.map((entry) {
-          final isSelected = currentMood == entry.value;
+          final isSelected = currentMood == entry.key;
           return PopupMenuItem<String?>(
-            value: entry.value,
+            value: entry.key,
             child: Row(
               children: [
-                if (isSelected)
-                  Icon(Icons.check, size: 20, color: theme.colorScheme.primary)
-                else
-                  const SizedBox(width: 20),
+                Icon(
+                  _moodIcons[entry.key] ?? Icons.mood,
+                  size: 20,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 12),
-                Text(entry.key),
+                Text(entry.value),
+                if (isSelected) ...[  
+                  const Spacer(),
+                  Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+                ],
               ],
             ),
           );
@@ -111,100 +130,87 @@ class MoodSelector extends StatelessWidget {
 
   Widget _buildFullSelector(BuildContext context, String? currentMood) {
     final theme = Theme.of(context);
-    // Default to Chill if no mood is set
-    final displayMood = currentMood ?? '😊 Chill';
-    // Extract emoji from mood string (first character)
-    final moodEmoji = displayMood.isNotEmpty ? displayMood.split(' ')[0] : '😊';
+    final displayLabel = currentMood != null
+        ? (moods[currentMood] ?? currentMood)
+        : 'Not set';
+    final moodIcon = currentMood != null
+        ? (_moodIcons[currentMood] ?? Icons.mood)
+        : Icons.mood_outlined;
 
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(
-          color: Colors.blue,
-          width: 3,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              moodIcon,
+              size: 22,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    moodEmoji,
-                    style: const TextStyle(fontSize: 24),
+                Text(
+                  'Mood',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current Mood',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Let others know how you\'re feeling',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                Text(
+                  displayLabel,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                ),
-                const SizedBox(width: 8),
-                // Dropdown button
-                PopupMenuButton<String>(
-                  icon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        displayMood,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSecondaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_drop_down,
-                        color: theme.colorScheme.secondary,
-                      ),
-                    ],
-                  ),
-                  onSelected: (mood) => _updateMood(context, mood),
-                  itemBuilder: (context) => moods.entries.map((entry) {
-                    final isSelected = displayMood == entry.value;
-                    return PopupMenuItem<String>(
-                      value: entry.value,
-                      child: Row(
-                        children: [
-                          if (isSelected)
-                            Icon(Icons.check, size: 20, color: theme.colorScheme.primary)
-                          else
-                            const SizedBox(width: 20),
-                          const SizedBox(width: 12),
-                          Text(entry.key),
-                        ],
-                      ),
-                    );
-                  }).toList(),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Change mood',
+            icon: Icon(
+              Icons.arrow_drop_down_circle_outlined,
+              color: theme.colorScheme.secondary,
+              size: 22,
+            ),
+            onSelected: (mood) => _updateMood(context, mood),
+            itemBuilder: (context) => moods.entries.map((entry) {
+              final isSelected = currentMood == entry.key;
+              return PopupMenuItem<String>(
+                value: entry.key,
+                child: Row(
+                  children: [
+                    Icon(
+                      _moodIcons[entry.key] ?? Icons.mood,
+                      size: 20,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(entry.value),
+                    if (isSelected) ...[  
+                      const Spacer(),
+                      Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }

@@ -250,6 +250,8 @@ class _HomePageState extends State<HomePage>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthUnauthenticated) {
@@ -260,12 +262,10 @@ class _HomePageState extends State<HomePage>
         appBar: AppBar(
           title: const Text(
             'Radius',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
           ),
           actions: [
-            // Bluetooth status icon with animation when off
             _buildBluetoothIcon(),
-            // Requests icon with red badge dot
             BlocBuilder<ConnectionBloc, ConnectionBlocState>(
               buildWhen: (prev, curr) =>
                   prev.receivedRequests.length != curr.receivedRequests.length,
@@ -277,343 +277,296 @@ class _HomePageState extends State<HomePage>
                     isLabelVisible: hasRequests,
                     backgroundColor: Colors.red,
                     smallSize: 10,
-                    child: const Icon(Icons.person_add, size: 26),
+                    child: const Icon(Icons.person_add_alt_1_outlined, size: 24),
                   ),
                   tooltip: 'Requests',
                 );
               },
             ),
+            const SizedBox(width: 4),
           ],
         ),
-        floatingActionButton: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(23),
-            border: Border.all(color: Colors.white, width: 3),
-          ),
-          child: FloatingActionButton(
-            onPressed: () => context.push(Routes.discoverySearch),
-            heroTag: 'searchUsers',
-            tooltip: 'Find People',
-            child: const Icon(Icons.person_search),
-          ),
-        ),
-        body: SafeArea(
-          bottom: true,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              16 + MediaQuery.of(context).padding.bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Mood selector - with blue border effect
-                const MoodSelector(showLabel: true, compact: false),
-                const SizedBox(height: 16),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final bottomPad = 16.0 + MediaQuery.of(context).padding.bottom;
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 12 - bottomPad,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // --- Mood + Status row ---
+                      const MoodSelector(showLabel: true, compact: false),
+                      const SizedBox(height: 12),
 
-                // Background Advertising Toggle Card
-                Card(
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.broadcast_on_personal,
-                          color: _backgroundAdvertising
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.outline,
-                          size: 28,
+                      // --- Background Advertising compact toggle ---
+                      _BackgroundAdvToggle(
+                        enabled: _backgroundAdvertising,
+                        onChanged: _toggleBackgroundAdvertising,
+                      ),
+                      const SizedBox(height: 28),
+
+                      // --- Quick Actions ---
+                      Text(
+                        'Quick Actions',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Background Advertising',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _backgroundAdvertising
-                                    ? 'Discoverable when app closed'
-                                    : 'Hidden when app closed',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.radar,
+                              label: 'Find Nearby',
+                              onTap: () => context.push(Routes.nearby),
+                            ),
                           ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.shuffle,
+                              label: 'Random Chat',
+                              onTap: () => context.push(Routes.randomChat),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.videocam_rounded,
+                              label: 'Video Chat',
+                              onTap: () => context.push(Routes.videoChat),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.sos,
+                              label: 'Nearby Help',
+                              onTap: () => context.push(Routes.nearbyHelp),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+
+                      // --- Groups section ---
+                      Text(
+                        'Groups',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        Switch(
-                          value: _backgroundAdvertising,
-                          onChanged: (value) =>
-                              _toggleBackgroundAdvertising(value),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FeatureCard(
+                              icon: Icons.location_on_outlined,
+                              label: 'Location\nGroups',
+                              onTap: () => context.push(Routes.myGroups),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _FeatureCard(
+                              icon: Icons.public_outlined,
+                              label: 'Random\nGroups',
+                              onTap: () => context.push(Routes.randomGroups),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _FeatureCard(
+                              icon: Icons.all_inclusive,
+                              label: 'Nearby\nGroups',
+                              onTap: () => context.push(Routes.nearbyGroups),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Quick action buttons - Nearby & Random Chat
-                Row(
-                  children: [
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.nearby),
-                        label: 'Find\nNearby',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        animationType: _CardAnimationType.wave,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.randomChat),
-                        label: 'Random\nChat',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        animationType: _CardAnimationType.personCycle,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Nearby Help section - prominent SOS button
-                _AnimatedSquareCard(
-                  onTap: () => context.push(Routes.nearbyHelp),
-                  label: 'Nearby Help',
-                  color: Theme.of(context).colorScheme.onError,
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  isSquare: false,
-                  useVerticalLayout: false,
-                  animationType: _CardAnimationType.sos,
-                ),
-                const SizedBox(height: 16),
-
-                // Groups section - Square cards in rows
-                Row(
-                  children: [
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.videoChat),
-                        label: 'Video\nChat',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        icon: Icons.videocam_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.myGroups),
-                        label: 'Location\nGroups',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        icon: Icons.location_on,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.randomGroups),
-                        label: 'Random\nGroups',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        icon: Icons.public,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.nearbyGroups),
-                        label: 'Nearby\nGroups',
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        isSquare: true,
-                        icon: Icons.all_inclusive,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-/// Simple card widget for home page action buttons.
-class _AnimatedSquareCard extends StatelessWidget {
-  final VoidCallback onTap;
-  final String label;
-  final Color color;
-  final Color backgroundColor;
-  final bool isSquare;
-  final bool useVerticalLayout;
-  final _CardAnimationType animationType;
-  final IconData? icon;
+// --- Reusable widgets ---
 
-  const _AnimatedSquareCard({
-    required this.onTap,
-    required this.label,
-    required this.color,
-    required this.backgroundColor,
-    this.isSquare = false,
-    this.useVerticalLayout = false,
-    this.animationType = _CardAnimationType.wave,
-    this.icon,
+/// Compact background advertising toggle.
+class _BackgroundAdvToggle extends StatelessWidget {
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const _BackgroundAdvToggle({
+    required this.enabled,
+    required this.onChanged,
   });
-
-  IconData _getIcon() {
-    if (icon != null) return icon!;
-    switch (animationType) {
-      case _CardAnimationType.wave:
-        return Icons.radar;
-      case _CardAnimationType.personCycle:
-        return Icons.psychology;
-      case _CardAnimationType.talking:
-        return Icons.groups;
-      case _CardAnimationType.sos:
-        return Icons.sos;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Use solid color style
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        color: backgroundColor,
-        child: (isSquare || useVerticalLayout)
-            ? _buildVerticalContent(theme)
-            : Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: animationType == _CardAnimationType.sos
-                            ? theme.colorScheme.onError
-                            : theme.colorScheme.onPrimary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _getIcon(),
-                        size: 28,
-                        color: animationType == _CardAnimationType.sos
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Flexible(
-                      child: Text(
-                        label,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: color,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: enabled
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
-
-  Widget _buildVerticalContent(ThemeData theme) {
-    // Use same size for all cards
-    final EdgeInsets outerPadding = const EdgeInsets.all(18);
-    final double iconPad = 14;
-    final double iconSize = 34;
-    final double gap = 12;
-
-    // Use error colors for SOS, contrasting colors for others
-    // Icon circle should contrast with card background
-    final bool isSos = animationType == _CardAnimationType.sos;
-    final iconBgColor = isSos ? theme.colorScheme.onError : theme.colorScheme.onPrimary;
-    final iconColor = isSos ? theme.colorScheme.error : theme.colorScheme.primary;
-
-    final content = Padding(
-      padding: outerPadding,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
-          Container(
-            padding: EdgeInsets.all(iconPad),
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _getIcon(),
-              size: iconSize,
-              color: iconColor,
+          Icon(
+            Icons.broadcast_on_personal,
+            size: 20,
+            color: enabled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              enabled ? 'Discoverable in background' : 'Hidden when app closed',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          SizedBox(height: gap),
-          Text(
-            label,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: color,
+          SizedBox(
+            height: 28,
+            child: FittedBox(
+              child: Switch(
+                value: enabled,
+                onChanged: onChanged,
+              ),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
-
-    if (isSquare) {
-      return AspectRatio(
-        aspectRatio: 1,
-        child: content,
-      );
-    }
-
-    return Center(child: content);
   }
 }
 
-enum _CardAnimationType { wave, personCycle, talking, sos }
+/// Full-width quick-action card with icon and label.
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: cs.onPrimaryContainer, size: 36),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact feature card for groups grid.
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: cs.onPrimaryContainer, size: 24),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
