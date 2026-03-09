@@ -3,14 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
-import '../../../../core/widgets/cached_avatar.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../../core/settings/app_settings_store.dart';
 import '../../../../core/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
-import '../../../connections/presentation/bloc/discovery_bloc.dart';
-import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
 import '../../../proximity/proximity_service.dart';
 
@@ -268,37 +265,21 @@ class _HomePageState extends State<HomePage>
           actions: [
             // Bluetooth status icon with animation when off
             _buildBluetoothIcon(),
-            BlocBuilder<ProfileBloc, ProfileState>(
-              builder: (context, profileState) {
-                return BlocBuilder<AuthBloc, AuthState>(
-                  builder: (context, authState) {
-                    String? photoUrl;
-                    String displayName = 'U';
-
-                    // Use profile data as primary source (same logic as connections page)
-                    if (profileState is ProfileLoaded) {
-                      photoUrl = profileState.profile.photoUrl;
-                      displayName = profileState.profile.name.isNotEmpty
-                          ? profileState.profile.name
-                          : 'U';
-                    } else if (authState is AuthAuthenticated) {
-                      // Fallback to auth data only if profile not loaded
-                      photoUrl = authState.user.avatarUrl;
-                      displayName = authState.user.displayName ?? 'U';
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: IconButton(
-                        onPressed: () => context.push(Routes.profile),
-                        icon: CachedAvatar(
-                          imageUrl: photoUrl,
-                          name: displayName,
-                          radius: 16,
-                        ),
-                      ),
-                    );
-                  },
+            // Requests icon with red badge dot
+            BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+              buildWhen: (prev, curr) =>
+                  prev.receivedRequests.length != curr.receivedRequests.length,
+              builder: (context, state) {
+                final hasRequests = state.receivedRequests.isNotEmpty;
+                return IconButton(
+                  onPressed: () => context.push(Routes.allRequests),
+                  icon: Badge(
+                    isLabelVisible: hasRequests,
+                    backgroundColor: Colors.red,
+                    smallSize: 10,
+                    child: const Icon(Icons.person_add, size: 26),
+                  ),
+                  tooltip: 'Requests',
                 );
               },
             ),
@@ -412,69 +393,6 @@ class _HomePageState extends State<HomePage>
                 ),
                 const SizedBox(height: 16),
 
-                // Received request buttons row
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RequestButtonCard(
-                        onTap: () => context.push(Routes.connectionRequests),
-                        label: 'Nearby\nRequest',
-                        icon: Icons.mail_outline,
-                        badgeBuilder: (context) {
-                          return BlocBuilder<ConnectionBloc,
-                              ConnectionBlocState>(
-                            buildWhen: (prev, curr) {
-                              final prevCount = prev.receivedRequests
-                                  .where((req) => req.source == 'nearby')
-                                  .length;
-                              final currCount = curr.receivedRequests
-                                  .where((req) => req.source == 'nearby')
-                                  .length;
-                              return prevCount != currCount;
-                            },
-                            builder: (context, state) {
-                              final count = state.receivedRequests
-                                  .where((req) => req.source == 'nearby')
-                                  .length;
-                              if (count == 0) return const SizedBox.shrink();
-                              return _BadgeCount(
-                                count: count,
-                                color:
-                                    Theme.of(context).colorScheme.error,
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _RequestButtonCard(
-                        onTap: () => context.push(Routes.discoveryRequests),
-                        label: 'Connection\nRequest',
-                        icon: Icons.person_search_outlined,
-                        badgeBuilder: (context) {
-                          return BlocBuilder<DiscoveryBloc, DiscoveryState>(
-                            buildWhen: (prev, curr) =>
-                                prev.receivedRequests.length !=
-                                curr.receivedRequests.length,
-                            builder: (context, state) {
-                              final count = state.receivedRequests.length;
-                              if (count == 0) return const SizedBox.shrink();
-                              return _BadgeCount(
-                                count: count,
-                                color:
-                                    Theme.of(context).colorScheme.tertiary,
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
                 // Nearby Help section - prominent SOS button
                 _AnimatedSquareCard(
                   onTap: () => context.push(Routes.nearbyHelp),
@@ -484,30 +402,6 @@ class _HomePageState extends State<HomePage>
                   isSquare: false,
                   useVerticalLayout: false,
                   animationType: _CardAnimationType.sos,
-                ),
-                const SizedBox(height: 16),
-
-                // Posts feed
-                _AnimatedSquareCard(
-                  onTap: () => context.push(Routes.postFeed),
-                  label: 'Posts Feed',
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  isSquare: false,
-                  useVerticalLayout: false,
-                  icon: Icons.dynamic_feed,
-                ),
-                const SizedBox(height: 16),
-
-                // Local News
-                _AnimatedSquareCard(
-                  onTap: () => context.push(Routes.localNews),
-                  label: 'Local',
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  isSquare: false,
-                  useVerticalLayout: false,
-                  icon: Icons.newspaper,
                 ),
                 const SizedBox(height: 16),
 
@@ -527,7 +421,7 @@ class _HomePageState extends State<HomePage>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.locationGroups),
+                        onTap: () => context.push(Routes.myGroups),
                         label: 'Location\nGroups',
                         color: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -542,7 +436,7 @@ class _HomePageState extends State<HomePage>
                   children: [
                     Expanded(
                       child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.discoverRandomGroups),
+                        onTap: () => context.push(Routes.randomGroups),
                         label: 'Random\nGroups',
                         color: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -553,7 +447,7 @@ class _HomePageState extends State<HomePage>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _AnimatedSquareCard(
-                        onTap: () => context.push(Routes.discoverNearbyGroups),
+                        onTap: () => context.push(Routes.nearbyGroups),
                         label: 'Nearby\nGroups',
                         color: Theme.of(context).colorScheme.onPrimary,
                         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -723,108 +617,3 @@ class _AnimatedSquareCard extends StatelessWidget {
 }
 
 enum _CardAnimationType { wave, personCycle, talking, sos }
-
-/// Card button for received connection/discovery requests on home page.
-class _RequestButtonCard extends StatelessWidget {
-  final VoidCallback onTap;
-  final String label;
-  final IconData icon;
-  final Widget Function(BuildContext context) badgeBuilder;
-
-  const _RequestButtonCard({
-    required this.onTap,
-    required this.label,
-    required this.icon,
-    required this.badgeBuilder,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      icon,
-                      size: 28,
-                      color: theme.colorScheme.onPrimary,
-                    ),
-                  ),
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: badgeBuilder(context),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              Flexible(
-                child: Text(
-                  label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Badge count indicator for request buttons.
-class _BadgeCount extends StatelessWidget {
-  final int count;
-  final Color color;
-
-  const _BadgeCount({
-    required this.count,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      constraints: const BoxConstraints(
-        minWidth: 20,
-        minHeight: 20,
-      ),
-      child: Text(
-        count > 99 ? '99+' : count.toString(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-}

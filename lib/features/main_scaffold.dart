@@ -29,11 +29,11 @@ class _MainScaffoldState extends State<MainScaffold> {
       return 2;
     } else if (location.startsWith('/connections')) {
       return 3;
-    } else if (location.startsWith('/nearby-groups')) {
-      return 1;
-    } else if (location.startsWith('/random-groups')) {
+    } else if (location.startsWith('/local-news')) {
       return 0;
-    } else if (location.startsWith('/my-groups')) {
+    } else if (location.startsWith('/posts')) {
+      return 1;
+    } else if (location == Routes.profile) {
       return 4;
     }
     return 2;
@@ -42,10 +42,10 @@ class _MainScaffoldState extends State<MainScaffold> {
   void _onItemTapped(int index) {
     switch (index) {
       case 0:
-        context.go(Routes.randomGroups);
+        context.go(Routes.localNews);
         break;
       case 1:
-        context.go(Routes.nearbyGroups);
+        context.go(Routes.postFeed);
         break;
       case 2:
         context.go(Routes.home);
@@ -54,7 +54,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         context.go(Routes.connections);
         break;
       case 4:
-        context.go(Routes.myGroups);
+        context.go(Routes.profile);
         break;
     }
   }
@@ -68,14 +68,14 @@ class _MainScaffoldState extends State<MainScaffold> {
         onDestinationSelected: _onItemTapped,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.public_outlined),
-            selectedIcon: Icon(Icons.public),
-            label: 'Random',
+            icon: Icon(Icons.newspaper_outlined),
+            selectedIcon: Icon(Icons.newspaper),
+            label: 'Local',
           ),
           NavigationDestination(
-            icon: Icon(Icons.all_inclusive_outlined),
-            selectedIcon: Icon(Icons.all_inclusive),
-            label: 'Nearby',
+            icon: Icon(Icons.dynamic_feed_outlined),
+            selectedIcon: Icon(Icons.dynamic_feed),
+            label: 'Feed',
           ),
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -88,9 +88,9 @@ class _MainScaffoldState extends State<MainScaffold> {
             label: 'Connections',
           ),
           NavigationDestination(
-            icon: _GroupsIcon(selected: false),
-            selectedIcon: _GroupsIcon(selected: true),
-            label: 'Location',
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),
@@ -162,13 +162,3 @@ class _ConnectionsIcon extends StatelessWidget {
   }
 }
 
-class _GroupsIcon extends StatelessWidget {
-  final bool selected;
-
-  const _GroupsIcon({required this.selected});
-
-  @override
-  Widget build(BuildContext context) {
-    return Icon(selected ? Icons.groups : Icons.groups_outlined);
-  }
-}

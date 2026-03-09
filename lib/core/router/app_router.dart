@@ -11,6 +11,7 @@ import '../../features/chat/presentation/bloc/chat_bloc.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
+import '../../features/connections/presentation/pages/all_requests_screen.dart';
 import '../../features/connections/presentation/pages/connection_profile_page.dart';
 import '../../features/connections/presentation/pages/connections_page.dart';
 import '../../features/connections/presentation/pages/discovery_search_page.dart';
@@ -211,34 +212,34 @@ GoRouter get appRouter {
             ),
           ),
           GoRoute(
-            path: Routes.nearbyGroups,
-            name: 'nearbyGroupsTab',
+            path: Routes.localNews,
+            name: 'localNewsTab',
             pageBuilder: (context, state) => NoTransitionPage(
               child: MultiBlocProvider(
                 providers: [
-                  BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+                  BlocProvider(create: (_) => getIt<NewsFeedBloc>()),
+                  BlocProvider(create: (_) => getIt<ReelsFeedBloc>()),
+                  BlocProvider.value(value: getIt<NewsLocationBloc>()),
                 ],
-                child: const NearbyGroupsPage(),
+                child: const LocalNewsFeedPage(),
               ),
             ),
           ),
           GoRoute(
-            path: Routes.randomGroups,
-            name: 'randomGroupsTab',
+            path: Routes.postFeed,
+            name: 'postFeedTab',
             pageBuilder: (context, state) => NoTransitionPage(
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider.value(value: getIt<RandomGroupBloc>()),
-                ],
-                child: const RandomGroupsPage(),
+              child: BlocProvider(
+                create: (_) => getIt<PostFeedBloc>(),
+                child: const PostFeedPage(),
               ),
             ),
           ),
           GoRoute(
-            path: Routes.myGroups,
-            name: 'myGroups',
+            path: Routes.profile,
+            name: 'profileTab',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: MyGroupsPage(),
+              child: ProfilePage(),
             ),
           ),
         ],
@@ -251,22 +252,34 @@ GoRouter get appRouter {
         builder: (context, state) => const NearbyUsersScreen(),
       ),
       GoRoute(
-        path: Routes.profile,
-        name: 'profile',
-        builder: (context, state) => const ProfilePage(),
+        path: Routes.nearbyGroups,
+        name: 'nearbyGroups',
+        builder: (context, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+          ],
+          child: const NearbyGroupsPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.randomGroups,
+        name: 'randomGroups',
+        builder: (context, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: getIt<RandomGroupBloc>()),
+          ],
+          child: const RandomGroupsPage(),
+        ),
+      ),
+      GoRoute(
+        path: Routes.myGroups,
+        name: 'myGroups',
+        builder: (context, state) => const MyGroupsPage(),
       ),
       GoRoute(
         path: Routes.editProfile,
         name: 'editProfile',
         builder: (context, state) => const EditProfilePage(),
-      ),
-      GoRoute(
-        path: Routes.postFeed,
-        name: 'postFeed',
-        builder: (context, state) => BlocProvider(
-          create: (_) => getIt<PostFeedBloc>(),
-          child: const PostFeedPage(),
-        ),
       ),
       GoRoute(
         path: Routes.createPost,
@@ -278,18 +291,6 @@ GoRouter get appRouter {
       ),
 
       // Local News routes
-      GoRoute(
-        path: Routes.localNews,
-        name: 'localNews',
-        builder: (context, state) => MultiBlocProvider(
-          providers: [
-            BlocProvider(create: (_) => getIt<NewsFeedBloc>()),
-            BlocProvider(create: (_) => getIt<ReelsFeedBloc>()),
-            BlocProvider.value(value: getIt<NewsLocationBloc>()),
-          ],
-          child: const LocalNewsFeedPage(),
-        ),
-      ),
       GoRoute(
         path: Routes.localNewsSetup,
         name: 'localNewsSetup',
@@ -377,6 +378,11 @@ GoRouter get appRouter {
         path: Routes.connectionRequests,
         name: 'connectionRequests',
         builder: (context, state) => const ConnectionRequestsScreen(),
+      ),
+      GoRoute(
+        path: Routes.allRequests,
+        name: 'allRequests',
+        builder: (context, state) => const AllRequestsScreen(),
       ),
 
       // Discovery routes (username-based user search & connection)
