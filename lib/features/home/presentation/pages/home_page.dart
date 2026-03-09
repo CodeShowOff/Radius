@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../../core/settings/app_settings_store.dart';
 import '../../../../core/di/injection.dart';
@@ -271,13 +272,15 @@ class _HomePageState extends State<HomePage>
                   prev.receivedRequests.length != curr.receivedRequests.length,
               builder: (context, state) {
                 final hasRequests = state.receivedRequests.isNotEmpty;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
                 return IconButton(
                   onPressed: () => context.push(Routes.allRequests),
                   icon: Badge(
                     isLabelVisible: hasRequests,
                     backgroundColor: Colors.red,
                     smallSize: 10,
-                    child: const Icon(Icons.person_add_alt_1_outlined, size: 24),
+                    child: Icon(Icons.person_add_alt_1_outlined, size: 24,
+                        color: isDark ? null : AppTheme.primaryColor),
                   ),
                   tooltip: 'Requests',
                 );
@@ -318,6 +321,7 @@ class _HomePageState extends State<HomePage>
                         ),
                       ),
                       const SizedBox(height: 12),
+                      // Row 1: Find Nearby | Nearby Groups
                       Row(
                         children: [
                           Expanded(
@@ -330,16 +334,25 @@ class _HomePageState extends State<HomePage>
                           const SizedBox(width: 12),
                           Expanded(
                             child: _QuickAction(
-                              icon: Icons.shuffle,
-                              label: 'Random Chat',
-                              onTap: () => context.push(Routes.randomChat),
+                              icon: Icons.all_inclusive,
+                              label: 'Nearby Groups',
+                              onTap: () => context.push(Routes.nearbyGroups),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
+                      // Row 2: Random Chat | Video Chat
                       Row(
                         children: [
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.chat_bubble_outline_rounded,
+                              label: 'Random Chat',
+                              onTap: () => context.push(Routes.randomChat),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: _QuickAction(
                               icon: Icons.videocam_rounded,
@@ -347,52 +360,33 @@ class _HomePageState extends State<HomePage>
                               onTap: () => context.push(Routes.videoChat),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.sos,
-                              label: 'Nearby Help',
-                              onTap: () => context.push(Routes.nearbyHelp),
-                            ),
-                          ),
                         ],
                       ),
-                      const Spacer(),
-
-                      // --- Groups section ---
-                      Text(
-                        'Groups',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                       const SizedBox(height: 12),
+                      // Row 3: Location Groups | Random Groups
                       Row(
                         children: [
                           Expanded(
-                            child: _FeatureCard(
+                            child: _QuickAction(
                               icon: Icons.location_on_outlined,
-                              label: 'Location\nGroups',
+                              label: 'Location Groups',
                               onTap: () => context.push(Routes.myGroups),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _FeatureCard(
+                            child: _QuickAction(
                               icon: Icons.public_outlined,
-                              label: 'Random\nGroups',
+                              label: 'Random Groups',
                               onTap: () => context.push(Routes.randomGroups),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _FeatureCard(
-                              icon: Icons.all_inclusive,
-                              label: 'Nearby\nGroups',
-                              onTap: () => context.push(Routes.nearbyGroups),
-                            ),
-                          ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Full-width Nearby Help
+                      _NearbyHelpAction(
+                        onTap: () => context.push(Routes.nearbyHelp),
                       ),
                     ],
                   ),
@@ -478,6 +472,7 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -494,10 +489,12 @@ class _QuickAction extends StatelessWidget {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: cs.primaryContainer,
+                color: isDark ? cs.primaryContainer : AppTheme.primaryColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: cs.onPrimaryContainer, size: 36),
+              child: Icon(icon,
+                  color: isDark ? cs.onPrimaryContainer : Colors.white,
+                  size: 36),
             ),
             const SizedBox(height: 10),
             Text(
@@ -516,52 +513,42 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
-/// Compact feature card for groups grid.
-class _FeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
+/// Full-width emergency action card.
+class _NearbyHelpAction extends StatelessWidget {
   final VoidCallback onTap;
-
-  const _FeatureCard({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _NearbyHelpAction({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final errorColor = theme.colorScheme.error;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          color: errorColor.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: cs.outlineVariant.withValues(alpha: 0.4),
-          ),
+          border: Border.all(color: errorColor.withValues(alpha: 0.2)),
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 68,
+              height: 68,
               decoration: BoxDecoration(
-                color: cs.primaryContainer,
+                color: errorColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: cs.onPrimaryContainer, size: 24),
+              child: Icon(Icons.sos, color: errorColor, size: 36),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(width: 12),
             Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
+              'Nearby Help',
+              style: theme.textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w600,
-                height: 1.2,
+                color: errorColor,
               ),
             ),
           ],
@@ -570,3 +557,5 @@ class _FeatureCard extends StatelessWidget {
     );
   }
 }
+
+
