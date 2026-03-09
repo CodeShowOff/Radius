@@ -65,6 +65,7 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
     final authState = context.read<AuthBloc>().state;
     final currentUserId =
         authState is AuthAuthenticated ? authState.user.id : '';
+    final isOwn = post.authorId == currentUserId;
 
     showDialog(
       context: context,
@@ -89,12 +90,62 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
                       initialLikeCount: post.likeCount,
                       initialCommentCount: post.commentCount,
                     ),
-                  child: NewsPostCard(post: post),
+                  child: NewsPostCard(
+                    post: post,
+                    isOwnPost: isOwn,
+                    onDelete: isOwn
+                        ? () {
+                            Navigator.pop(dialogContext);
+                            _confirmDelete(context, post);
+                          }
+                        : null,
+                  ),
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, NewsPost post) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Post?'),
+        content: const Text(
+          'This post will be permanently deleted. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                await _service.deletePost(post.id);
+                if (mounted) {
+                  setState(() {
+                    _posts.removeWhere((p) => p.id == post.id);
+                  });
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to delete post')),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

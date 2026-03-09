@@ -199,6 +199,7 @@ Future<void> configureDependencies() {
         postRepository: getIt<IPostRepository>(),
         mediaService: getIt<PostMediaService>(),
         mediaOptimizer: getIt<MediaOptimizer>(),
+        postService: getIt<PostService>(),
       ),
     );
   }
@@ -524,6 +525,7 @@ Future<void> configureDependencies() {
         mediaService: getIt<NewsMediaService>(),
         locationService: getIt<NewsLocationService>(),
         mediaOptimizer: getIt<MediaOptimizer>(),
+        newsPostService: getIt<NewsPostService>(),
       ),
     );
   }

@@ -55,7 +55,8 @@ import '../../features/random_groups/presentation/pages/random_group_settings_pa
 import '../../features/random_groups/presentation/pages/random_groups_page.dart';
 import '../../features/main_scaffold.dart';
 import '../../features/profile/presentation/pages/edit_profile_page.dart';
-import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/pages/own_public_profile_page.dart';
+import '../../features/profile/presentation/pages/settings_page.dart';
 import '../../features/posts/presentation/bloc/create_post_bloc.dart';
 import '../../features/posts/presentation/bloc/post_feed_bloc.dart';
 import '../../features/posts/presentation/pages/create_post_page.dart';
@@ -239,7 +240,7 @@ GoRouter get appRouter {
             path: Routes.profile,
             name: 'profileTab',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfilePage(),
+              child: OwnPublicProfilePage(),
             ),
           ),
         ],
@@ -282,6 +283,11 @@ GoRouter get appRouter {
         builder: (context, state) => const EditProfilePage(),
       ),
       GoRoute(
+        path: Routes.settings,
+        name: 'settings',
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
         path: Routes.createPost,
         name: 'createPost',
         builder: (context, state) => BlocProvider(
@@ -321,6 +327,7 @@ GoRouter get appRouter {
             mediaService: getIt(),
             locationService: getIt(),
             mediaOptimizer: getIt(),
+            newsPostService: getIt(),
             postType: 'reel',
           ),
           child: const CreateNewsPostPage(isReel: true),

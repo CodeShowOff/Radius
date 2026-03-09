@@ -514,6 +514,8 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
   }
 
   void _onVisibilityChanged(VisibilityInfo info) {
+    if (!mounted) return;
+
     // Preload the video file into cache when >50% visible
     if (info.visibleFraction > 0.5 && !_preloadStarted) {
       _preloadStarted = true;
@@ -528,7 +530,7 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
     // Pause when less than 50% visible
     if (info.visibleFraction < 0.5 && _controller!.value.isPlaying) {
       _controller!.pause();
-      setState(() => _isPlaying = false);
+      if (mounted) setState(() => _isPlaying = false);
     }
   }
 

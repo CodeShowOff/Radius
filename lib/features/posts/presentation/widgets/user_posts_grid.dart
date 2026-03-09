@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/post.dart';
 import '../../domain/repositories/i_post_interaction_repository.dart';
@@ -29,6 +30,14 @@ class UserPostsGrid extends StatelessWidget {
         : '';
     final currentUserPhoto =
         authState is AuthAuthenticated ? authState.user.avatarUrl : null;
+    final isOwn = post.authorId == currentUserId;
+
+    // Capture bloc reference before opening dialog (dialog has different context tree)
+    final userPostsBloc = context.read<UserPostsBloc>();
+    final connectionState = context.read<ConnectionBloc>().state;
+    final connectionIds = connectionState.connections
+        .map((c) => c.getOtherUserId(currentUserId))
+        .toList();
 
     showDialog(
       context: context,
@@ -57,6 +66,29 @@ class UserPostsGrid extends StatelessWidget {
                   child: Builder(
                     builder: (cardContext) => PostCard(
                       post: post,
+                      isOwnPost: isOwn,
+                      onDelete: isOwn
+                          ? () {
+                              Navigator.pop(dialogContext);
+                              _confirmDelete(
+                                context,
+                                post.id,
+                                userPostsBloc,
+                              );
+                            }
+                          : null,
+                      onVisibilityChange: isOwn
+                          ? (v) {
+                              Navigator.pop(dialogContext);
+                              _confirmVisibilityChange(
+                                context,
+                                post.id,
+                                v,
+                                userPostsBloc,
+                                connectionIds,
+                              );
+                            }
+                          : null,
                       onLikeTap: () {
                         cardContext
                             .read<PostInteractionCubit>()
@@ -81,6 +113,75 @@ class UserPostsGrid extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  static void _confirmDelete(
+    BuildContext context,
+    String postId,
+    UserPostsBloc bloc,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Post?'),
+        content: const Text(
+          'This post will be permanently deleted. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              bloc.add(UserPostsDeleteRequested(postId));
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _confirmVisibilityChange(
+    BuildContext context,
+    String postId,
+    PostVisibility newVisibility,
+    UserPostsBloc bloc,
+    List<String> connectionIds,
+  ) {
+    final label = newVisibility == PostVisibility.public
+        ? 'public'
+        : 'connections only';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change Visibility?'),
+        content: Text('Make this post visible to $label?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              bloc.add(UserPostsVisibilityChanged(
+                postId: postId,
+                newVisibility: newVisibility,
+                connectionIds: connectionIds,
+              ));
+            },
+            child: const Text('Change'),
+          ),
+        ],
       ),
     );
   }

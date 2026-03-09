@@ -39,6 +39,27 @@ class PostService {
     }
   }
 
+  /// Counts posts created by [authorId] since the start of today (UTC).
+  /// Used for daily rate limiting.
+  Future<int> countTodayPostsByAuthor(String authorId) async {
+    try {
+      final now = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(now.year, now.month, now.day);
+
+      final snapshot = await _postsRef
+          .where('authorId', isEqualTo: authorId)
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .count()
+          .get();
+
+      return snapshot.count ?? 0;
+    } catch (e, stack) {
+      _logger.e('Error counting today posts for $authorId',
+          error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
+
   /// Gets a single post by ID.
   Future<PostModel?> getPost(String postId) async {
     try {

@@ -9,6 +9,7 @@ import '../../../posts/domain/entities/media_item.dart';
 import '../../data/services/geocoding_service.dart';
 import '../../data/services/news_location_service.dart';
 import '../../data/services/news_media_service.dart';
+import '../../data/services/news_post_service.dart';
 import '../../domain/entities/news_location.dart';
 import '../../domain/repositories/i_news_post_repository.dart';
 
@@ -28,22 +29,28 @@ class CreateNewsPostBloc
   final NewsMediaService _mediaService;
   final NewsLocationService _locationService;
   final MediaOptimizer _mediaOptimizer;
+  final NewsPostService _newsPostService;
   final Logger _logger;
 
   /// The type of post being created: 'post' or 'reel'.
   final String postType;
+
+  /// Maximum number of local news posts + reels a user can create per day.
+  static const int maxNewsPostsPerDay = 3;
 
   CreateNewsPostBloc({
     required INewsPostRepository repository,
     required NewsMediaService mediaService,
     required NewsLocationService locationService,
     required MediaOptimizer mediaOptimizer,
+    required NewsPostService newsPostService,
     this.postType = 'post',
     Logger? logger,
   })  : _repository = repository,
         _mediaService = mediaService,
         _locationService = locationService,
         _mediaOptimizer = mediaOptimizer,
+        _newsPostService = newsPostService,
         _logger = logger ?? Logger(),
         super(const CreateNewsPostState()) {
     on<CreateNewsPostMediaAdded>(_onMediaAdded);
@@ -145,6 +152,22 @@ class CreateNewsPostBloc
     Emitter<CreateNewsPostState> emit,
   ) async {
     if (!state.canSubmit || _authorId == null) return;
+
+    // ─── Rate limit check ─────────────────────────────────────────────
+    try {
+      final todayCount =
+          await _newsPostService.countTodayPostsByAuthor(_authorId!);
+      if (todayCount >= maxNewsPostsPerDay) {
+        emit(state.copyWith(
+          status: CreateNewsPostStatus.error,
+          errorMessage:
+              'Daily limit reached. You can only create $maxNewsPostsPerDay local news posts and reels per day.',
+        ));
+        return;
+      }
+    } catch (e) {
+      _logger.w('Rate limit check failed, allowing post', error: e);
+    }
 
     // Reel-specific pre-validation
     if (isReel) {

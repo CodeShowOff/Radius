@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -384,80 +386,218 @@ class _NewsImage extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Video thumbnail with play icon overlay
+// Video player with thumbnail fallback
 // ---------------------------------------------------------------------------
-class _VideoThumbnailView extends StatelessWidget {
+class _VideoThumbnailView extends StatefulWidget {
   final MediaItem mediaItem;
 
   const _VideoThumbnailView({required this.mediaItem});
 
   @override
+  State<_VideoThumbnailView> createState() => _VideoThumbnailViewState();
+}
+
+class _VideoThumbnailViewState extends State<_VideoThumbnailView> {
+  VideoPlayerController? _controller;
+  bool _isPlaying = false;
+  bool _isInitialized = false;
+  bool _isLoading = false;
+  bool _hasError = false;
+
+  static final _cacheManager = CacheManager(
+    Config(
+      'news_videos',
+      stalePeriod: const Duration(days: 7),
+      maxNrOfCacheObjects: 50,
+    ),
+  );
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onVideoStateChanged);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeAndPlay() async {
+    if (_controller != null) {
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+        if (mounted) setState(() => _isPlaying = false);
+      } else {
+        _controller!.play();
+        if (mounted) setState(() => _isPlaying = true);
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final file =
+          await _cacheManager.getSingleFile(widget.mediaItem.url);
+
+      _controller = VideoPlayerController.file(file);
+      await _controller!.initialize();
+      _controller!.addListener(_onVideoStateChanged);
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _isLoading = false;
+        });
+        _controller!.play();
+        setState(() => _isPlaying = true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _onVideoStateChanged() {
+    if (!mounted || _controller == null) return;
+    final isPlaying = _controller!.value.isPlaying;
+    if (isPlaying != _isPlaying) {
+      setState(() => _isPlaying = isPlaying);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final thumbnailUrl = mediaItem.thumbnailUrl;
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 400),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: thumbnailUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                height: 300,
-                color: theme.colorScheme.surfaceContainerHighest,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                height: 250,
-                color: theme.colorScheme.surfaceContainerHighest,
-              ),
-            )
-          else
-            Container(
-              height: 250,
-              width: double.infinity,
-              color: theme.colorScheme.surfaceContainerHighest,
-            ),
-          // Play button overlay
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.6),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.play_arrow,
-              color: Colors.white,
-              size: 32,
+    // Video is initialized — show the player
+    if (_isInitialized && _controller != null) {
+      return GestureDetector(
+        onTap: _initializeAndPlay,
+        child: Container(
+          width: double.infinity,
+          color: Colors.black,
+          constraints: const BoxConstraints(maxHeight: 400),
+          alignment: Alignment.center,
+          child: AspectRatio(
+            aspectRatio: _controller!.value.aspectRatio,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                VideoPlayer(_controller!),
+                if (!_isPlaying)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Colors.black45,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: VideoProgressIndicator(
+                    _controller!,
+                    allowScrubbing: true,
+                    padding: const EdgeInsets.only(top: 4),
+                  ),
+                ),
+              ],
             ),
           ),
-          // Duration badge
-          if (mediaItem.durationMs != null)
-            Positioned(
-              bottom: 8,
-              right: 8,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(4),
+        ),
+      );
+    }
+
+    // Thumbnail with play button
+    final thumbnailUrl = widget.mediaItem.thumbnailUrl;
+    return GestureDetector(
+      onTap: _hasError ? null : _initializeAndPlay,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 400),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: thumbnailUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  height: 300,
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child:
+                      const Center(child: CircularProgressIndicator()),
                 ),
-                child: Text(
-                  _formatDuration(mediaItem.durationMs!),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                errorWidget: (context, url, error) => Container(
+                  height: 250,
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+              )
+            else
+              Container(
+                height: 250,
+                width: double.infinity,
+                color: theme.colorScheme.surfaceContainerHighest,
+              ),
+            // Loading / Play / Error overlay
+            if (_isLoading)
+              const CircularProgressIndicator(color: Colors.white)
+            else if (_hasError)
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 48, color: theme.colorScheme.error),
+                  const SizedBox(height: 8),
+                  Text('Failed to load video',
+                      style:
+                          TextStyle(color: theme.colorScheme.error)),
+                ],
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+            // Duration badge
+            if (widget.mediaItem.durationMs != null)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _formatDuration(widget.mediaItem.durationMs!),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

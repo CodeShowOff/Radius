@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 
 import '../../data/services/media_optimizer.dart';
 import '../../data/services/post_media_service.dart';
+import '../../data/services/post_service.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/post.dart';
 import '../../domain/repositories/i_post_repository.dart';
@@ -21,16 +22,22 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
   final IPostRepository _postRepository;
   final PostMediaService _mediaService;
   final MediaOptimizer _mediaOptimizer;
+  final PostService _postService;
   final Logger _logger;
+
+  /// Maximum number of connection posts a user can create per day.
+  static const int maxPostsPerDay = 5;
 
   CreatePostBloc({
     required IPostRepository postRepository,
     required PostMediaService mediaService,
     required MediaOptimizer mediaOptimizer,
+    required PostService postService,
     Logger? logger,
   })  : _postRepository = postRepository,
         _mediaService = mediaService,
         _mediaOptimizer = mediaOptimizer,
+        _postService = postService,
         _logger = logger ?? Logger(),
         super(const CreatePostState()) {
     on<CreatePostMediaAdded>(_onMediaAdded);
@@ -92,6 +99,23 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
     Emitter<CreatePostState> emit,
   ) async {
     if (!state.canSubmit) return;
+
+    // ─── Rate limit check ─────────────────────────────────────────────
+    if (_authorId != null) {
+      try {
+        final todayCount = await _postService.countTodayPostsByAuthor(_authorId!);
+        if (todayCount >= maxPostsPerDay) {
+          emit(state.copyWith(
+            status: CreatePostStatus.error,
+            errorMessage:
+                'Daily limit reached. You can only create $maxPostsPerDay posts per day.',
+          ));
+          return;
+        }
+      } catch (e) {
+        _logger.w('Rate limit check failed, allowing post', error: e);
+      }
+    }
 
     // ─── Optimize media ───────────────────────────────────────────────
     emit(state.copyWith(
