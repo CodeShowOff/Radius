@@ -110,6 +110,9 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
   }
 
   void _confirmDelete(BuildContext context, NewsPost post) {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -134,15 +137,13 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
                 }
               } catch (_) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  scaffoldMessenger.showSnackBar(
                     const SnackBar(content: Text('Failed to delete post')),
                   );
                 }
               }
             },
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: errorColor),
             child: const Text('Delete'),
           ),
         ],
