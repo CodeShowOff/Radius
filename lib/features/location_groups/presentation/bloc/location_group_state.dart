@@ -16,8 +16,8 @@ class LocationGroupState extends Equatable {
   final GroupBlocStatus status;
 
   /// Currently browsing location.
-  final String? selectedCountryCode;
-  final String? selectedStateCode;
+  final String? selectedCountryName;
+  final String? selectedCityName;
 
   /// Groups in the currently selected location.
   final List<LocationGroup> locationGroups;
@@ -67,8 +67,8 @@ class LocationGroupState extends Equatable {
 
   const LocationGroupState({
     this.status = GroupBlocStatus.initial,
-    this.selectedCountryCode,
-    this.selectedStateCode,
+    this.selectedCountryName,
+    this.selectedCityName,
     this.locationGroups = const [],
     this.userGroups = const [],
     this.userGroupsUserId,
@@ -100,8 +100,8 @@ class LocationGroupState extends Equatable {
 
   LocationGroupState copyWith({
     GroupBlocStatus? status,
-    String? selectedCountryCode,
-    String? selectedStateCode,
+    String? selectedCountryName,
+    String? selectedCityName,
     List<LocationGroup>? locationGroups,
     List<LocationGroup>? userGroups,
     String? userGroupsUserId,
@@ -122,8 +122,8 @@ class LocationGroupState extends Equatable {
   }) {
     return LocationGroupState(
       status: status ?? this.status,
-      selectedCountryCode: selectedCountryCode ?? this.selectedCountryCode,
-      selectedStateCode: selectedStateCode ?? this.selectedStateCode,
+      selectedCountryName: selectedCountryName ?? this.selectedCountryName,
+      selectedCityName: selectedCityName ?? this.selectedCityName,
       locationGroups: locationGroups ?? this.locationGroups,
       userGroups: userGroups ?? this.userGroups,
       userGroupsUserId: userGroupsUserId ?? this.userGroupsUserId,
@@ -145,8 +145,8 @@ class LocationGroupState extends Equatable {
   @override
   List<Object?> get props => [
         status,
-        selectedCountryCode,
-        selectedStateCode,
+        selectedCountryName,
+        selectedCityName,
         locationGroups,
         userGroups,
         userGroupsUserId,

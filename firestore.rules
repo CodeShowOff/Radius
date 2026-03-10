@@ -594,8 +594,8 @@ service cloud.firestore {
         && request.resource.data.memberCount == 1
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.countryCode is string
-        && request.resource.data.stateCode is string
+        && request.resource.data.countryName is string
+        && request.resource.data.cityName is string
         && request.resource.data.visibility in ['public', 'requestToJoin'];
       
       // RULE: Only admins can update group settings
@@ -606,7 +606,7 @@ service cloud.firestore {
             // Admin path: full settings updates (no immutable field changes)
             isGroupAdmin()
             && !request.resource.data.diff(resource.data).affectedKeys()
-                .hasAny(['createdByUserId', 'createdAt', 'countryCode', 'stateCode'])
+                .hasAny(['createdByUserId', 'createdAt', 'countryName', 'cityName'])
           )
           || (
             // Member join/leave path: only memberCount ±1 and updatedAt
@@ -1299,11 +1299,11 @@ service cloud.firestore {
       // Only the author can create a post
       allow create: if isAuthenticated()
         && request.resource.data.authorId == request.auth.uid
-        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'country', 'district', 'latitude', 'longitude', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'country', 'city', 'latitude', 'longitude', 'createdAt', 'updatedAt'])
         && request.resource.data.country is string
         && request.resource.data.country.size() > 0
-        && request.resource.data.district is string
-        && request.resource.data.district.size() > 0
+        && request.resource.data.city is string
+        && request.resource.data.city.size() > 0
         && request.resource.data.latitude is number
         && request.resource.data.longitude is number
         && (
@@ -1329,7 +1329,7 @@ service cloud.firestore {
         && request.resource.data.authorId == resource.data.authorId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.country == resource.data.country
-        && request.resource.data.district == resource.data.district
+        && request.resource.data.city == resource.data.city
         && (
           // postType is immutable after creation
           !('postType' in request.resource.data.keys())

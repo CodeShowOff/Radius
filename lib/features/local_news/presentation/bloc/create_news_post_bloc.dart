@@ -19,7 +19,7 @@ part 'create_news_post_state.dart';
 /// BLoC for the news post creation flow.
 ///
 /// Key rule: When submitting, the BLoC **always** requests live GPS first.
-/// The post is tagged with the GPS-derived district/city/locality.
+/// The post is tagged with the GPS-derived city (matched against locations.json).
 /// No manual override for post creation — this ensures location integrity.
 ///
 /// Flow: compose → submit → GPS detect → optimize media → upload → create doc
@@ -204,6 +204,13 @@ class CreateNewsPostBloc
         status: CreateNewsPostStatus.error,
         errorMessage: e.message,
         locationFailureReason: e.reason,
+      ));
+      return;
+    } on LocationCityMatchException catch (e) {
+      _logger.w('City match failed: ${e.message}');
+      emit(state.copyWith(
+        status: CreateNewsPostStatus.error,
+        errorMessage: e.message,
       ));
       return;
     } on GeocodingException catch (e) {

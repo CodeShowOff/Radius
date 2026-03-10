@@ -222,7 +222,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          '${widget.reel.locality}, ${widget.reel.district}',
+                          widget.reel.locationLabel,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.white70,
                           ),

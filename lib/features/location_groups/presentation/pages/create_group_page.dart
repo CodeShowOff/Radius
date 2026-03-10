@@ -6,7 +6,6 @@ import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/country.dart';
 import '../../domain/entities/location_group.dart';
-import '../../domain/entities/state_region.dart';
 import '../bloc/location_group_bloc.dart';
 import '../widgets/location_selector.dart';
 
@@ -25,7 +24,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
 
   int _currentStep = 0;
   Country? _selectedCountry;
-  StateRegion? _selectedState;
+  String? _selectedCity;
   GroupVisibility _visibility = GroupVisibility.public;
   DateTime? _lastCreateAttempt;
 
@@ -41,7 +40,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
       _nameController.text.trim().length <= 50;
 
   bool get _canProceedStep1 =>
-      _selectedCountry != null && _selectedState != null;
+      _selectedCountry != null && _selectedCity != null;
 
   bool get _canCreate => _canProceedStep0 && _canProceedStep1;
 
@@ -95,10 +94,8 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
           description: _descriptionController.text.trim().isEmpty
               ? null
               : _descriptionController.text.trim(),
-          countryCode: _selectedCountry!.code,
-          stateCode: _selectedState!.code,
           countryName: _selectedCountry!.name,
-          stateName: _selectedState!.name,
+          cityName: _selectedCity!,
           creatorUserId: authState.user.id,
           creatorUserName: authState.user.displayName,
           creatorUserPhotoUrl: authState.user.avatarUrl,
@@ -344,17 +341,17 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
         const SizedBox(height: 16),
 
         LocationSelector(
-          selectedCountryCode: _selectedCountry?.code,
-          selectedStateCode: _selectedState?.code,
+          selectedCountryName: _selectedCountry?.name,
+          selectedCityName: _selectedCity,
           onCountryChanged: (country) {
             setState(() {
               _selectedCountry = country;
-              _selectedState = null;
+              _selectedCity = null;
             });
           },
-          onStateChanged: (state) {
+          onCityChanged: (city) {
             setState(() {
-              _selectedState = state;
+              _selectedCity = city;
             });
           },
         ),
@@ -419,8 +416,8 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                   ),
                 _SummaryRow(
                   label: 'Location',
-                  value: _selectedCountry != null && _selectedState != null
-                      ? '${_selectedState!.name}, ${_selectedCountry!.name}'
+                  value: _selectedCountry != null && _selectedCity != null
+                      ? '$_selectedCity, ${_selectedCountry!.name}'
                       : 'Not selected',
                 ),
                 _SummaryRow(

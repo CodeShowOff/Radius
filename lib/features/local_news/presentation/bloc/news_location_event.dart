@@ -23,27 +23,18 @@ class NewsLocationGpsRequested extends NewsLocationEvent {
   const NewsLocationGpsRequested();
 }
 
-/// User selected a location manually (from search or dropdown).
+/// User selected a location manually (from country/city picker).
 class NewsLocationManualSelected extends NewsLocationEvent {
-  final String district;
   final String city;
   final String country;
-  final double latitude;
-  final double longitude;
-  final String locality;
 
   const NewsLocationManualSelected({
-    required this.district,
     required this.city,
     required this.country,
-    this.latitude = 0.0,
-    this.longitude = 0.0,
-    this.locality = '',
   });
 
   @override
-  List<Object?> get props =>
-      [district, city, country, latitude, longitude, locality];
+  List<Object?> get props => [city, country];
 }
 
 /// User confirmed and wants to save the detected/selected location.

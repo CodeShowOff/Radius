@@ -10,18 +10,18 @@ abstract class LocationGroupEvent extends Equatable {
 
 /// Load groups for a specific location.
 class LoadGroupsForLocation extends LocationGroupEvent {
-  final String countryCode;
-  final String stateCode;
+  final String countryName;
+  final String cityName;
   final GroupSortOption sortBy;
 
   const LoadGroupsForLocation({
-    required this.countryCode,
-    required this.stateCode,
+    required this.countryName,
+    required this.cityName,
     this.sortBy = GroupSortOption.mostActive,
   });
 
   @override
-  List<Object?> get props => [countryCode, stateCode, sortBy];
+  List<Object?> get props => [countryName, cityName, sortBy];
 }
 
 /// Load user's joined groups.
@@ -38,10 +38,8 @@ class LoadUserGroups extends LocationGroupEvent {
 class CreateGroup extends LocationGroupEvent {
   final String name;
   final String? description;
-  final String countryCode;
-  final String stateCode;
   final String countryName;
-  final String stateName;
+  final String cityName;
   final String creatorUserId;
   final String? creatorUserName;
   final String? creatorUserPhotoUrl;
@@ -50,10 +48,8 @@ class CreateGroup extends LocationGroupEvent {
   const CreateGroup({
     required this.name,
     this.description,
-    required this.countryCode,
-    required this.stateCode,
     required this.countryName,
-    required this.stateName,
+    required this.cityName,
     required this.creatorUserId,
     this.creatorUserName,
     this.creatorUserPhotoUrl,
@@ -64,10 +60,8 @@ class CreateGroup extends LocationGroupEvent {
   List<Object?> get props => [
         name,
         description,
-        countryCode,
-        stateCode,
         countryName,
-        stateName,
+        cityName,
         creatorUserId,
         creatorUserName,
         visibility,

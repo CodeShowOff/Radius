@@ -11,15 +11,15 @@ abstract class ReelsFeedEvent extends Equatable {
 /// Load the reels feed for a specific location.
 class ReelsFeedLoadRequested extends ReelsFeedEvent {
   final String country;
-  final String district;
+  final String city;
 
   const ReelsFeedLoadRequested({
     required this.country,
-    required this.district,
+    required this.city,
   });
 
   @override
-  List<Object?> get props => [country, district];
+  List<Object?> get props => [country, city];
 }
 
 /// Load more reels (next page / pagination).

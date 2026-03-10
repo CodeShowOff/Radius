@@ -35,8 +35,8 @@ class NewsFeedState extends Equatable {
   /// Country the feed is scoped to.
   final String? country;
 
-  /// District the feed is scoped to.
-  final String? district;
+  /// City the feed is scoped to.
+  final String? city;
 
   const NewsFeedState({
     this.status = NewsFeedStatus.initial,
@@ -45,13 +45,13 @@ class NewsFeedState extends Equatable {
     this.isLoadingMore = false,
     this.errorMessage,
     this.country,
-    this.district,
+    this.city,
   });
 
   /// Location label for the feed header.
   String get locationLabel {
-    if (district != null && country != null) {
-      return '$district, $country';
+    if (city != null && country != null) {
+      return '$city, $country';
     }
     return '';
   }
@@ -63,7 +63,7 @@ class NewsFeedState extends Equatable {
     bool? isLoadingMore,
     String? errorMessage,
     String? country,
-    String? district,
+    String? city,
   }) {
     return NewsFeedState(
       status: status ?? this.status,
@@ -72,7 +72,7 @@ class NewsFeedState extends Equatable {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       errorMessage: errorMessage,
       country: country ?? this.country,
-      district: district ?? this.district,
+      city: city ?? this.city,
     );
   }
 
@@ -84,6 +84,6 @@ class NewsFeedState extends Equatable {
         isLoadingMore,
         errorMessage,
         country,
-        district,
+        city,
       ];
 }

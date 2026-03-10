@@ -10,7 +10,7 @@ part 'reels_feed_state.dart';
 
 /// BLoC for the local news reels feed with paginated loading.
 ///
-/// Queries posts with `postType == 'reel'` by country + district,
+/// Queries posts with `postType == 'reel'` by country + city,
 /// supports infinite-scroll pagination and pull-to-refresh.
 class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
   final INewsPostRepository _repository;
@@ -19,7 +19,7 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
   static const int _pageSize = 10;
 
   String? _country;
-  String? _district;
+  String? _city;
 
   ReelsFeedBloc({
     required INewsPostRepository repository,
@@ -38,18 +38,18 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
     Emitter<ReelsFeedState> emit,
   ) async {
     _country = event.country;
-    _district = event.district;
+    _city = event.city;
 
     emit(state.copyWith(
       status: ReelsFeedStatus.loading,
       country: event.country,
-      district: event.district,
+      city: event.city,
       currentIndex: 0,
     ));
 
     final result = await _repository.getReelsFeed(
       country: event.country,
-      district: event.district,
+      city: event.city,
       limit: _pageSize,
     );
 
@@ -77,13 +77,13 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
     Emitter<ReelsFeedState> emit,
   ) async {
     if (state.isLoadingMore || !state.hasMore) return;
-    if (_country == null || _district == null) return;
+    if (_country == null || _city == null) return;
 
     emit(state.copyWith(isLoadingMore: true));
 
     final result = await _repository.getReelsFeed(
       country: _country!,
-      district: _district!,
+      city: _city!,
       limit: _pageSize,
     );
 
@@ -111,11 +111,11 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
     ReelsFeedRefreshRequested event,
     Emitter<ReelsFeedState> emit,
   ) async {
-    if (_country == null || _district == null) return;
+    if (_country == null || _city == null) return;
 
     final result = await _repository.getReelsFeed(
       country: _country!,
-      district: _district!,
+      city: _city!,
       limit: _pageSize,
     );
 
@@ -158,7 +158,7 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
       (failure) {
         _logger.e('Failed to delete reel: ${failure.message}');
         // Restore on failure — re-fetch
-        if (_country != null && _district != null) {
+        if (_country != null && _city != null) {
           add(const ReelsFeedRefreshRequested());
         }
       },

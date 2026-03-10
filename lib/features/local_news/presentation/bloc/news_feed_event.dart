@@ -11,15 +11,15 @@ abstract class NewsFeedEvent extends Equatable {
 /// Load the news feed for a specific location.
 class NewsFeedLoadRequested extends NewsFeedEvent {
   final String country;
-  final String district;
+  final String city;
 
   const NewsFeedLoadRequested({
     required this.country,
-    required this.district,
+    required this.city,
   });
 
   @override
-  List<Object?> get props => [country, district];
+  List<Object?> get props => [country, city];
 }
 
 /// Load more posts (next page / pagination).

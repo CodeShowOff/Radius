@@ -10,7 +10,7 @@ part 'news_feed_state.dart';
 
 /// BLoC for the local news feed with paginated loading.
 ///
-/// Queries posts by country + district, supports infinite-scroll pagination
+/// Queries posts by country + city, supports infinite-scroll pagination
 /// and pull-to-refresh.
 class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
   final INewsPostRepository _repository;
@@ -19,7 +19,7 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
   static const int _pageSize = 20;
 
   String? _country;
-  String? _district;
+  String? _city;
 
   NewsFeedBloc({
     required INewsPostRepository repository,
@@ -38,17 +38,17 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
     Emitter<NewsFeedState> emit,
   ) async {
     _country = event.country;
-    _district = event.district;
+    _city = event.city;
 
     emit(state.copyWith(
       status: NewsFeedStatus.loading,
       country: event.country,
-      district: event.district,
+      city: event.city,
     ));
 
     final result = await _repository.getNewsFeed(
       country: event.country,
-      district: event.district,
+      city: event.city,
       limit: _pageSize,
     );
 
@@ -75,13 +75,13 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
     Emitter<NewsFeedState> emit,
   ) async {
     if (state.isLoadingMore || !state.hasMore) return;
-    if (_country == null || _district == null) return;
+    if (_country == null || _city == null) return;
 
     emit(state.copyWith(isLoadingMore: true));
 
     final result = await _repository.getNewsFeed(
       country: _country!,
-      district: _district!,
+      city: _city!,
       limit: _pageSize,
     );
 
@@ -109,12 +109,12 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
     NewsFeedRefreshRequested event,
     Emitter<NewsFeedState> emit,
   ) async {
-    if (_country == null || _district == null) return;
+    if (_country == null || _city == null) return;
 
     // Don't show loading indicator — pull-to-refresh has its own
     final result = await _repository.getNewsFeed(
       country: _country!,
-      district: _district!,
+      city: _city!,
       limit: _pageSize,
     );
 
@@ -150,7 +150,7 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
       (failure) {
         _logger.e('Failed to delete news post: ${failure.message}');
         // Restore the post on failure — re-fetch
-        if (_country != null && _district != null) {
+        if (_country != null && _city != null) {
           add(NewsFeedRefreshRequested());
         }
       },

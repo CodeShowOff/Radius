@@ -24,11 +24,10 @@ class NewsLocationModel extends NewsLocation {
 
     final latitude = data['latitude'] as num?;
     final longitude = data['longitude'] as num?;
-    final district = data['district'] as String?;
+    final district = data['district'] as String? ?? '';
     final city = data['city'] as String?;
 
     if (latitude == null || longitude == null ||
-        district == null || district.isEmpty ||
         city == null || city.isEmpty) {
       return null;
     }

@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../location_groups/data/location_data_service.dart';
 import '../../../location_groups/domain/entities/country.dart';
-import '../../../location_groups/domain/entities/state_region.dart';
 
-/// Widget for manually picking a country and state/region for local news.
+/// Widget for manually picking a country and city for local news.
 ///
 /// Reuses the [LocationDataService] from the location_groups feature
-/// for country/state data. When both selections are made, it fires
-/// [onLocationSelected] with the country name and state name.
+/// for country/city data. When both selections are made, it fires
+/// [onLocationSelected] with the country name and city name.
 class ManualLocationPicker extends StatefulWidget {
-  /// Called when both country and state are selected.
-  final void Function(String country, String state) onLocationSelected;
+  /// Called when both country and city are selected.
+  final void Function(String country, String city) onLocationSelected;
 
   const ManualLocationPicker({
     super.key,
@@ -26,56 +25,63 @@ class _ManualLocationPickerState extends State<ManualLocationPicker> {
   final _locationService = LocationDataService();
 
   List<Country> _countries = [];
-  List<StateRegion> _states = [];
+  List<String> _cities = [];
 
   Country? _selectedCountry;
-  StateRegion? _selectedState;
+  String? _selectedCity;
 
   String _countrySearch = '';
-  String _stateSearch = '';
+  String _citySearch = '';
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _countries = _locationService.getCountries();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await _locationService.ensureLoaded();
+    if (!mounted) return;
+    setState(() {
+      _countries = _locationService.getCountries();
+      _loading = false;
+    });
   }
 
   void _onCountrySelected(Country country) {
     setState(() {
       _selectedCountry = country;
-      _selectedState = null;
-      _stateSearch = '';
-      _states = _locationService.getStatesForCountry(country.code);
-
-      // Countries without states — auto-select first entry
-      if (!country.hasStates && _states.isNotEmpty) {
-        _selectedState = _states.first;
-        widget.onLocationSelected(country.name, _states.first.name);
-      }
+      _selectedCity = null;
+      _citySearch = '';
+      _cities = _locationService.getCitiesForCountry(country.name);
     });
   }
 
-  void _onStateSelected(StateRegion state) {
+  void _onCitySelected(String city) {
     setState(() {
-      _selectedState = state;
+      _selectedCity = city;
     });
 
     if (_selectedCountry != null) {
-      widget.onLocationSelected(_selectedCountry!.name, state.name);
+      widget.onLocationSelected(_selectedCountry!.name, city);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final filteredCountries = _countrySearch.isEmpty
         ? _countries
         : _locationService.searchCountries(_countrySearch);
-    final filteredStates = _stateSearch.isEmpty
-        ? _states
-        : _locationService.searchStates(
-            _selectedCountry?.code ?? '',
-            _stateSearch,
+    final filteredCities = _citySearch.isEmpty
+        ? _cities
+        : _locationService.searchCities(
+            _selectedCountry?.name ?? '',
+            _citySearch,
           );
 
     return Column(
@@ -99,38 +105,25 @@ class _ManualLocationPickerState extends State<ManualLocationPicker> {
         ),
         const SizedBox(height: 16),
 
-        // State field
+        // City field
         _PickerField(
-          label: 'State / Region',
+          label: 'City',
           hint: _selectedCountry == null
               ? 'Select a country first'
-              : 'Select a state',
-          value: _selectedState?.name,
-          enabled: _selectedCountry != null && _selectedCountry!.hasStates,
-          onTap: () => _showSelectionSheet<StateRegion>(
+              : 'Select a city',
+          value: _selectedCity,
+          enabled: _selectedCountry != null,
+          onTap: () => _showSelectionSheet<String>(
             context: context,
-            title: 'Select State / Region',
-            items: filteredStates,
-            searchHint: 'Search states...',
-            searchQuery: _stateSearch,
-            onSearchChanged: (q) => setState(() => _stateSearch = q),
-            itemLabel: (s) => s.name,
-            onSelected: _onStateSelected,
+            title: 'Select City',
+            items: filteredCities,
+            searchHint: 'Search cities...',
+            searchQuery: _citySearch,
+            onSearchChanged: (q) => setState(() => _citySearch = q),
+            itemLabel: (s) => s,
+            onSelected: _onCitySelected,
           ),
         ),
-
-        // Info text for countries listed nationally
-        if (_selectedCountry != null && !_selectedCountry!.hasStates)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'News in ${_selectedCountry!.name} is listed nationally.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
       ],
     );
   }

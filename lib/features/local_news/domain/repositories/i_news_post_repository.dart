@@ -31,10 +31,10 @@ abstract class INewsPostRepository {
   /// Updates a post's text content.
   Future<Either<Failure, void>> updatePostText(String postId, String? text);
 
-  /// Gets the news feed for a specific location (district + country).
+  /// Gets the news feed for a specific location (city + country).
   Future<Either<Failure, List<NewsPost>>> getNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 20,
     DocumentSnapshot? startAfter,
   });
@@ -42,7 +42,7 @@ abstract class INewsPostRepository {
   /// Watches the real-time news feed for a location.
   Stream<List<NewsPost>> watchNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 20,
   });
 
@@ -56,10 +56,10 @@ abstract class INewsPostRepository {
   /// Streams real-time updates for a single post.
   Stream<NewsPost?> postStream(String postId);
 
-  /// Gets the reels feed for a specific location (district + country).
+  /// Gets the reels feed for a specific location (city + country).
   Future<Either<Failure, List<NewsPost>>> getReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 10,
     DocumentSnapshot? startAfter,
   });
@@ -67,7 +67,7 @@ abstract class INewsPostRepository {
   /// Watches the real-time reels feed for a location.
   Stream<List<NewsPost>> watchReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 10,
   });
 }

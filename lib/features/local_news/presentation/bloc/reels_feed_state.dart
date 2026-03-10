@@ -35,8 +35,8 @@ class ReelsFeedState extends Equatable {
   /// Country the feed is scoped to.
   final String? country;
 
-  /// District the feed is scoped to.
-  final String? district;
+  /// City the feed is scoped to.
+  final String? city;
 
   /// Index of the currently active/visible reel.
   final int currentIndex;
@@ -48,7 +48,7 @@ class ReelsFeedState extends Equatable {
     this.isLoadingMore = false,
     this.errorMessage,
     this.country,
-    this.district,
+    this.city,
     this.currentIndex = 0,
   });
 
@@ -59,7 +59,7 @@ class ReelsFeedState extends Equatable {
     bool? isLoadingMore,
     String? errorMessage,
     String? country,
-    String? district,
+    String? city,
     int? currentIndex,
   }) {
     return ReelsFeedState(
@@ -69,7 +69,7 @@ class ReelsFeedState extends Equatable {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       errorMessage: errorMessage,
       country: country ?? this.country,
-      district: district ?? this.district,
+      city: city ?? this.city,
       currentIndex: currentIndex ?? this.currentIndex,
     );
   }
@@ -82,7 +82,7 @@ class ReelsFeedState extends Equatable {
         isLoadingMore,
         errorMessage,
         country,
-        district,
+        city,
         currentIndex,
       ];
 }

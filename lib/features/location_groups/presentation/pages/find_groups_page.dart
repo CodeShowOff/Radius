@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/routes.dart';
 import '../../data/location_group_service.dart';
 import '../../domain/entities/country.dart';
-import '../../domain/entities/state_region.dart';
 import '../bloc/location_group_bloc.dart';
 import '../widgets/group_card.dart';
 import '../widgets/location_selector.dart';
@@ -20,7 +19,7 @@ class FindGroupsPage extends StatefulWidget {
 
 class _FindGroupsPageState extends State<FindGroupsPage> {
   Country? _selectedCountry;
-  StateRegion? _selectedState;
+  String? _selectedCity;
   bool _showLocationSelector = true;
   GroupSortOption _sortBy = GroupSortOption.mostActive;
 
@@ -30,24 +29,24 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
     // Could load last selected location from preferences here
   }
 
-  void _onLocationSelected(Country country, StateRegion state) {
+  void _onLocationSelected(Country country, String city) {
     setState(() {
       _selectedCountry = country;
-      _selectedState = state;
+      _selectedCity = city;
       _showLocationSelector = false;
     });
 
     // Load groups for this location
     context.read<LocationGroupBloc>().add(LoadGroupsForLocation(
-          countryCode: country.code,
-          stateCode: state.code,
+          countryName: country.name,
+          cityName: city,
           sortBy: _sortBy,
         ));
   }
 
   void _onSortChanged(GroupSortOption option) {
     setState(() => _sortBy = option);
-    if (_selectedCountry != null && _selectedState != null) {
+    if (_selectedCountry != null && _selectedCity != null) {
       context.read<LocationGroupBloc>().add(ChangeSortOption(sortBy: option));
     }
   }
@@ -59,10 +58,10 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
   }
 
   Future<void> _refreshGroups() async {
-    if (_selectedCountry != null && _selectedState != null) {
+    if (_selectedCountry != null && _selectedCity != null) {
       context.read<LocationGroupBloc>().add(LoadGroupsForLocation(
-            countryCode: _selectedCountry!.code,
-            stateCode: _selectedState!.code,
+            countryName: _selectedCountry!.name,
+            cityName: _selectedCity!,
             sortBy: _sortBy,
           ));
       // Wait a bit for the stream to update
@@ -115,7 +114,7 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Select a country and state to discover groups in that area.',
+            'Select a country and city to discover groups in that area.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -125,17 +124,17 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
 
           // Location selector
           LocationSelector(
-            selectedCountryCode: _selectedCountry?.code,
-            selectedStateCode: _selectedState?.code,
+            selectedCountryName: _selectedCountry?.name,
+            selectedCityName: _selectedCity,
             onCountryChanged: (country) {
               setState(() {
                 _selectedCountry = country;
-                _selectedState = null;
+                _selectedCity = null;
               });
             },
-            onStateChanged: (state) {
+            onCityChanged: (city) {
               setState(() {
-                _selectedState = state;
+                _selectedCity = city;
               });
             },
             onLocationSelected: _onLocationSelected,
@@ -145,8 +144,8 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
 
           // Search button
           FilledButton.icon(
-            onPressed: _selectedCountry != null && _selectedState != null
-                ? () => _onLocationSelected(_selectedCountry!, _selectedState!)
+            onPressed: _selectedCountry != null && _selectedCity != null
+                ? () => _onLocationSelected(_selectedCountry!, _selectedCity!)
                 : null,
             icon: const Icon(Icons.search),
             label: const Text('Find Groups'),
@@ -191,7 +190,7 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _selectedState?.name ?? '',
+                      _selectedCity ?? '',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -306,7 +305,7 @@ class _FindGroupsPageState extends State<FindGroupsPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Be the first to create a group in ${_selectedState?.name}!',
+              'Be the first to create a group in $_selectedCity!',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
               ),

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:logger/logger.dart';
 
+import '../../../location_groups/data/location_data_service.dart';
 import '../../domain/entities/news_location.dart';
 import 'geocoding_service.dart';
 
@@ -16,14 +17,17 @@ import 'geocoding_service.dart';
 class NewsLocationService {
   final FirebaseFirestore _firestore;
   final GeocodingService _geocodingService;
+  final LocationDataService _locationDataService;
   final Logger _logger;
 
   NewsLocationService({
     FirebaseFirestore? firestore,
     required GeocodingService geocodingService,
+    LocationDataService? locationDataService,
     Logger? logger,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _geocodingService = geocodingService,
+        _locationDataService = locationDataService ?? LocationDataService(),
         _logger = logger ?? Logger();
 
   // ==================== GPS LOCATION ====================
@@ -75,14 +79,51 @@ class NewsLocationService {
 
   // ==================== RESOLVE LOCATION ====================
 
-  /// Gets the current GPS location and reverse-geocodes it into a [NewsLocation].
+  /// Gets the current GPS location, reverse-geocodes it, and matches the
+  /// city against the bundled locations.json data.
+  ///
+  /// Returns a [NewsLocation] whose [city] and [country] are canonical names
+  /// from locations.json when a match is found.
+  /// Throws [LocationCityMatchException] if the GPS city cannot be matched.
   Future<NewsLocation> detectCurrentLocation() async {
     final position = await getCurrentGpsPosition();
-    return _geocodingService.reverseGeocode(
+    final raw = await _geocodingService.reverseGeocode(
       latitude: position.latitude,
       longitude: position.longitude,
       source: LocationSource.gps,
     );
+
+    // Match against locations.json
+    await _locationDataService.ensureLoaded();
+
+    final matchedCountry =
+        _locationDataService.findMatchingCountry(raw.country);
+    if (matchedCountry == null) {
+      _logger.w('Country not found in locations.json: ${raw.country}');
+      throw LocationCityMatchException(
+        'Could not match your country "${raw.country}" in the location database. '
+        'Please select your location manually.',
+        detectedCity: raw.city,
+        detectedCountry: raw.country,
+      );
+    }
+
+    final matchedCity =
+        _locationDataService.findMatchingCity(matchedCountry, raw.city);
+    if (matchedCity == null) {
+      _logger.w(
+        'City not found in locations.json: ${raw.city} ($matchedCountry)',
+      );
+      throw LocationCityMatchException(
+        'Could not match city "${raw.city}" in $matchedCountry. '
+        'Please select your location manually.',
+        detectedCity: raw.city,
+        detectedCountry: matchedCountry,
+      );
+    }
+
+    _logger.i('GPS matched to: $matchedCity, $matchedCountry');
+    return raw.copyWith(city: matchedCity, country: matchedCountry);
   }
 
   /// Reverse-geocodes arbitrary coordinates into a [NewsLocation].
@@ -148,12 +189,11 @@ class NewsLocationService {
 
       final latitude = locationData['latitude'] as num?;
       final longitude = locationData['longitude'] as num?;
-      final district = locationData['district'] as String?;
+      final district = locationData['district'] as String? ?? '';
       final city = locationData['city'] as String?;
 
-      // Require at minimum coordinates + district + city
+      // Require at minimum coordinates + city
       if (latitude == null || longitude == null ||
-          district == null || district.isEmpty ||
           city == null || city.isEmpty) {
         return null;
       }
@@ -219,4 +259,20 @@ class LocationServiceException implements Exception {
 
   @override
   String toString() => 'LocationServiceException: $message';
+}
+
+/// Exception thrown when GPS-detected city cannot be matched in locations.json.
+class LocationCityMatchException implements Exception {
+  final String message;
+  final String detectedCity;
+  final String detectedCountry;
+
+  const LocationCityMatchException(
+    this.message, {
+    required this.detectedCity,
+    required this.detectedCountry,
+  });
+
+  @override
+  String toString() => 'LocationCityMatchException: $message';
 }

@@ -207,19 +207,19 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   ) async {
     // Only show loading if we have no cached data for this location
     if (state.locationGroups.isEmpty ||
-        state.selectedCountryCode != event.countryCode ||
-        state.selectedStateCode != event.stateCode) {
+        state.selectedCountryName != event.countryName ||
+        state.selectedCityName != event.cityName) {
       emit(state.copyWith(
         status: GroupBlocStatus.loading,
-        selectedCountryCode: event.countryCode,
-        selectedStateCode: event.stateCode,
+        selectedCountryName: event.countryName,
+        selectedCityName: event.cityName,
         sortBy: event.sortBy,
       ));
     } else {
       // Keep showing existing data while refreshing
       emit(state.copyWith(
-        selectedCountryCode: event.countryCode,
-        selectedStateCode: event.stateCode,
+        selectedCountryName: event.countryName,
+        selectedCityName: event.cityName,
         sortBy: event.sortBy,
       ));
     }
@@ -228,8 +228,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
 
     _groupsSubscription = _groupService
         .streamGroupsForLocation(
-      countryCode: event.countryCode,
-      stateCode: event.stateCode,
+      countryName: event.countryName,
+      cityName: event.cityName,
       sortBy: event.sortBy,
     )
         .listen(
@@ -374,10 +374,8 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     final result = await _groupService.createGroup(
       name: event.name,
       description: event.description,
-      countryCode: event.countryCode,
-      stateCode: event.stateCode,
       countryName: event.countryName,
-      stateName: event.stateName,
+      cityName: event.cityName,
       creatorUserId: event.creatorUserId,
       creatorUserName: event.creatorUserName,
       creatorUserPhotoUrl: event.creatorUserPhotoUrl,
@@ -828,10 +826,10 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     ChangeSortOption event,
     Emitter<LocationGroupState> emit,
   ) {
-    if (state.selectedCountryCode != null && state.selectedStateCode != null) {
+    if (state.selectedCountryName != null && state.selectedCityName != null) {
       add(LoadGroupsForLocation(
-        countryCode: state.selectedCountryCode!,
-        stateCode: state.selectedStateCode!,
+        countryName: state.selectedCountryName!,
+        cityName: state.selectedCityName!,
         sortBy: event.sortBy,
       ));
     }

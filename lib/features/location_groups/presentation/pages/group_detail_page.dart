@@ -692,7 +692,7 @@ class _GroupDetailPageState extends State<GroupDetailPage>
                 Icons.location_on,
                 color: theme.colorScheme.primary,
               ),
-              title: Text(group.stateName),
+              title: Text(group.cityName),
               subtitle: Text(group.countryName),
             ),
           ),

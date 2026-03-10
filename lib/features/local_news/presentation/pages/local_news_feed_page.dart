@@ -5,14 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../data/services/geocoding_service.dart';
 import '../../domain/entities/news_location.dart';
 import '../../domain/repositories/i_news_interaction_repository.dart';
 import '../bloc/news_feed_bloc.dart';
 import '../bloc/news_interaction_cubit.dart';
 import '../bloc/news_location_bloc.dart';
 import '../bloc/reels_feed_bloc.dart';
-import '../widgets/location_search_picker.dart';
+import '../widgets/manual_location_picker.dart';
 import '../widgets/news_post_card.dart';
 import '../widgets/reels_feed_view.dart';
 
@@ -91,11 +90,11 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
   void _loadFeed(NewsLocation location) {
     context.read<NewsFeedBloc>().add(NewsFeedLoadRequested(
           country: location.country,
-          district: location.district,
+          city: location.city,
         ));
     context.read<ReelsFeedBloc>().add(ReelsFeedLoadRequested(
           country: location.country,
-          district: location.district,
+          city: location.city,
         ));
   }
 
@@ -344,11 +343,11 @@ class _SetupChoiceView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Manual search option
+          // Manual pick option
           _SetupOptionCard(
-            icon: Icons.search,
-            title: 'Search Location',
-            subtitle: 'Search for your city or area',
+            icon: Icons.list_alt,
+            title: 'Pick Manually',
+            subtitle: 'Select your country and city',
             onTap: onManualTap,
           ),
         ],
@@ -725,7 +724,7 @@ class _SetupErrorView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Manual search view — wraps LocationSearchPicker
+// Manual search view — wraps ManualLocationPicker
 // ---------------------------------------------------------------------------
 class _ManualSearchView extends StatelessWidget {
   final VoidCallback onBack;
@@ -749,7 +748,7 @@ class _ManualSearchView extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Search Location',
+                'Select Location',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -758,23 +757,18 @@ class _ManualSearchView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Search for your city or area. Select from the suggestions below.',
+            'Pick your country and city from the list below.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
-          LocationSearchPicker(
-            geocodingService: getIt<GeocodingService>(),
-            onLocationSelected: (location) {
+          ManualLocationPicker(
+            onLocationSelected: (country, city) {
               context.read<NewsLocationBloc>().add(
                     NewsLocationManualSelected(
-                      district: location.district,
-                      city: location.city,
-                      country: location.country,
-                      latitude: location.latitude,
-                      longitude: location.longitude,
-                      locality: location.locality,
+                      city: city,
+                      country: country,
                     ),
                   );
             },
@@ -816,7 +810,7 @@ class _NewsFeedTab extends StatelessWidget {
               if (loc != null) {
                 context.read<NewsFeedBloc>().add(NewsFeedLoadRequested(
                       country: loc.country,
-                      district: loc.district,
+                      city: loc.city,
                     ));
               }
             },

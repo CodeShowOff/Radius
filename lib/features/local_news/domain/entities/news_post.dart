@@ -33,7 +33,7 @@ class NewsPost extends Equatable {
   /// GeoHash for proximity queries.
   final String geoHash;
 
-  /// District / sub-administrative area (primary feed grouping).
+  /// District / sub-administrative area (from GPS geocoding).
   final String district;
 
   /// City name.
@@ -97,10 +97,11 @@ class NewsPost extends Equatable {
 
   /// Human-readable location label.
   String get locationLabel {
-    if (locality.isNotEmpty && locality != district) {
-      return '$locality, $district';
+    if (city.isNotEmpty && country.isNotEmpty) {
+      return '$city, $country';
     }
-    return '$district, $city';
+    if (city.isNotEmpty) return city;
+    return country;
   }
 
   /// Sentinel value for explicitly setting nullable fields to null in copyWith.

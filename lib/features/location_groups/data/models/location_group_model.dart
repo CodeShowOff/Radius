@@ -9,10 +9,8 @@ import '../../domain/entities/location_group.dart';
 /// location_groups/{groupId}
 ///   - name: string
 ///   - description: string?
-///   - countryCode: string
-///   - stateCode: string
 ///   - countryName: string
-///   - stateName: string
+///   - cityName: string
 ///   - createdByUserId: string
 ///   - createdByUserName: string?
 ///   - visibility: string ('public' | 'requestToJoin')
@@ -28,10 +26,8 @@ class LocationGroupModel extends LocationGroup {
     required super.id,
     required super.name,
     super.description,
-    required super.countryCode,
-    required super.stateCode,
     required super.countryName,
-    required super.stateName,
+    required super.cityName,
     required super.createdByUserId,
     super.createdByUserName,
     required super.visibility,
@@ -51,10 +47,8 @@ class LocationGroupModel extends LocationGroup {
       id: doc.id,
       name: data['name'] as String,
       description: data['description'] as String?,
-      countryCode: data['countryCode'] as String,
-      stateCode: data['stateCode'] as String,
-      countryName: data['countryName'] as String,
-      stateName: data['stateName'] as String,
+      countryName: (data['countryName'] ?? data['countryCode'] ?? '') as String,
+      cityName: (data['cityName'] ?? data['stateCode'] ?? '') as String,
       createdByUserId: data['createdByUserId'] as String,
       createdByUserName: data['createdByUserName'] as String?,
       visibility: _parseVisibility(data['visibility'] as String?),
@@ -73,10 +67,8 @@ class LocationGroupModel extends LocationGroup {
       id: group.id,
       name: group.name,
       description: group.description,
-      countryCode: group.countryCode,
-      stateCode: group.stateCode,
       countryName: group.countryName,
-      stateName: group.stateName,
+      cityName: group.cityName,
       createdByUserId: group.createdByUserId,
       createdByUserName: group.createdByUserName,
       visibility: group.visibility,
@@ -94,10 +86,8 @@ class LocationGroupModel extends LocationGroup {
     return {
       'name': name,
       'description': description,
-      'countryCode': countryCode,
-      'stateCode': stateCode,
       'countryName': countryName,
-      'stateName': stateName,
+      'cityName': cityName,
       'createdByUserId': createdByUserId,
       'createdByUserName': createdByUserName,
       'visibility': visibility.name,
@@ -110,7 +100,7 @@ class LocationGroupModel extends LocationGroup {
       'avatarUrl': avatarUrl,
       // Search fields for queries
       'nameLowercase': name.toLowerCase(),
-      'searchKey': '${countryCode}_$stateCode'.toLowerCase(),
+      'searchKey': '${countryName}_$cityName'.toLowerCase(),
     };
   }
 
@@ -119,10 +109,8 @@ class LocationGroupModel extends LocationGroup {
     return {
       'name': name,
       'description': description,
-      'countryCode': countryCode,
-      'stateCode': stateCode,
       'countryName': countryName,
-      'stateName': stateName,
+      'cityName': cityName,
       'createdByUserId': createdByUserId,
       'createdByUserName': createdByUserName,
       'visibility': visibility.name,
@@ -133,7 +121,7 @@ class LocationGroupModel extends LocationGroup {
       'lastMessagePreview': null,
       'avatarUrl': avatarUrl,
       'nameLowercase': name.toLowerCase(),
-      'searchKey': '${countryCode}_$stateCode'.toLowerCase(),
+      'searchKey': '${countryName}_$cityName'.toLowerCase(),
     };
   }
 

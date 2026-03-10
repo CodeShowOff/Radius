@@ -2,27 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../data/location_data_service.dart';
 import '../../domain/entities/country.dart';
-import '../../domain/entities/state_region.dart';
 
-/// Widget for selecting a Country and State combination.
+/// Widget for selecting a Country and City combination.
 ///
-/// Ensures state selection is disabled until country is selected,
-/// and automatically handles countries without states.
+/// Loads location data asynchronously from the bundled JSON asset.
+/// City selection is disabled until a country is selected.
 class LocationSelector extends StatefulWidget {
-  /// Currently selected country code
-  final String? selectedCountryCode;
+  /// Currently selected country name
+  final String? selectedCountryName;
 
-  /// Currently selected state code
-  final String? selectedStateCode;
+  /// Currently selected city name
+  final String? selectedCityName;
 
   /// Called when country changes
   final ValueChanged<Country?>? onCountryChanged;
 
-  /// Called when state changes
-  final ValueChanged<StateRegion?>? onStateChanged;
+  /// Called when city changes
+  final ValueChanged<String?>? onCityChanged;
 
-  /// Called when both country and state are selected (for convenience)
-  final void Function(Country country, StateRegion state)? onLocationSelected;
+  /// Called when both country and city are selected (for convenience)
+  final void Function(Country country, String city)? onLocationSelected;
 
   /// Whether to show search in dropdowns
   final bool searchable;
@@ -30,27 +29,27 @@ class LocationSelector extends StatefulWidget {
   /// Label for country field
   final String countryLabel;
 
-  /// Label for state field
-  final String stateLabel;
+  /// Label for city field
+  final String cityLabel;
 
   /// Hint text for country field
   final String countryHint;
 
-  /// Hint text for state field
-  final String stateHint;
+  /// Hint text for city field
+  final String cityHint;
 
   const LocationSelector({
     super.key,
-    this.selectedCountryCode,
-    this.selectedStateCode,
+    this.selectedCountryName,
+    this.selectedCityName,
     this.onCountryChanged,
-    this.onStateChanged,
+    this.onCityChanged,
     this.onLocationSelected,
     this.searchable = true,
     this.countryLabel = 'Country',
-    this.stateLabel = 'State / Region',
+    this.cityLabel = 'City',
     this.countryHint = 'Select a country',
-    this.stateHint = 'Select a state',
+    this.cityHint = 'Select a city',
   });
 
   @override
@@ -61,57 +60,63 @@ class _LocationSelectorState extends State<LocationSelector> {
   final _locationService = LocationDataService();
 
   Country? _selectedCountry;
-  StateRegion? _selectedState;
+  String? _selectedCity;
   List<Country> _countries = [];
-  List<StateRegion> _states = [];
+  List<String> _cities = [];
+  bool _loading = true;
 
   String _countrySearchQuery = '';
-  String _stateSearchQuery = '';
+  String _citySearchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _countries = _locationService.getCountries();
+    _loadData();
+  }
 
-    // Initialize from passed values
-    if (widget.selectedCountryCode != null) {
-      _selectedCountry = _locationService.getCountryByCode(widget.selectedCountryCode!);
-      if (_selectedCountry != null) {
-        _states = _locationService.getStatesForCountry(_selectedCountry!.code);
+  Future<void> _loadData() async {
+    await _locationService.ensureLoaded();
+    if (!mounted) return;
+    setState(() {
+      _countries = _locationService.getCountries();
+      _loading = false;
 
-        if (widget.selectedStateCode != null) {
-          _selectedState = _locationService.getStateByCode(widget.selectedStateCode!);
+      // Initialize from passed values
+      if (widget.selectedCountryName != null) {
+        _selectedCountry = _locationService.getCountryByName(widget.selectedCountryName!);
+        if (_selectedCountry != null) {
+          _cities = _locationService.getCitiesForCountry(_selectedCountry!.name);
+          if (widget.selectedCityName != null) {
+            _selectedCity = _cities.contains(widget.selectedCityName!)
+                ? widget.selectedCityName
+                : null;
+          }
         }
       }
-    }
+    });
   }
 
   @override
   void didUpdateWidget(LocationSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Update if external values change
-    if (widget.selectedCountryCode != oldWidget.selectedCountryCode) {
+    if (widget.selectedCountryName != oldWidget.selectedCountryName) {
       setState(() {
-        if (widget.selectedCountryCode != null) {
-          _selectedCountry = _locationService.getCountryByCode(widget.selectedCountryCode!);
+        if (widget.selectedCountryName != null) {
+          _selectedCountry = _locationService.getCountryByName(widget.selectedCountryName!);
           if (_selectedCountry != null) {
-            _states = _locationService.getStatesForCountry(_selectedCountry!.code);
+            _cities = _locationService.getCitiesForCountry(_selectedCountry!.name);
           }
         } else {
           _selectedCountry = null;
-          _states = [];
+          _cities = [];
         }
       });
     }
 
-    if (widget.selectedStateCode != oldWidget.selectedStateCode) {
+    if (widget.selectedCityName != oldWidget.selectedCityName) {
       setState(() {
-        if (widget.selectedStateCode != null) {
-          _selectedState = _locationService.getStateByCode(widget.selectedStateCode!);
-        } else {
-          _selectedState = null;
-        }
+        _selectedCity = widget.selectedCityName;
       });
     }
   }
@@ -119,53 +124,47 @@ class _LocationSelectorState extends State<LocationSelector> {
   void _onCountrySelected(Country? country) {
     setState(() {
       _selectedCountry = country;
-      _selectedState = null;
-      _stateSearchQuery = '';
+      _selectedCity = null;
+      _citySearchQuery = '';
 
       if (country != null) {
-        _states = _locationService.getStatesForCountry(country.code);
-
-        // For countries without states, auto-select "National"
-        if (!country.hasStates && _states.isNotEmpty) {
-          _selectedState = _states.first;
-          widget.onStateChanged?.call(_selectedState);
-          
-          if (_selectedState != null) {
-            widget.onLocationSelected?.call(country, _selectedState!);
-          }
-        }
+        _cities = _locationService.getCitiesForCountry(country.name);
       } else {
-        _states = [];
+        _cities = [];
       }
     });
 
     widget.onCountryChanged?.call(country);
+    widget.onCityChanged?.call(null);
   }
 
-  void _onStateSelected(StateRegion? state) {
+  void _onCitySelected(String? city) {
     setState(() {
-      _selectedState = state;
+      _selectedCity = city;
     });
 
-    widget.onStateChanged?.call(state);
+    widget.onCityChanged?.call(city);
 
-    if (_selectedCountry != null && state != null) {
-      widget.onLocationSelected?.call(_selectedCountry!, state);
+    if (_selectedCountry != null && city != null) {
+      widget.onLocationSelected?.call(_selectedCountry!, city);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final filteredCountries = _countrySearchQuery.isEmpty
         ? _countries
         : _locationService.searchCountries(_countrySearchQuery);
 
-    final filteredStates = _stateSearchQuery.isEmpty
-        ? _states
-        : _locationService.searchStates(
-            _selectedCountry?.code ?? '',
-            _stateSearchQuery,
+    final filteredCities = _citySearchQuery.isEmpty
+        ? _cities
+        : _locationService.searchCities(
+            _selectedCountry?.name ?? '',
+            _citySearchQuery,
           );
 
     return Column(
@@ -193,44 +192,31 @@ class _LocationSelectorState extends State<LocationSelector> {
 
         const SizedBox(height: 16),
 
-        // State selector
-        _SelectionField<StateRegion>(
-          label: widget.stateLabel,
-          hint: widget.stateHint,
-          value: _selectedState,
-          items: filteredStates,
-          enabled: _selectedCountry != null && _selectedCountry!.hasStates,
-          searchable: widget.searchable && _states.length > 10,
-          searchHint: 'Search states...',
-          searchQuery: _stateSearchQuery,
+        // City selector
+        _SelectionField<String>(
+          label: widget.cityLabel,
+          hint: widget.cityHint,
+          value: _selectedCity,
+          items: filteredCities,
+          enabled: _selectedCountry != null,
+          searchable: widget.searchable && _cities.length > 10,
+          searchHint: 'Search cities...',
+          searchQuery: _citySearchQuery,
           onSearchChanged: (query) {
             setState(() {
-              _stateSearchQuery = query;
+              _citySearchQuery = query;
             });
           },
-          itemBuilder: (state) => Text(state.name),
-          selectedBuilder: (state) => Text(state.name),
-          itemSearchText: (state) => state.name,
-          onSelected: _onStateSelected,
+          itemBuilder: (city) => Text(city),
+          selectedBuilder: (city) => Text(city),
+          itemSearchText: (city) => city,
+          onSelected: _onCitySelected,
           emptyMessage: _selectedCountry == null
               ? 'Please select a country first'
-              : _states.isEmpty
-                  ? 'No regions available'
+              : _cities.isEmpty
+                  ? 'No cities available'
                   : null,
         ),
-
-        // Info text for countries without states
-        if (_selectedCountry != null && !_selectedCountry!.hasStates)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Groups in ${_selectedCountry!.name} are listed nationally.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
       ],
     );
   }

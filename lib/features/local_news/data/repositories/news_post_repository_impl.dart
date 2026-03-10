@@ -135,14 +135,14 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
   @override
   Future<Either<Failure, List<NewsPost>>> getNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 20,
     DocumentSnapshot? startAfter,
   }) async {
     try {
       final posts = await _postService.getNewsFeed(
         country: country,
-        district: district,
+        city: city,
         limit: limit,
         startAfter: startAfter,
       );
@@ -160,11 +160,11 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
   @override
   Stream<List<NewsPost>> watchNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 20,
   }) {
     return _postService
-        .watchNewsFeed(country: country, district: district, limit: limit)
+        .watchNewsFeed(country: country, city: city, limit: limit)
         .map((models) => models.map((m) => m.toEntity()).toList());
   }
 
@@ -200,14 +200,14 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
   @override
   Future<Either<Failure, List<NewsPost>>> getReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 10,
     DocumentSnapshot? startAfter,
   }) async {
     try {
       final reels = await _postService.getReelsFeed(
         country: country,
-        district: district,
+        city: city,
         limit: limit,
         startAfter: startAfter,
       );
@@ -225,11 +225,11 @@ class NewsPostRepositoryImpl implements INewsPostRepository {
   @override
   Stream<List<NewsPost>> watchReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = 10,
   }) {
     return _postService
-        .watchReelsFeed(country: country, district: district, limit: limit)
+        .watchReelsFeed(country: country, city: city, limit: limit)
         .map((models) => models.map((m) => m.toEntity()).toList());
   }
 }

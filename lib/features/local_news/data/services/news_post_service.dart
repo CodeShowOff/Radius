@@ -9,7 +9,7 @@ import '../models/news_post_model.dart';
 ///
 /// Firestore Collection: `local_news_posts`
 ///
-/// Posts are queried by `country` + `district` for location-based feeds,
+/// Posts are queried by `country` + `city` for location-based feeds,
 /// ordered by `createdAt` descending.
 class NewsPostService {
   final FirebaseFirestore _firestore;
@@ -103,18 +103,18 @@ class NewsPostService {
 
   // ==================== FEED QUERIES ====================
 
-  /// Watches the news feed for a specific district, ordered by creation time.
+  /// Watches the news feed for a specific city, ordered by creation time.
   ///
-  /// Primary query: all posts in the same `country` + `district`.
-  /// Requires composite index: country ASC, district ASC, createdAt DESC.
+  /// Primary query: all posts in the same `country` + `city`.
+  /// Requires composite index: country ASC, city ASC, createdAt DESC.
   Stream<List<NewsPostModel>> watchNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = defaultPageSize,
   }) {
     return _postsRef
         .where('country', isEqualTo: country)
-        .where('district', isEqualTo: district)
+        .where('city', isEqualTo: city)
         .where('postType', isEqualTo: 'post')
         .orderBy('createdAt', descending: true)
         .limit(limit)
@@ -131,17 +131,17 @@ class NewsPostService {
     });
   }
 
-  /// Fetches a page of news posts for a district (for pagination).
+  /// Fetches a page of news posts for a city (for pagination).
   Future<List<NewsPostModel>> getNewsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = defaultPageSize,
     DocumentSnapshot? startAfter,
   }) async {
     try {
       Query<Map<String, dynamic>> query = _postsRef
           .where('country', isEqualTo: country)
-          .where('district', isEqualTo: district)
+          .where('city', isEqualTo: city)
           .where('postType', isEqualTo: 'post')
           .orderBy('createdAt', descending: true)
           .limit(limit);
@@ -155,7 +155,7 @@ class NewsPostService {
           .map((doc) => NewsPostModel.fromFirestore(doc))
           .toList();
     } catch (e, stack) {
-      _logger.e('Error fetching news feed for $district, $country',
+      _logger.e('Error fetching news feed for $city, $country',
           error: e, stackTrace: stack);
       rethrow;
     }
@@ -166,18 +166,18 @@ class NewsPostService {
   /// Default page size for reels feed (smaller than posts since videos are heavier).
   static const int defaultReelsPageSize = 10;
 
-  /// Watches the reels feed for a specific district, ordered by creation time.
+  /// Watches the reels feed for a specific city, ordered by creation time.
   ///
   /// Only returns posts with `postType == 'reel'`.
-  /// Requires composite index: country ASC, district ASC, postType ASC, createdAt DESC.
+  /// Requires composite index: country ASC, city ASC, postType ASC, createdAt DESC.
   Stream<List<NewsPostModel>> watchReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = defaultReelsPageSize,
   }) {
     return _postsRef
         .where('country', isEqualTo: country)
-        .where('district', isEqualTo: district)
+        .where('city', isEqualTo: city)
         .where('postType', isEqualTo: 'reel')
         .orderBy('createdAt', descending: true)
         .limit(limit)
@@ -194,20 +194,20 @@ class NewsPostService {
     });
   }
 
-  /// Fetches a page of reels for a district (for pagination).
+  /// Fetches a page of reels for a city (for pagination).
   ///
   /// Only returns posts with `postType == 'reel'`.
-  /// Requires composite index: country ASC, district ASC, postType ASC, createdAt DESC.
+  /// Requires composite index: country ASC, city ASC, postType ASC, createdAt DESC.
   Future<List<NewsPostModel>> getReelsFeed({
     required String country,
-    required String district,
+    required String city,
     int limit = defaultReelsPageSize,
     DocumentSnapshot? startAfter,
   }) async {
     try {
       Query<Map<String, dynamic>> query = _postsRef
           .where('country', isEqualTo: country)
-          .where('district', isEqualTo: district)
+          .where('city', isEqualTo: city)
           .where('postType', isEqualTo: 'reel')
           .orderBy('createdAt', descending: true)
           .limit(limit);
@@ -221,7 +221,7 @@ class NewsPostService {
           .map((doc) => NewsPostModel.fromFirestore(doc))
           .toList();
     } catch (e, stack) {
-      _logger.e('Error fetching reels feed for $district, $country',
+      _logger.e('Error fetching reels feed for $city, $country',
           error: e, stackTrace: stack);
       rethrow;
     }

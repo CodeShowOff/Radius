@@ -20,7 +20,7 @@ enum GroupStatus {
 
 /// Entity representing a location-scoped group.
 ///
-/// Groups are anchored to a specific Country + State combination
+/// Groups are anchored to a specific Country + City combination
 /// and are discoverable through location-based browsing.
 class LocationGroup extends Equatable {
   /// Unique identifier for the group
@@ -32,17 +32,11 @@ class LocationGroup extends Equatable {
   /// Optional description
   final String? description;
 
-  /// ISO-3166-1 alpha-2 country code
-  final String countryCode;
-
-  /// State/region code (ISO-3166-2 or custom)
-  final String stateCode;
-
-  /// Country display name (denormalized for fast UI)
+  /// Country display name (also used as query key)
   final String countryName;
 
-  /// State display name (denormalized for fast UI)
-  final String stateName;
+  /// City display name (also used as query key)
+  final String cityName;
 
   /// User ID of the group creator
   final String createdByUserId;
@@ -75,10 +69,8 @@ class LocationGroup extends Equatable {
     required this.id,
     required this.name,
     this.description,
-    required this.countryCode,
-    required this.stateCode,
     required this.countryName,
-    required this.stateName,
+    required this.cityName,
     required this.createdByUserId,
     this.createdByUserName,
     required this.visibility,
@@ -100,7 +92,7 @@ class LocationGroup extends Equatable {
   bool get isActive => status == GroupStatus.active;
 
   /// Generate a search-friendly location string
-  String get locationString => '$stateName, $countryName';
+  String get locationString => '$cityName, $countryName';
 
   /// Check if recently created (within last 7 days)
   bool get isNew {
@@ -112,10 +104,8 @@ class LocationGroup extends Equatable {
     String? id,
     String? name,
     String? description,
-    String? countryCode,
-    String? stateCode,
     String? countryName,
-    String? stateName,
+    String? cityName,
     String? createdByUserId,
     String? createdByUserName,
     GroupVisibility? visibility,
@@ -130,10 +120,8 @@ class LocationGroup extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
-      countryCode: countryCode ?? this.countryCode,
-      stateCode: stateCode ?? this.stateCode,
       countryName: countryName ?? this.countryName,
-      stateName: stateName ?? this.stateName,
+      cityName: cityName ?? this.cityName,
       createdByUserId: createdByUserId ?? this.createdByUserId,
       createdByUserName: createdByUserName ?? this.createdByUserName,
       visibility: visibility ?? this.visibility,
@@ -151,10 +139,8 @@ class LocationGroup extends Equatable {
         id,
         name,
         description,
-        countryCode,
-        stateCode,
         countryName,
-        stateName,
+        cityName,
         createdByUserId,
         createdByUserName,
         visibility,

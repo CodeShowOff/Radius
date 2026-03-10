@@ -169,7 +169,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
               if (loc != null) {
                 context.read<ReelsFeedBloc>().add(ReelsFeedLoadRequested(
                       country: loc.country,
-                      district: loc.district,
+                      city: loc.city,
                     ));
               }
             },

@@ -47,11 +47,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "countryCode",
+          "fieldPath": "countryName",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "stateCode",
+          "fieldPath": "cityName",
           "order": "ASCENDING"
         },
         {
@@ -69,11 +69,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "countryCode",
+          "fieldPath": "countryName",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "stateCode",
+          "fieldPath": "cityName",
           "order": "ASCENDING"
         },
         {
@@ -91,11 +91,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "countryCode",
+          "fieldPath": "countryName",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "stateCode",
+          "fieldPath": "cityName",
           "order": "ASCENDING"
         },
         {
@@ -707,7 +707,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "district",
+          "fieldPath": "city",
           "order": "ASCENDING"
         },
         {
@@ -725,7 +725,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "district",
+          "fieldPath": "city",
           "order": "ASCENDING"
         },
         {

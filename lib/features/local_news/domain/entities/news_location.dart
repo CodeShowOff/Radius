@@ -18,7 +18,7 @@ class NewsLocation extends Equatable {
   /// Longitude coordinate.
   final double longitude;
 
-  /// District / sub-administrative area (primary feed grouping).
+  /// District / sub-administrative area (from GPS geocoding).
   final String district;
 
   /// City name.
@@ -45,14 +45,18 @@ class NewsLocation extends Equatable {
 
   /// Human-readable location string for display.
   String get displayString {
-    if (locality.isNotEmpty && locality != district) {
-      return '$locality, $district';
+    if (city.isNotEmpty && country.isNotEmpty) {
+      return '$city, $country';
     }
-    return '$district, $city';
+    if (city.isNotEmpty) return city;
+    return country;
   }
 
   /// Short label for headers.
-  String get shortDisplayString => '$district, $city';
+  String get shortDisplayString {
+    if (city.isNotEmpty) return '$city, $country';
+    return country;
+  }
 
   NewsLocation copyWith({
     double? latitude,

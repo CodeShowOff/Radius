@@ -82,6 +82,12 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
         status: NewsLocationStatus.error,
         errorMessage: e.message,
       ));
+    } on LocationCityMatchException catch (e) {
+      _logger.w('City match failed: ${e.message}');
+      emit(state.copyWith(
+        status: NewsLocationStatus.error,
+        errorMessage: e.message,
+      ));
     } on GeocodingException catch (e) {
       _logger.w('Geocoding error: ${e.message}');
       emit(state.copyWith(
@@ -98,17 +104,17 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
     }
   }
 
-  /// User selected a location manually.
+  /// User selected a location manually from the country/city picker.
   Future<void> _onManualSelected(
     NewsLocationManualSelected event,
     Emitter<NewsLocationState> emit,
   ) async {
     final location = NewsLocation(
-      latitude: event.latitude,
-      longitude: event.longitude,
-      district: event.district,
+      latitude: 0.0,
+      longitude: 0.0,
+      district: '',
       city: event.city,
-      locality: event.locality,
+      locality: '',
       country: event.country,
       source: LocationSource.manual,
     );

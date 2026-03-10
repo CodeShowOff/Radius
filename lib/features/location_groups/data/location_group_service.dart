@@ -102,20 +102,18 @@ class LocationGroupService {
   Future<GroupResult<LocationGroup>> createGroup({
     required String name,
     String? description,
-    required String countryCode,
-    required String stateCode,
     required String countryName,
-    required String stateName,
+    required String cityName,
     required String creatorUserId,
     String? creatorUserName,
     String? creatorUserPhotoUrl,
     required GroupVisibility visibility,
   }) async {
     try {
-      // Validate location codes to prevent Firestore invalid_query errors
-      if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+      // Validate location fields to prevent Firestore invalid_query errors
+      if (countryName.trim().isEmpty || cityName.trim().isEmpty) {
         return const GroupFailure(
-          'Invalid location: country and state codes are required',
+          'Invalid location: country and city are required',
           GroupErrorType.invalidData,
         );
       }
@@ -145,10 +143,9 @@ class LocationGroupService {
       }
 
       // Check for duplicate name in same location
-      // First try with nameLowercase index for performance
       final duplicateCheck = await _groupsRef
-          .where('countryCode', isEqualTo: countryCode)
-          .where('stateCode', isEqualTo: stateCode)
+          .where('countryName', isEqualTo: countryName)
+          .where('cityName', isEqualTo: cityName)
           .where('nameLowercase', isEqualTo: trimmedName.toLowerCase())
           .where('status', isEqualTo: 'active')
           .limit(1)
@@ -159,24 +156,6 @@ class LocationGroupService {
           'A group with this name already exists in this location',
           GroupErrorType.duplicateName,
         );
-      }
-
-      // Fallback: Check for groups without nameLowercase field (legacy data)
-      final legacyCheck = await _groupsRef
-          .where('countryCode', isEqualTo: countryCode)
-          .where('stateCode', isEqualTo: stateCode)
-          .where('status', isEqualTo: 'active')
-          .get();
-
-      for (final doc in legacyCheck.docs) {
-        final data = doc.data();
-        final existingName = data['name'] as String?;
-        if (existingName?.toLowerCase() == trimmedName.toLowerCase()) {
-          return const GroupFailure(
-            'A group with this name already exists in this location',
-            GroupErrorType.duplicateName,
-          );
-        }
       }
 
       // Create group document
@@ -195,10 +174,8 @@ class LocationGroupService {
         id: groupId,
         name: trimmedName,
         description: finalDescription,
-        countryCode: countryCode,
-        stateCode: stateCode,
         countryName: countryName,
-        stateName: stateName,
+        cityName: cityName,
         createdByUserId: creatorUserId,
         createdByUserName: creatorUserName,
         visibility: visibility,
@@ -245,7 +222,7 @@ class LocationGroupService {
       );
       await batch.commit();
 
-      _logger.i('Created group: $groupId in $stateCode, $countryCode');
+      _logger.i('Created group: $groupId in $cityName, $countryName');
 
       // Fetch the created group to get server timestamp
       final createdDoc = await _groupsRef.doc(groupId).get();
@@ -269,22 +246,22 @@ class LocationGroupService {
 
   /// Gets groups for a specific location (country + state).
   Future<List<LocationGroup>> getGroupsForLocation({
-    required String countryCode,
-    required String stateCode,
+    required String countryName,
+    required String cityName,
     GroupSortOption sortBy = GroupSortOption.mostActive,
     int limit = 50,
   }) async {
     // Validate inputs to prevent Firestore invalid_query errors
-    if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+    if (countryName.trim().isEmpty || cityName.trim().isEmpty) {
       _logger
-          .w('getGroupsForLocation called with empty countryCode or stateCode');
+          .w('getGroupsForLocation called with empty countryName or cityName');
       return [];
     }
 
     try {
       Query<Map<String, dynamic>> query = _groupsRef
-          .where('countryCode', isEqualTo: countryCode)
-          .where('stateCode', isEqualTo: stateCode)
+          .where('countryName', isEqualTo: countryName)
+          .where('cityName', isEqualTo: cityName)
           .where('status', isEqualTo: 'active');
 
       // Apply sorting
@@ -314,27 +291,27 @@ class LocationGroupService {
   /// Streams groups for a location with real-time updates.
   ///
   /// Note: This query requires a composite Firestore index on:
-  /// (countryCode, stateCode, status, lastActivityAt/createdAt/memberCount)
+  /// (countryName, cityName, status, lastActivityAt/createdAt/memberCount)
   ///
   /// If the index doesn't exist, the stream will emit an error.
   /// The error is logged but NOT converted to an empty list, so that
   /// the BLoC can preserve any previously loaded data.
   Stream<List<LocationGroup>> streamGroupsForLocation({
-    required String countryCode,
-    required String stateCode,
+    required String countryName,
+    required String cityName,
     GroupSortOption sortBy = GroupSortOption.mostActive,
     int limit = 50,
   }) {
     // Validate inputs to prevent Firestore invalid_query errors
-    if (countryCode.trim().isEmpty || stateCode.trim().isEmpty) {
+    if (countryName.trim().isEmpty || cityName.trim().isEmpty) {
       _logger.w(
-          'streamGroupsForLocation called with empty countryCode or stateCode');
+          'streamGroupsForLocation called with empty countryName or cityName');
       return Stream.value([]);
     }
 
     Query<Map<String, dynamic>> query = _groupsRef
-        .where('countryCode', isEqualTo: countryCode)
-        .where('stateCode', isEqualTo: stateCode)
+        .where('countryName', isEqualTo: countryName)
+        .where('cityName', isEqualTo: cityName)
         .where('status', isEqualTo: 'active');
 
     // Apply sorting
@@ -1521,21 +1498,21 @@ class LocationGroupService {
         // Check for duplicate name in same location
         final group = await getGroupById(groupId);
         if (group != null) {
-          // Validate location codes are present (defensive check)
-          if (group.countryCode.trim().isEmpty ||
-              group.stateCode.trim().isEmpty) {
+          // Validate location names are present (defensive check)
+          if (group.countryName.trim().isEmpty ||
+              group.cityName.trim().isEmpty) {
             _logger.e(
-                'Group $groupId has invalid location codes, cannot check for duplicates');
+                'Group $groupId has invalid location data, cannot check for duplicates');
             return const GroupFailure(
               'Group has invalid location data',
               GroupErrorType.invalidData,
             );
           }
 
-          // First try with nameLowercase index
+          // Check for duplicate name in same location
           final duplicateCheck = await _groupsRef
-              .where('countryCode', isEqualTo: group.countryCode)
-              .where('stateCode', isEqualTo: group.stateCode)
+              .where('countryName', isEqualTo: group.countryName)
+              .where('cityName', isEqualTo: group.cityName)
               .where('nameLowercase', isEqualTo: trimmedName.toLowerCase())
               .where('status', isEqualTo: 'active')
               .get();
@@ -1545,25 +1522,6 @@ class LocationGroupService {
               'A group with this name already exists in this location',
               GroupErrorType.duplicateName,
             );
-          }
-
-          // Fallback: Check for groups without nameLowercase field (legacy data)
-          final legacyCheck = await _groupsRef
-              .where('countryCode', isEqualTo: group.countryCode)
-              .where('stateCode', isEqualTo: group.stateCode)
-              .where('status', isEqualTo: 'active')
-              .get();
-
-          for (final doc in legacyCheck.docs) {
-            if (doc.id == groupId) continue; // Skip current group
-            final data = doc.data();
-            final existingName = data['name'] as String?;
-            if (existingName?.toLowerCase() == trimmedName.toLowerCase()) {
-              return const GroupFailure(
-                'A group with this name already exists in this location',
-                GroupErrorType.duplicateName,
-              );
-            }
           }
         }
 
