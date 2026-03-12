@@ -12,6 +12,7 @@ import '../../../local_news/presentation/widgets/user_news_posts_grid.dart';
 import '../../../posts/presentation/bloc/user_posts_bloc.dart';
 import '../../../posts/presentation/widgets/user_posts_grid.dart';
 import '../bloc/profile_bloc.dart';
+import '../widgets/mood_selector.dart';
 
 /// Page showing the current user's own public profile in the same
 /// Instagram-style layout used for other users' profiles.
@@ -58,7 +59,6 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
             String bio = '';
             String? vibe;
             String? mood;
-            String? gender;
             String? discoveryUsername;
 
             if (profileState is ProfileLoaded) {
@@ -70,7 +70,6 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
               bio = p.bio;
               vibe = p.vibe;
               mood = p.mood;
-              gender = p.gender;
               discoveryUsername = p.discoveryUsername;
             }
 
@@ -211,35 +210,146 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                             ),
                           ),
 
-                          // ── Vibe & Mood & Gender ──
+                          // ── Vibe & Mood ──
                           Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 2),
-                            child: Text(
-                              'Vibe: ${vibe?.isNotEmpty == true ? vibe! : 'Not set'}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 2),
-                            child: Text(
-                              'Mood: ${mood?.isNotEmpty == true ? mood! : 'Not set'}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 2),
-                            child: Text(
-                              'Gender: ${gender?.isNotEmpty == true ? gender! : 'Not set'}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
+                                horizontal: 16, vertical: 6),
+                            child: Row(
+                              children: [
+                                // Vibe
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.5),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: theme
+                                            .colorScheme.outlineVariant
+                                            .withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.electric_bolt,
+                                              size: 14,
+                                              color: theme.colorScheme
+                                                  .primary,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Vibe',
+                                              style: theme
+                                                  .textTheme.labelSmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          vibe?.isNotEmpty == true
+                                              ? _stripEmoji(vibe!)
+                                              : 'Not set',
+                                          style: theme
+                                              .textTheme.bodySmall
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color:
+                                                vibe?.isNotEmpty == true
+                                                    ? theme.colorScheme
+                                                        .onSurface
+                                                    : theme.colorScheme
+                                                        .onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Mood
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.5),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: theme
+                                            .colorScheme.outlineVariant
+                                            .withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.mood,
+                                              size: 14,
+                                              color: theme.colorScheme
+                                                  .secondary,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Mood',
+                                              style: theme
+                                                  .textTheme.labelSmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          mood?.isNotEmpty == true
+                                              ? (MoodSelector.moods[mood!] ?? _stripEmoji(mood))
+                                              : 'Not set',
+                                          style: theme
+                                              .textTheme.bodySmall
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color:
+                                                mood?.isNotEmpty == true
+                                                    ? theme.colorScheme
+                                                        .onSurface
+                                                    : theme.colorScheme
+                                                        .onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -302,6 +412,12 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
       },
     );
   }
+}
+
+/// Strips leading emoji + space from a string like '👋 Open to talk' → 'Open to talk'.
+String _stripEmoji(String s) {
+  final idx = s.indexOf(' ');
+  return idx > 0 ? s.substring(idx + 1) : s;
 }
 
 class _StatItem extends StatelessWidget {

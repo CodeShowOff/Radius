@@ -607,12 +607,64 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    // Video uploads are not enabled yet
-    emit(state.copyWith(
-      errorMessage:
-          '🎬 Video sharing is coming soon! Stay tuned.',
+    // Check if media uploads are enabled
+    if (!AppConstants.enableMediaUploads) {
+      emit(state.copyWith(
+        errorMessage:
+            '🎬 Video sharing will be available very soon! We\'re setting up our servers.',
+      ));
+      return;
+    }
+
+    // Create optimistic pending message IMMEDIATELY for instant display
+    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final optimisticMessage = Message(
+      id: localId,
+      conversationId: state.conversationId!,
+      senderId: state.currentUserId!,
+      text: event.caption ?? '',
+      type: MessageType.video,
+      status: MessageStatus.pending,
+      duration: event.duration,
+      sentAt: DateTime.now(),
+      localId: localId,
+      uploadProgress: 0.0,
+    );
+
+    final pending = Map<String, Message>.from(state.pendingMessages);
+    pending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: pending));
+
+    // Capture state values before async operation
+    final conversationId = state.conversationId!;
+    final senderId = state.currentUserId!;
+    final otherUserId = state.otherUserId;
+    final caption = event.caption ?? '';
+    final duration = event.duration;
+
+    // Fire-and-forget: start upload in background (doesn't block event queue)
+    var lastReportedProgress = -1.0;
+    unawaited(_performMediaUpload(
+      localId: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      otherUserId: otherUserId,
+      type: MessageType.video,
+      text: caption,
+      duration: duration,
+      upload: () => _mediaUploadService.uploadVideo(
+        file: event.file,
+        conversationId: conversationId,
+        senderId: senderId,
+        duration: duration,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            _safeAdd(_ChatMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
     ));
-    return;
   }
 
   /// Performs the actual media upload and sends the message to Firestore.

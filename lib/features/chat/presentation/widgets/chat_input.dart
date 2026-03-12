@@ -17,6 +17,7 @@ class ChatInput extends StatefulWidget {
   final void Function(File file, int duration)? onVoiceRecorded;
   final bool enabled;
   final String? hintText;
+  final bool showVideoComingSoon;
 
   const ChatInput({
     super.key,
@@ -29,6 +30,7 @@ class ChatInput extends StatefulWidget {
     this.onVoiceRecorded,
     this.enabled = true,
     this.hintText,
+    this.showVideoComingSoon = false,
   });
 
   @override
@@ -152,6 +154,28 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    try {
+      final XFile? video = await _imagePicker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 10),
+      );
+
+      if (video != null) {
+        widget.onVideoSelected?.call(File(video.path));
+      }
+    } catch (e) {
+      final errorMessage = e.toString().toLowerCase();
+      if (errorMessage.contains('permission') ||
+          errorMessage.contains('denied')) {
+        _showError('Photo library access is required to select videos. '
+            'Please enable photo library permission in your device settings.');
+      } else {
+        _showError('Failed to pick video: $e');
+      }
+    }
+  }
+
   void _showAttachmentOptions() {
     showModalBottomSheet(
       context: context,
@@ -170,13 +194,18 @@ class _ChatInputState extends State<ChatInput> {
         },
         onVideoPressed: () {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Video sharing is coming soon!'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          if (widget.showVideoComingSoon) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Video sharing in groups is coming soon!'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+            _pickVideo();
+          }
         },
+        showVideoComingSoon: widget.showVideoComingSoon,
       ),
     );
   }
@@ -333,6 +362,7 @@ class AttachmentPicker extends StatelessWidget {
   final VoidCallback? onCameraPressed;
   final VoidCallback? onFilePressed;
   final VoidCallback? onVideoPressed;
+  final bool showVideoComingSoon;
 
   const AttachmentPicker({
     super.key,
@@ -340,6 +370,7 @@ class AttachmentPicker extends StatelessWidget {
     this.onCameraPressed,
     this.onFilePressed,
     this.onVideoPressed,
+    this.showVideoComingSoon = false,
   });
 
   @override
@@ -384,7 +415,7 @@ class AttachmentPicker extends StatelessWidget {
                 label: 'Video',
                 color: Colors.orange,
                 onTap: onVideoPressed,
-                isUpcoming: true,
+                isUpcoming: showVideoComingSoon,
               ),
             ],
           ),

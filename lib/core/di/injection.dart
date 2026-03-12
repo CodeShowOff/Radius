@@ -32,6 +32,7 @@ import '../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../features/location_groups/data/group_chat_cache_service.dart';
 import '../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../features/location_groups/data/group_chat_service.dart';
+import '../../features/location_groups/data/group_media_upload_service.dart';
 import '../../features/location_groups/data/location_data_service.dart';
 import '../../features/location_groups/data/location_group_service.dart';
 import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
@@ -301,6 +302,10 @@ Future<void> configureDependencies() {
   // Must be registered before RealTimeDataManager but after getIt.init() for ChatService
   // Registration moved below getIt.init() to ensure ChatService is available
 
+  if (!getIt.isRegistered<GroupMediaUploadService>()) {
+    getIt.registerLazySingleton<GroupMediaUploadService>(() => GroupMediaUploadService());
+  }
+
   if (!getIt.isRegistered<LocationGroupBloc>()) {
     getIt.registerLazySingleton<LocationGroupBloc>(
       () => LocationGroupBloc(
@@ -314,6 +319,7 @@ Future<void> configureDependencies() {
       () => GroupChatBloc(
         chatService: getIt<GroupChatService>(),
         cacheService: getIt<GroupChatCacheService>(),
+        mediaUploadService: getIt<GroupMediaUploadService>(),
       ),
     );
   }
@@ -377,6 +383,7 @@ Future<void> configureDependencies() {
       () => RandomGroupChatBloc(
         chatService: getIt<RandomGroupChatService>(),
         cacheService: getIt<RandomGroupChatCacheService>(),
+        mediaUploadService: getIt<GroupMediaUploadService>(),
       ),
     );
   }

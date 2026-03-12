@@ -10,6 +10,8 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/group_message_bubble.dart';
 import '../../data/group_chat_cache_service.dart';
 import '../../data/group_chat_service.dart';
+import '../../data/group_media_upload_service.dart';
+import '../../../chat/data/media_upload_service.dart';
 import '../../domain/entities/group_message.dart';
 
 part 'group_chat_event.dart';
@@ -52,6 +54,7 @@ const _uuid = Uuid();
 class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
   final GroupChatService _chatService;
   final GroupChatCacheService _cacheService;
+  final GroupMediaUploadService _mediaUploadService;
   final Logger _logger;
 
   StreamSubscription<List<GroupMessage>>? _messagesSubscription;
@@ -65,9 +68,11 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
   GroupChatBloc({
     required GroupChatService chatService,
     required GroupChatCacheService cacheService,
+    required GroupMediaUploadService mediaUploadService,
     Logger? logger,
   })  : _chatService = chatService,
         _cacheService = cacheService,
+        _mediaUploadService = mediaUploadService,
         _logger = logger ?? Logger(),
         super(const GroupChatState()) {
     on<OpenGroupChat>(_onOpenGroupChat);
@@ -85,6 +90,8 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     on<ClearGroupChatMessages>(_onClearGroupChatMessages);
     on<_UnreadInfoReceived>(_onUnreadInfoReceived);
     on<RetryGroupMessage>(_onRetryGroupMessage);
+    on<_GroupMediaUploadProgress>(_onGroupMediaUploadProgress);
+    on<_GroupMediaUploadFailed>(_onGroupMediaUploadFailed);
   }
 
   /// Check if membership is cached and still valid.
@@ -377,8 +384,51 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     if (state.groupId == null || state.currentUserId == null) return;
     if (!state.membershipVerified) return;
 
-    emit(state.copyWith(
-      errorMessage: '📷 Photo sharing in groups is coming soon!',
+    final localId = _uuid.v4();
+    final optimisticMessage = GroupMessage(
+      id: 'pending_$localId',
+      groupId: state.groupId!,
+      senderId: state.currentUserId!,
+      senderName: state.currentUserName,
+      senderPhotoUrl: state.currentUserPhotoUrl,
+      text: event.caption ?? '',
+      type: GroupMessageType.image,
+      sentAt: DateTime.now(),
+      localId: localId,
+      status: GroupMessageStatus.pending,
+      uploadProgress: 0.0,
+    );
+
+    final updatedPending = Map<String, GroupMessage>.from(state.pendingMessages);
+    updatedPending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: updatedPending));
+
+    final groupId = state.groupId!;
+    final senderId = state.currentUserId!;
+    final senderName = state.currentUserName;
+    final senderPhotoUrl = state.currentUserPhotoUrl;
+    final caption = event.caption ?? '';
+
+    var lastReportedProgress = -1.0;
+    unawaited(_performGroupMediaUpload(
+      localId: localId,
+      groupId: groupId,
+      senderId: senderId,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      type: GroupMessageType.image,
+      text: caption,
+      upload: () => _mediaUploadService.uploadImage(
+        file: event.file,
+        groupId: groupId,
+        senderId: senderId,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            _safeAdd(_GroupMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
     ));
   }
 
@@ -389,8 +439,53 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     if (state.groupId == null || state.currentUserId == null) return;
     if (!state.membershipVerified) return;
 
-    emit(state.copyWith(
-      errorMessage: '🎤 Voice messages in groups are coming soon!',
+    final localId = _uuid.v4();
+    final optimisticMessage = GroupMessage(
+      id: 'pending_$localId',
+      groupId: state.groupId!,
+      senderId: state.currentUserId!,
+      senderName: state.currentUserName,
+      senderPhotoUrl: state.currentUserPhotoUrl,
+      text: '',
+      type: GroupMessageType.audio,
+      duration: event.duration,
+      sentAt: DateTime.now(),
+      localId: localId,
+      status: GroupMessageStatus.pending,
+      uploadProgress: 0.0,
+    );
+
+    final updatedPending = Map<String, GroupMessage>.from(state.pendingMessages);
+    updatedPending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: updatedPending));
+
+    final groupId = state.groupId!;
+    final senderId = state.currentUserId!;
+    final senderName = state.currentUserName;
+    final senderPhotoUrl = state.currentUserPhotoUrl;
+    final duration = event.duration;
+
+    var lastReportedProgress = -1.0;
+    unawaited(_performGroupMediaUpload(
+      localId: localId,
+      groupId: groupId,
+      senderId: senderId,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      type: GroupMessageType.audio,
+      duration: duration,
+      upload: () => _mediaUploadService.uploadAudio(
+        file: event.file,
+        groupId: groupId,
+        senderId: senderId,
+        duration: duration,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            _safeAdd(_GroupMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
     ));
   }
 
@@ -401,8 +496,53 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     if (state.groupId == null || state.currentUserId == null) return;
     if (!state.membershipVerified) return;
 
-    emit(state.copyWith(
-      errorMessage: '📄 Document sharing in groups is coming soon!',
+    final localId = _uuid.v4();
+    final fileName = event.file.path.split(Platform.pathSeparator).last;
+    final optimisticMessage = GroupMessage(
+      id: 'pending_$localId',
+      groupId: state.groupId!,
+      senderId: state.currentUserId!,
+      senderName: state.currentUserName,
+      senderPhotoUrl: state.currentUserPhotoUrl,
+      text: event.caption ?? '',
+      type: GroupMessageType.document,
+      mediaFileName: fileName,
+      sentAt: DateTime.now(),
+      localId: localId,
+      status: GroupMessageStatus.pending,
+      uploadProgress: 0.0,
+    );
+
+    final updatedPending = Map<String, GroupMessage>.from(state.pendingMessages);
+    updatedPending[localId] = optimisticMessage;
+    emit(state.copyWith(pendingMessages: updatedPending));
+
+    final groupId = state.groupId!;
+    final senderId = state.currentUserId!;
+    final senderName = state.currentUserName;
+    final senderPhotoUrl = state.currentUserPhotoUrl;
+    final caption = event.caption ?? '';
+
+    var lastReportedProgress = -1.0;
+    unawaited(_performGroupMediaUpload(
+      localId: localId,
+      groupId: groupId,
+      senderId: senderId,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      type: GroupMessageType.document,
+      text: caption,
+      upload: () => _mediaUploadService.uploadDocument(
+        file: event.file,
+        groupId: groupId,
+        senderId: senderId,
+        onProgress: (progress) {
+          if (!isClosed && (progress - lastReportedProgress >= 0.05 || progress >= 1.0)) {
+            lastReportedProgress = progress;
+            _safeAdd(_GroupMediaUploadProgress(localId: localId, progress: progress));
+          }
+        },
+      ),
     ));
   }
 
@@ -694,6 +834,86 @@ class GroupChatBloc extends Bloc<GroupChatEvent, GroupChatState> {
     );
 
     _logger.i('Message subscription created for group $groupId');
+  }
+
+  /// Safely adds an event to the bloc, checking if it's still open.
+  void _safeAdd(GroupChatEvent event) {
+    if (!isClosed) {
+      add(event);
+    }
+  }
+
+  /// Performs the actual media upload and sends the message to Firestore.
+  Future<void> _performGroupMediaUpload({
+    required String localId,
+    required String groupId,
+    required String senderId,
+    String? senderName,
+    String? senderPhotoUrl,
+    required GroupMessageType type,
+    required Future<UploadResult> Function() upload,
+    String text = '',
+    int? duration,
+  }) async {
+    try {
+      _safeAdd(_GroupMediaUploadProgress(localId: localId, progress: 0.0));
+
+      final uploadResult = await upload();
+      if (isClosed) return;
+
+      await _chatService.sendMediaMessage(
+        groupId: groupId,
+        senderId: senderId,
+        senderName: senderName,
+        senderPhotoUrl: senderPhotoUrl,
+        type: type,
+        mediaUrl: uploadResult.downloadUrl,
+        mediaFileName: uploadResult.fileName,
+        mediaFileSize: uploadResult.fileSize,
+        text: text,
+        duration: duration,
+        localId: localId,
+      );
+    } catch (e) {
+      _logger.e('Group media upload/send failed', error: e);
+      _safeAdd(_GroupMediaUploadFailed(localId: localId, error: 'Failed to send media: $e'));
+    }
+  }
+
+  void _onGroupMediaUploadProgress(
+    _GroupMediaUploadProgress event,
+    Emitter<GroupChatState> emit,
+  ) {
+    final currentPending = Map<String, GroupMessage>.from(state.pendingMessages);
+    final existingMsg = currentPending[event.localId];
+    if (existingMsg != null) {
+      currentPending[event.localId] = existingMsg.copyWith(
+        uploadProgress: event.progress,
+        status: GroupMessageStatus.pending,
+      );
+      emit(state.copyWith(pendingMessages: currentPending));
+    }
+  }
+
+  void _onGroupMediaUploadFailed(
+    _GroupMediaUploadFailed event,
+    Emitter<GroupChatState> emit,
+  ) {
+    final currentPending = Map<String, GroupMessage>.from(state.pendingMessages);
+    final existingMsg = currentPending[event.localId];
+    if (existingMsg != null) {
+      currentPending[event.localId] = existingMsg.copyWith(
+        status: GroupMessageStatus.error,
+        errorReason: event.error,
+        uploadProgress: null,
+      );
+    } else {
+      currentPending.remove(event.localId);
+    }
+    emit(state.copyWith(
+      pendingMessages: currentPending,
+      errorMessage: event.error,
+    ));
   }
 
   @override

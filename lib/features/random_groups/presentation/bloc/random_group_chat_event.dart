@@ -154,3 +154,25 @@ class _UnreadInfoReceived extends RandomGroupChatEvent {
   @override
   List<Object?> get props => [firstUnreadMessageId, unreadCount];
 }
+
+/// Internal event: media upload progress update.
+class _RandomMediaUploadProgress extends RandomGroupChatEvent {
+  final String localId;
+  final double progress;
+
+  const _RandomMediaUploadProgress({required this.localId, required this.progress});
+
+  @override
+  List<Object?> get props => [localId, progress];
+}
+
+/// Internal event: media upload failed.
+class _RandomMediaUploadFailed extends RandomGroupChatEvent {
+  final String localId;
+  final String error;
+
+  const _RandomMediaUploadFailed({required this.localId, required this.error});
+
+  @override
+  List<Object?> get props => [localId, error];
+}

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../../data/audio_session_manager.dart';
 import '../../domain/entities/message.dart';
 import '../screens/photo_viewer_screen.dart';
+import '../screens/video_viewer_screen.dart';
 
 /// Widget for displaying media content in message bubbles.
 class MediaMessageContent extends StatelessWidget {
@@ -432,28 +431,14 @@ class _VideoContentState extends State<_VideoContent> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
-  StreamSubscription? _audioStateSub;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
-
-    // Listen for audio playback from AudioSessionManager.
-    // If an audio message starts playing, pause this video.
-    final manager = widget.audioSessionManager;
-    if (manager != null) {
-      _audioStateSub = manager.playerStateStream.listen((state) {
-        if (!mounted) return;
-        if (state.isPlaying && _controller?.value.isPlaying == true) {
-          _controller!.pause();
-          if (mounted) setState(() {});
-        }
-      });
-    }
+    _initializeThumbnail();
   }
 
-  Future<void> _initializePlayer() async {
+  Future<void> _initializeThumbnail() async {
     if (widget.message.mediaUrl == null) return;
 
     try {
@@ -479,23 +464,25 @@ class _VideoContentState extends State<_VideoContent> {
 
   @override
   void dispose() {
-    _audioStateSub?.cancel();
     _controller?.dispose();
     super.dispose();
   }
 
-  void _togglePlayPause() {
-    if (_controller == null || !_isInitialized) return;
-
-    setState(() {
-      if (_controller!.value.isPlaying) {
-        _controller!.pause();
-      } else {
-        // Stop any playing audio before starting video
-        widget.audioSessionManager?.stop();
-        _controller!.play();
-      }
-    });
+  void _openVideoViewer(BuildContext context) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            VideoViewerScreen(
+          videoUrl: widget.message.mediaUrl!,
+          caption: widget.message.text.isNotEmpty ? widget.message.text : null,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   @override
@@ -548,76 +535,43 @@ class _VideoContentState extends State<_VideoContent> {
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 250,
-        height: 150,
-        color: Colors.black,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 250,
-              height: 150,
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _controller!.value.size.width,
-                  height: _controller!.value.size.height,
-                  child: VideoPlayer(_controller!),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _togglePlayPause,
-                child: Container(
-                  color: Colors.transparent,
-                  child: AnimatedOpacity(
-                    opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _controller!.value.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          size: 48,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+    return GestureDetector(
+      onTap: () => _openVideoViewer(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 250,
+          height: 150,
+          color: Colors.black,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 250,
+                height: 150,
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _controller!.value.size.width,
+                    height: _controller!.value.size.height,
+                    child: VideoPlayer(_controller!),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: ValueListenableBuilder(
-                valueListenable: _controller!,
-                builder: (context, VideoPlayerValue value, child) {
-                  return LinearProgressIndicator(
-                    value: value.duration.inMilliseconds > 0
-                        ? value.position.inMilliseconds /
-                            value.duration.inMilliseconds
-                        : 0.0,
-                    backgroundColor: Colors.white24,
-                    valueColor: AlwaysStoppedAnimation(
-                      theme.colorScheme.primary,
-                    ),
-                  );
-                },
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  size: 48,
+                  color: Colors.white,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

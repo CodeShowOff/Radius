@@ -650,6 +650,7 @@ class _GroupChatPageState extends State<GroupChatPage>
       onVoiceRecorded: (file, duration) {
         context.read<GroupChatBloc>().add(SendGroupAudio(file, duration: duration));
       },
+      showVideoComingSoon: true,
     );
   }
 }

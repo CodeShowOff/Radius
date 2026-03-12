@@ -853,6 +853,12 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
+/// Strips leading emoji + space from vibe strings like '👋 Open to talk' → 'Open to talk'.
+String _stripVibeEmoji(String s) {
+  final idx = s.indexOf(' ');
+  return idx > 0 ? s.substring(idx + 1) : s;
+}
+
 /// Vibe selector widget with predefined vibe options.
 class _VibeSelector extends StatelessWidget {
   final String? selectedVibe;
@@ -945,7 +951,7 @@ class _VibeSelector extends StatelessWidget {
                 ),
                 ...popularVibes.map((vibe) {
                   return FilterChip(
-                    label: Text(vibe),
+                    label: Text(_stripVibeEmoji(vibe)),
                     selected: selectedVibe == vibe,
                     onSelected: (selected) {
                       onChanged(selected ? vibe : null);
@@ -982,7 +988,7 @@ class _VibeSelector extends StatelessWidget {
                 ...vibes.entries.map((entry) {
                   return DropdownMenuItem<String>(
                     value: entry.value,
-                    child: Text(entry.key),
+                    child: Text(_stripVibeEmoji(entry.key)),
                   );
                 }),
               ],

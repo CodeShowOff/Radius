@@ -153,3 +153,25 @@ class _UnreadInfoReceived extends GroupChatEvent {
   @override
   List<Object?> get props => [firstUnreadMessageId, unreadCount];
 }
+
+/// Internal event: media upload progress update.
+class _GroupMediaUploadProgress extends GroupChatEvent {
+  final String localId;
+  final double progress;
+
+  const _GroupMediaUploadProgress({required this.localId, required this.progress});
+
+  @override
+  List<Object?> get props => [localId, progress];
+}
+
+/// Internal event: media upload failed.
+class _GroupMediaUploadFailed extends GroupChatEvent {
+  final String localId;
+  final String error;
+
+  const _GroupMediaUploadFailed({required this.localId, required this.error});
+
+  @override
+  List<Object?> get props => [localId, error];
+}

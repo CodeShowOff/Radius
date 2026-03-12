@@ -678,6 +678,7 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage>
             .read<RandomGroupChatBloc>()
             .add(SendRandomGroupAudio(file, duration: duration));
       },
+      showVideoComingSoon: true,
     );
   }
 

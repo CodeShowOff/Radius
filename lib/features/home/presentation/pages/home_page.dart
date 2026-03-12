@@ -10,6 +10,7 @@ import '../../../../core/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/widgets/mood_selector.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../proximity/proximity_service.dart';
 
 /// Home page - main screen after authentication.
@@ -252,6 +253,7 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -260,184 +262,306 @@ class _HomePageState extends State<HomePage>
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'Radius',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
-          ),
-          actions: [
-            _buildBluetoothIcon(),
-            BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-              buildWhen: (prev, curr) =>
-                  prev.receivedRequests.length != curr.receivedRequests.length,
-              builder: (context, state) {
-                final hasRequests = state.receivedRequests.isNotEmpty;
-                final isDark = Theme.of(context).brightness == Brightness.dark;
-                return IconButton(
-                  onPressed: () => context.push(Routes.allRequests),
-                  icon: Badge(
-                    isLabelVisible: hasRequests,
-                    backgroundColor: Colors.red,
-                    smallSize: 10,
-                    child: Icon(Icons.person_add_alt_1_outlined, size: 24,
-                        color: isDark ? null : AppTheme.primaryColor),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Header ---
+                Row(
+                  children: [
+                    Text(
+                      'Radius',
+                      style: theme.textTheme.displayMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    // Bluetooth warning (only when off)
+                    if (!_bluetoothEnabled && !_checkingBluetooth)
+                      _buildBluetoothIcon(),
+                    // Notification bell
+                    IconButton(
+                      onPressed: () => context.push(Routes.notificationSettings),
+                      icon: Icon(
+                        Icons.notifications_outlined,
+                        size: 24,
+                        color: isDark ? Colors.white70 : AppTheme.primaryColor,
+                      ),
+                      tooltip: 'Notifications',
+                    ),
+                    // Connection requests with badge
+                    BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                      buildWhen: (prev, curr) =>
+                          prev.receivedRequests.length !=
+                          curr.receivedRequests.length,
+                      builder: (context, state) {
+                        final count = state.receivedRequests.length;
+                        return IconButton(
+                          onPressed: () => context.push(Routes.allRequests),
+                          icon: Badge(
+                            isLabelVisible: count > 0,
+                            backgroundColor: Colors.red,
+                            label: count > 0
+                                ? Text('$count',
+                                    style: const TextStyle(fontSize: 10))
+                                : null,
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              size: 24,
+                              color: isDark
+                                  ? Colors.white70
+                                  : AppTheme.primaryColor,
+                            ),
+                          ),
+                          tooltip: 'Requests',
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Discover people around you',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  tooltip: 'Requests',
-                );
-              },
+                ),
+                const SizedBox(height: 20),
+
+                // --- Mood Card ---
+                _buildMoodCard(context, theme, isDark),
+                const SizedBox(height: 12),
+
+                // --- Background Advertising Card ---
+                _buildBgAdvCard(context, theme, isDark),
+                const SizedBox(height: 20),
+
+                // --- Find People Hero Card ---
+                _buildHeroCard(context, theme),
+                const SizedBox(height: 28),
+
+                // --- Quick Connect ---
+                Text(
+                  'Quick Connect',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickConnectCard(
+                        icon: Icons.chat_bubble_rounded,
+                        label: 'Random',
+                        subtitle: 'Chat',
+                        color: AppTheme.primaryColor,
+                        onTap: () => context.push(Routes.randomChat),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickConnectCard(
+                        icon: Icons.videocam_rounded,
+                        label: 'Video',
+                        subtitle: 'Chat',
+                        color: AppTheme.primaryColor,
+                        onTap: () => context.push(Routes.videoChat),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // --- Groups Around You ---
+                Text(
+                  'Groups Around You',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GroupCard(
+                        icon: Icons.all_inclusive,
+                        label: 'Nearby',
+                        subtitle: 'Groups',
+                        color: const Color(0xFFE91E63),
+                        onTap: () => context.push(Routes.nearbyGroups),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _GroupCard(
+                        icon: Icons.location_on,
+                        label: 'Location',
+                        subtitle: 'Groups',
+                        color: const Color(0xFF2196F3),
+                        onTap: () => context.push(Routes.myGroups),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _GroupCard(
+                        icon: Icons.casino_rounded,
+                        label: 'Random',
+                        subtitle: 'Groups',
+                        color: AppTheme.primaryColor,
+                        onTap: () => context.push(Routes.randomGroups),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // --- Emergency Help ---
+                _EmergencyHelpCard(
+                  onTap: () => context.push(Routes.nearbyHelp),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-          ],
-        ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final bottomPad = 16.0 + MediaQuery.of(context).padding.bottom;
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 12 - bottomPad,
-                ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // --- Mood + Status row ---
-                      const MoodSelector(showLabel: true, compact: false),
-                      const SizedBox(height: 12),
-
-                      // --- Background Advertising compact toggle ---
-                      _BackgroundAdvToggle(
-                        enabled: _backgroundAdvertising,
-                        onChanged: _toggleBackgroundAdvertising,
-                      ),
-                      const SizedBox(height: 28),
-
-                      // --- Quick Actions ---
-                      Text(
-                        'Quick Actions',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Row 1: Find Nearby | Nearby Groups
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.radar,
-                              label: 'Find Nearby',
-                              onTap: () => context.push(Routes.nearby),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.all_inclusive,
-                              label: 'Nearby Groups',
-                              onTap: () => context.push(Routes.nearbyGroups),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Row 2: Random Chat | Video Chat
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.chat_bubble_outline_rounded,
-                              label: 'Random Chat',
-                              onTap: () => context.push(Routes.randomChat),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.videocam_rounded,
-                              label: 'Video Chat',
-                              onTap: () => context.push(Routes.videoChat),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Row 3: Location Groups | Random Groups
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.location_on_outlined,
-                              label: 'Location Groups',
-                              onTap: () => context.push(Routes.myGroups),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickAction(
-                              icon: Icons.public_outlined,
-                              label: 'Random Groups',
-                              onTap: () => context.push(Routes.randomGroups),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Full-width Nearby Help
-                      _NearbyHelpAction(
-                        onTap: () => context.push(Routes.nearbyHelp),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+          ),
         ),
       ),
     );
   }
-}
 
-// --- Reusable widgets ---
+  // --- Mood Card ---
+  Widget _buildMoodCard(
+      BuildContext context, ThemeData theme, bool isDark) {
+    return BlocBuilder<ProfileBloc, ProfileState>(
+      builder: (context, profileState) {
+        String moodLabel = 'Set Mood';
+        IconData moodIcon = Icons.mood_outlined;
 
-/// Compact background advertising toggle.
-class _BackgroundAdvToggle extends StatelessWidget {
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
+        if (profileState is ProfileLoaded &&
+            profileState.profile.mood != null) {
+          final mood = profileState.profile.mood!;
+          // Support both old emoji keys ('😊 Chill') and new clean values ('Chill')
+          final cleanMood = MoodSelector.moods[mood] ?? mood;
+          moodLabel = '$cleanMood Mood';
+          const moodIcons = {
+            'Chill': Icons.sentiment_satisfied_alt,
+            'Focused': Icons.psychology,
+            'Deep talk': Icons.forum,
+            'Fun': Icons.celebration,
+          };
+          moodIcon = moodIcons[cleanMood] ?? Icons.mood;
+        }
 
-  const _BackgroundAdvToggle({
-    required this.enabled,
-    required this.onChanged,
-  });
+        return GestureDetector(
+          onTap: () => _showMoodPicker(context),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppTheme.primaryColor.withValues(alpha: 0.3)
+                        : AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(moodIcon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    moodLabel,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_drop_down_circle_outlined,
+                  color: theme.colorScheme.secondary,
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  // --- Background Advertising Card ---
+  Widget _buildBgAdvCard(
+      BuildContext context, ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: enabled
+        color: _backgroundAdvertising
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
           Icon(
             Icons.broadcast_on_personal,
             size: 20,
-            color: enabled
+            color: _backgroundAdvertising
                 ? theme.colorScheme.primary
                 : theme.colorScheme.outline,
           ),
           const SizedBox(width: 10),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: _backgroundAdvertising
+                  ? AppTheme.successColor
+                  : theme.colorScheme.outline,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _backgroundAdvertising ? 'Visible' : 'Hidden',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _backgroundAdvertising
+                  ? AppTheme.successColor
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
-              enabled ? 'Discoverable in background' : 'Hidden when app closed',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
+              _backgroundAdvertising
+                  ? 'Discoverable in background'
+                  : 'Hidden when app closed',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -445,8 +569,8 @@ class _BackgroundAdvToggle extends StatelessWidget {
             height: 28,
             child: FittedBox(
               child: Switch(
-                value: enabled,
-                onChanged: onChanged,
+                value: _backgroundAdvertising,
+                onChanged: _toggleBackgroundAdvertising,
               ),
             ),
           ),
@@ -454,57 +578,354 @@ class _BackgroundAdvToggle extends StatelessWidget {
       ),
     );
   }
+
+  // --- Hero Find People Card ---
+  Widget _buildHeroCard(BuildContext context, ThemeData theme) {
+    return GestureDetector(
+      onTap: () => context.push(Routes.nearby),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF3D1566),
+              Color(0xFF7B2EA8),
+              Color(0xFFB44088),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          children: [
+            // Decorative circles
+            Positioned(
+              right: -20,
+              top: -20,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 30,
+              bottom: -10,
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.04),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -15,
+              bottom: -15,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.03),
+                ),
+              ),
+            ),
+            // Content
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Find People\nNear You',
+                        style:
+                            theme.textTheme.headlineMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'See who is around you\nright now',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFE040A0),
+                              Color(0xFF8B2FC9),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFE040A0)
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Start Exploring',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Magnifying glass illustration
+                SizedBox(
+                  width: 100,
+                  height: 120,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Outer glow ring
+                      Container(
+                        width: 85,
+                        height: 85,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                Colors.white.withValues(alpha: 0.12),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      // Inner circle with icon
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                Colors.white.withValues(alpha: 0.2),
+                            width: 2,
+                          ),
+                          color:
+                              Colors.white.withValues(alpha: 0.08),
+                        ),
+                        child: Icon(
+                          Icons.search_rounded,
+                          color:
+                              Colors.white.withValues(alpha: 0.9),
+                          size: 30,
+                        ),
+                      ),
+                      // Decorative dots
+                      Positioned(
+                        right: 5,
+                        top: 10,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.white.withValues(alpha: 0.35),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 8,
+                        bottom: 15,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.white.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 15,
+                        bottom: 8,
+                        child: Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.white.withValues(alpha: 0.25),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Mood picker bottom sheet ---
+  void _showMoodPicker(BuildContext context) {
+    const moodIcons = {
+      'Chill': Icons.sentiment_satisfied_alt,
+      'Focused': Icons.psychology,
+      'Deep talk': Icons.forum,
+      'Fun': Icons.celebration,
+    };
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        final sheetTheme = Theme.of(ctx);
+        final profileState = context.read<ProfileBloc>().state;
+        final rawMood =
+            profileState is ProfileLoaded ? profileState.profile.mood : null;
+        // Normalise stored mood to clean value for comparison
+        final currentMood =
+            rawMood != null ? (MoodSelector.moods[rawMood] ?? rawMood) : null;
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Text(
+                  'Set Your Mood',
+                  style: sheetTheme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              ...MoodSelector.moods.entries.map((entry) {
+                final isSelected = currentMood == entry.value;
+                return ListTile(
+                  leading: Icon(
+                    moodIcons[entry.value] ?? Icons.mood,
+                    color: isSelected
+                        ? sheetTheme.colorScheme.primary
+                        : sheetTheme.colorScheme.onSurfaceVariant,
+                  ),
+                  title: Text(entry.value),
+                  trailing: isSelected
+                      ? Icon(Icons.check,
+                          color: sheetTheme.colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _updateMood(context, entry.value);
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _updateMood(BuildContext context, String mood) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+    final profileState = context.read<ProfileBloc>().state;
+    if (profileState is! ProfileLoaded) return;
+    final updatedProfile = profileState.profile.copyWith(
+      mood: mood,
+      updatedAt: DateTime.now(),
+    );
+    context.read<ProfileBloc>().add(ProfileUpdateRequested(updatedProfile));
+  }
 }
 
-/// Full-width quick-action card with icon and label.
-class _QuickAction extends StatelessWidget {
+// --- Quick Connect Card ---
+class _QuickConnectCard extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String subtitle;
+  final Color color;
   final VoidCallback onTap;
 
-  const _QuickAction({
+  const _QuickConnectCard({
     required this.icon,
     required this.label,
+    required this.subtitle,
+    required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
           children: [
             Container(
-              width: 68,
-              height: 68,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark ? cs.primaryContainer : AppTheme.primaryColor,
-                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon,
-                  color: isDark ? cs.onPrimaryContainer : Colors.white,
-                  size: 36),
+              child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -513,42 +934,153 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
-/// Full-width emergency action card.
-class _NearbyHelpAction extends StatelessWidget {
+// --- Group Card ---
+class _GroupCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
   final VoidCallback onTap;
-  const _NearbyHelpAction({required this.onTap});
+
+  const _GroupCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Emergency Help Card ---
+class _EmergencyHelpCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _EmergencyHelpCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final errorColor = theme.colorScheme.error;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         decoration: BoxDecoration(
-          color: errorColor.withValues(alpha: 0.08),
+          color: errorColor.withValues(alpha: isDark ? 0.1 : 0.06),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: errorColor.withValues(alpha: 0.2)),
+          border: Border.all(
+            color: errorColor.withValues(alpha: 0.25),
+          ),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // SOS badge
             Container(
-              width: 68,
-              height: 68,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: errorColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+                color: errorColor,
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.sos, color: errorColor, size: 36),
+              child: const Text(
+                'SOS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
             ),
             const SizedBox(width: 12),
-            Text(
-              'Nearby Help',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: errorColor,
+            // Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Emergency Help',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    'Instantly alert nearby users',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // SOS Button
+            FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: errorColor,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'SOS',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
