@@ -6,7 +6,6 @@ import 'package:logger/logger.dart';
 
 import '../../../posts/data/services/media_optimizer.dart';
 import '../../../posts/domain/entities/media_item.dart';
-import '../../data/services/geocoding_service.dart';
 import '../../data/services/news_location_service.dart';
 import '../../data/services/news_media_service.dart';
 import '../../data/services/news_post_service.dart';
@@ -18,11 +17,9 @@ part 'create_news_post_state.dart';
 
 /// BLoC for the news post creation flow.
 ///
-/// Key rule: When submitting, the BLoC **always** requests live GPS first.
-/// The post is tagged with the GPS-derived city (matched against locations.json).
-/// No manual override for post creation — this ensures location integrity.
+/// Posts are tagged with the user's saved location (set via manual setup).
 ///
-/// Flow: compose → submit → GPS detect → optimize media → upload → create doc
+/// Flow: compose → submit → optimize media → upload → create doc
 class CreateNewsPostBloc
     extends Bloc<CreateNewsPostEvent, CreateNewsPostState> {
   final INewsPostRepository _repository;
@@ -57,7 +54,6 @@ class CreateNewsPostBloc
     on<CreateNewsPostMediaRemoved>(_onMediaRemoved);
     on<CreateNewsPostTextChanged>(_onTextChanged);
     on<CreateNewsPostSubmitted>(_onSubmitted);
-    on<CreateNewsPostLocationRetry>(_onLocationRetry);
   }
 
   // ─── User context (set before submitting) ──────────────────────────
@@ -181,54 +177,28 @@ class CreateNewsPostBloc
       }
     }
 
-    // ─── Step 1: Detect live GPS location ─────────────────────────
-    emit(state.copyWith(
-      status: CreateNewsPostStatus.detectingLocation,
-      progress: 0.0,
-      clearError: true,
-    ));
-
-    NewsLocation location;
+    // ─── Step 1: Get user's saved location ────────────────────────
+    final NewsLocation? location;
     try {
-      location = await _locationService.detectCurrentLocation();
-      _logger.i('News post location: ${location.shortDisplayString}');
-
-      if (isClosed) return;
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.locationDetected,
-        detectedLocation: location,
-      ));
-    } on LocationServiceException catch (e) {
-      _logger.w('Location detection failed: ${e.message}');
+      location = await _locationService.getUserNewsLocation(_authorId!);
+    } catch (e) {
+      _logger.e('Failed to fetch saved location', error: e);
       emit(state.copyWith(
         status: CreateNewsPostStatus.error,
-        errorMessage: e.message,
-        locationFailureReason: e.reason,
-      ));
-      return;
-    } on LocationCityMatchException catch (e) {
-      _logger.w('City match failed: ${e.message}');
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.error,
-        errorMessage: e.message,
-      ));
-      return;
-    } on GeocodingException catch (e) {
-      _logger.w('Geocoding failed: ${e.message}');
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.error,
-        errorMessage: 'Could not determine your location name. '
-            'Please try again.',
-      ));
-      return;
-    } catch (e, stack) {
-      _logger.e('Unexpected location error', error: e, stackTrace: stack);
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.error,
-        errorMessage: 'Failed to detect location. Please try again.',
+        errorMessage: 'Could not read your saved location. Please try again.',
       ));
       return;
     }
+
+    if (location == null) {
+      emit(state.copyWith(
+        status: CreateNewsPostStatus.error,
+        errorMessage: 'Please set your location in local news settings before posting.',
+      ));
+      return;
+    }
+
+    _logger.i('Using saved location: ${location.shortDisplayString}');
 
     // ─── Step 2: Optimize media ───────────────────────────────────
     final optimizedMedia = <SelectedNewsMedia>[];
@@ -399,39 +369,4 @@ class CreateNewsPostBloc
     }
   }
 
-  /// Retries only the GPS location detection (no submission).
-  /// Used after the user enables location services or grants permission.
-  Future<void> _onLocationRetry(
-    CreateNewsPostLocationRetry event,
-    Emitter<CreateNewsPostState> emit,
-  ) async {
-    emit(state.copyWith(
-      status: CreateNewsPostStatus.detectingLocation,
-      clearError: true,
-    ));
-
-    try {
-      final location = await _locationService.detectCurrentLocation();
-      _logger.i('Location retry succeeded: ${location.shortDisplayString}');
-
-      if (isClosed) return;
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.idle,
-        detectedLocation: location,
-      ));
-    } on LocationServiceException catch (e) {
-      _logger.w('Location retry failed: ${e.message}');
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.error,
-        errorMessage: e.message,
-        locationFailureReason: e.reason,
-      ));
-    } catch (e, stack) {
-      _logger.e('Location retry unexpected error', error: e, stackTrace: stack);
-      emit(state.copyWith(
-        status: CreateNewsPostStatus.error,
-        errorMessage: 'Failed to detect location. Please try again.',
-      ));
-    }
-  }
 }

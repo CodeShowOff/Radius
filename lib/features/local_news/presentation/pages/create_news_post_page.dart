@@ -2,17 +2,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
 import '../../../posts/presentation/widgets/media_picker_sheet.dart';
-import '../../data/services/news_location_service.dart';
 import '../bloc/create_news_post_bloc.dart';
 
-/// Page for creating a local news post or reel with mandatory GPS verification.
+/// Page for creating a local news post or reel.
 class CreateNewsPostPage extends StatefulWidget {
   /// When true, the page is in reel-creation mode (single video, 30s max).
   final bool isReel;
@@ -23,17 +21,9 @@ class CreateNewsPostPage extends StatefulWidget {
   State<CreateNewsPostPage> createState() => _CreateNewsPostPageState();
 }
 
-class _CreateNewsPostPageState extends State<CreateNewsPostPage>
-    with WidgetsBindingObserver {
+class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
   final _textController = TextEditingController();
   bool _initialized = false;
-  bool _waitingForSettingsReturn = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
 
   @override
   void didChangeDependencies() {
@@ -58,88 +48,8 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _waitingForSettingsReturn) {
-      _waitingForSettingsReturn = false;
-      context
-          .read<CreateNewsPostBloc>()
-          .add(const CreateNewsPostLocationRetry());
-    }
-  }
-
-  void _showLocationErrorDialog(
-      BuildContext context, LocationFailureReason reason) {
-    final String title;
-    final String message;
-    final String actionLabel;
-    final VoidCallback onAction;
-
-    switch (reason) {
-      case LocationFailureReason.serviceDisabled:
-        title = 'Location Disabled';
-        message =
-            'Your device location (GPS) is turned off. Posting local news '
-            'requires your live location to ensure accuracy.\n\n'
-            'Please turn on location services and try again.';
-        actionLabel = 'Open Location Settings';
-        onAction = () {
-          Navigator.of(context).pop();
-          _waitingForSettingsReturn = true;
-          Geolocator.openLocationSettings();
-        };
-      case LocationFailureReason.permissionDenied:
-        title = 'Location Permission Needed';
-        message =
-            'This app needs location permission to tag your news post with '
-            'an accurate location.\n\n'
-            'Please grant location access and try again.';
-        actionLabel = 'Grant Permission';
-        onAction = () {
-          Navigator.of(context).pop();
-          // Only retry location detection — user will press Post manually
-          context
-              .read<CreateNewsPostBloc>()
-              .add(const CreateNewsPostLocationRetry());
-        };
-      case LocationFailureReason.permissionDeniedForever:
-        title = 'Location Permission Blocked';
-        message =
-            'Location permission has been permanently denied. You need to '
-            'enable it from your device\'s app settings.\n\n'
-            'Go to Settings → Apps → Radius → Permissions → Location '
-            'and allow access.';
-        actionLabel = 'Open App Settings';
-        onAction = () {
-          Navigator.of(context).pop();
-          _waitingForSettingsReturn = true;
-          Geolocator.openAppSettings();
-        };
-    }
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.location_off, size: 36),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: onAction,
-            child: Text(actionLabel),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -152,17 +62,13 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage>
           );
           context.pop(true);
         } else if (state.status == CreateNewsPostStatus.error) {
-          if (state.locationFailureReason != null) {
-            _showLocationErrorDialog(context, state.locationFailureReason!);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(state.errorMessage ?? 'Failed to create news post'),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
-          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text(state.errorMessage ?? 'Failed to create news post'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
         }
       },
       builder: (context, state) {
@@ -206,7 +112,7 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // GPS notice
-                        _GpsNotice(state: state),
+                        _LocationNotice(),
                         const SizedBox(height: 16),
 
                         // Text input
@@ -309,45 +215,12 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage>
   }
 }
 
-// ─── GPS status notice ────────────────────────────────────────────────
+// ─── Location notice ────────────────────────────────────────────────
 
-class _GpsNotice extends StatelessWidget {
-  final CreateNewsPostState state;
-
-  const _GpsNotice({required this.state});
-
+class _LocationNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final location = state.detectedLocation;
-
-    if (location != null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.location_on,
-              size: 18,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Will be posted to ${location.shortDisplayString}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -358,14 +231,14 @@ class _GpsNotice extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.gps_fixed,
+            Icons.location_on,
             size: 18,
             color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Your GPS location will be used to tag this news post.',
+              'This post will be tagged with your saved location.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -386,10 +259,6 @@ class _ProgressSection extends StatelessWidget {
 
   String get _statusLabel {
     switch (state.status) {
-      case CreateNewsPostStatus.detectingLocation:
-        return 'Detecting your location…';
-      case CreateNewsPostStatus.locationDetected:
-        return 'Location confirmed';
       case CreateNewsPostStatus.optimizing:
         return 'Optimizing media…';
       case CreateNewsPostStatus.uploading:
@@ -406,9 +275,7 @@ class _ProgressSection extends StatelessWidget {
     return Column(
       children: [
         LinearProgressIndicator(
-          value: state.status == CreateNewsPostStatus.detectingLocation
-              ? null
-              : state.progress,
+          value: state.progress,
           minHeight: 3,
         ),
         Padding(

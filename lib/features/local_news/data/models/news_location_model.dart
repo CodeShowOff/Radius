@@ -84,8 +84,7 @@ class NewsLocationModel extends NewsLocation {
   }
 
   static LocationSource _parseSource(String? value) {
-    if (value == 'gps') return LocationSource.gps;
     if (value == 'manual') return LocationSource.manual;
-    return LocationSource.gps;
+    return LocationSource.manual;
   }
 }

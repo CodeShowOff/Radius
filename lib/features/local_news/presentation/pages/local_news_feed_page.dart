@@ -18,7 +18,7 @@ import '../widgets/reels_feed_view.dart';
 /// Main news feed page showing location-scoped news posts.
 ///
 /// On first open, checks for a saved location. If none is found,
-/// displays a location setup flow (GPS or manual search). Once a
+/// displays a manual location setup flow. Once a
 /// location is set, shows the feed with posts filtered by that location.
 class LocalNewsFeedPage extends StatefulWidget {
   const LocalNewsFeedPage({super.key});
@@ -31,9 +31,6 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     with TickerProviderStateMixin {
   final _scrollController = ScrollController();
   late final TabController _tabController;
-
-  /// Whether the manual search picker is shown (within setup flow).
-  bool _showManualSearch = false;
 
   @override
   void initState() {
@@ -152,7 +149,6 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
         if (locationState.status == NewsLocationStatus.ready &&
             locationState.location != null) {
           _loadFeed(locationState.location!);
-          setState(() => _showManualSearch = false);
         }
       },
       builder: (context, locationState) {
@@ -244,14 +240,7 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     return switch (locationState.status) {
       NewsLocationStatus.initial || NewsLocationStatus.loading =>
         const _CheckingLocationView(),
-      NewsLocationStatus.needsSetup => _showManualSearch
-          ? _ManualSearchView(
-              onBack: () => setState(() => _showManualSearch = false),
-            )
-          : _SetupChoiceView(
-              onManualTap: () => setState(() => _showManualSearch = true),
-            ),
-      NewsLocationStatus.detecting => const _DetectingGpsView(),
+      NewsLocationStatus.needsSetup => _ManualSetupView(),
       NewsLocationStatus.detected => _ConfirmLocationView(
           location: locationState.location!,
           userId: _userId,
@@ -259,7 +248,6 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
       NewsLocationStatus.saving => const _SavingLocationView(),
       NewsLocationStatus.error => _SetupErrorView(
           message: locationState.errorMessage ?? 'An unknown error occurred.',
-          onManualTap: () => setState(() => _showManualSearch = true),
         ),
       NewsLocationStatus.ready =>
         const _CheckingLocationView(), // brief flash before rebuild
@@ -289,13 +277,9 @@ class _CheckingLocationView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Setup Choice — GPS vs Manual Search
+// Manual setup view — show manual location picker directly
 // ---------------------------------------------------------------------------
-class _SetupChoiceView extends StatelessWidget {
-  final VoidCallback onManualTap;
-
-  const _SetupChoiceView({required this.onManualTap});
-
+class _ManualSetupView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -327,158 +311,23 @@ class _SetupChoiceView extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 40),
-
-          // GPS option
-          _SetupOptionCard(
-            icon: Icons.my_location,
-            title: 'Use GPS',
-            subtitle: 'Automatically detect your location',
-            recommended: true,
-            onTap: () {
-              context.read<NewsLocationBloc>().add(
-                    const NewsLocationGpsRequested(),
-                  );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Manual pick option
-          _SetupOptionCard(
-            icon: Icons.list_alt,
-            title: 'Pick Manually',
-            subtitle: 'Select your country and city',
-            onTap: onManualTap,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Setup option card
-// ---------------------------------------------------------------------------
-class _SetupOptionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool recommended;
-  final VoidCallback onTap;
-
-  const _SetupOptionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.recommended = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: recommended ? 2 : 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: recommended
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outline,
-          width: recommended ? 2 : 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Icon(icon, size: 32, color: theme.colorScheme.primary),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (recommended) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'Recommended',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// GPS detecting view
-// ---------------------------------------------------------------------------
-class _DetectingGpsView extends StatelessWidget {
-  const _DetectingGpsView();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
           const SizedBox(height: 24),
           Text(
-            'Detecting your location...',
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'This may take a moment.',
-            style: theme.textTheme.bodySmall?.copyWith(
+            'Pick your country and city from the list below.',
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
+          ),
+          const SizedBox(height: 24),
+          ManualLocationPicker(
+            onLocationSelected: (country, city) {
+              context.read<NewsLocationBloc>().add(
+                    NewsLocationManualSelected(
+                      city: city,
+                      country: country,
+                    ),
+                  );
+            },
           ),
         ],
       ),
@@ -560,26 +409,6 @@ class _ConfirmLocationView extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  if (location.source == LocationSource.gps) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.gps_fixed,
-                          size: 14,
-                          color: theme.colorScheme.outline,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Detected via GPS',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -652,11 +481,9 @@ class _SavingLocationView extends StatelessWidget {
 // ---------------------------------------------------------------------------
 class _SetupErrorView extends StatelessWidget {
   final String message;
-  final VoidCallback onManualTap;
 
   const _SetupErrorView({
     required this.message,
-    required this.onManualTap,
   });
 
   @override
@@ -694,84 +521,17 @@ class _SetupErrorView extends StatelessWidget {
           FilledButton.icon(
             onPressed: () {
               context.read<NewsLocationBloc>().add(
-                    const NewsLocationGpsRequested(),
+                    const NewsLocationChangeRequested(),
                   );
             },
             icon: const Icon(Icons.refresh),
-            label: const Text('Try GPS Again'),
+            label: const Text('Try Again'),
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: onManualTap,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Search Location Manually'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Manual search view — wraps ManualLocationPicker
-// ---------------------------------------------------------------------------
-class _ManualSearchView extends StatelessWidget {
-  final VoidCallback onBack;
-
-  const _ManualSearchView({required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Select Location',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Pick your country and city from the list below.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ManualLocationPicker(
-            onLocationSelected: (country, city) {
-              context.read<NewsLocationBloc>().add(
-                    NewsLocationManualSelected(
-                      city: city,
-                      country: country,
-                    ),
-                  );
-            },
           ),
         ],
       ),

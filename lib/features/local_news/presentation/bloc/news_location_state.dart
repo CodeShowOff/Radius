@@ -11,10 +11,7 @@ enum NewsLocationStatus {
   /// No saved location — show setup UI.
   needsSetup,
 
-  /// GPS detection or reverse geocoding in progress.
-  detecting,
-
-  /// Location detected — awaiting user confirmation.
+  /// Location selected — awaiting user confirmation.
   detected,
 
   /// Saving location to Firestore.
@@ -51,7 +48,6 @@ class NewsLocationState extends Equatable {
   /// Whether an operation is in progress.
   bool get isLoading =>
       status == NewsLocationStatus.loading ||
-      status == NewsLocationStatus.detecting ||
       status == NewsLocationStatus.saving;
 
   NewsLocationState copyWith({

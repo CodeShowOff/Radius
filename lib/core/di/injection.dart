@@ -481,7 +481,7 @@ Future<void> configureDependencies() {
   }
   if (!getIt.isRegistered<NewsLocationService>()) {
     getIt.registerLazySingleton<NewsLocationService>(
-      () => NewsLocationService(geocodingService: getIt<GeocodingService>()),
+      () => NewsLocationService(),
     );
   }
   if (!getIt.isRegistered<NewsPostService>()) {

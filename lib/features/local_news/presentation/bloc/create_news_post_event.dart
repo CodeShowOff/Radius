@@ -38,12 +38,7 @@ class CreateNewsPostTextChanged extends CreateNewsPostEvent {
   List<Object?> get props => [text];
 }
 
-/// User tapped the submit button — triggers GPS detection → optimize → upload → create.
+/// User tapped the submit button — triggers optimize → upload → create.
 class CreateNewsPostSubmitted extends CreateNewsPostEvent {
   const CreateNewsPostSubmitted();
-}
-
-/// User returned from settings — re-check location only (no submission).
-class CreateNewsPostLocationRetry extends CreateNewsPostEvent {
-  const CreateNewsPostLocationRetry();
 }

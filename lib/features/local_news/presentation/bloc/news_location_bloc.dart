@@ -2,7 +2,6 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
-import '../../data/services/geocoding_service.dart';
 import '../../data/services/news_location_service.dart';
 import '../../domain/entities/news_location.dart';
 
@@ -13,7 +12,6 @@ part 'news_location_state.dart';
 ///
 /// Handles:
 /// - Checking for an existing saved location
-/// - GPS detection + reverse geocoding
 /// - Manual location selection
 /// - Saving the confirmed location to Firestore
 class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
@@ -27,7 +25,6 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
         _logger = logger ?? Logger(),
         super(const NewsLocationState()) {
     on<NewsLocationCheckRequested>(_onCheckRequested);
-    on<NewsLocationGpsRequested>(_onGpsRequested);
     on<NewsLocationManualSelected>(_onManualSelected);
     on<NewsLocationSaveRequested>(_onSaveRequested);
     on<NewsLocationChangeRequested>(_onChangeRequested);
@@ -57,49 +54,6 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
       _logger.e('Error checking saved location', error: e, stackTrace: stack);
       emit(state.copyWith(
         status: NewsLocationStatus.needsSetup,
-      ));
-    }
-  }
-
-  /// Detect location via GPS + reverse geocoding.
-  Future<void> _onGpsRequested(
-    NewsLocationGpsRequested event,
-    Emitter<NewsLocationState> emit,
-  ) async {
-    emit(state.copyWith(status: NewsLocationStatus.detecting, clearError: true));
-
-    try {
-      final location = await _locationService.detectCurrentLocation();
-
-      _logger.i('GPS location detected: ${location.shortDisplayString}');
-      emit(state.copyWith(
-        status: NewsLocationStatus.detected,
-        location: location,
-      ));
-    } on LocationServiceException catch (e) {
-      _logger.w('Location service error: ${e.message}');
-      emit(state.copyWith(
-        status: NewsLocationStatus.error,
-        errorMessage: e.message,
-      ));
-    } on LocationCityMatchException catch (e) {
-      _logger.w('City match failed: ${e.message}');
-      emit(state.copyWith(
-        status: NewsLocationStatus.error,
-        errorMessage: e.message,
-      ));
-    } on GeocodingException catch (e) {
-      _logger.w('Geocoding error: ${e.message}');
-      emit(state.copyWith(
-        status: NewsLocationStatus.error,
-        errorMessage: 'Could not determine your location name. '
-            'Please try again or enter your location manually.',
-      ));
-    } catch (e, stack) {
-      _logger.e('Unexpected GPS error', error: e, stackTrace: stack);
-      emit(state.copyWith(
-        status: NewsLocationStatus.error,
-        errorMessage: 'Failed to detect location. Please try again.',
       ));
     }
   }

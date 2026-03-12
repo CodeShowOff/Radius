@@ -5,12 +5,6 @@ enum CreateNewsPostStatus {
   /// Initial idle state — user is composing.
   idle,
 
-  /// Live GPS detection + reverse geocoding in progress.
-  detectingLocation,
-
-  /// Location detected — brief confirmation before proceeding.
-  locationDetected,
-
   /// Media files are being optimized (compressed/resized).
   optimizing,
 
@@ -58,23 +52,15 @@ class CreateNewsPostState extends Equatable {
   /// Current status of the creation process.
   final CreateNewsPostStatus status;
 
-  /// Detected location (populated after GPS detection).
-  final NewsLocation? detectedLocation;
-
   /// Error message if status is error.
   final String? errorMessage;
-
-  /// Reason for location failure, if the error is location-related.
-  final LocationFailureReason? locationFailureReason;
 
   const CreateNewsPostState({
     this.selectedMedia = const [],
     this.text = '',
     this.progress = 0.0,
     this.status = CreateNewsPostStatus.idle,
-    this.detectedLocation,
     this.errorMessage,
-    this.locationFailureReason,
   });
 
   /// Whether the post can be submitted (has text or media, and is idle or in error).
@@ -88,7 +74,6 @@ class CreateNewsPostState extends Equatable {
 
   /// Whether any processing is in progress.
   bool get isBusy =>
-      status == CreateNewsPostStatus.detectingLocation ||
       status == CreateNewsPostStatus.optimizing ||
       status == CreateNewsPostStatus.uploading ||
       status == CreateNewsPostStatus.creating;
@@ -98,10 +83,7 @@ class CreateNewsPostState extends Equatable {
     String? text,
     double? progress,
     CreateNewsPostStatus? status,
-    NewsLocation? detectedLocation,
     String? errorMessage,
-    LocationFailureReason? locationFailureReason,
-    bool clearLocation = false,
     bool clearError = false,
   }) {
     return CreateNewsPostState(
@@ -109,12 +91,7 @@ class CreateNewsPostState extends Equatable {
       text: text ?? this.text,
       progress: progress ?? this.progress,
       status: status ?? this.status,
-      detectedLocation:
-          clearLocation ? null : (detectedLocation ?? this.detectedLocation),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      locationFailureReason: clearError
-          ? null
-          : (locationFailureReason ?? this.locationFailureReason),
     );
   }
 
@@ -124,8 +101,6 @@ class CreateNewsPostState extends Equatable {
         text,
         progress,
         status,
-        detectedLocation,
         errorMessage,
-        locationFailureReason,
       ];
 }

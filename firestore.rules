@@ -1299,13 +1299,12 @@ service cloud.firestore {
       // Only the author can create a post
       allow create: if isAuthenticated()
         && request.resource.data.authorId == request.auth.uid
-        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'country', 'city', 'latitude', 'longitude', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'country', 'city', 'location', 'createdAt', 'updatedAt'])
         && request.resource.data.country is string
         && request.resource.data.country.size() > 0
         && request.resource.data.city is string
         && request.resource.data.city.size() > 0
-        && request.resource.data.latitude is number
-        && request.resource.data.longitude is number
+        && request.resource.data.location is latlng
         && (
           // postType is optional but if present, must be 'post' or 'reel'
           !('postType' in request.resource.data.keys())

@@ -2,9 +2,6 @@ import 'package:equatable/equatable.dart';
 
 /// How the user's location was determined.
 enum LocationSource {
-  /// Location obtained via GPS.
-  gps,
-
   /// Location entered manually by the user.
   manual,
 }

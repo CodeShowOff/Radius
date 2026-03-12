@@ -18,11 +18,6 @@ class NewsLocationCheckRequested extends NewsLocationEvent {
   List<Object?> get props => [userId];
 }
 
-/// User chose to detect location via GPS.
-class NewsLocationGpsRequested extends NewsLocationEvent {
-  const NewsLocationGpsRequested();
-}
-
 /// User selected a location manually (from country/city picker).
 class NewsLocationManualSelected extends NewsLocationEvent {
   final String city;
