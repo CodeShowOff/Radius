@@ -59,14 +59,6 @@ import '../../features/profile/domain/repositories/i_profile_repository.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../features/proximity/presentation/bloc/nearby_users_bloc.dart';
 import '../../features/proximity/proximity_service.dart';
-import '../../features/video_chat/data/video_call_service.dart';
-import '../../features/video_chat/data/video_chat_profile_service.dart';
-import '../../features/video_chat/data/video_chat_settings_service.dart';
-import '../../features/video_chat/data/video_match_service.dart';
-import '../../features/video_chat/data/webrtc_service.dart';
-import '../../features/video_chat/presentation/bloc/video_call_bloc.dart';
-import '../../features/video_chat/presentation/bloc/video_chat_lobby_bloc.dart';
-import '../../features/video_chat/presentation/bloc/video_match_bloc.dart';
 import '../../features/local_news/data/services/geocoding_service.dart';
 import '../../features/local_news/data/services/news_interaction_service.dart';
 import '../../features/local_news/data/services/news_location_service.dart';
@@ -420,64 +412,6 @@ Future<void> configureDependencies() {
       () => RandomChatBloc(
         service: getIt<RandomChatService>(),
         cacheService: getIt<RandomChatCacheService>(),
-      ),
-    );
-  }
-
-  // Video Chat feature — anonymous random video calling
-  if (!getIt.isRegistered<VideoChatProfileService>()) {
-    getIt.registerLazySingleton<VideoChatProfileService>(
-      () => VideoChatProfileService(),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoChatSettingsService>()) {
-    getIt.registerLazySingleton<VideoChatSettingsService>(
-      () => VideoChatSettingsService(),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoCallService>()) {
-    getIt.registerLazySingleton<VideoCallService>(
-      () => VideoCallService(),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoMatchService>()) {
-    getIt.registerLazySingleton<VideoMatchService>(
-      () => VideoMatchService(),
-    );
-  }
-
-  // WebRtcService is per-call (factory) — each call gets a fresh instance
-  if (!getIt.isRegistered<WebRtcService>()) {
-    getIt.registerFactory<WebRtcService>(
-      () => WebRtcService(),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoChatLobbyBloc>()) {
-    getIt.registerFactory<VideoChatLobbyBloc>(
-      () => VideoChatLobbyBloc(
-        profileService: getIt<VideoChatProfileService>(),
-        settingsService: getIt<VideoChatSettingsService>(),
-      ),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoCallBloc>()) {
-    getIt.registerFactory<VideoCallBloc>(
-      () => VideoCallBloc(
-        callService: getIt<VideoCallService>(),
-        webRtcService: getIt<WebRtcService>(),
-      ),
-    );
-  }
-
-  if (!getIt.isRegistered<VideoMatchBloc>()) {
-    getIt.registerFactory<VideoMatchBloc>(
-      () => VideoMatchBloc(
-        matchService: getIt<VideoMatchService>(),
       ),
     );
   }

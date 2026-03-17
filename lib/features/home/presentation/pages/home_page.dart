@@ -308,7 +308,7 @@ class _HomePageState extends State<HomePage>
                                     style: const TextStyle(fontSize: 10))
                                 : null,
                             child: Icon(
-                              Icons.person_outline_rounded,
+                              Icons.person_add_alt_1_rounded,
                               size: 24,
                               color: isDark
                                   ? Colors.white70
@@ -364,11 +364,11 @@ class _HomePageState extends State<HomePage>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _QuickConnectCard(
-                        icon: Icons.videocam_rounded,
-                        label: 'Video',
-                        subtitle: 'Chat',
+                        icon: Icons.person_search_rounded,
+                        label: 'Find',
+                        subtitle: 'People',
                         color: AppTheme.primaryColor,
-                        onTap: () => context.push(Routes.videoChat),
+                        onTap: () => context.push(Routes.discoverySearch),
                       ),
                     ),
                   ],

@@ -121,11 +121,6 @@ abstract class Routes {
   static String localNewsPostWith(String postId) =>
       '/local-news/post/$postId';
 
-  // Video Chat routes (anonymous random video calling)
-  static const String videoChat = '/video-chat';
-  static const String videoMatch = '/video-match';
-  static const String videoCall = '/video-call';
-
   /// Helper to build a help request detail route with request ID.
   static String nearbyHelpRequestDetailWith(String requestId) =>
       '/nearby-help/request/$requestId';

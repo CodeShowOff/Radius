@@ -7,12 +7,6 @@
 -keep class io.flutter.plugins.**  { *; }
 -keep class io.flutter.plugin.editing.** { *; }
 
-# WebRTC — keep ALL native classes (video rendering, codecs, JNI bindings)
--keep class org.webrtc.** { *; }
--dontwarn org.webrtc.**
-# flutter_webrtc plugin platform channel & rendering
--keep class com.cloudwebrtc.webrtc.** { *; }
-
 # Flutter Blue Plus rules (required for release builds)
 -keep class com.lib.flutter_blue_plus.* { *; }
 

@@ -239,26 +239,6 @@ service firebase.storage {
     }
 
     // ============================================================
-    // VIDEO CHAT PROFILE PHOTOS
-    // ============================================================
-
-    // Profile photos in video_chat_photos/{userId}/profile.jpg
-    match /video_chat_photos/{userId}/{fileName} {
-      // Owner can upload/overwrite their own photo
-      allow write: if isAuthenticated()
-        && request.auth.uid == userId
-        && isImage()
-        && isValidSize(10); // 10MB max
-
-      // Anyone authenticated can read (shown during calls)
-      allow read: if isAuthenticated();
-
-      // Owner can delete their photo
-      allow delete: if isAuthenticated()
-        && request.auth.uid == userId;
-    }
-
-    // ============================================================
     // LOCAL NEWS MEDIA
     // ============================================================
 
