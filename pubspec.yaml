@@ -1,5 +1,5 @@
 name: radius
-description: A proximity-based social connection app using Bluetooth LE.
+description: Radius is a proximity-first social app for nearby discovery, chat, groups, and local community interactions.
 publish_to: 'none'
 version: 1.0.0+1
 
