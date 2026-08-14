@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:logger/logger.dart';
 
 import '../domain/entities/help_radius.dart';
@@ -63,7 +64,7 @@ enum NearbyHelpErrorType {
 /// - `users/{userId}` - nearbyHelpSettings field for opt-in/opt-out
 class NearbyHelpService {
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
+  static const String _backendUrl = 'http://10.0.2.2:3000/api';
   final Logger _logger;
 
   // Collection references
@@ -77,10 +78,8 @@ class NearbyHelpService {
 
   NearbyHelpService({
     FirebaseFirestore? firestore,
-    FirebaseFunctions? functions,
     Logger? logger,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance,
         _logger = logger ?? Logger() {
     _helpRequestsRef = _firestore.collection('help_requests');
   }
@@ -490,18 +489,24 @@ class NearbyHelpService {
     required String excludeUserId,
   }) async {
     try {
-      final callable = _functions.httpsCallable(
-        'findNearbyHelpers',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
-      );
-
-      final result = await callable.call<Map<String, dynamic>>({
+      final body = {
         'latitude': latitude,
         'longitude': longitude,
         'radiusMeters': radius.meters,
-      });
+      };
 
-      final data = result.data;
+      final response = await http.post(
+        Uri.parse('$_backendUrl/findNearbyHelpers'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Server returned ${response.statusCode}');
+      }
+
+      final jsonResponse = jsonDecode(response.body);
+      final data = jsonResponse['data'] ?? jsonResponse;
       final userIds =
           (data['userIds'] as List<dynamic>?)?.cast<String>() ?? [];
 

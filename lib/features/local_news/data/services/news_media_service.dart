@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import '../../../../core/error/exceptions.dart';
 
@@ -28,8 +29,8 @@ class NewsUploadResult {
 /// - `local_news_media/reels/{authorId}/{postId}/{uuid}.ext` (max 50MB)
 /// - `local_news_media/thumbnails/{authorId}/{postId}/{uuid}.jpg` (max 5MB)
 class NewsMediaService {
-  final FirebaseStorage _storage;
   final Logger _logger;
+  static const String _backendUrl = 'http://10.0.2.2:3000/api/upload';
 
   static const String _imagesPath = 'local_news_media/images';
   static const String _videosPath = 'local_news_media/videos';
@@ -39,10 +40,8 @@ class NewsMediaService {
   static const _uuid = Uuid();
 
   NewsMediaService({
-    FirebaseStorage? storage,
     Logger? logger,
-  })  : _storage = storage ?? FirebaseStorage.instance,
-        _logger = logger ?? Logger();
+  })  : _logger = logger ?? Logger();
 
   /// Uploads a news post image and returns the download URL + storage path.
   Future<NewsUploadResult> uploadImage({
@@ -139,40 +138,24 @@ class NewsMediaService {
 
       _logger.d('Uploading news media to: $filePath ($fileSize bytes)');
 
-      final ref = _storage.ref().child(filePath);
-      final metadata = SettableMetadata(
-        contentType: _getContentType(extension),
-        customMetadata: {
-          'authorId': authorId,
-          'postId': postId,
-          'uploadedAt': DateTime.now().millisecondsSinceEpoch.toString(),
-        },
-      );
-
-      final uploadTask = ref.putFile(file, metadata);
-
-      if (onProgress != null) {
-        uploadTask.snapshotEvents.listen(
-          (TaskSnapshot snapshot) {
-            final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-            onProgress(progress);
-          },
-          onError: (error) {
-            _logger.e('Upload progress error', error: error);
-          },
-        );
+      // HTTP Upload
+      if (onProgress != null) onProgress(0.1);
+      final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      
+      final response = await request.send();
+      if (response.statusCode != 200) {
+         throw DatabaseException(
+           message: 'Upload failed with status: ${response.statusCode}',
+           code: 'upload-failed',
+         );
       }
-
-      final snapshot = await uploadTask;
-
-      if (snapshot.state != TaskState.success) {
-        throw DatabaseException(
-          message: 'Upload failed with state: ${snapshot.state}',
-          code: 'upload-failed',
-        );
-      }
-
-      final downloadUrl = await ref.getDownloadURL();
+      
+      final responseBody = await response.stream.bytesToString();
+      final jsonResponse = jsonDecode(responseBody);
+      final downloadUrl = jsonResponse['url'] as String;
+      
+      if (onProgress != null) onProgress(1.0);
 
       _logger.i('News media uploaded successfully: $filePath');
 
@@ -181,9 +164,6 @@ class NewsMediaService {
         storagePath: filePath,
         fileSize: fileSize,
       );
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Firebase upload error', error: e, stackTrace: stack);
-      throw _mapStorageException(e);
     } on DatabaseException {
       rethrow;
     } catch (e, stack) {
@@ -196,42 +176,15 @@ class NewsMediaService {
     }
   }
 
-  /// Deletes a media file from storage by its path.
   Future<void> deleteFile(String storagePath) async {
-    try {
-      final ref = _storage.ref().child(storagePath);
-      await ref.delete();
-      _logger.d('News media deleted: $storagePath');
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Error deleting news media', error: e, stackTrace: stack);
-      // Don't throw — file might already be deleted
-    }
+    _logger.d('News media deleted mocked: $storagePath');
   }
 
-  /// Deletes all media files for a news post.
   Future<void> deleteAllPostMedia({
     required String authorId,
     required String postId,
   }) async {
-    final paths = [
-      '$_imagesPath/$authorId/$postId',
-      '$_videosPath/$authorId/$postId',
-      '$_reelsPath/$authorId/$postId',
-      '$_thumbnailsPath/$authorId/$postId',
-    ];
-
-    for (final path in paths) {
-      try {
-        final listResult = await _storage.ref().child(path).listAll();
-        for (final item in listResult.items) {
-          await item.delete();
-        }
-      } on FirebaseException catch (e) {
-        if (e.code != 'storage/object-not-found') {
-          _logger.e('Error cleaning up news media at $path', error: e);
-        }
-      }
-    }
+    _logger.d('deleteAllPostMedia mocked');
   }
 
   /// Generates a temporary post ID for use during upload
@@ -390,38 +343,5 @@ class NewsMediaService {
     }
   }
 
-  DatabaseException _mapStorageException(FirebaseException e) {
-    String message;
-    switch (e.code) {
-      case 'storage/unauthorized':
-        message = 'Unauthorized to upload file';
-        break;
-      case 'storage/canceled':
-        message = 'Upload was cancelled';
-        break;
-      case 'storage/unknown':
-        message = 'Unknown error occurred during upload';
-        break;
-      case 'storage/object-not-found':
-        message = 'File not found';
-        break;
-      case 'storage/quota-exceeded':
-        message = 'Storage quota exceeded';
-        break;
-      case 'storage/unauthenticated':
-        message = 'User not authenticated';
-        break;
-      case 'storage/retry-limit-exceeded':
-        message = 'Upload retry limit exceeded';
-        break;
-      default:
-        message = e.message ?? 'Storage error occurred';
-    }
-
-    return DatabaseException(
-      message: message,
-      code: e.code,
-      originalError: e,
-    );
-  }
+  // Removed _mapStorageException
 }

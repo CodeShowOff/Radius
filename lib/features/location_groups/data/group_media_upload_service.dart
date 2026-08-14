@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import '../../../core/error/exceptions.dart';
 import '../../chat/data/media_upload_service.dart';
@@ -13,8 +14,8 @@ import '../../chat/data/media_upload_service.dart';
 /// Uses `group_media/` storage paths (vs `chat_media/` for 1:1 chats).
 /// Storage rules enforce group membership via `isAnyGroupMember()`.
 class GroupMediaUploadService {
-  final FirebaseStorage _storage;
   final Logger _logger;
+  static const String _backendUrl = 'http://10.0.2.2:3000/api/upload';
 
   static const String _imagesPath = 'group_media/images';
   static const String _audioPath = 'group_media/audio';
@@ -23,10 +24,8 @@ class GroupMediaUploadService {
   static const _uuid = Uuid();
 
   GroupMediaUploadService({
-    FirebaseStorage? storage,
     Logger? logger,
-  })  : _storage = storage ?? FirebaseStorage.instance,
-        _logger = logger ?? Logger();
+  })  : _logger = logger ?? Logger();
 
   /// Uploads an image file for a group chat.
   Future<UploadResult> uploadImage({
@@ -111,41 +110,24 @@ class GroupMediaUploadService {
 
       _logger.d('Uploading group file to: $filePath ($fileSize bytes)');
 
-      final ref = _storage.ref().child(filePath);
-      final metadata = SettableMetadata(
-        contentType: _getContentType(extension),
-        customMetadata: {
-          'groupId': groupId,
-          'senderId': senderId,
-          'uploadedAt': timestamp.toString(),
-          if (duration != null) 'duration': duration.toString(),
-        },
-      );
-
-      final uploadTask = ref.putFile(file, metadata);
-
-      if (onProgress != null) {
-        uploadTask.snapshotEvents.listen(
-          (TaskSnapshot snapshot) {
-            final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-            onProgress(progress);
-          },
-          onError: (error) {
-            _logger.e('Upload progress error', error: error);
-          },
-        );
+      // HTTP Upload
+      if (onProgress != null) onProgress(0.1);
+      final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      
+      final response = await request.send();
+      if (response.statusCode != 200) {
+         throw DatabaseException(
+           message: 'Upload failed with status: ${response.statusCode}',
+           code: 'upload-failed',
+         );
       }
-
-      final snapshot = await uploadTask;
-
-      if (snapshot.state != TaskState.success) {
-        throw DatabaseException(
-          message: 'Upload failed with state: ${snapshot.state}',
-          code: 'upload-failed',
-        );
-      }
-
-      final downloadUrl = await ref.getDownloadURL();
+      
+      final responseBody = await response.stream.bytesToString();
+      final jsonResponse = jsonDecode(responseBody);
+      final downloadUrl = jsonResponse['url'] as String;
+      
+      if (onProgress != null) onProgress(1.0);
 
       _logger.i('Group file uploaded successfully: $downloadUrl');
 
@@ -157,9 +139,6 @@ class GroupMediaUploadService {
         fileSize: fileSize,
         duration: duration,
       );
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Firebase upload error', error: e, stackTrace: stack);
-      throw _mapStorageException(e);
     } catch (e, stack) {
       if (e is DatabaseException) rethrow;
       _logger.e('Upload error', error: e, stackTrace: stack);
@@ -209,33 +188,7 @@ class GroupMediaUploadService {
     }
   }
 
-  DatabaseException _mapStorageException(FirebaseException e) {
-    String message;
-    switch (e.code) {
-      case 'storage/unauthorized':
-        message = 'Unauthorized to upload file';
-        break;
-      case 'storage/canceled':
-        message = 'Upload was cancelled';
-        break;
-      case 'storage/quota-exceeded':
-        message = 'Storage quota exceeded';
-        break;
-      case 'storage/unauthenticated':
-        message = 'User not authenticated';
-        break;
-      case 'storage/retry-limit-exceeded':
-        message = 'Upload retry limit exceeded';
-        break;
-      default:
-        message = e.message ?? 'Storage error occurred';
-    }
-    return DatabaseException(
-      message: message,
-      code: e.code,
-      originalError: e,
-    );
-  }
+  // Removed _mapStorageException
 
   void _validateFileSize(int fileSize, String storagePath) {
     const int maxImageSize = 20 * 1024 * 1024;

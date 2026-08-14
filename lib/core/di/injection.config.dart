@@ -11,7 +11,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as _i974;
 import 'package:firebase_auth/firebase_auth.dart' as _i59;
 import 'package:firebase_messaging/firebase_messaging.dart' as _i892;
-import 'package:firebase_storage/firebase_storage.dart' as _i457;
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as _i163;
 import 'package:get_it/get_it.dart' as _i174;
@@ -61,8 +61,7 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i819.DeviceInfoService>(() => _i819.DeviceInfoService());
     gh.lazySingleton<_i974.FirebaseFirestore>(() => firebaseModule.firestore);
     gh.lazySingleton<_i59.FirebaseAuth>(() => firebaseModule.firebaseAuth);
-    gh.lazySingleton<_i457.FirebaseStorage>(
-        () => firebaseModule.firebaseStorage);
+
     gh.lazySingleton<_i116.GoogleSignIn>(() => firebaseModule.googleSignIn);
     gh.lazySingleton<_i497.Logger>(() => firebaseModule.logger);
     gh.lazySingleton<_i892.FirebaseMessaging>(
@@ -71,7 +70,6 @@ extension GetItInjectableX on _i174.GetIt {
         () => notificationModule.localNotifications);
     gh.lazySingleton<_i356.MediaUploadService>(
         () => chatModule.mediaUploadService(
-              gh<_i457.FirebaseStorage>(),
               gh<_i497.Logger>(),
             ));
     gh.lazySingleton<_i939.FirestoreService>(

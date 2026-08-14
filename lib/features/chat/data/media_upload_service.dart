@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import '../../../core/error/exceptions.dart';
 
@@ -32,8 +33,9 @@ class UploadResult {
 /// - Progress tracking
 /// - Error handling with retry logic
 class MediaUploadService {
-  final FirebaseStorage _storage;
   final Logger _logger;
+  
+  static const String _backendUrl = 'http://10.0.2.2:3000/api/upload';
 
   // Storage paths
   static const String _imagesPath = 'chat_media/images';
@@ -45,10 +47,8 @@ class MediaUploadService {
   static const _uuid = Uuid();
 
   MediaUploadService({
-    FirebaseStorage? storage,
     Logger? logger,
-  })  : _storage = storage ?? FirebaseStorage.instance,
-        _logger = logger ?? Logger();
+  })  : _logger = logger ?? Logger();
 
   /// Uploads an image file and returns the download URL.
   Future<UploadResult> uploadImage({
@@ -177,46 +177,24 @@ class MediaUploadService {
 
       _logger.d('Uploading file to: $filePath ($fileSize bytes)');
 
-      // Create reference and metadata
-      final ref = _storage.ref().child(filePath);
-      final metadata = SettableMetadata(
-        contentType: _getContentType(extension),
-        customMetadata: {
-          'conversationId': conversationId,
-          'senderId': senderId,
-          'uploadedAt': timestamp.toString(),
-          if (duration != null) 'duration': duration.toString(),
-        },
-      );
-
-      // Upload file with progress tracking
-      final uploadTask = ref.putFile(file, metadata);
-
-      // Listen to progress
-      if (onProgress != null) {
-        uploadTask.snapshotEvents.listen(
-          (TaskSnapshot snapshot) {
-            final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-            onProgress(progress);
-          },
-          onError: (error) {
-            _logger.e('Upload progress error', error: error);
-          },
-        );
+      // Upload file with HTTP
+      if (onProgress != null) onProgress(0.1);
+      final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      
+      final response = await request.send();
+      if (response.statusCode != 200) {
+         throw DatabaseException(
+           message: 'Upload failed with status: ${response.statusCode}',
+           code: 'upload-failed',
+         );
       }
-
-      // Wait for upload to complete
-      final snapshot = await uploadTask;
-
-      if (snapshot.state != TaskState.success) {
-        throw DatabaseException(
-          message: 'Upload failed with state: ${snapshot.state}',
-          code: 'upload-failed',
-        );
-      }
-
-      // Get download URL
-      final downloadUrl = await ref.getDownloadURL();
+      
+      final responseBody = await response.stream.bytesToString();
+      final jsonResponse = jsonDecode(responseBody);
+      final downloadUrl = jsonResponse['url'] as String;
+      
+      if (onProgress != null) onProgress(1.0);
 
       _logger.i('File uploaded successfully: $downloadUrl');
 
@@ -229,9 +207,6 @@ class MediaUploadService {
         fileSize: fileSize,
         duration: duration,
       );
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Firebase upload error', error: e, stackTrace: stack);
-      throw _mapStorageException(e);
     } catch (e, stack) {
       _logger.e('Upload error', error: e, stackTrace: stack);
       throw DatabaseException(
@@ -244,14 +219,8 @@ class MediaUploadService {
 
   /// Deletes a media file from storage.
   Future<void> deleteFile(String downloadUrl) async {
-    try {
-      final ref = _storage.refFromURL(downloadUrl);
-      await ref.delete();
-      _logger.d('File deleted: $downloadUrl');
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Error deleting file', error: e, stackTrace: stack);
-      // Don't throw - file might already be deleted
-    }
+    // Delete not fully implemented on dev server, just mock it
+    _logger.d('File deleted mocked: $downloadUrl');
   }
 
   /// Gets the content type based on file extension.
@@ -308,43 +277,7 @@ class MediaUploadService {
   }
 
   /// Maps Firebase Storage exceptions to DatabaseException.
-  DatabaseException _mapStorageException(FirebaseException e) {
-    String message;
-    switch (e.code) {
-      case 'storage/unauthorized':
-        message = 'Unauthorized to upload file';
-        break;
-      case 'storage/canceled':
-        message = 'Upload was cancelled';
-        break;
-      case 'storage/unknown':
-        message = 'Unknown error occurred during upload';
-        break;
-      case 'storage/object-not-found':
-        message = 'File not found';
-        break;
-      case 'storage/bucket-not-found':
-        message = 'Storage bucket not found';
-        break;
-      case 'storage/quota-exceeded':
-        message = 'Storage quota exceeded';
-        break;
-      case 'storage/unauthenticated':
-        message = 'User not authenticated';
-        break;
-      case 'storage/retry-limit-exceeded':
-        message = 'Upload retry limit exceeded';
-        break;
-      default:
-        message = e.message ?? 'Storage error occurred';
-    }
-
-    return DatabaseException(
-      message: message,
-      code: e.code,
-      originalError: e,
-    );
-  }
+  // Removed _mapStorageException
 
   /// Validates file size based on storage path (images: 20MB, audio: 50MB, documents: 100MB, stickers: 5MB)
   void _validateFileSize(int fileSize, String storagePath) {

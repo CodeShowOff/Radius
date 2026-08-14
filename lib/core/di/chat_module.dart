@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+
 import 'package:injectable/injectable.dart';
 import 'package:logger/logger.dart';
 
@@ -18,9 +18,8 @@ abstract class ChatModule {
       ChatService(firestore: firestore, logger: logger);
 
   @lazySingleton
-  MediaUploadService mediaUploadService(
-          FirebaseStorage storage, Logger logger) =>
-      MediaUploadService(storage: storage, logger: logger);
+  MediaUploadService mediaUploadService(Logger logger) =>
+      MediaUploadService(logger: logger);
 
   @lazySingleton
   MessageRetryService messageRetryService(
