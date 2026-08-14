@@ -3429,17 +3429,75 @@ export const syncPostAuthorProfile = onDocumentUpdated(
  *
  * Trigger: posts/{postId}/likes/{userId} — onCreate
  */
+// =============================================================================
+// GLOBAL POSTS — Trending Score & Counter Maintenance
+// =============================================================================
+
+/**
+ * Initializes the trendingScore on a global post when it is created.
+ *
+ * Trigger: posts/{postId} — onCreate
+ */
+export const onPostCreated = onDocumentCreated(
+  "posts/{postId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const postData = event.data?.data();
+    if (!postData) return;
+
+    const createdAt = postData.createdAt as admin.firestore.Timestamp;
+    const likes = postData.likeCount || 0;
+    const comments = postData.commentCount || 0;
+    
+    // If createdAt is missing, we can't calculate a score
+    if (!createdAt) return;
+
+    // Uses the same gravity-based trending algorithm
+    const trendingScore = calculateTrendingScore(createdAt, likes, comments);
+
+    try {
+      await admin.firestore().collection("posts").doc(postId).update({
+        trendingScore: trendingScore,
+      });
+      logger.log(`Initialized trendingScore for post ${postId}`);
+    } catch (error) {
+      logger.error(`Error initializing trendingScore for post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Increments likeCount and updates trendingScore on the parent post when a like is created.
+ *
+ * Trigger: posts/{postId}/likes/{userId} — onCreate
+ */
 export const onPostLikeCreated = onDocumentCreated(
   "posts/{postId}/likes/{userId}",
   async (event) => {
     const postId = event.params.postId;
     const db = admin.firestore();
 
+    const postRef = db.collection("posts").doc(postId);
+
     try {
-      await db.collection("posts").doc(postId).update({
-        likeCount: admin.firestore.FieldValue.increment(1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        if (!createdAt) return;
+
+        const newLikes = (data.likeCount || 0) + 1;
+        const comments = data.commentCount || 0;
+        const newScore = calculateTrendingScore(createdAt, newLikes, comments);
+
+        transaction.update(postRef, {
+          likeCount: newLikes,
+          trendingScore: newScore,
+        });
       });
-      logger.log(`Incremented likeCount on post ${postId}`);
+      logger.log(`Incremented likeCount & updated trendingScore on post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing likeCount on post ${postId}:`, error);
     }
@@ -3447,7 +3505,7 @@ export const onPostLikeCreated = onDocumentCreated(
 );
 
 /**
- * Decrements likeCount on the parent post when a like document is deleted.
+ * Decrements likeCount and updates trendingScore on the parent post when a like is deleted.
  *
  * Trigger: posts/{postId}/likes/{userId} — onDelete
  */
@@ -3457,11 +3515,27 @@ export const onPostLikeDeleted = onDocumentDeleted(
     const postId = event.params.postId;
     const db = admin.firestore();
 
+    const postRef = db.collection("posts").doc(postId);
+
     try {
-      await db.collection("posts").doc(postId).update({
-        likeCount: admin.firestore.FieldValue.increment(-1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        if (!createdAt) return;
+
+        const newLikes = Math.max(0, (data.likeCount || 0) - 1);
+        const comments = data.commentCount || 0;
+        const newScore = calculateTrendingScore(createdAt, newLikes, comments);
+
+        transaction.update(postRef, {
+          likeCount: newLikes,
+          trendingScore: newScore,
+        });
       });
-      logger.log(`Decremented likeCount on post ${postId}`);
+      logger.log(`Decremented likeCount & updated trendingScore on post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing likeCount on post ${postId}:`, error);
     }
@@ -3469,7 +3543,7 @@ export const onPostLikeDeleted = onDocumentDeleted(
 );
 
 /**
- * Increments commentCount on the parent post when a comment is created.
+ * Increments commentCount and updates trendingScore on the parent post when a comment is created.
  *
  * Trigger: posts/{postId}/comments/{commentId} — onCreate
  */
@@ -3479,11 +3553,27 @@ export const onPostCommentCreated = onDocumentCreated(
     const postId = event.params.postId;
     const db = admin.firestore();
 
+    const postRef = db.collection("posts").doc(postId);
+
     try {
-      await db.collection("posts").doc(postId).update({
-        commentCount: admin.firestore.FieldValue.increment(1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        if (!createdAt) return;
+
+        const likes = data.likeCount || 0;
+        const newComments = (data.commentCount || 0) + 1;
+        const newScore = calculateTrendingScore(createdAt, likes, newComments);
+
+        transaction.update(postRef, {
+          commentCount: newComments,
+          trendingScore: newScore,
+        });
       });
-      logger.log(`Incremented commentCount on post ${postId}`);
+      logger.log(`Incremented commentCount & updated trendingScore on post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing commentCount on post ${postId}:`, error);
     }
@@ -3491,7 +3581,7 @@ export const onPostCommentCreated = onDocumentCreated(
 );
 
 /**
- * Decrements commentCount on the parent post when a comment is deleted.
+ * Decrements commentCount and updates trendingScore on the parent post when a comment is deleted.
  *
  * Trigger: posts/{postId}/comments/{commentId} — onDelete
  */
@@ -3501,11 +3591,27 @@ export const onPostCommentDeleted = onDocumentDeleted(
     const postId = event.params.postId;
     const db = admin.firestore();
 
+    const postRef = db.collection("posts").doc(postId);
+
     try {
-      await db.collection("posts").doc(postId).update({
-        commentCount: admin.firestore.FieldValue.increment(-1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        if (!createdAt) return;
+
+        const likes = data.likeCount || 0;
+        const newComments = Math.max(0, (data.commentCount || 0) - 1);
+        const newScore = calculateTrendingScore(createdAt, likes, newComments);
+
+        transaction.update(postRef, {
+          commentCount: newComments,
+          trendingScore: newScore,
+        });
       });
-      logger.log(`Decremented commentCount on post ${postId}`);
+      logger.log(`Decremented commentCount & updated trendingScore on post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing commentCount on post ${postId}:`, error);
     }
@@ -3517,7 +3623,52 @@ export const onPostCommentDeleted = onDocumentDeleted(
 // =============================================================================
 
 /**
- * Increments likeCount on the parent local news post when a like is created.
+ * Calculates the trending score for a local news post using a gravity-based algorithm.
+ * 45000 seconds = 12.5 hours. A post needs 10x more interactions to match a post that is 12.5 hours newer.
+ */
+function calculateTrendingScore(createdAt: admin.firestore.Timestamp, likes: number, comments: number): number {
+  const interactions = likes + (comments * 2);
+  const interactionScore = Math.log10(Math.max(1, interactions));
+  const epochSeconds = 1704067200; // Jan 1 2024
+  const timeScore = (createdAt.seconds - epochSeconds) / 45000;
+  return interactionScore + timeScore;
+}
+
+/**
+ * Initializes the trendingScore on a local news post when it is created.
+ *
+ * Trigger: local_news_posts/{postId} — onCreate
+ */
+export const onLocalNewsPostCreated = onDocumentCreated(
+  "local_news_posts/{postId}",
+  async (event) => {
+    const postId = event.params.postId;
+    const postData = event.data?.data();
+    if (!postData) return;
+
+    const createdAt = postData.createdAt as admin.firestore.Timestamp;
+    const likes = postData.likeCount || 0;
+    const comments = postData.commentCount || 0;
+    
+    // If createdAt is missing, we can't calculate a score
+    if (!createdAt) return;
+
+    const trendingScore = calculateTrendingScore(createdAt, likes, comments);
+
+    const db = admin.firestore();
+    try {
+      await db.collection("local_news_posts").doc(postId).update({
+        trendingScore: trendingScore,
+      });
+      logger.log(`Initialized trendingScore=${trendingScore} for local news post ${postId}`);
+    } catch (error) {
+      logger.error(`Error initializing trendingScore for local news post ${postId}:`, error);
+    }
+  }
+);
+
+/**
+ * Increments likeCount and updates trendingScore on the parent local news post when a like is created.
  *
  * Trigger: local_news_posts/{postId}/likes/{userId} — onCreate
  */
@@ -3526,12 +3677,30 @@ export const onLocalNewsLikeCreated = onDocumentCreated(
   async (event) => {
     const postId = event.params.postId;
     const db = admin.firestore();
+    const postRef = db.collection("local_news_posts").doc(postId);
 
     try {
-      await db.collection("local_news_posts").doc(postId).update({
-        likeCount: admin.firestore.FieldValue.increment(1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const newLikes = (data.likeCount || 0) + 1;
+        const comments = data.commentCount || 0;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        
+        if (!createdAt) {
+          transaction.update(postRef, { likeCount: newLikes });
+          return;
+        }
+
+        const trendingScore = calculateTrendingScore(createdAt, newLikes, comments);
+        transaction.update(postRef, {
+          likeCount: newLikes,
+          trendingScore: trendingScore,
+        });
       });
-      logger.log(`Incremented likeCount on local news post ${postId}`);
+      logger.log(`Incremented likeCount and updated trendingScore on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing likeCount on local news post ${postId}:`, error);
     }
@@ -3539,7 +3708,7 @@ export const onLocalNewsLikeCreated = onDocumentCreated(
 );
 
 /**
- * Decrements likeCount on the parent local news post when a like is deleted.
+ * Decrements likeCount and updates trendingScore on the parent local news post when a like is deleted.
  *
  * Trigger: local_news_posts/{postId}/likes/{userId} — onDelete
  */
@@ -3548,12 +3717,30 @@ export const onLocalNewsLikeDeleted = onDocumentDeleted(
   async (event) => {
     const postId = event.params.postId;
     const db = admin.firestore();
+    const postRef = db.collection("local_news_posts").doc(postId);
 
     try {
-      await db.collection("local_news_posts").doc(postId).update({
-        likeCount: admin.firestore.FieldValue.increment(-1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const newLikes = Math.max(0, (data.likeCount || 0) - 1);
+        const comments = data.commentCount || 0;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        
+        if (!createdAt) {
+          transaction.update(postRef, { likeCount: newLikes });
+          return;
+        }
+
+        const trendingScore = calculateTrendingScore(createdAt, newLikes, comments);
+        transaction.update(postRef, {
+          likeCount: newLikes,
+          trendingScore: trendingScore,
+        });
       });
-      logger.log(`Decremented likeCount on local news post ${postId}`);
+      logger.log(`Decremented likeCount and updated trendingScore on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing likeCount on local news post ${postId}:`, error);
     }
@@ -3561,7 +3748,7 @@ export const onLocalNewsLikeDeleted = onDocumentDeleted(
 );
 
 /**
- * Increments commentCount on the parent local news post when a comment is created.
+ * Increments commentCount and updates trendingScore on the parent local news post when a comment is created.
  *
  * Trigger: local_news_posts/{postId}/comments/{commentId} — onCreate
  */
@@ -3570,12 +3757,30 @@ export const onLocalNewsCommentCreated = onDocumentCreated(
   async (event) => {
     const postId = event.params.postId;
     const db = admin.firestore();
+    const postRef = db.collection("local_news_posts").doc(postId);
 
     try {
-      await db.collection("local_news_posts").doc(postId).update({
-        commentCount: admin.firestore.FieldValue.increment(1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const likes = data.likeCount || 0;
+        const newComments = (data.commentCount || 0) + 1;
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        
+        if (!createdAt) {
+          transaction.update(postRef, { commentCount: newComments });
+          return;
+        }
+
+        const trendingScore = calculateTrendingScore(createdAt, likes, newComments);
+        transaction.update(postRef, {
+          commentCount: newComments,
+          trendingScore: trendingScore,
+        });
       });
-      logger.log(`Incremented commentCount on local news post ${postId}`);
+      logger.log(`Incremented commentCount and updated trendingScore on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing commentCount on local news post ${postId}:`, error);
     }
@@ -3583,7 +3788,7 @@ export const onLocalNewsCommentCreated = onDocumentCreated(
 );
 
 /**
- * Decrements commentCount on the parent local news post when a comment is deleted.
+ * Decrements commentCount and updates trendingScore on the parent local news post when a comment is deleted.
  *
  * Trigger: local_news_posts/{postId}/comments/{commentId} — onDelete
  */
@@ -3592,12 +3797,30 @@ export const onLocalNewsCommentDeleted = onDocumentDeleted(
   async (event) => {
     const postId = event.params.postId;
     const db = admin.firestore();
+    const postRef = db.collection("local_news_posts").doc(postId);
 
     try {
-      await db.collection("local_news_posts").doc(postId).update({
-        commentCount: admin.firestore.FieldValue.increment(-1),
+      await db.runTransaction(async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists) return;
+
+        const data = postDoc.data()!;
+        const likes = data.likeCount || 0;
+        const newComments = Math.max(0, (data.commentCount || 0) - 1);
+        const createdAt = data.createdAt as admin.firestore.Timestamp;
+        
+        if (!createdAt) {
+          transaction.update(postRef, { commentCount: newComments });
+          return;
+        }
+
+        const trendingScore = calculateTrendingScore(createdAt, likes, newComments);
+        transaction.update(postRef, {
+          commentCount: newComments,
+          trendingScore: trendingScore,
+        });
       });
-      logger.log(`Decremented commentCount on local news post ${postId}`);
+      logger.log(`Decremented commentCount and updated trendingScore on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing commentCount on local news post ${postId}:`, error);
     }

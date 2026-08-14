@@ -45,6 +45,7 @@ class NewsPostModel extends NewsPost {
     super.likeCount,
     super.commentCount,
     super.postType,
+    super.trendingScore,
   });
 
   /// Creates model from Firestore document.
@@ -98,6 +99,7 @@ class NewsPostModel extends NewsPost {
       likeCount: (data['likeCount'] as int?) ?? 0,
       commentCount: (data['commentCount'] as int?) ?? 0,
       postType: data['postType'] as String? ?? 'post',
+      trendingScore: (data['trendingScore'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -122,6 +124,7 @@ class NewsPostModel extends NewsPost {
       likeCount: post.likeCount,
       commentCount: post.commentCount,
       postType: post.postType,
+      trendingScore: post.trendingScore,
     );
   }
 
@@ -143,6 +146,7 @@ class NewsPostModel extends NewsPost {
       'postType': postType,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'trendingScore': trendingScore,
     };
   }
 
@@ -167,6 +171,7 @@ class NewsPostModel extends NewsPost {
       likeCount: likeCount,
       commentCount: commentCount,
       postType: postType,
+      trendingScore: trendingScore,
     );
   }
 

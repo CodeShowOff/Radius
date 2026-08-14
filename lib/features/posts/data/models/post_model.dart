@@ -34,6 +34,7 @@ class PostModel extends Post {
     required super.updatedAt,
     super.likeCount,
     super.commentCount,
+    super.trendingScore,
     this.authorConnections = const [],
   });
 
@@ -80,6 +81,7 @@ class PostModel extends Post {
       updatedAt: updatedAt.toDate(),
       likeCount: (data['likeCount'] as int?) ?? 0,
       commentCount: (data['commentCount'] as int?) ?? 0,
+      trendingScore: (data['trendingScore'] as num?)?.toDouble() ?? 0.0,
       authorConnections: authorConnections,
     );
   }
@@ -98,6 +100,7 @@ class PostModel extends Post {
       updatedAt: post.updatedAt,
       likeCount: post.likeCount,
       commentCount: post.commentCount,
+      trendingScore: post.trendingScore,
       authorConnections: authorConnections,
     );
   }
@@ -114,6 +117,7 @@ class PostModel extends Post {
       'authorPhotoUrl': authorPhotoUrl,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'trendingScore': trendingScore,
       'authorConnections': authorConnections,
     };
   }
@@ -132,6 +136,7 @@ class PostModel extends Post {
       updatedAt: updatedAt,
       likeCount: likeCount,
       commentCount: commentCount,
+      trendingScore: trendingScore,
     );
   }
 

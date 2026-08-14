@@ -116,7 +116,7 @@ class PostService {
       if (viewerUserId != null && viewerUserId == authorId) {
         Query<Map<String, dynamic>> query = _postsRef
             .where('authorId', isEqualTo: authorId)
-            .orderBy('createdAt', descending: true)
+            .orderBy('trendingScore', descending: true)
             .limit(limit);
         if (startAfter != null) {
           query = query.startAfterDocument(startAfter);
@@ -134,13 +134,13 @@ class PostService {
         Query<Map<String, dynamic>> publicQuery = _postsRef
             .where('authorId', isEqualTo: authorId)
             .where('visibility', isEqualTo: 'public')
-            .orderBy('createdAt', descending: true)
+            .orderBy('trendingScore', descending: true)
             .limit(limit);
 
         Query<Map<String, dynamic>> connectionsQuery = _postsRef
             .where('authorId', isEqualTo: authorId)
             .where('authorConnections', arrayContains: viewerUserId)
-            .orderBy('createdAt', descending: true)
+            .orderBy('trendingScore', descending: true)
             .limit(limit);
 
         if (startAfter != null) {
@@ -165,7 +165,7 @@ class PostService {
         }
 
         final merged = postMap.values.toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          ..sort((a, b) => b.trendingScore.compareTo(a.trendingScore));
 
         return merged.take(limit).toList();
       }
@@ -174,7 +174,7 @@ class PostService {
       Query<Map<String, dynamic>> query = _postsRef
           .where('authorId', isEqualTo: authorId)
           .where('visibility', isEqualTo: 'public')
-          .orderBy('createdAt', descending: true)
+          .orderBy('trendingScore', descending: true)
           .limit(limit);
 
       if (startAfter != null) {
@@ -215,7 +215,7 @@ class PostService {
         Query<Map<String, dynamic>> query = _postsRef
             .where('authorId', whereIn: batch)
             .where('visibility', isEqualTo: 'public')
-            .orderBy('createdAt', descending: true)
+            .orderBy('trendingScore', descending: true)
             .limit(limit);
 
         if (startAfter != null) {
@@ -247,7 +247,7 @@ class PostService {
       Query<Map<String, dynamic>> query = _postsRef
           .where('visibility', isEqualTo: 'connections')
           .where('authorConnections', arrayContains: userId)
-          .orderBy('createdAt', descending: true)
+          .orderBy('trendingScore', descending: true)
           .limit(limit);
 
       if (startAfter != null) {

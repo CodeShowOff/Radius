@@ -62,6 +62,9 @@ class NewsPost extends Equatable {
   /// Post type: 'post' for regular news posts, 'reel' for short-form videos.
   final String postType;
 
+  /// Dynamic trending score based on time decay and engagement.
+  final double trendingScore;
+
   const NewsPost({
     required this.id,
     required this.authorId,
@@ -81,6 +84,7 @@ class NewsPost extends Equatable {
     this.likeCount = 0,
     this.commentCount = 0,
     this.postType = 'post',
+    this.trendingScore = 0.0,
   });
 
   /// Whether this post is a reel (short-form video).
@@ -126,6 +130,7 @@ class NewsPost extends Equatable {
     int? likeCount,
     int? commentCount,
     String? postType,
+    double? trendingScore,
   }) {
     return NewsPost(
       id: id ?? this.id,
@@ -148,6 +153,7 @@ class NewsPost extends Equatable {
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       postType: postType ?? this.postType,
+      trendingScore: trendingScore ?? this.trendingScore,
     );
   }
 
@@ -171,5 +177,6 @@ class NewsPost extends Equatable {
         likeCount,
         commentCount,
         postType,
+        trendingScore,
       ];
 }

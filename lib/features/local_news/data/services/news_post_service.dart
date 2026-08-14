@@ -116,7 +116,7 @@ class NewsPostService {
         .where('country', isEqualTo: country)
         .where('city', isEqualTo: city)
         .where('postType', isEqualTo: 'post')
-        .orderBy('createdAt', descending: true)
+        .orderBy('trendingScore', descending: true)
         .limit(limit)
         .snapshots()
         .map((snapshot) {
@@ -143,7 +143,7 @@ class NewsPostService {
           .where('country', isEqualTo: country)
           .where('city', isEqualTo: city)
           .where('postType', isEqualTo: 'post')
-          .orderBy('createdAt', descending: true)
+          .orderBy('trendingScore', descending: true)
           .limit(limit);
 
       if (startAfter != null) {
@@ -179,7 +179,7 @@ class NewsPostService {
         .where('country', isEqualTo: country)
         .where('city', isEqualTo: city)
         .where('postType', isEqualTo: 'reel')
-        .orderBy('createdAt', descending: true)
+        .orderBy('trendingScore', descending: true)
         .limit(limit)
         .snapshots()
         .map((snapshot) {
@@ -209,7 +209,7 @@ class NewsPostService {
           .where('country', isEqualTo: country)
           .where('city', isEqualTo: city)
           .where('postType', isEqualTo: 'reel')
-          .orderBy('createdAt', descending: true)
+          .orderBy('trendingScore', descending: true)
           .limit(limit);
 
       if (startAfter != null) {

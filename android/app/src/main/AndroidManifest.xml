@@ -53,6 +53,7 @@
         android:label="Radius"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"

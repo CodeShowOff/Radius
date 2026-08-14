@@ -46,6 +46,9 @@ class Post extends Equatable {
   /// Denormalized comment count (maintained by Cloud Functions).
   final int commentCount;
 
+  /// Gravity-based interaction score for trending rank.
+  final double trendingScore;
+
   const Post({
     required this.id,
     required this.authorId,
@@ -58,6 +61,7 @@ class Post extends Equatable {
     required this.updatedAt,
     this.likeCount = 0,
     this.commentCount = 0,
+    this.trendingScore = 0.0,
   });
 
   /// Whether the post has any media.
@@ -84,6 +88,7 @@ class Post extends Equatable {
     DateTime? updatedAt,
     int? likeCount,
     int? commentCount,
+    double? trendingScore,
   }) {
     return Post(
       id: id ?? this.id,
@@ -99,6 +104,7 @@ class Post extends Equatable {
       updatedAt: updatedAt ?? this.updatedAt,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
+      trendingScore: trendingScore ?? this.trendingScore,
     );
   }
 
@@ -115,5 +121,6 @@ class Post extends Equatable {
         updatedAt,
         likeCount,
         commentCount,
+        trendingScore,
       ];
 }
