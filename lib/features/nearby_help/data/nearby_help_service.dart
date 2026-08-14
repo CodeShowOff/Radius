@@ -64,7 +64,7 @@ enum NearbyHelpErrorType {
 /// - `users/{userId}` - nearbyHelpSettings field for opt-in/opt-out
 class NearbyHelpService {
   final FirebaseFirestore _firestore;
-  static const String _backendUrl = 'http://10.0.2.2:3000/api';
+  static const String _backendUrl = 'http://192.168.13.103:3000/api';
   final Logger _logger;
 
   // Collection references

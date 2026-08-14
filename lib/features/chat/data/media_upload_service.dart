@@ -35,7 +35,7 @@ class UploadResult {
 class MediaUploadService {
   final Logger _logger;
   
-  static const String _backendUrl = 'http://10.0.2.2:3000/api/upload';
+  static const String _backendUrl = 'http://192.168.13.103:3000/api/upload';
 
   // Storage paths
   static const String _imagesPath = 'chat_media/images';

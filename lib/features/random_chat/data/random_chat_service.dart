@@ -59,7 +59,7 @@ enum RandomChatErrorType {
 /// ```
 class RandomChatService {
   final FirebaseFirestore _firestore;
-  static const String _backendUrl = 'http://10.0.2.2:3000/api';
+  static const String _backendUrl = 'http://192.168.13.103:3000/api';
   final Logger _logger;
 
   static const int maxDailyUsers = 10;

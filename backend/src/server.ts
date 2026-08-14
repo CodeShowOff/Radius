@@ -73,11 +73,13 @@ for (const [name, def] of Object.entries(myFunctions) as [string, any][]) {
         let uid = null;
         if (authHeader && authHeader.startsWith('Bearer ')) {
           const idToken = authHeader.split('Bearer ')[1];
-          try {
-            const decodedToken = await admin.auth().verifyIdToken(idToken);
-            uid = decodedToken.uid;
-          } catch (e) {
-            console.error("Auth verify failed:", e);
+          if (idToken) {
+            try {
+              const decodedToken = await admin.auth().verifyIdToken(idToken);
+              uid = decodedToken.uid;
+            } catch (e) {
+              console.error("Auth verify failed:", e);
+            }
           }
         }
         
