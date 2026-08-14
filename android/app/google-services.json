@@ -1,103 +1,26 @@
 {
   "project_info": {
-    "project_number": "486551872927",
-    "project_id": "radiusapp-ecfcd",
-    "storage_bucket": "radiusapp-ecfcd.firebasestorage.app"
+    "project_number": "1031419504649",
+    "project_id": "radiusappcso",
+    "storage_bucket": "radiusappcso.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:486551872927:android:9d8bfaf52a369100dcc9aa",
+        "mobilesdk_app_id": "1:1031419504649:android:0d0c910d7e65698b1af0d8",
         "android_client_info": {
           "package_name": "com.codeshowoff.radius"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "486551872927-eldeh14eeb4ulcqg7n4305lopof60l6g.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.codeshowoff.radius",
-            "certificate_hash": "d01be38240d386378672e42b206d1f5d223a0ff8"
-          }
-        },
-        {
-          "client_id": "486551872927-ntd7issmbqshi8l264hrh5se1k2p1o4u.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.codeshowoff.radius",
-            "certificate_hash": "9c6f0162f8c28e240ad9bea4000835e574cf183a"
-          }
-        },
-        {
-          "client_id": "486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBqDQJIooySxhx96nAE_PjwRKpVZk-ddDU"
+          "current_key": "AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.radius"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:486551872927:android:e368a91d01ed3f84dcc9aa",
-        "android_client_info": {
-          "package_name": "com.example.radius"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "486551872927-4ct5jov5nfmdhpsh6a08c3vmbch3cqqt.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.radius",
-            "certificate_hash": "d01be38240d386378672e42b206d1f5d223a0ff8"
-          }
-        },
-        {
-          "client_id": "486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBqDQJIooySxhx96nAE_PjwRKpVZk-ddDU"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "486551872927-1jaqc84ue2jea06pndmf1t6uol5frtgt.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.radius"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
