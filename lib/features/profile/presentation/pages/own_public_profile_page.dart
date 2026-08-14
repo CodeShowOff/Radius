@@ -211,147 +211,77 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                           ),
 
                           // ── Vibe & Mood ──
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
-                            child: Row(
-                              children: [
-                                // Vibe
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.5),
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: theme
-                                            .colorScheme.outlineVariant
-                                            .withValues(alpha: 0.4),
+                          if ((vibe?.isNotEmpty == true) || (mood?.isNotEmpty == true))
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if (vibe?.isNotEmpty == true)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.electric_bolt,
+                                            size: 14,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            vibe!,
+                                            style: theme.textTheme.labelMedium?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.electric_bolt,
-                                              size: 14,
-                                              color: theme.colorScheme
-                                                  .primary,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'Vibe',
-                                              style: theme
-                                                  .textTheme.labelSmall
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
+                                  if (mood?.isNotEmpty == true)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.4),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: theme.colorScheme.secondary.withValues(alpha: 0.2),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          vibe?.isNotEmpty == true
-                                              ? _stripEmoji(vibe!)
-                                              : 'Not set',
-                                          style: theme
-                                              .textTheme.bodySmall
-                                              ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            color:
-                                                vibe?.isNotEmpty == true
-                                                    ? theme.colorScheme
-                                                        .onSurface
-                                                    : theme.colorScheme
-                                                        .onSurfaceVariant,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.mood,
+                                            size: 14,
+                                            color: theme.colorScheme.secondary,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // Mood
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.5),
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: theme
-                                            .colorScheme.outlineVariant
-                                            .withValues(alpha: 0.4),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            mood!,
+                                            style: theme.textTheme.labelMedium?.copyWith(
+                                              color: theme.colorScheme.secondary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.mood,
-                                              size: 14,
-                                              color: theme.colorScheme
-                                                  .secondary,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'Mood',
-                                              style: theme
-                                                  .textTheme.labelSmall
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          mood?.isNotEmpty == true
-                                              ? (MoodSelector.moods[mood!] ?? _stripEmoji(mood))
-                                              : 'Not set',
-                                          style: theme
-                                              .textTheme.bodySmall
-                                              ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            color:
-                                                mood?.isNotEmpty == true
-                                                    ? theme.colorScheme
-                                                        .onSurface
-                                                    : theme.colorScheme
-                                                        .onSurfaceVariant,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
 
                           const SizedBox(height: 12),
 

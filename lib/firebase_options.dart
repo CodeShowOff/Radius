@@ -5,15 +5,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
-///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -30,8 +21,7 @@ class DefaultFirebaseOptions {
         return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
+          'DefaultFirebaseOptions have not been configured for linux.',
         );
       default:
         throw UnsupportedError(
@@ -41,53 +31,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA8feyW4YatnwiJfkln2XCdobAtHRuS6Z0',
-    appId: '1:486551872927:web:756fd15799f804eedcc9aa',
-    messagingSenderId: '486551872927',
-    projectId: 'radiusapp-ecfcd',
-    authDomain: 'radiusapp-ecfcd.firebaseapp.com',
-    storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    measurementId: 'G-19723T3N8L',
+    apiKey: 'AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw',
+    appId: '1:1031419504649:web:0d0c910d7e65698b1af0d8',
+    messagingSenderId: '1031419504649',
+    projectId: 'radiusappcso',
+    authDomain: 'radiusappcso.firebaseapp.com',
+    storageBucket: 'radiusappcso.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBqDQJIooySxhx96nAE_PjwRKpVZk-ddDU',
-    appId: '1:486551872927:android:9d8bfaf52a369100dcc9aa',
-    messagingSenderId: '486551872927',
-    projectId: 'radiusapp-ecfcd',
-    storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
+    apiKey: 'AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw',
+    appId: '1:1031419504649:android:0d0c910d7e65698b1af0d8',
+    messagingSenderId: '1031419504649',
+    projectId: 'radiusappcso',
+    storageBucket: 'radiusappcso.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCQvShQy75UYraL7T8gbMd9ckS5OamX5qs',
-    appId: '1:486551872927:ios:a5895d5ac8a3bf15dcc9aa',
-    messagingSenderId: '486551872927',
-    projectId: 'radiusapp-ecfcd',
-    storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    androidClientId: '486551872927-4ct5jov5nfmdhpsh6a08c3vmbch3cqqt.apps.googleusercontent.com',
-    iosClientId: '486551872927-sf24d31nm53illbf2ijircm7a17s4dsj.apps.googleusercontent.com',
+    apiKey: 'AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw',
+    appId: '1:1031419504649:ios:0d0c910d7e65698b1af0d8',
+    messagingSenderId: '1031419504649',
+    projectId: 'radiusappcso',
+    storageBucket: 'radiusappcso.firebasestorage.app',
     iosBundleId: 'com.codeshowoff.radius',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCQvShQy75UYraL7T8gbMd9ckS5OamX5qs',
-    appId: '1:486551872927:ios:a5895d5ac8a3bf15dcc9aa',
-    messagingSenderId: '486551872927',
-    projectId: 'radiusapp-ecfcd',
-    storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    androidClientId: '486551872927-4ct5jov5nfmdhpsh6a08c3vmbch3cqqt.apps.googleusercontent.com',
-    iosClientId: '486551872927-sf24d31nm53illbf2ijircm7a17s4dsj.apps.googleusercontent.com',
+    apiKey: 'AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw',
+    appId: '1:1031419504649:ios:0d0c910d7e65698b1af0d8',
+    messagingSenderId: '1031419504649',
+    projectId: 'radiusappcso',
+    storageBucket: 'radiusappcso.firebasestorage.app',
     iosBundleId: 'com.codeshowoff.radius',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyA8feyW4YatnwiJfkln2XCdobAtHRuS6Z0',
-    appId: '1:486551872927:web:777b028085c1bbc1dcc9aa',
-    messagingSenderId: '486551872927',
-    projectId: 'radiusapp-ecfcd',
-    authDomain: 'radiusapp-ecfcd.firebaseapp.com',
-    storageBucket: 'radiusapp-ecfcd.firebasestorage.app',
-    measurementId: 'G-BXJVLMGE76',
+    apiKey: 'AIzaSyDcRKjTMUZVkETAa59yGjUYwRubeugFBJw',
+    appId: '1:1031419504649:web:0d0c910d7e65698b1af0d8',
+    messagingSenderId: '1031419504649',
+    projectId: 'radiusappcso',
+    authDomain: 'radiusappcso.firebaseapp.com',
+    storageBucket: 'radiusappcso.firebasestorage.app',
   );
-
 }

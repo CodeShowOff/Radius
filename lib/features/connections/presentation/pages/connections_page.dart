@@ -216,6 +216,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
               color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
             ),
             border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            filled: false,
             contentPadding: const EdgeInsets.symmetric(vertical: 10),
             prefixIcon: Icon(
               Icons.search,

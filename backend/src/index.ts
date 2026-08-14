@@ -4,7 +4,6 @@ import {
 } from "./mock";
 import * as admin from "firebase-admin";
 
-admin.initializeApp();
 
 // =============================================================================
 // RANDOM CHAT - Server-Side Suggestion Generation

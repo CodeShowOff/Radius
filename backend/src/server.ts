@@ -9,9 +9,15 @@ import * as admin from 'firebase-admin';
 const serviceAccountPath = path.join(__dirname, '..', 'serviceAccountKey.json');
 if (fs.existsSync(serviceAccountPath)) {
   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  
+  // Set environment variables for Google Auth Library (required by Firestore listeners)
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = serviceAccountPath;
+  process.env.GCLOUD_PROJECT = serviceAccount.project_id;
+  
   if (admin.apps.length === 0) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id
     });
   }
 } else {

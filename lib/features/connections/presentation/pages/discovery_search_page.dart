@@ -162,6 +162,9 @@ class _DiscoverySearchPageState extends State<DiscoverySearchPage> {
                               .withValues(alpha: 0.6),
                         ),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 14,

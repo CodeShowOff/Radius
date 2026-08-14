@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:logger/logger.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../domain/entities/random_chat_connection.dart';
 import '../domain/entities/random_chat_request.dart';
@@ -183,9 +184,15 @@ class RandomChatService {
           'gender': currentUserGender,
       };
 
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+
       final response = await http.post(
         Uri.parse('$_backendUrl/generateRandomChatSuggestions'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode(body),
       );
 

@@ -73,8 +73,8 @@ class _MainScaffoldState extends State<MainScaffold> {
             label: 'Local',
           ),
           NavigationDestination(
-            icon: Icon(Icons.dynamic_feed_outlined),
-            selectedIcon: Icon(Icons.dynamic_feed),
+            icon: Icon(Icons.featured_play_list_outlined),
+            selectedIcon: Icon(Icons.featured_play_list),
             label: 'Feed',
           ),
           NavigationDestination(
