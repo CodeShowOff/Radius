@@ -572,6 +572,7 @@ class _ModernConnectionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bio = entry.profile['bio'] as String?;
+    final unreadCount = entry.conversation.getUnreadCount(currentUserId);
     
     // Create a premium look
     return InkWell(
@@ -619,11 +620,14 @@ class _ModernConnectionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    bio != null && bio.isNotEmpty 
-                      ? bio 
-                      : 'Connected since ${_formatTime(entry.connection.connectedAt)}',
+                    entry.conversation.lastMessageText?.isNotEmpty == true
+                        ? entry.conversation.lastMessageText!
+                        : (bio != null && bio.isNotEmpty 
+                            ? bio 
+                            : 'Connected since ${_formatTime(entry.connection.connectedAt)}'),
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: unreadCount > 0 ? theme.colorScheme.onSurface : theme.colorScheme.outline,
+                      fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -636,11 +640,16 @@ class _ModernConnectionTile extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton.filledTonal(
-                  onPressed: onTap,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                  padding: EdgeInsets.zero,
+                Badge(
+                  isLabelVisible: unreadCount > 0,
+                  label: Text(unreadCount.toString()),
+                  offset: const Offset(4, -4),
+                  child: IconButton.filledTonal(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ],
             ),

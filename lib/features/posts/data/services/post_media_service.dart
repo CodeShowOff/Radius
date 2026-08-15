@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../../../../core/constants/env.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
@@ -30,7 +31,7 @@ class PostUploadResult {
 /// - `post_media/thumbnails/{authorId}/{postId}/{uuid}.jpg` (max 5MB)
 class PostMediaService {
   final Logger _logger;
-  static const String _backendUrl = 'http://192.168.13.103:3000/api/upload';
+  static const String _backendUrl = Env.uploadUrl;
 
   static const String _imagesPath = 'post_media/images';
   static const String _videosPath = 'post_media/videos';

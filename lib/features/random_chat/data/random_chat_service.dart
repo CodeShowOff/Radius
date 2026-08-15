@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:logger/logger.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../core/constants/env.dart';
 
 import '../domain/entities/random_chat_connection.dart';
 import '../domain/entities/random_chat_request.dart';
@@ -60,7 +61,7 @@ enum RandomChatErrorType {
 /// ```
 class RandomChatService {
   final FirebaseFirestore _firestore;
-  static const String _backendUrl = 'http://192.168.13.103:3000/api';
+  static const String _backendUrl = Env.backendUrl;
   final Logger _logger;
 
   static const int maxDailyUsers = 10;

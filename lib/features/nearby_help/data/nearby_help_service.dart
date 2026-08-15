@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../../../core/constants/env.dart';
 import 'package:logger/logger.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -65,7 +66,7 @@ enum NearbyHelpErrorType {
 /// - `users/{userId}` - nearbyHelpSettings field for opt-in/opt-out
 class NearbyHelpService {
   final FirebaseFirestore _firestore;
-  static const String _backendUrl = 'http://192.168.13.103:3000/api';
+  static const String _backendUrl = Env.backendUrl;
   final Logger _logger;
 
   // Collection references

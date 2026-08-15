@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Radius (Local Backend)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=BACKEND_URL=http://192.168.13.105:3000/api"
+      ]
+    }
+  ]
+}

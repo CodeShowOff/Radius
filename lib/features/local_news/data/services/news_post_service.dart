@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../../../core/constants/env.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 
@@ -142,7 +143,7 @@ class NewsPostService {
   }) async {
     try {
       final client = HttpClient();
-      final request = await client.postUrl(Uri.parse('http://192.168.13.105:3000/api/getLocalNewsFeed'));
+      final request = await client.postUrl(Uri.parse('${Env.backendUrl}/getLocalNewsFeed'));
       request.headers.contentType = ContentType.json;
       
       final requestBody = jsonEncode({
@@ -223,7 +224,7 @@ class NewsPostService {
     try {
       final client = HttpClient();
       // Use 192.168.13.105 to reach the local machine from a real device
-      final request = await client.postUrl(Uri.parse('http://192.168.13.105:3000/api/getReelsFeed'));
+      final request = await client.postUrl(Uri.parse('${Env.backendUrl}/getReelsFeed'));
       request.headers.contentType = ContentType.json;
       
       final requestBody = jsonEncode({

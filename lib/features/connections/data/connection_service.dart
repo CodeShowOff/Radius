@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-
+import '../../../core/constants/env.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 
@@ -437,7 +437,7 @@ class ConnectionService {
     try {
       final client = HttpClient();
       final request = await client.postUrl(
-          Uri.parse('http://192.168.13.105:3000/api/getSuggestedConnections'));
+          Uri.parse('${Env.backendUrl}/getSuggestedConnections'));
       request.headers.contentType = ContentType.json;
 
       final requestBody = jsonEncode({

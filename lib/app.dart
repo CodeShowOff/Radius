@@ -191,6 +191,11 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     try {
       final notificationService = getIt<NotificationService>();
       notificationService.onInAppNotification = (title, body, data) {
+        final currentPath = appRouter.routerDelegate.currentConfiguration.uri.path;
+        if (currentPath == Routes.connections || currentPath == Routes.conversations) {
+          return;
+        }
+
         // Show SnackBar for new messages when user is not viewing that chat
         if (mounted) {
           _scaffoldMessengerKey.currentState?.clearSnackBars();

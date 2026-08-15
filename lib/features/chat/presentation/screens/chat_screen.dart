@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/widgets/cached_avatar.dart';
@@ -22,6 +24,7 @@ import '../../data/chat_service.dart';
 
 import '../bloc/chat_bloc.dart';
 import '../bloc/conversations_bloc.dart';
+import '../widgets/chat_input.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart' hide Message, ChatState;
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:file_picker/file_picker.dart';
@@ -568,9 +571,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     messages: state.chatUiMessages,
                     onAttachmentPressed: (isDisconnected || isBlocked) ? null : _handleAttachmentPressed,
                     onMessageTap: _handleMessageTap,
-                    onSendPressed: (isDisconnected || isBlocked) ? (types.PartialText message) {} : (types.PartialText message) {
-                      _sendMessage(message.text);
-                    },
+                    onMessageLongPress: _handleMessageLongPress,
+                    timeFormat: DateFormat.jm(),
+                    dateFormat: DateFormat('MMMM d, yyyy'),
+                    onSendPressed: (types.PartialText message) {},
+                    customBottomWidget: (isDisconnected || isBlocked) ? const SizedBox.shrink() : _buildInputArea(Theme.of(context), state),
                     user: types.User(id: widget.currentUserId),
                     onEndReached: () async {
                       if (state.hasMore && state.status != ChatStatus.loadingMore) {
@@ -616,6 +621,68 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInputArea(ThemeData theme, ChatState state) {
+    return ChatInput(
+      onSend: (text) {
+        _sendMessage(text);
+      },
+      onImageSelected: (file) {
+        context.read<ChatBloc>().add(ChatSendImage(file, source: ImageSource.gallery));
+      },
+      onCameraImageSelected: (file) {
+        context.read<ChatBloc>().add(ChatSendImage(file, source: ImageSource.camera));
+      },
+      onDocumentSelected: (file) {
+        context.read<ChatBloc>().add(ChatSendDocument(file));
+      },
+      onVideoSelected: (file) {
+        context.read<ChatBloc>().add(ChatSendVideo(file));
+      },
+      onVoiceRecorded: (file, duration) {
+        context.read<ChatBloc>().add(ChatSendAudio(file, duration: duration));
+      },
+    );
+  }
+
+  void _handleMessageLongPress(BuildContext context, types.Message message) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (bottomSheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message is types.TextMessage)
+                ListTile(
+                  leading: const Icon(Icons.copy),
+                  title: const Text('Copy Text'),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: message.text));
+                    Navigator.pop(bottomSheetContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Copied to clipboard')),
+                    );
+                  },
+                ),
+              if (message.author.id == widget.currentUserId)
+                ListTile(
+                  leading: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+                  title: Text('Delete Message', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  onTap: () {
+                    Navigator.pop(bottomSheetContext);
+                    context.read<ChatBloc>().add(ChatDeleteMessage(message.id));
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

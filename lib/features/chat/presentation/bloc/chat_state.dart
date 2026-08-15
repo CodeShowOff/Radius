@@ -126,23 +126,27 @@ class ChatState extends Equatable {
 
   /// Gets messages formatted for the flutter_chat_ui package.
   List<types.Message> get chatUiMessages {
-    return allMessages.map((msg) {
+    final uiMessages = <types.Message>[];
+    
+    for (final msg in allMessages) {
       final author = types.User(id: msg.senderId);
       final createdAt = msg.sentAt.millisecondsSinceEpoch;
       final status = _mapStatus(msg.status);
       final id = msg.localId ?? msg.id;
 
+      types.Message uiMsg;
       switch (msg.type) {
         case MessageType.text:
-          return types.TextMessage(
+          uiMsg = types.TextMessage(
             author: author,
             createdAt: createdAt,
             id: id,
             text: msg.text,
             status: status,
           );
+          break;
         case MessageType.image:
-          return types.ImageMessage(
+          uiMsg = types.ImageMessage(
             author: author,
             createdAt: createdAt,
             id: id,
@@ -151,8 +155,9 @@ class ChatState extends Equatable {
             uri: msg.localFilePath ?? msg.mediaUrl ?? '',
             status: status,
           );
+          break;
         case MessageType.audio:
-          return types.AudioMessage(
+          uiMsg = types.AudioMessage(
             author: author,
             createdAt: createdAt,
             id: id,
@@ -162,8 +167,9 @@ class ChatState extends Equatable {
             uri: msg.localFilePath ?? msg.mediaUrl ?? '',
             status: status,
           );
+          break;
         case MessageType.video:
-          return types.VideoMessage(
+          uiMsg = types.VideoMessage(
             author: author,
             createdAt: createdAt,
             id: id,
@@ -172,8 +178,9 @@ class ChatState extends Equatable {
             uri: msg.localFilePath ?? msg.mediaUrl ?? '',
             status: status,
           );
+          break;
         case MessageType.document:
-          return types.FileMessage(
+          uiMsg = types.FileMessage(
             author: author,
             createdAt: createdAt,
             id: id,
@@ -182,9 +189,10 @@ class ChatState extends Equatable {
             uri: msg.localFilePath ?? msg.mediaUrl ?? '',
             status: status,
           );
+          break;
         case MessageType.sticker:
           // flutter_chat_ui doesn't have a sticker type by default, map to image or custom
-          return types.ImageMessage(
+          uiMsg = types.ImageMessage(
             author: author,
             createdAt: createdAt,
             id: id,
@@ -193,8 +201,25 @@ class ChatState extends Equatable {
             uri: msg.localFilePath ?? msg.mediaUrl ?? '',
             status: status,
           );
+          break;
       }
-    }).toList();
+      
+      uiMessages.add(uiMsg);
+
+      // Inject unread divider AFTER the message in the list
+      // (Since it's sorted descending, this places it visually ABOVE the message)
+      if (firstUnreadMessageId != null && msg.id == firstUnreadMessageId) {
+        uiMessages.add(
+          types.SystemMessage(
+            id: 'unread-divider',
+            text: '$unreadCountAtOpen UNREAD MESSAGES',
+            createdAt: createdAt,
+          ),
+        );
+      }
+    }
+    
+    return uiMessages;
   }
 
   types.Status _mapStatus(MessageStatus status) {

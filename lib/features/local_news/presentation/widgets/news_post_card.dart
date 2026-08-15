@@ -404,7 +404,7 @@ class _NewsImage extends StatelessWidget {
         cacheManager: _imageCacheManager,
         imageUrl: imageUrl,
         width: double.infinity,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         placeholder: (context, url) => Container(
           height: 350,
           color: theme.colorScheme.surfaceContainerHighest,
@@ -568,7 +568,7 @@ class _VideoThumbnailViewState extends State<_VideoThumbnailView> {
               CachedNetworkImage(
                 imageUrl: thumbnailUrl,
                 width: double.infinity,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 placeholder: (context, url) => Container(
                   height: 300,
                   color: theme.colorScheme.surfaceContainerHighest,

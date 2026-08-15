@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 
+import '../../../../core/constants/env.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
@@ -16,7 +17,7 @@ import '../../chat/data/media_upload_service.dart';
 /// Storage rules enforce group membership via `isAnyGroupMember()`.
 class GroupMediaUploadService {
   final Logger _logger;
-  static const String _backendUrl = 'http://192.168.13.103:3000/api/upload';
+  static const String _backendUrl = Env.uploadUrl;
 
   static const String _imagesPath = 'group_media/images';
   static const String _audioPath = 'group_media/audio';

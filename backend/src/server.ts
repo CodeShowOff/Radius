@@ -90,10 +90,10 @@ for (const [name, def] of Object.entries(myFunctions) as [string, any][]) {
         }
         
         // Sometimes Flutter clients send bare JSON without a `data` wrapper if we just use http.post
-        // We'll adapt it so the function gets what it expects.
-        const data = req.body;
+        // If they do send a `data` wrapper, we want to extract it so the function doesn't get `{ data: { data: ... } }`.
+        const payload = req.body && req.body.data !== undefined ? req.body.data : req.body;
         const callableReq = {
-          data: data,
+          data: payload,
           auth: uid ? { uid } : null
         };
 
@@ -165,12 +165,19 @@ function setupTriggers() {
            try { await trigger.callback(event); } catch(e) { console.error(e); }
         } 
         else if (trigger.type === 'updated' && change.type === 'modified') {
-           // Provide a pseudo-Change object
+           // We can't reconstruct 'before' state in this dev server, so we pass
+           // a proxy object that won't crash functions checking for null.
+           // Functions using event.data?.before.data() will safely get undefined.
+           const safeBeforeProxy = {
+             data: () => ({}),
+             exists: false,
+             id: change.doc.id,
+             ref: change.doc.ref,
+           };
            event.data = {
-             before: null, // Hard to reconstruct before state without listening to every change perfectly
+             before: safeBeforeProxy,
              after: change.doc
            };
-           // Note: since this is dev, missing 'before' might break some specific functions.
            try { await trigger.callback(event); } catch(e) { console.error(e); }
         }
         else if (trigger.type === 'deleted' && change.type === 'removed') {
@@ -193,6 +200,6 @@ setTimeout(() => {
 
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Backend server running on port ${PORT}`);
+app.listen(PORT as number, '0.0.0.0', () => {
+  console.log(`Backend server running on port ${PORT} at 0.0.0.0`);
 });
