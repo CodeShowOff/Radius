@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 
 import '../../../core/error/exceptions.dart';
@@ -155,7 +156,6 @@ class MediaUploadService {
       // Get file info
       final fileSize = await file.length();
       final fileName = file.path.split(Platform.pathSeparator).last;
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final extension = fileName.contains('.')
           ? fileName.substring(fileName.lastIndexOf('.'))
           : '';
@@ -180,7 +180,15 @@ class MediaUploadService {
       // Upload file with HTTP
       if (onProgress != null) onProgress(0.1);
       final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      
+      final mimeType = _getContentType(extension).split('/');
+      final mediaType = MediaType(mimeType[0], mimeType[1]);
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'file', 
+        file.path,
+        contentType: mediaType,
+      ));
       
       final response = await request.send();
       if (response.statusCode != 200) {

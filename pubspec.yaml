@@ -83,6 +83,7 @@ dependencies:
   wakelock_plus: ^1.2.8
   photo_view: ^0.15.0
   gal: ^2.3.2
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:

@@ -84,7 +84,6 @@ class SharedMessagesList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: messages.length + (hasMore ? 1 : 0) + (isTyping ? 1 : 0),
       // Performance optimizations
-      cacheExtent: 500, // Cache more items off-screen
       itemBuilder: (context, index) {
         // Typing indicator at index 0 (bottom of reversed list)
         if (config.showTypingIndicator && isTyping && index == 0) {

@@ -65,7 +65,7 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
         return PreloadPageView.builder(
           controller: _pageController,
           scrollDirection: Axis.vertical,
-          preloadPagesCount: 1, // Cache 1 page ahead and behind
+          preloadPagesCount: 2, // Cache 2 pages ahead and behind for instant swiping
           itemCount: totalCount,
           onPageChanged: (index) {
             // Trigger load-more when approaching the end

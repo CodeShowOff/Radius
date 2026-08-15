@@ -134,7 +134,7 @@ class RandomChatService {
         if (cachedDate == dateKey && cachedIds.isNotEmpty) {
           _logger.d(
               'Returning ${cachedIds.length} profile-cached suggestions for $dateKey');
-          return _fetchUserDetails(cachedIds, dateKey);
+          return await _fetchUserDetails(cachedIds, dateKey);
         }
 
         if (cachedDate == dateKey && cachedIds.isEmpty) {
@@ -145,7 +145,7 @@ class RandomChatService {
       }
 
       // Generate new suggestions
-      return _generateDailySuggestions(
+      return await _generateDailySuggestions(
         currentUserId: currentUserId,
         currentUserGender: currentUserGender,
         dateKey: dateKey,
@@ -215,7 +215,7 @@ class RandomChatService {
       }
 
       // Fetch full profile details for the returned IDs
-      return _fetchUserDetails(suggestedIds, serverDateKey);
+      return await _fetchUserDetails(suggestedIds, serverDateKey);
     } catch (e, stack) {
       _logger.e('Error calling generateRandomChatSuggestions',
           error: e, stackTrace: stack);

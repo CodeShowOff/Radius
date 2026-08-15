@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -139,23 +141,37 @@ class NewsPostService {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      Query<Map<String, dynamic>> query = _postsRef
-          .where('country', isEqualTo: country)
-          .where('city', isEqualTo: city)
-          .where('postType', isEqualTo: 'post')
-          .orderBy('trendingScore', descending: true)
-          .limit(limit);
-
-      if (startAfter != null) {
-        query = query.startAfterDocument(startAfter);
+      final client = HttpClient();
+      final request = await client.postUrl(Uri.parse('http://192.168.13.105:3000/api/getLocalNewsFeed'));
+      request.headers.contentType = ContentType.json;
+      
+      final requestBody = jsonEncode({
+        'data': {
+          'country': country,
+          'city': city,
+          'limit': limit,
+          if (startAfter != null) 'startAfter': startAfter.id,
+        }
+      });
+      
+      request.write(requestBody);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      
+      if (response.statusCode != 200) {
+        throw Exception('API Error: $responseBody');
       }
 
-      final snapshot = await query.get();
-      return snapshot.docs
-          .map((doc) => NewsPostModel.fromFirestore(doc))
-          .toList();
+      final jsonResponse = jsonDecode(responseBody);
+      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+
+      return rawData.map((item) {
+        final map = item as Map<String, dynamic>;
+        final id = map['id'] as String;
+        return NewsPostModel.fromMap(map, id);
+      }).toList();
     } catch (e, stack) {
-      _logger.e('Error fetching news feed for $city, $country',
+      _logger.e('Error fetching news feed from API for $city, $country',
           error: e, stackTrace: stack);
       rethrow;
     }
@@ -205,23 +221,38 @@ class NewsPostService {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      Query<Map<String, dynamic>> query = _postsRef
-          .where('country', isEqualTo: country)
-          .where('city', isEqualTo: city)
-          .where('postType', isEqualTo: 'reel')
-          .orderBy('trendingScore', descending: true)
-          .limit(limit);
-
-      if (startAfter != null) {
-        query = query.startAfterDocument(startAfter);
+      final client = HttpClient();
+      // Use 192.168.13.105 to reach the local machine from a real device
+      final request = await client.postUrl(Uri.parse('http://192.168.13.105:3000/api/getReelsFeed'));
+      request.headers.contentType = ContentType.json;
+      
+      final requestBody = jsonEncode({
+        'data': {
+          'country': country,
+          'city': city,
+          'limit': limit,
+          if (startAfter != null) 'startAfter': startAfter.id,
+        }
+      });
+      
+      request.write(requestBody);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      
+      if (response.statusCode != 200) {
+        throw Exception('API Error: $responseBody');
       }
 
-      final snapshot = await query.get();
-      return snapshot.docs
-          .map((doc) => NewsPostModel.fromFirestore(doc))
-          .toList();
+      final jsonResponse = jsonDecode(responseBody);
+      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+
+      return rawData.map((item) {
+        final map = item as Map<String, dynamic>;
+        final id = map['id'] as String;
+        return NewsPostModel.fromMap(map, id);
+      }).toList();
     } catch (e, stack) {
-      _logger.e('Error fetching reels feed for $city, $country',
+      _logger.e('Error fetching reels feed from API for $city, $country',
           error: e, stackTrace: stack);
       rethrow;
     }

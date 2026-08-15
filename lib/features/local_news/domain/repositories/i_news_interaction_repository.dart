@@ -55,4 +55,12 @@ abstract class INewsInteractionRepository {
     required String postId,
     int limit = 50,
   });
+
+  /// Records an engagement action (like, comment, share, watch) and score for a news post.
+  Future<Either<Failure, void>> recordEngagement({
+    required String postId,
+    required String userId,
+    required int score,
+    required String actionType,
+  });
 }

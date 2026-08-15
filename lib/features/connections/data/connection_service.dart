@@ -1,4 +1,5 @@
-import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -143,7 +144,7 @@ class ConnectionService {
             pendingRequest.receiverId == senderId) {
           _logger.i(
               'Auto-accepting existing request from $receiverId to $senderId');
-          return acceptRequest(
+          return await acceptRequest(
             requestId: pendingRequest.id,
             currentUserId: senderId,
           ).then((result) {
@@ -428,6 +429,40 @@ class ConnectionService {
         'Failed to cancel request: ${e.toString()}',
         ConnectionErrorType.networkError,
       );
+    }
+  }
+
+  /// Gets suggested connections from the "People You May Know" API.
+  Future<List<Map<String, dynamic>>> getSuggestedConnections(String userId) async {
+    try {
+      final client = HttpClient();
+      final request = await client.postUrl(
+          Uri.parse('http://192.168.13.105:3000/api/getSuggestedConnections'));
+      request.headers.contentType = ContentType.json;
+
+      final requestBody = jsonEncode({
+        'data': {
+          'userId': userId,
+          'limit': 15,
+        }
+      });
+
+      request.write(requestBody);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode != 200) {
+        throw Exception('API Error: $responseBody');
+      }
+
+      final jsonResponse = jsonDecode(responseBody);
+      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+
+      return rawData.cast<Map<String, dynamic>>();
+    } catch (e, stack) {
+      _logger.e('Error fetching suggested connections for $userId',
+          error: e, stackTrace: stack);
+      return [];
     }
   }
 

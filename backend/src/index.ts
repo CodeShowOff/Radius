@@ -3453,7 +3453,7 @@ export const onPostCreated = onDocumentCreated(
     if (!createdAt) return;
 
     // Uses the same gravity-based trending algorithm
-    const trendingScore = calculateTrendingScore(createdAt, likes, comments);
+    const trendingScore = calculateTrendingScore(createdAt, likes + (comments * 2));
 
     try {
       await admin.firestore().collection("posts").doc(postId).update({
@@ -3490,7 +3490,7 @@ export const onPostLikeCreated = onDocumentCreated(
 
         const newLikes = (data.likeCount || 0) + 1;
         const comments = data.commentCount || 0;
-        const newScore = calculateTrendingScore(createdAt, newLikes, comments);
+        const newScore = calculateTrendingScore(createdAt, newLikes + (comments * 2));
 
         transaction.update(postRef, {
           likeCount: newLikes,
@@ -3528,7 +3528,7 @@ export const onPostLikeDeleted = onDocumentDeleted(
 
         const newLikes = Math.max(0, (data.likeCount || 0) - 1);
         const comments = data.commentCount || 0;
-        const newScore = calculateTrendingScore(createdAt, newLikes, comments);
+        const newScore = calculateTrendingScore(createdAt, newLikes + (comments * 2));
 
         transaction.update(postRef, {
           likeCount: newLikes,
@@ -3566,7 +3566,7 @@ export const onPostCommentCreated = onDocumentCreated(
 
         const likes = data.likeCount || 0;
         const newComments = (data.commentCount || 0) + 1;
-        const newScore = calculateTrendingScore(createdAt, likes, newComments);
+        const newScore = calculateTrendingScore(createdAt, likes + (newComments * 2));
 
         transaction.update(postRef, {
           commentCount: newComments,
@@ -3604,7 +3604,7 @@ export const onPostCommentDeleted = onDocumentDeleted(
 
         const likes = data.likeCount || 0;
         const newComments = Math.max(0, (data.commentCount || 0) - 1);
-        const newScore = calculateTrendingScore(createdAt, likes, newComments);
+        const newScore = calculateTrendingScore(createdAt, likes + (newComments * 2));
 
         transaction.update(postRef, {
           commentCount: newComments,
@@ -3626,9 +3626,8 @@ export const onPostCommentDeleted = onDocumentDeleted(
  * Calculates the trending score for a local news post using a gravity-based algorithm.
  * 45000 seconds = 12.5 hours. A post needs 10x more interactions to match a post that is 12.5 hours newer.
  */
-function calculateTrendingScore(createdAt: admin.firestore.Timestamp, likes: number, comments: number): number {
-  const interactions = likes + (comments * 2);
-  const interactionScore = Math.log10(Math.max(1, interactions));
+function calculateTrendingScore(createdAt: admin.firestore.Timestamp, engagementScore: number): number {
+  const interactionScore = Math.log10(Math.max(1, engagementScore));
   const epochSeconds = 1704067200; // Jan 1 2024
   const timeScore = (createdAt.seconds - epochSeconds) / 45000;
   return interactionScore + timeScore;
@@ -3647,13 +3646,12 @@ export const onLocalNewsPostCreated = onDocumentCreated(
     if (!postData) return;
 
     const createdAt = postData.createdAt as admin.firestore.Timestamp;
-    const likes = postData.likeCount || 0;
-    const comments = postData.commentCount || 0;
+    const engagementScore = postData.engagementScore || 0;
     
     // If createdAt is missing, we can't calculate a score
     if (!createdAt) return;
 
-    const trendingScore = calculateTrendingScore(createdAt, likes, comments);
+    const trendingScore = calculateTrendingScore(createdAt, engagementScore);
 
     const db = admin.firestore();
     try {
@@ -3666,6 +3664,245 @@ export const onLocalNewsPostCreated = onDocumentCreated(
     }
   }
 );
+
+/**
+ * The Feed API (Reels)
+ *
+ * Endpoint: /api/getReelsFeed
+ * Ranks videos based on engagementScore rather than chronologically.
+ */
+export const getReelsFeed = onCall({}, async (request: any) => {
+  const data = request.data || {};
+  const city = data.city;
+  const country = data.country;
+  const limit = data.limit || 10;
+
+  if (!city || !country) {
+    throw new Error('City and Country are required to fetch the Reels feed.');
+  }
+
+  const db = admin.firestore();
+  
+  // The Feed Engine Algorithm
+  // Query all reels for the specified location, and rank them natively by their engagementScore.
+  try {
+    const snapshot = await db.collection("local_news_posts")
+      .where("postType", "==", "reel")
+      .where("city", "==", city)
+      .where("country", "==", country)
+      .orderBy("engagementScore", "desc")
+      .limit(limit)
+      .get();
+
+    const reels = snapshot.docs.map(doc => {
+      const docData = doc.data();
+      // Ensure timestamps are correctly converted if necessary for the client, 
+      // but typically the client parses the raw JSON if sent via REST.
+      return {
+        id: doc.id,
+        ...docData,
+      };
+    });
+
+    return reels;
+  } catch (error) {
+    logger.error("Error generating reels feed:", error);
+    throw new Error('Failed to generate reels feed.');
+  }
+});
+
+/**
+ * The Feed API (Standard Local Posts)
+ *
+ * Endpoint: /api/getLocalNewsFeed
+ * Ranks text/image local posts based on engagementScore rather than chronologically.
+ */
+export const getLocalNewsFeed = onCall({}, async (request: any) => {
+  const data = request.data || {};
+  const city = data.city;
+  const country = data.country;
+  const limit = data.limit || 20;
+
+  if (!city || !country) {
+    throw new Error('City and Country are required to fetch the local news feed.');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    const snapshot = await db.collection("local_news_posts")
+      .where("postType", "==", "post")
+      .where("city", "==", city)
+      .where("country", "==", country)
+      .orderBy("engagementScore", "desc")
+      .limit(limit)
+      .get();
+
+    const posts = snapshot.docs.map(doc => {
+      const docData = doc.data();
+      return {
+        id: doc.id,
+        ...docData,
+      };
+    });
+
+    return posts;
+  } catch (error) {
+    logger.error("Error generating local news feed:", error);
+    throw new Error('Failed to generate local news feed.');
+  }
+});
+
+// =============================================================================
+// PEOPLE YOU MAY KNOW - Suggested Connections Algorithm
+// =============================================================================
+
+/**
+ * Algorithm for suggesting new connections ("People You May Know").
+ * 
+ * Ranks users based on:
+ * 1. Location Proximity (Same city/country)
+ * 2. Mutual Connections (Friends of friends)
+ * 3. Not currently connected and no pending requests.
+ */
+export const getSuggestedConnections = onCall({
+  enforceAppCheck: false,
+}, async (request: any) => {
+  const data = request.data || {};
+  const currentUserId = request.auth?.uid || data.userId;
+  
+  if (!currentUserId) {
+    throw new HttpsError("unauthenticated", "Must provide userId or be authenticated");
+  }
+
+  const limitCount = data.limit || 15;
+  const db = admin.firestore();
+
+  try {
+    // 1. Get current user profile for location info
+    const currentUserDoc = await db.collection("profiles").doc(currentUserId).get();
+    const currentUserData = currentUserDoc.data() || {};
+    const city = currentUserData.city || "";
+    const country = currentUserData.country || "";
+
+    // 2. Get current user's active connections to filter them out and find mutuals
+    const connectionsSnapshot = await db.collection("connections")
+      .where("participants", "array-contains", currentUserId)
+      .get();
+    
+    const existingConnectionIds = new Set<string>();
+    existingConnectionIds.add(currentUserId); // Don't suggest self
+
+    // Build a map of our friends' connections to calculate mutuals
+    const mutualCandidates = new Map<string, number>();
+
+    for (const doc of connectionsSnapshot.docs) {
+      const data = doc.data();
+      const otherId = data.userId1 === currentUserId ? data.userId2 : data.userId1;
+      existingConnectionIds.add(otherId);
+      
+      // Look up friends of this friend to find mutuals
+      const friendsOfFriend = await db.collection("connections")
+        .where("participants", "array-contains", otherId)
+        .limit(20) // Cap to avoid massive queries
+        .get();
+        
+      for (const fof of friendsOfFriend.docs) {
+        const fofData = fof.data();
+        const mutualId = fofData.userId1 === otherId ? fofData.userId2 : fofData.userId1;
+        if (mutualId !== currentUserId) {
+          mutualCandidates.set(mutualId, (mutualCandidates.get(mutualId) || 0) + 1);
+        }
+      }
+    }
+
+    // 3. Get pending sent/received requests to filter them out
+    const sentReqs = await db.collection("connection_requests")
+      .where("senderId", "==", currentUserId)
+      .where("status", "==", "pending")
+      .get();
+    sentReqs.forEach(doc => existingConnectionIds.add(doc.data().receiverId));
+
+    const receivedReqs = await db.collection("connection_requests")
+      .where("receiverId", "==", currentUserId)
+      .where("status", "==", "pending")
+      .get();
+    receivedReqs.forEach(doc => existingConnectionIds.add(doc.data().senderId));
+
+    // 4. Fetch random users in the same location to fill out suggestions
+    let locationUsers: any[] = [];
+    if (city && country) {
+      const locSnapshot = await db.collection("profiles")
+        .where("country", "==", country)
+        .where("city", "==", city)
+        .limit(50)
+        .get();
+        
+      locationUsers = locSnapshot.docs
+        .filter(doc => !existingConnectionIds.has(doc.id))
+        .map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    // 5. If we need more, fetch a few random recent profiles
+    let generalUsers: any[] = [];
+    if (locationUsers.length < limitCount) {
+      const genSnapshot = await db.collection("profiles")
+        .orderBy("lastActiveAt", "desc")
+        .limit(30)
+        .get();
+        
+      generalUsers = genSnapshot.docs
+        .filter(doc => !existingConnectionIds.has(doc.id))
+        .map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    // Combine and deduplicate candidates
+    const allCandidates = new Map<string, any>();
+    locationUsers.forEach(u => allCandidates.set(u.id, u));
+    generalUsers.forEach(u => allCandidates.set(u.id, u));
+
+    // Calculate score for each candidate
+    const scoredCandidates = Array.from(allCandidates.values()).map(user => {
+      let score = 0;
+      let reason = "Suggested for you";
+      
+      const mutualCount = mutualCandidates.get(user.id) || 0;
+      if (mutualCount > 0) {
+        score += mutualCount * 20; // 20 pts per mutual connection
+        reason = `${mutualCount} mutual connection${mutualCount > 1 ? 's' : ''}`;
+      } else if (user.city === city && user.country === country) {
+        score += 10;
+        reason = `Near you in ${city}`;
+      } else if (user.country === country) {
+        score += 5;
+        reason = `From ${country}`;
+      }
+      
+      return {
+        ...user,
+        algorithmScore: score,
+        suggestionReason: reason
+      };
+    });
+
+    // Sort by score descending
+    scoredCandidates.sort((a, b) => b.algorithmScore - a.algorithmScore);
+
+    // Return top N
+    return scoredCandidates.slice(0, limitCount).map(user => ({
+      userId: user.id,
+      displayName: user.displayName || user.name || 'User',
+      photoUrl: user.photoUrl || user.avatarUrl || null,
+      bio: user.bio || '',
+      discoveryUsername: user.discoveryUsername || '',
+      reason: user.suggestionReason
+    }));
+
+  } catch (error) {
+    logger.error("Error generating suggested connections:", error);
+    throw new HttpsError("internal", "Failed to generate suggestions.");
+  }
+});
 
 /**
  * Increments likeCount and updates trendingScore on the parent local news post when a like is created.
@@ -3686,21 +3923,12 @@ export const onLocalNewsLikeCreated = onDocumentCreated(
 
         const data = postDoc.data()!;
         const newLikes = (data.likeCount || 0) + 1;
-        const comments = data.commentCount || 0;
-        const createdAt = data.createdAt as admin.firestore.Timestamp;
         
-        if (!createdAt) {
-          transaction.update(postRef, { likeCount: newLikes });
-          return;
-        }
-
-        const trendingScore = calculateTrendingScore(createdAt, newLikes, comments);
         transaction.update(postRef, {
           likeCount: newLikes,
-          trendingScore: trendingScore,
         });
       });
-      logger.log(`Incremented likeCount and updated trendingScore on local news post ${postId}`);
+      logger.log(`Incremented likeCount on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing likeCount on local news post ${postId}:`, error);
     }
@@ -3726,21 +3954,12 @@ export const onLocalNewsLikeDeleted = onDocumentDeleted(
 
         const data = postDoc.data()!;
         const newLikes = Math.max(0, (data.likeCount || 0) - 1);
-        const comments = data.commentCount || 0;
-        const createdAt = data.createdAt as admin.firestore.Timestamp;
         
-        if (!createdAt) {
-          transaction.update(postRef, { likeCount: newLikes });
-          return;
-        }
-
-        const trendingScore = calculateTrendingScore(createdAt, newLikes, comments);
         transaction.update(postRef, {
           likeCount: newLikes,
-          trendingScore: trendingScore,
         });
       });
-      logger.log(`Decremented likeCount and updated trendingScore on local news post ${postId}`);
+      logger.log(`Decremented likeCount on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing likeCount on local news post ${postId}:`, error);
     }
@@ -3765,22 +3984,13 @@ export const onLocalNewsCommentCreated = onDocumentCreated(
         if (!postDoc.exists) return;
 
         const data = postDoc.data()!;
-        const likes = data.likeCount || 0;
         const newComments = (data.commentCount || 0) + 1;
-        const createdAt = data.createdAt as admin.firestore.Timestamp;
         
-        if (!createdAt) {
-          transaction.update(postRef, { commentCount: newComments });
-          return;
-        }
-
-        const trendingScore = calculateTrendingScore(createdAt, likes, newComments);
         transaction.update(postRef, {
           commentCount: newComments,
-          trendingScore: trendingScore,
         });
       });
-      logger.log(`Incremented commentCount and updated trendingScore on local news post ${postId}`);
+      logger.log(`Incremented commentCount on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error incrementing commentCount on local news post ${postId}:`, error);
     }
@@ -3805,22 +4015,13 @@ export const onLocalNewsCommentDeleted = onDocumentDeleted(
         if (!postDoc.exists) return;
 
         const data = postDoc.data()!;
-        const likes = data.likeCount || 0;
         const newComments = Math.max(0, (data.commentCount || 0) - 1);
-        const createdAt = data.createdAt as admin.firestore.Timestamp;
         
-        if (!createdAt) {
-          transaction.update(postRef, { commentCount: newComments });
-          return;
-        }
-
-        const trendingScore = calculateTrendingScore(createdAt, likes, newComments);
         transaction.update(postRef, {
           commentCount: newComments,
-          trendingScore: trendingScore,
         });
       });
-      logger.log(`Decremented commentCount and updated trendingScore on local news post ${postId}`);
+      logger.log(`Decremented commentCount on local news post ${postId}`);
     } catch (error) {
       logger.error(`Error decrementing commentCount on local news post ${postId}:`, error);
     }

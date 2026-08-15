@@ -12,7 +12,6 @@ import '../../../local_news/presentation/widgets/user_news_posts_grid.dart';
 import '../../../posts/presentation/bloc/user_posts_bloc.dart';
 import '../../../posts/presentation/widgets/user_posts_grid.dart';
 import '../bloc/profile_bloc.dart';
-import '../widgets/mood_selector.dart';
 
 /// Page showing the current user's own public profile in the same
 /// Instagram-style layout used for other users' profiles.
@@ -344,11 +343,6 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
   }
 }
 
-/// Strips leading emoji + space from a string like '👋 Open to talk' → 'Open to talk'.
-String _stripEmoji(String s) {
-  final idx = s.indexOf(' ');
-  return idx > 0 ? s.substring(idx + 1) : s;
-}
 
 class _StatItem extends StatelessWidget {
   final String label;

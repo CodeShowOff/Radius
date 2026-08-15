@@ -1200,7 +1200,6 @@ class _NearbyUsersListState extends State<_NearbyUsersList> {
                     // Performance optimizations
                     itemCount: filteredUsers.length + 1, // +1 for footer
                     itemExtent: null, // Let items size themselves
-                    cacheExtent: 200, // Cache items off-screen
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),

@@ -161,4 +161,29 @@ class NewsInteractionRepositoryImpl implements INewsInteractionRepository {
         .commentsStream(postId: postId, limit: limit)
         .map((models) => models.map((m) => m.toEntity()).toList());
   }
+
+  @override
+  Future<Either<Failure, void>> recordEngagement({
+    required String postId,
+    required String userId,
+    required int score,
+    required String actionType,
+  }) async {
+    try {
+      await _service.recordEngagement(
+        postId: postId,
+        userId: userId,
+        score: score,
+        actionType: actionType,
+      );
+      return const Right(null);
+    } on FirebaseException catch (e) {
+      return Left(DatabaseFailure(
+        message: e.message ?? 'Failed to record engagement',
+        code: e.code,
+      ));
+    } catch (e) {
+      return Left(DatabaseFailure(message: 'Failed to record engagement: $e'));
+    }
+  }
 }

@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:http_parser/http_parser.dart';
 
 import '../../../core/error/exceptions.dart';
 import '../../chat/data/media_upload_service.dart';
@@ -96,7 +97,6 @@ class GroupMediaUploadService {
 
       final fileSize = await file.length();
       final fileName = file.path.split(Platform.pathSeparator).last;
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final extension = fileName.contains('.')
           ? fileName.substring(fileName.lastIndexOf('.'))
           : '';
@@ -113,7 +113,15 @@ class GroupMediaUploadService {
       // HTTP Upload
       if (onProgress != null) onProgress(0.1);
       final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      
+      final mimeType = _getContentType(extension).split('/');
+      final mediaType = MediaType(mimeType[0], mimeType[1]);
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'file', 
+        file.path,
+        contentType: mediaType,
+      ));
       
       final response = await request.send();
       if (response.statusCode != 200) {
@@ -140,8 +148,7 @@ class GroupMediaUploadService {
         duration: duration,
       );
     } catch (e, stack) {
-      if (e is DatabaseException) rethrow;
-      _logger.e('Upload error', error: e, stackTrace: stack);
+      _logger.e('Group upload error', error: e, stackTrace: stack);
       throw DatabaseException(
         message: 'Failed to upload file',
         code: 'upload-failed',
@@ -150,8 +157,10 @@ class GroupMediaUploadService {
     }
   }
 
+  /// Gets the content type based on file extension.
   String _getContentType(String extension) {
     switch (extension.toLowerCase()) {
+      // Images
       case '.jpg':
       case '.jpeg':
         return 'image/jpeg';
@@ -161,6 +170,8 @@ class GroupMediaUploadService {
         return 'image/gif';
       case '.webp':
         return 'image/webp';
+
+      // Audio
       case '.mp3':
         return 'audio/mpeg';
       case '.m4a':
@@ -171,6 +182,8 @@ class GroupMediaUploadService {
         return 'audio/wav';
       case '.ogg':
         return 'audio/ogg';
+
+      // Documents
       case '.pdf':
         return 'application/pdf';
       case '.doc':
@@ -183,6 +196,15 @@ class GroupMediaUploadService {
         return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       case '.txt':
         return 'text/plain';
+
+      // Video
+      case '.mp4':
+        return 'video/mp4';
+      case '.mov':
+        return 'video/quicktime';
+      case '.avi':
+        return 'video/x-msvideo';
+
       default:
         return 'application/octet-stream';
     }

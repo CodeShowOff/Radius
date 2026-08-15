@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../posts/domain/entities/media_item.dart';
@@ -27,23 +31,56 @@ class ReelPlayerCard extends StatefulWidget {
   State<ReelPlayerCard> createState() => _ReelPlayerCardState();
 }
 
-class _ReelPlayerCardState extends State<ReelPlayerCard> {
+class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProviderStateMixin {
   VideoPlayerController? _controller;
-  bool _isMuted = false;
   bool _showPauseIcon = false;
   bool _hasError = false;
   bool _isInitialized = false;
 
+  final Stopwatch _watchStopwatch = Stopwatch();
+  int _totalAccumulatedWatchMs = 0;
+  bool _watchReported = false;
+  late final NewsInteractionCubit _cubit;
+  late final AnimationController _spinController;
+
   @override
   void initState() {
     super.initState();
+    _cubit = context.read<NewsInteractionCubit>();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
     _initVideo();
   }
 
   @override
   void dispose() {
+    _reportWatchTime();
+    _spinController.dispose();
     _controller?.dispose();
     super.dispose();
+  }
+
+  void _reportWatchTime() {
+    if (_watchReported) return;
+    _watchReported = true;
+
+    if (_watchStopwatch.isRunning) {
+      _watchStopwatch.stop();
+      _totalAccumulatedWatchMs += _watchStopwatch.elapsedMilliseconds;
+    }
+
+    if (_totalAccumulatedWatchMs > 0) {
+      final totalMs = (_controller != null && _controller!.value.isInitialized)
+          ? _controller!.value.duration.inMilliseconds
+          : 0;
+      
+      _cubit.recordWatchTime(
+        watchedMs: _totalAccumulatedWatchMs,
+        totalMs: totalMs,
+      );
+    }
   }
 
   Future<void> _initVideo() async {
@@ -98,6 +135,9 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
     if (c == null || !c.value.isInitialized) return;
 
     if (info.visibleFraction >= 0.8) {
+      if (!_watchStopwatch.isRunning) {
+        _watchStopwatch.start();
+      }
       if (!c.value.isPlaying) {
         c.play();
         if (mounted) {
@@ -106,10 +146,17 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
           });
         }
       }
+      if (!_spinController.isAnimating) _spinController.repeat();
     } else {
+      if (_watchStopwatch.isRunning) {
+        _watchStopwatch.stop();
+        _totalAccumulatedWatchMs += _watchStopwatch.elapsedMilliseconds;
+        _watchStopwatch.reset();
+      }
       if (c.value.isPlaying) {
         c.pause();
       }
+      _spinController.stop();
     }
   }
 
@@ -121,21 +168,15 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
       if (c.value.isPlaying) {
         c.pause();
         _showPauseIcon = true;
+        _spinController.stop();
       } else {
         c.play();
         _showPauseIcon = false;
+        _spinController.repeat();
       }
     });
   }
 
-  void _toggleMute() {
-    final c = _controller;
-    if (c == null) return;
-    setState(() {
-      _isMuted = !_isMuted;
-      c.setVolume(_isMuted ? 0 : 1);
-    });
-  }
 
   void _onLikeTap(BuildContext context) {
     final authState = context.read<AuthBloc>().state;
@@ -157,6 +198,17 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
       currentUserName: authState.user.displayName ?? authState.user.username,
       currentUserPhotoUrl: authState.user.avatarUrl,
     );
+  }
+
+  void _onShareTap(BuildContext context) {
+    final textToShare = widget.reel.text != null && widget.reel.text!.isNotEmpty
+        ? 'Check out this reel by ${widget.reel.authorName}: ${widget.reel.text}'
+        : 'Check out this reel by ${widget.reel.authorName} on Radius!';
+    
+    SharePlus.instance.share(ShareParams(text: textToShare)).then((_) {
+      if (!context.mounted) return;
+      context.read<NewsInteractionCubit>().recordShare();
+    });
   }
 
   static String _formatCount(int count) {
@@ -193,12 +245,51 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                   ),
                 ),
 
-              // Bottom gradient for text readability
+              // Top Gradient & "Reels" Header
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 120,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.5),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 16,
+                left: 16,
+                right: 16,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Reels',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
+                    ),
+                    const Icon(CupertinoIcons.camera, color: Colors.white, size: 28),
+                  ],
+                ),
+              ),
+
+              // Bottom gradient for text readability (taller & smoother)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                height: 200,
+                height: 350,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -206,84 +297,127 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withValues(alpha: 0.7),
+                        Colors.black.withValues(alpha: 0.3),
+                        Colors.black.withValues(alpha: 0.8),
                       ],
                     ),
                   ),
                 ),
               ),
 
-              // Bottom overlay — author + caption
+              // Bottom Left overlay — author, caption, audio track
               Positioned(
                 left: 16,
-                right: 60,
-                bottom: 16,
+                right: 70,
+                bottom: 24,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Author row
+                    // Author row with Follow button
                     Row(
                       children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundImage: widget.reel.authorPhotoUrl != null
-                              ? NetworkImage(widget.reel.authorPhotoUrl!)
-                              : null,
-                          child: widget.reel.authorPhotoUrl == null
-                              ? Text(
-                                  widget.reel.authorName.isNotEmpty
-                                      ? widget.reel.authorName[0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                      fontSize: 14, color: Colors.white),
-                                )
-                              : null,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundImage: widget.reel.authorPhotoUrl != null
+                                  ? NetworkImage(widget.reel.authorPhotoUrl!)
+                                  : null,
+                              child: widget.reel.authorPhotoUrl == null
+                                  ? Text(
+                                      widget.reel.authorName.isNotEmpty
+                                          ? widget.reel.authorName[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                          fontSize: 14, color: Colors.white),
+                                    )
+                                  : null,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Flexible(
                           child: Text(
                             widget.reel.authorName,
                             style: theme.textTheme.titleSmall?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
+                              fontSize: 15,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white, width: 1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Follow',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
+                    const SizedBox(height: 12),
 
                     // Caption
                     if (widget.reel.text != null &&
                         widget.reel.text!.isNotEmpty) ...[
-                      const SizedBox(height: 8),
                       Text(
                         widget.reel.text!,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white,
+                          fontSize: 14,
                         ),
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 12),
                     ],
 
-                    // Location
-                    const SizedBox(height: 4),
+                    // Audio Track Row
                     Row(
                       children: [
                         const Icon(
+                          CupertinoIcons.music_note_2,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '${widget.reel.authorName} • Original Audio',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(
                           Icons.location_on,
                           size: 14,
-                          color: Colors.white70,
+                          color: Colors.white,
                         ),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             widget.reel.locationLabel,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white70,
+                              color: Colors.white,
+                              fontSize: 13,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -298,7 +432,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
               // Right side — interaction buttons + mute
               Positioned(
                 right: 8,
-                bottom: 80,
+                bottom: 24,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -310,8 +444,8 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                       builder: (context, state) {
                         return _ReelActionButton(
                           icon: state.isLiked
-                              ? Icons.favorite
-                              : Icons.favorite_border,
+                              ? CupertinoIcons.heart_fill
+                              : CupertinoIcons.heart,
                           label: _formatCount(state.likeCount),
                           color: state.isLiked ? Colors.red : Colors.white,
                           onTap: () => _onLikeTap(context),
@@ -325,7 +459,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                           prev.commentCount != curr.commentCount,
                       builder: (context, state) {
                         return _ReelActionButton(
-                          icon: Icons.chat_bubble_outline,
+                          icon: CupertinoIcons.chat_bubble,
                           label: _formatCount(state.commentCount),
                           color: Colors.white,
                           onTap: () => _onCommentTap(context),
@@ -335,25 +469,47 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
                     const SizedBox(height: 16),
                     // Share button
                     _ReelActionButton(
-                      icon: Icons.share_outlined,
-                      label: '',
+                      icon: CupertinoIcons.paperplane,
+                      label: 'Share',
                       color: Colors.white,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Share will be available soon!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                      onTap: () => _onShareTap(context),
                     ),
                     const SizedBox(height: 16),
-                    // Mute button
+                    // More button
                     _ReelActionButton(
-                      icon: _isMuted ? Icons.volume_off : Icons.volume_up,
+                      icon: Icons.more_vert,
                       label: '',
                       color: Colors.white,
-                      onTap: _toggleMute,
+                      onTap: () {}, // Optional menu
+                    ),
+                    const SizedBox(height: 16),
+                    // Spinning audio disc
+                    AnimatedBuilder(
+                      animation: _spinController,
+                      builder: (_, child) {
+                        return Transform.rotate(
+                          angle: _spinController.value * 2 * math.pi,
+                          child: child,
+                        );
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24, width: 2),
+                          color: Colors.black87,
+                          image: widget.reel.authorPhotoUrl != null
+                              ? DecorationImage(
+                                  image: NetworkImage(widget.reel.authorPhotoUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: widget.reel.authorPhotoUrl == null
+                            ? const Icon(CupertinoIcons.music_note, color: Colors.white, size: 20)
+                            : null,
+                      ),
                     ),
                   ],
                 ),
@@ -450,15 +606,15 @@ class _ReelActionButton extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 28, color: color),
+          Icon(icon, size: 30, color: color),
           if (label.isNotEmpty) ...[
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

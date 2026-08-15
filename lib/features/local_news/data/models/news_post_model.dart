@@ -103,6 +103,68 @@ class NewsPostModel extends NewsPost {
     );
   }
 
+  /// Creates model from a raw map (e.g., from Node.js REST API).
+  factory NewsPostModel.fromMap(Map<String, dynamic> data, String docId) {
+    final authorId = data['authorId'] as String?;
+    
+    // Node.js Firestore Timestamps serialize as {_seconds, _nanoseconds}
+    DateTime parseTimestamp(dynamic ts) {
+      if (ts == null) return DateTime.now();
+      if (ts is Map && ts.containsKey('_seconds')) {
+        return DateTime.fromMillisecondsSinceEpoch((ts['_seconds'] as int) * 1000);
+      }
+      if (ts is String) {
+        return DateTime.parse(ts);
+      }
+      return DateTime.now();
+    }
+
+    final createdAt = parseTimestamp(data['createdAt']);
+    final updatedAt = parseTimestamp(data['updatedAt']);
+
+    if (authorId == null) {
+      throw FormatException('NewsPost map missing authorId');
+    }
+
+    // Parse media items
+    final rawMediaItems = data['mediaItems'] as List<dynamic>? ?? [];
+    final mediaItems = rawMediaItems
+        .map((item) =>
+            MediaItemModel.fromMap(item as Map<String, dynamic>).toEntity())
+        .toList();
+
+    // Parse location GeoPoint
+    double latitude = 0.0;
+    double longitude = 0.0;
+    final geoPoint = data['location'];
+    if (geoPoint is Map) {
+      latitude = (geoPoint['_latitude'] as num?)?.toDouble() ?? 0.0;
+      longitude = (geoPoint['_longitude'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    return NewsPostModel(
+      id: docId,
+      authorId: authorId,
+      text: data['text'] as String?,
+      mediaItems: mediaItems,
+      authorName: data['authorName'] as String? ?? '',
+      authorPhotoUrl: data['authorPhotoUrl'] as String?,
+      latitude: latitude,
+      longitude: longitude,
+      geoHash: data['geoHash'] as String? ?? '',
+      district: data['district'] as String? ?? '',
+      city: data['city'] as String? ?? '',
+      locality: data['locality'] as String? ?? '',
+      country: data['country'] as String? ?? '',
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      likeCount: (data['likeCount'] as int?) ?? 0,
+      commentCount: (data['commentCount'] as int?) ?? 0,
+      postType: data['postType'] as String? ?? 'post',
+      trendingScore: (data['trendingScore'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
   /// Creates model from domain entity.
   factory NewsPostModel.fromEntity(NewsPost post) {
     return NewsPostModel(

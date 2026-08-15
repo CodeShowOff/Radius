@@ -1,8 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -31,46 +32,50 @@ class NewsPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Author header + location badge
-            _NewsPostHeader(
-              authorName: post.authorName,
-              authorPhotoUrl: post.authorPhotoUrl,
-              createdAt: post.createdAt,
-              isOwnPost: isOwnPost,
-              onDelete: onDelete,
-            ),
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Author header + location badge
+          _NewsPostHeader(
+            authorName: post.authorName,
+            authorPhotoUrl: post.authorPhotoUrl,
+            locationText: post.city.isNotEmpty ? '${post.city}, ${post.country}' : '',
+            isOwnPost: isOwnPost,
+            onDelete: onDelete,
+          ),
 
-            // Media content
-            if (post.hasMedia)
-              post.hasMultipleMedia
-                  ? _MediaCarousel(mediaItems: post.mediaItems)
-                  : _SingleMedia(mediaItem: post.mediaItems.first),
+          // 2. Media content (Edge-to-edge)
+          if (post.hasMedia)
+            post.hasMultipleMedia
+                ? _MediaCarousel(mediaItems: post.mediaItems)
+                : _SingleMedia(mediaItem: post.mediaItems.first),
 
-            // Text content
-            if (post.text != null && post.text!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                  post.text!,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  maxLines: 6,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+          // 3. Interactive Action Bar (Like, Comment, Share)
+          _ActionBar(onCommentTap: () => _openComments(context)),
 
-            // Like / Comment actions
-            const _ActionBar(),
-          ],
-        ),
+          // 4. Caption, Likes Count, and Timestamp
+          _PostCaption(
+            post: post,
+            onCommentTap: () => _openComments(context),
+          ),
+          
+          const Divider(height: 1, thickness: 0.5),
+        ],
       ),
+    );
+  }
+
+  void _openComments(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    NewsCommentsBottomSheet.show(
+      context: context,
+      currentUserId: authState.user.id,
+      currentUserName: authState.user.displayName ?? authState.user.username,
+      currentUserPhotoUrl: authState.user.avatarUrl,
     );
   }
 }
@@ -81,14 +86,14 @@ class NewsPostCard extends StatelessWidget {
 class _NewsPostHeader extends StatelessWidget {
   final String authorName;
   final String? authorPhotoUrl;
-  final DateTime createdAt;
+  final String locationText;
   final bool isOwnPost;
   final VoidCallback? onDelete;
 
   const _NewsPostHeader({
     required this.authorName,
     this.authorPhotoUrl,
-    required this.createdAt,
+    required this.locationText,
     this.isOwnPost = false,
     this.onDelete,
   });
@@ -98,15 +103,15 @@ class _NewsPostHeader extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
           CachedAvatar(
             imageUrl: authorPhotoUrl,
             name: authorName,
-            radius: 20,
+            radius: 16,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,13 +119,20 @@ class _NewsPostHeader extends StatelessWidget {
                 Text(
                   authorName,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                _TimeAgoText(dateTime: createdAt),
+                if (locationText.isNotEmpty)
+                  Text(
+                    locationText,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),
@@ -158,7 +170,9 @@ class _NewsPostHeader extends StatelessWidget {
 // Interactive action bar with like/comment buttons
 // ---------------------------------------------------------------------------
 class _ActionBar extends StatelessWidget {
-  const _ActionBar();
+  final VoidCallback onCommentTap;
+  
+  const _ActionBar({required this.onCommentTap});
 
   @override
   Widget build(BuildContext context) {
@@ -167,95 +181,48 @@ class _ActionBar extends StatelessWidget {
     return BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
       builder: (context, state) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Row(
             children: [
               // Like button
-              InkWell(
+              GestureDetector(
                 onTap: () => _onLikeTap(context),
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        state.isLiked
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        size: 22,
-                        color: state.isLiked
-                            ? Colors.red
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                      if (state.likeCount > 0) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(state.likeCount),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                child: Icon(
+                  state.isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                  size: 28,
+                  color: state.isLiked ? Colors.red : theme.colorScheme.onSurface,
                 ),
               ),
-
-              const SizedBox(width: 8),
-
+              const SizedBox(width: 16),
               // Comment button
-              InkWell(
-                onTap: () => _onCommentTap(context),
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline,
-                        size: 22,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      if (state.commentCount > 0) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(state.commentCount),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+              GestureDetector(
+                onTap: onCommentTap,
+                child: Icon(
+                  CupertinoIcons.chat_bubble,
+                  size: 28,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
-
-              const SizedBox(width: 8),
-
+              const SizedBox(width: 16),
               // Share button
-              InkWell(
+              GestureDetector(
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Share will be available soon!'),
-                      duration: Duration(seconds: 2),
-                    ),
+                    const SnackBar(content: Text('Share will be available soon!')),
                   );
                 },
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Icon(
-                    Icons.share_outlined,
-                    size: 22,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                child: Icon(
+                  CupertinoIcons.paperplane,
+                  size: 28,
+                  color: theme.colorScheme.onSurface,
                 ),
+              ),
+              const Spacer(),
+              // Bookmark placeholder
+              Icon(
+                CupertinoIcons.bookmark,
+                size: 28,
+                color: theme.colorScheme.onSurface,
               ),
             ],
           ),
@@ -272,29 +239,92 @@ class _ActionBar extends StatelessWidget {
           userName: authState.user.displayName ?? authState.user.username,
           userPhotoUrl: authState.user.avatarUrl,
         );
-  }
+  }}
 
-  void _onCommentTap(BuildContext context) {
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return;
+// ---------------------------------------------------------------------------
+// Caption, Likes, and Timestamp Below Action Bar
+// ---------------------------------------------------------------------------
+class _PostCaption extends StatelessWidget {
+  final NewsPost post;
+  final VoidCallback onCommentTap;
 
-    NewsCommentsBottomSheet.show(
-      context: context,
-      currentUserId: authState.user.id,
-      currentUserName: authState.user.displayName ?? authState.user.username,
-      currentUserPhotoUrl: authState.user.avatarUrl,
-    );
-  }
+  const _PostCaption({required this.post, required this.onCommentTap});
 
   static String _formatCount(int count) {
     if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
     if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
     return count.toString();
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
+      builder: (context, state) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Likes count
+              if (state.likeCount > 0)
+                Text(
+                  '${_formatCount(state.likeCount)} likes',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              
+              const SizedBox(height: 4),
+
+              // 2. Author + Caption Text inline
+              if (post.text != null && post.text!.isNotEmpty)
+                RichText(
+                  text: TextSpan(
+                    style: theme.textTheme.bodyMedium,
+                    children: [
+                      TextSpan(
+                        text: '${post.authorName} ',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(text: post.text!),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+
+              const SizedBox(height: 4),
+
+              // 3. View comments link
+              if (state.commentCount > 0)
+                GestureDetector(
+                  onTap: onCommentTap,
+                  child: Text(
+                    'View all ${_formatCount(state.commentCount)} comments',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 4),
+
+              // 4. Timestamp
+              _TimeAgoText(dateTime: post.createdAt),
+              
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Time ago
+// Time ago formatting
 // ---------------------------------------------------------------------------
 class _TimeAgoText extends StatelessWidget {
   final DateTime dateTime;
@@ -309,21 +339,23 @@ class _TimeAgoText extends StatelessWidget {
 
     String text;
     if (difference.inMinutes < 1) {
-      text = 'Just now';
+      text = 'JUST NOW';
     } else if (difference.inHours < 1) {
-      text = '${difference.inMinutes}m';
+      text = '${difference.inMinutes} MINUTES AGO';
     } else if (difference.inDays < 1) {
-      text = '${difference.inHours}h';
+      text = '${difference.inHours} HOURS AGO';
     } else if (difference.inDays < 7) {
-      text = '${difference.inDays}d';
+      text = '${difference.inDays} DAYS AGO';
     } else {
-      text = '${(difference.inDays / 7).floor()}w';
+      text = '${(difference.inDays / 7).floor()} WEEKS AGO';
     }
 
     return Text(
       text,
       style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.outline,
+        color: theme.colorScheme.onSurfaceVariant,
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -354,23 +386,31 @@ class _NewsImage extends StatelessWidget {
 
   const _NewsImage({required this.imageUrl});
 
+  static final _imageCacheManager = CacheManager(
+    Config(
+      'news_images',
+      stalePeriod: const Duration(days: 7),
+      maxNrOfCacheObjects: 150,
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 400),
+      constraints: const BoxConstraints(maxHeight: 500),
       child: CachedNetworkImage(
+        cacheManager: _imageCacheManager,
         imageUrl: imageUrl,
         width: double.infinity,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
-          height: 300,
+          height: 350,
           color: theme.colorScheme.surfaceContainerHighest,
-          child: const Center(child: CircularProgressIndicator()),
         ),
         errorWidget: (context, url, error) => Container(
-          height: 200,
+          height: 350,
           color: theme.colorScheme.surfaceContainerHighest,
           child: Center(
             child: Icon(

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../domain/entities/news_location.dart';
+import '../bloc/news_feed_bloc.dart';
 import '../bloc/news_location_bloc.dart';
 import '../bloc/reels_feed_bloc.dart';
 import '../widgets/manual_location_picker.dart';

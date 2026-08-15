@@ -321,27 +321,6 @@ class NewsMediaService {
     }
   }
 
-  String _getContentType(String extension) {
-    switch (extension.toLowerCase()) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
-      case '.gif':
-        return 'image/gif';
-      case '.webp':
-        return 'image/webp';
-      case '.mp4':
-        return 'video/mp4';
-      case '.mov':
-        return 'video/quicktime';
-      case '.avi':
-        return 'video/x-msvideo';
-      default:
-        return 'application/octet-stream';
-    }
-  }
 
   // Removed _mapStorageException
 }

@@ -168,7 +168,7 @@ class AuthRepositoryImpl implements IAuthRepository {
         // Force token refresh before creating profile
         await _authService.getIdToken(forceRefresh: true);
         
-        return _createUserProfileWithRetry(
+        return await _createUserProfileWithRetry(
             firebaseUser.uid, email, firebaseUser.displayName);
       }
 
@@ -200,7 +200,7 @@ class AuthRepositoryImpl implements IAuthRepository {
 
       // Use retry logic for the entire Firestore operation since both read and write
       // can fail with permission-denied during token propagation
-      return _handleGoogleSignInFirestoreOperations(firebaseUser);
+      return await _handleGoogleSignInFirestoreOperations(firebaseUser);
     } on AuthException catch (e) {
       return Left(AuthFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -361,7 +361,7 @@ class AuthRepositoryImpl implements IAuthRepository {
       await _authService.getIdToken(forceRefresh: true);
 
       // Create user profile in Firestore with retry logic
-      return _createUserProfileWithRetry(
+      return await _createUserProfileWithRetry(
         firebaseUser.uid,
         email,
         displayName,

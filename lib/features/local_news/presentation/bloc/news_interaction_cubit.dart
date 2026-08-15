@@ -93,7 +93,15 @@ class NewsInteractionCubit extends Cubit<NewsInteractionState> {
           ));
         }
       },
-      (isLiked) {
+      (isLikedResult) {
+        // Record engagement
+        _repository.recordEngagement(
+          postId: state.postId!,
+          userId: state.userId!,
+          score: isLikedResult ? 5 : -5, // +5 for like, -5 for unlike
+          actionType: isLikedResult ? 'like' : 'unlike',
+        );
+
         if (!isClosed) {
           emit(state.copyWith(isLikeInProgress: false));
         }
@@ -157,6 +165,14 @@ class NewsInteractionCubit extends Cubit<NewsInteractionState> {
         }
       },
       (comment) {
+        // Record engagement
+        _repository.recordEngagement(
+          postId: state.postId!,
+          userId: state.userId!,
+          score: 10, // +10 points for comment
+          actionType: 'comment',
+        );
+
         if (!isClosed) {
           emit(state.copyWith(
             comments: [comment, ...state.comments],
@@ -199,6 +215,39 @@ class NewsInteractionCubit extends Cubit<NewsInteractionState> {
         }
       },
       (_) {},
+    );
+  }
+
+  /// Records a share action engagement.
+  void recordShare() {
+    if (state.postId == null || state.userId == null) return;
+    _repository.recordEngagement(
+      postId: state.postId!,
+      userId: state.userId!,
+      score: 20, // +20 points for share
+      actionType: 'share',
+    );
+  }
+
+  /// Records watch time engagement.
+  void recordWatchTime({required int watchedMs, required int totalMs}) {
+    if (state.postId == null || state.userId == null) return;
+    
+    // Evaluate score based on rules
+    int score = 0;
+    if (watchedMs < 1000) {
+      score = -5; // Swiped away in less than 1 second
+    } else if (watchedMs >= totalMs && totalMs > 0) {
+      score = 10; // Watched 100%
+    } else {
+      score = 1; // Base score for partial watch
+    }
+
+    _repository.recordEngagement(
+      postId: state.postId!,
+      userId: state.userId!,
+      score: score,
+      actionType: 'watch',
     );
   }
 }

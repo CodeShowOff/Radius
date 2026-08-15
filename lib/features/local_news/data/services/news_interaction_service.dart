@@ -236,4 +236,45 @@ class NewsInteractionService {
             .map((doc) => CommentModel.fromFirestore(doc, postId))
             .toList());
   }
+
+  // ─── Engagement Tracking ──────────────────────────────────────────────
+
+  /// Records an engagement action and score for a news post.
+  Future<void> recordEngagement({
+    required String postId,
+    required String userId,
+    required int score,
+    required String actionType,
+  }) async {
+    try {
+      final postRef = _postsRef.doc(postId);
+      
+      // We run this in a transaction or just batch write. Let's use a batch
+      // to increment the score on the post, and log the action.
+      final batch = _firestore.batch();
+
+      // 1. Increment total engagement score on the post
+      batch.set(
+        postRef,
+        {'engagementScore': FieldValue.increment(score)},
+        SetOptions(merge: true),
+      );
+
+      // 2. Record the specific action to prevent double-counting or for analytics
+      // Use a subcollection for engagement logs. We use auto-id for the log doc.
+      final engagementRef = postRef.collection('engagements').doc();
+      batch.set(engagementRef, {
+        'userId': userId,
+        'actionType': actionType,
+        'score': score,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    } catch (e, stack) {
+      _logger.e('Error recording engagement for news post $postId',
+          error: e, stackTrace: stack);
+      rethrow;
+    }
+  }
 }
