@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/widgets/linkified_text.dart';
@@ -42,12 +42,12 @@ class MessageBubble extends StatelessWidget {
         ? theme.colorScheme.primary
         : theme.colorScheme.surfaceContainerHighest;
 
-    // Pre-compute border radius
+    // Pre-compute border radius (tail at bottom, sharp corner for tail)
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
-      bottomLeft: Radius.circular(isMe && showTail ? 18 : 4),
-      bottomRight: Radius.circular(!isMe && showTail ? 18 : 4),
+      bottomLeft: Radius.circular(isMe ? 18 : (showTail ? 4 : 18)),
+      bottomRight: Radius.circular(isMe ? (showTail ? 4 : 18) : 18),
     );
 
     // Pre-compute padding
@@ -272,28 +272,31 @@ class _MessageTextWithTime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LinkifiedText(
-      text: message.text,
-      style: theme.textTheme.bodyLarge?.copyWith(
-        color: isMe
-            ? theme.colorScheme.onPrimary
-            : theme.colorScheme.onSurface,
-        height: 1.3,
-      ) ?? const TextStyle(),
-      linkColor: isMe
-          ? theme.colorScheme.onPrimary
-          : theme.colorScheme.primary,
-      trailingSpan: WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 6),
+    return Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: [
+        LinkifiedText(
+          text: '${message.text}   ', // Small trailing space to avoid overlapping meta
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: isMe
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurface,
+            height: 1.3,
+          ) ?? const TextStyle(),
+          linkColor: isMe
+              ? theme.colorScheme.onPrimary
+              : theme.colorScheme.primary,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 1),
           child: _MessageMeta(
             message: message,
             isMe: isMe,
             theme: theme,
           ),
         ),
-      ),
+      ],
     );
   }
 }

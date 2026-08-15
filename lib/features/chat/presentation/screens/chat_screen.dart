@@ -19,11 +19,14 @@ import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../data/audio_session_manager.dart';
 import '../../data/chat_service.dart';
-import '../../domain/entities/message.dart';
+
 import '../bloc/chat_bloc.dart';
 import '../bloc/conversations_bloc.dart';
-import '../widgets/chat_input.dart';
-import '../widgets/message_bubble.dart';
+import 'package:flutter_chat_ui/flutter_chat_ui.dart' hide Message, ChatState;
+import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
+import 'package:file_picker/file_picker.dart';
+import 'photo_viewer_screen.dart';
+import 'video_viewer_screen.dart';
 
 /// Main chat screen for a conversation.
 class ChatScreen extends StatefulWidget {
@@ -52,16 +55,11 @@ class ChatScreen extends StatefulWidget {
 /// - App resumes from pause
 /// - Device wakes from sleep
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  final ScrollController _scrollController = ScrollController();
-  bool _isLoadingMore = false;
+
   Connection? _connection;
 
   String? _currentUserName;
   String? _currentUserPhotoUrl;
-
-  /// Whether we've already scrolled to the first unread message.
-  /// Prevents repeated scrolling on stream updates.
-  bool _hasScrolledToUnread = false;
 
   // Global audio session manager — ensures only one audio plays at a time
   late final AudioSessionManager _audioSessionManager;
@@ -91,7 +89,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _audioSessionManager = AudioSessionManager();
-    _scrollController.addListener(_onScroll);
     _checkConnectionStatus();
     _initPresenceTracking();
     _initReconnectionHandling();
@@ -250,8 +247,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // CRITICAL: Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
     
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
     _audioSessionManager.dispose();
     
     // Cancel reconnection subscription
@@ -290,101 +285,126 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _onScroll() {
-    // Load more when near top (inverted list)
-    if (_scrollController.position.pixels >=
-            _scrollController.position.maxScrollExtent - 200 &&
-        !_isLoadingMore) {
-      try {
-        final bloc = context.read<ChatBloc>();
-        if (!bloc.isClosed && bloc.state.hasMore && bloc.state.status != ChatStatus.loading) {
-          _isLoadingMore = true;
-          bloc.add(const ChatLoadMore());
-        }
-      } catch (_) {
-        // BLoC not available (screen already disposed)
-      }
-    }
-  }
-
   void _sendMessage(String text) {
     context.read<ChatBloc>().add(ChatSendMessage(text));
-
-    // Scroll to bottom after sending
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   void _onImageSelected(File file, ImageSource source) {
     context.read<ChatBloc>().add(ChatSendImage(file, source: source));
-    _scrollToBottom();
   }
 
   void _onDocumentSelected(File file) {
     context.read<ChatBloc>().add(ChatSendDocument(file));
-    _scrollToBottom();
   }
 
-  void _onVideoSelected(File file) {
-    context.read<ChatBloc>().add(ChatSendVideo(file));
-    _scrollToBottom();
+  void _handleAttachmentPressed() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext context) => SafeArea(
+        child: SizedBox(
+          height: 150,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleImageSelection(ImageSource.camera);
+                },
+                child: const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text('Camera'),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleImageSelection(ImageSource.gallery);
+                },
+                child: const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text('Photo'),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleFileSelection();
+                },
+                child: const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text('Document'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  void _onVoiceRecorded(File file, int duration) {
-    context.read<ChatBloc>().add(ChatSendAudio(file, duration: duration));
-    _scrollToBottom();
+  void _handleImageSelection(ImageSource source) async {
+    final result = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 70,
+    );
+    if (result != null) {
+      _onImageSelected(File(result.path), source);
+    }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  /// Scrolls to the first unread message position.
-  /// Uses estimated offset based on message index in the reversed list.
-  void _scrollToFirstUnread(ChatState state) {
-    final messages = state.allMessages;
-    final firstUnreadIndex = messages.indexWhere(
-      (m) => m.id == state.firstUnreadMessageId,
+  void _handleFileSelection() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
     );
 
-    // If unread message is near the bottom (within first 3 items), no scroll needed
-    if (firstUnreadIndex <= 2) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      if (maxExtent <= 0) return;
-
-      // Estimate offset: index * average message height (70px)
-      // Subtract a bit to show the divider near the top of the viewport
-      final estimatedOffset = (firstUnreadIndex - 1) * 70.0;
-      _scrollController.jumpTo(estimatedOffset.clamp(0.0, maxExtent));
-    });
+    if (result != null && result.files.single.path != null) {
+      _onDocumentSelected(File(result.files.single.path!));
+    }
   }
 
-  void _onTypingChanged(bool isTyping) {
-    try {
-      final bloc = context.read<ChatBloc>();
-      if (!bloc.isClosed) {
-        bloc.add(ChatSetTyping(isTyping));
-      }
-    } catch (_) {}
+  void _handleMessageTap(BuildContext context, types.Message message) async {
+    if (message is types.ImageMessage) {
+      final heroTag = 'chat_image_${message.id}';
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          opaque: false,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              PhotoViewerScreen(
+            imageUrl: message.uri.startsWith('http') ? message.uri : null,
+            localFilePath: message.uri.startsWith('http') ? null : message.uri,
+            heroTag: heroTag,
+            caption: null,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    } else if (message is types.VideoMessage) {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          opaque: false,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              VideoViewerScreen(
+            videoUrl: message.uri,
+            caption: null,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    }
   }
+
+
+
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -511,28 +531,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-            // Messages list
+            // Messages list and input handled by Chat widget
             Expanded(
-              child: BlocConsumer<ChatBloc, ChatState>(
-                listenWhen: (previous, current) =>
-                    previous.status != current.status ||
-                    (current.firstUnreadMessageId != null &&
-                        previous.firstUnreadMessageId == null),
-                listener: (context, state) {
-                  if (state.status != ChatStatus.loading) {
-                    _isLoadingMore = false;
-                  }
-
-                  // Scroll to first unread message on initial load
-                  if (!_hasScrolledToUnread &&
-                      state.firstUnreadMessageId != null) {
-                    _hasScrolledToUnread = true;
-                    _scrollToFirstUnread(state);
-                  }
-                },
+              child: BlocBuilder<ChatBloc, ChatState>(
                 builder: (context, state) {
-                  // Show error state
-                  if (state.status == ChatStatus.error) {
+                  // Show error state if completely failed (no messages)
+                  if (state.status == ChatStatus.error && state.messages.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -560,45 +564,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     );
                   }
 
-                  // Show messages list (may be empty for new conversations)
-                  // The _MessagesList handles empty state internally
-                  return _MessagesList(
-                    messages: state.allMessages,
-                    currentUserId: state.currentUserId ?? widget.currentUserId,
-                    isTyping: state.isOtherUserTyping,
-                    hasMore: state.hasMore,
-                    scrollController: _scrollController,
-                    // Pass loading state so list can show subtle indicator
-                    isLoading: state.status == ChatStatus.loading || state.status == ChatStatus.initial,
-                    firstUnreadMessageId: state.firstUnreadMessageId,
-                    unreadCount: state.unreadCountAtOpen,
-                    onRetry: (message) {
-                      context.read<ChatBloc>().add(ChatRetryMessage(message));
+                  return Chat(
+                    messages: state.chatUiMessages,
+                    onAttachmentPressed: (isDisconnected || isBlocked) ? null : _handleAttachmentPressed,
+                    onMessageTap: _handleMessageTap,
+                    onSendPressed: (isDisconnected || isBlocked) ? (types.PartialText message) {} : (types.PartialText message) {
+                      _sendMessage(message.text);
                     },
-                    onDelete: (messageId) {
-                      context.read<ChatBloc>().add(ChatDeleteMessage(messageId));
+                    user: types.User(id: widget.currentUserId),
+                    onEndReached: () async {
+                      if (state.hasMore && state.status != ChatStatus.loadingMore) {
+                        context.read<ChatBloc>().add(const ChatLoadMore());
+                      }
                     },
-                    audioSessionManager: _audioSessionManager,
+                    theme: DefaultChatTheme(
+                      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                      primaryColor: Theme.of(context).colorScheme.primary,
+                    ),
+                    typingIndicatorOptions: TypingIndicatorOptions(
+                      typingUsers: state.isOtherUserTyping ? [types.User(id: widget.otherUserId, firstName: widget.otherUserName)] : [],
+                    ),
                   );
                 },
               ),
             ),
-
-            // Input
-            if (!isDisconnected && !isBlocked)
-              ChatInput(
-                onSend: _sendMessage,
-                onTypingChanged: _onTypingChanged,
-                onImageSelected: (file) =>
-                    _onImageSelected(file, ImageSource.gallery),
-                onCameraImageSelected: (file) =>
-                    _onImageSelected(file, ImageSource.camera),
-                onDocumentSelected: _onDocumentSelected,
-                onVideoSelected: _onVideoSelected,
-                onVoiceRecorded: _onVoiceRecorded,
-              )
-            else
+            if (isDisconnected || isBlocked)
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -971,211 +963,4 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _MessagesList extends StatelessWidget {
-  final List<Message> messages;
-  final String currentUserId;
-  final bool isTyping;
-  final bool hasMore;
-  final ScrollController scrollController;
-  final bool isLoading;
-  final String? firstUnreadMessageId;
-  final int unreadCount;
-  final ValueChanged<Message>? onRetry;
-  final ValueChanged<String>? onDelete;
-  final AudioSessionManager? audioSessionManager;
 
-  const _MessagesList({
-    required this.messages,
-    required this.currentUserId,
-    required this.isTyping,
-    required this.hasMore,
-    required this.scrollController,
-    this.isLoading = false,
-    this.firstUnreadMessageId,
-    this.unreadCount = 0,
-    this.onRetry,
-    this.onDelete,
-    this.audioSessionManager,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Only show empty state if:
-    // 1. Not loading (stream has emitted at least once)
-    // 2. No messages
-    // 3. No typing indicator
-    // This prevents the "No messages yet" flash during initial load
-    if (messages.isEmpty && !isTyping && !isLoading) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No messages yet',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Say hello! 👋',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // If loading with no messages yet, show nothing (parent handles spinner)
-    if (messages.isEmpty && isLoading) {
-      return const SizedBox.shrink();
-    }
-
-    return ListView.builder(
-      controller: scrollController,
-      reverse: true, // Most recent at bottom
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: messages.length + (hasMore ? 1 : 0) + (isTyping ? 1 : 0),
-      itemBuilder: (context, index) {
-        // Typing indicator at index 0 (bottom of reversed list)
-        if (isTyping && index == 0) {
-          return const TypingIndicator();
-        }
-
-        // Adjust index for typing indicator
-        final adjustedIndex = isTyping ? index - 1 : index;
-
-        // Loading indicator at the top (end of reversed list)
-        if (hasMore && adjustedIndex == messages.length) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final message = messages[adjustedIndex];
-        final isMe = message.senderId == currentUserId;
-
-        // Check if we should show tail (grouping messages)
-        final showTail = _shouldShowTail(adjustedIndex);
-
-        // Check if we should show date separator
-        final showDate = _shouldShowDate(adjustedIndex);
-
-        // Check if this message is the first unread message
-        final isFirstUnread = firstUnreadMessageId != null &&
-            message.id == firstUnreadMessageId;
-
-        return Column(
-          children: [
-            if (showDate) DateSeparator(date: message.sentAt),
-            if (isFirstUnread)
-              _UnreadDivider(count: unreadCount),
-            MessageBubble(
-              message: message,
-              isMe: isMe,
-              showTail: showTail,
-              onRetry: onRetry,
-              onDelete: onDelete,
-              audioSessionManager: audioSessionManager,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  bool _shouldShowTail(int index) {
-    if (index == 0) return true;
-
-    final currentMessage = messages[index];
-    final previousMessage = messages[index - 1];
-
-    // Different sender
-    if (currentMessage.senderId != previousMessage.senderId) return true;
-
-    // Time gap > 1 minute
-    final timeDiff = previousMessage.sentAt.difference(currentMessage.sentAt);
-    if (timeDiff.inMinutes > 1) return true;
-
-    return false;
-  }
-
-  bool _shouldShowDate(int index) {
-    if (index == messages.length - 1) return true;
-
-    final currentMessage = messages[index];
-    final nextMessage = messages[index + 1];
-
-    final currentDate = DateTime(
-      currentMessage.sentAt.year,
-      currentMessage.sentAt.month,
-      currentMessage.sentAt.day,
-    );
-    final nextDate = DateTime(
-      nextMessage.sentAt.year,
-      nextMessage.sentAt.month,
-      nextMessage.sentAt.day,
-    );
-
-    return currentDate != nextDate;
-  }
-}
-
-/// Divider shown above the first unread message, similar to WhatsApp.
-class _UnreadDivider extends StatelessWidget {
-  final int count;
-
-  const _UnreadDivider({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final label = count <= 0
-        ? 'Unread messages'
-        : count == 1
-            ? '1 unread message'
-            : '$count unread messages';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Divider(
-              color: theme.colorScheme.primary.withValues(alpha: 0.4),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              label,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Divider(
-              color: theme.colorScheme.primary.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

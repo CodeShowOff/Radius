@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -61,7 +63,8 @@ class _ImageContent extends StatelessWidget {
         opaque: false,
         pageBuilder: (context, animation, secondaryAnimation) =>
             PhotoViewerScreen(
-          imageUrl: message.mediaUrl!,
+          imageUrl: message.mediaUrl,
+          localFilePath: message.localFilePath,
           heroTag: heroTag,
           caption: message.text.isNotEmpty ? message.text : null,
         ),
@@ -74,11 +77,74 @@ class _ImageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (message.mediaUrl == null) {
+    if (message.mediaUrl == null && message.localFilePath == null) {
       return _LoadingPlaceholder(icon: Icons.image, uploadProgress: message.uploadProgress);
     }
 
     final heroTag = 'chat_image_${message.id}';
+
+    final isUploading = message.isUploading;
+
+    Widget imageWidget;
+    if (message.mediaUrl != null) {
+      imageWidget = CachedNetworkImage(
+        imageUrl: message.mediaUrl!,
+        width: 250,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          width: 250,
+          height: 250,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          width: 250,
+          height: 250,
+          color: Theme.of(context).colorScheme.errorContainer,
+          child: Icon(
+            Icons.broken_image,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      );
+    } else {
+      imageWidget = Image.file(
+        File(message.localFilePath!),
+        width: 250,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 250,
+          height: 250,
+          color: Theme.of(context).colorScheme.errorContainer,
+          child: Icon(
+            Icons.broken_image,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      );
+    }
+
+    // Add upload overlay if uploading
+    if (isUploading) {
+      imageWidget = Stack(
+        alignment: Alignment.center,
+        children: [
+          imageWidget,
+          Container(
+            width: 250,
+            color: Colors.black45,
+          ),
+          CircularProgressIndicator(
+            value: message.uploadProgress,
+            color: Colors.white,
+          ),
+        ],
+      );
+    }
 
     return GestureDetector(
       onTap: () => _openPhotoViewer(context),
@@ -86,29 +152,7 @@ class _ImageContent extends StatelessWidget {
         tag: heroTag,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: CachedNetworkImage(
-            imageUrl: message.mediaUrl!,
-            width: 250,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              width: 250,
-              height: 250,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: 250,
-              height: 250,
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Icon(
-                Icons.broken_image,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ),
+          child: imageWidget,
         ),
       ),
     );

@@ -36,6 +36,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
   bool _showPauseIcon = false;
   bool _hasError = false;
   bool _isInitialized = false;
+  bool _isMuted = false;
 
   final Stopwatch _watchStopwatch = Stopwatch();
   int _totalAccumulatedWatchMs = 0;
@@ -105,6 +106,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
 
       await controller.initialize();
       controller.setLooping(true);
+      controller.setVolume(_isMuted ? 0.0 : 1.0);
 
       if (mounted) {
         setState(() {
@@ -174,6 +176,16 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
         _showPauseIcon = false;
         _spinController.repeat();
       }
+    });
+  }
+
+  void _toggleMute() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+
+    setState(() {
+      _isMuted = !_isMuted;
+      c.setVolume(_isMuted ? 0.0 : 1.0);
     });
   }
 
@@ -473,6 +485,16 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
                       label: 'Share',
                       color: Colors.white,
                       onTap: () => _onShareTap(context),
+                    ),
+                    const SizedBox(height: 16),
+                    // Mute toggle button
+                    _ReelActionButton(
+                      icon: _isMuted
+                          ? CupertinoIcons.speaker_slash
+                          : CupertinoIcons.speaker_3,
+                      label: '',
+                      color: Colors.white,
+                      onTap: _toggleMute,
                     ),
                     const SizedBox(height: 16),
                     // More button

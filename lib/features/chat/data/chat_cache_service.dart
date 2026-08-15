@@ -157,9 +157,19 @@ class ChatCacheService {
       mergedMessages = messages;
     }
 
-    // Trim to max size
-    if (mergedMessages.length > maxMessagesPerConversation) {
-      mergedMessages = mergedMessages.sublist(0, maxMessagesPerConversation);
+    // Trim to max size if we haven't paginated
+    // If we have paginated (length > maxMessagesPerConversation), we allow the cache to grow
+    // up to a safety limit (e.g. 1000) to prevent infinite memory growth, or we can just
+    // ensure we don't trim below the current length.
+    final safetyLimit = 1000;
+    final targetLimit = (existing != null && existing.messages.length > maxMessagesPerConversation)
+        ? existing.messages.length + messages.length // allow new messages to be added without truncating old ones
+        : maxMessagesPerConversation;
+
+    final finalLimit = targetLimit > safetyLimit ? safetyLimit : targetLimit;
+
+    if (mergedMessages.length > finalLimit) {
+      mergedMessages = mergedMessages.sublist(0, finalLimit);
     }
 
     // For preloads, set createdAt to now (TTL starts now)
@@ -207,9 +217,10 @@ class ChatCacheService {
 
     final mergedMessages = [...existing.messages, ...newOlderMessages];
 
-    // Trim to max size
-    final trimmedMessages = mergedMessages.length > maxMessagesPerConversation
-        ? mergedMessages.sublist(0, maxMessagesPerConversation)
+    // Trim to safety size (not maxMessagesPerConversation, since we want to allow >100)
+    const safetyLimit = 1000;
+    final trimmedMessages = mergedMessages.length > safetyLimit
+        ? mergedMessages.sublist(0, safetyLimit)
         : mergedMessages;
 
     _cache[conversationId] = existing.copyWith(

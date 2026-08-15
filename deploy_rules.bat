@@ -1,4 +1,4 @@
 @echo off
 
 echo Deploying Firestore rules...
-firebase deploy --only firestore:rules
+npx firebase-tools deploy --only firestore:rules

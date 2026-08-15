@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 import '../../../core/error/exceptions.dart';
 
@@ -175,18 +176,42 @@ class MediaUploadService {
       final filePath =
           '$storagePath/$conversationId/$fileId$extension';
 
-      _logger.d('Uploading file to: $filePath ($fileSize bytes)');
+      File fileToUpload = file;
+      int uploadSize = fileSize;
+
+      // Compress images before uploading
+      if (storagePath == _imagesPath) {
+        try {
+          final targetPath = file.path.replaceAll(extension, '_compressed.jpg');
+          final compressedFile = await FlutterImageCompress.compressAndGetFile(
+            file.absolute.path,
+            targetPath,
+            quality: 70,
+            format: CompressFormat.jpeg,
+          );
+          
+          if (compressedFile != null) {
+            fileToUpload = File(compressedFile.path);
+            uploadSize = await fileToUpload.length();
+            _logger.i('Image compressed from $fileSize to $uploadSize bytes');
+          }
+        } catch (e) {
+          _logger.w('Image compression failed, falling back to original: $e');
+        }
+      }
+
+      _logger.d('Uploading file to: $filePath ($uploadSize bytes)');
 
       // Upload file with HTTP
       if (onProgress != null) onProgress(0.1);
       final request = http.MultipartRequest('POST', Uri.parse(_backendUrl));
       
-      final mimeType = _getContentType(extension).split('/');
+      final mimeType = _getContentType(fileToUpload.path.contains('.') ? fileToUpload.path.substring(fileToUpload.path.lastIndexOf('.')) : extension).split('/');
       final mediaType = MediaType(mimeType[0], mimeType[1]);
       
       request.files.add(await http.MultipartFile.fromPath(
         'file', 
-        file.path,
+        fileToUpload.path,
         contentType: mediaType,
       ));
       
@@ -208,6 +233,9 @@ class MediaUploadService {
 
       // Clean up temp source file after successful upload
       _deleteTempFile(file);
+      if (fileToUpload.path != file.path) {
+        _deleteTempFile(fileToUpload);
+      }
 
       return UploadResult(
         downloadUrl: downloadUrl,

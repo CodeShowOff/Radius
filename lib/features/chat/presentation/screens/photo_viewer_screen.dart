@@ -10,13 +10,15 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 /// Full-screen photo viewer with pinch-to-zoom and save-to-gallery.
 class PhotoViewerScreen extends StatefulWidget {
-  final String imageUrl;
+  final String? imageUrl;
+  final String? localFilePath;
   final String? heroTag;
   final String? caption;
 
   const PhotoViewerScreen({
     super.key,
-    required this.imageUrl,
+    this.imageUrl,
+    this.localFilePath,
     this.heroTag,
     this.caption,
   });
@@ -35,13 +37,21 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // Download the image bytes
-      final response = await http.get(Uri.parse(widget.imageUrl));
-      if (response.statusCode != 200) {
-        throw Exception('Failed to download image');
+      Uint8List bytes;
+      
+      if (widget.imageUrl != null) {
+        // Download the image bytes
+        final response = await http.get(Uri.parse(widget.imageUrl!));
+        if (response.statusCode != 200) {
+          throw Exception('Failed to download image');
+        }
+        bytes = response.bodyBytes;
+      } else if (widget.localFilePath != null) {
+        // Read local file bytes
+        bytes = await File(widget.localFilePath!).readAsBytes();
+      } else {
+        throw Exception('No image source provided');
       }
-
-      final Uint8List bytes = response.bodyBytes;
 
       // Save to a temporary file first, then use Gal to save to gallery
       final tempDir = await getTemporaryDirectory();
@@ -87,7 +97,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final imageProvider = CachedNetworkImageProvider(widget.imageUrl);
+    final ImageProvider imageProvider;
+    if (widget.imageUrl != null) {
+      imageProvider = CachedNetworkImageProvider(widget.imageUrl!);
+    } else if (widget.localFilePath != null) {
+      imageProvider = FileImage(File(widget.localFilePath!));
+    } else {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text('No image available', style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,

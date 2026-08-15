@@ -1,4 +1,4 @@
 @echo off
 
 echo Deploying all Firebase resources...
-firebase deploy
+npx firebase-tools deploy

@@ -99,6 +99,23 @@ class ChatState extends Equatable {
     final sorted = messageMap.values.toList()
       ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
 
+    // Dynamic Read Receipts: Upgrade status to 'seen' if the other user has read it
+    final otherUserId = this.otherUserId;
+    final otherUserLastReadAt = conversation?.lastReadAt[otherUserId];
+
+    if (currentUserId != null && otherUserId != null && otherUserLastReadAt != null) {
+      return sorted.map((msg) {
+        // Only update status for messages sent by the current user
+        if (msg.senderId == currentUserId && msg.status == MessageStatus.sent) {
+          // If the message was sent before or at the same time the other user last read the chat
+          if (!msg.sentAt.isAfter(otherUserLastReadAt)) {
+            return msg.copyWith(status: MessageStatus.seen);
+          }
+        }
+        return msg;
+      }).toList();
+    }
+
     return sorted;
   }
 
@@ -106,6 +123,95 @@ class ChatState extends Equatable {
   /// Since messages are ordered descending (newest first), the oldest is at the end.
   DateTime? get oldestMessageTime =>
       messages.isNotEmpty ? messages.last.sentAt : null;
+
+  /// Gets messages formatted for the flutter_chat_ui package.
+  List<types.Message> get chatUiMessages {
+    return allMessages.map((msg) {
+      final author = types.User(id: msg.senderId);
+      final createdAt = msg.sentAt.millisecondsSinceEpoch;
+      final status = _mapStatus(msg.status);
+      final id = msg.localId ?? msg.id;
+
+      switch (msg.type) {
+        case MessageType.text:
+          return types.TextMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            text: msg.text,
+            status: status,
+          );
+        case MessageType.image:
+          return types.ImageMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            name: msg.mediaFileName ?? 'image.jpg',
+            size: msg.mediaFileSize ?? 0,
+            uri: msg.localFilePath ?? msg.mediaUrl ?? '',
+            status: status,
+          );
+        case MessageType.audio:
+          return types.AudioMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            duration: Duration(seconds: msg.duration ?? 0),
+            name: msg.mediaFileName ?? 'audio.m4a',
+            size: msg.mediaFileSize ?? 0,
+            uri: msg.localFilePath ?? msg.mediaUrl ?? '',
+            status: status,
+          );
+        case MessageType.video:
+          return types.VideoMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            name: msg.mediaFileName ?? 'video.mp4',
+            size: msg.mediaFileSize ?? 0,
+            uri: msg.localFilePath ?? msg.mediaUrl ?? '',
+            status: status,
+          );
+        case MessageType.document:
+          return types.FileMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            name: msg.mediaFileName ?? 'document',
+            size: msg.mediaFileSize ?? 0,
+            uri: msg.localFilePath ?? msg.mediaUrl ?? '',
+            status: status,
+          );
+        case MessageType.sticker:
+          // flutter_chat_ui doesn't have a sticker type by default, map to image or custom
+          return types.ImageMessage(
+            author: author,
+            createdAt: createdAt,
+            id: id,
+            name: msg.mediaFileName ?? 'sticker.png',
+            size: msg.mediaFileSize ?? 0,
+            uri: msg.localFilePath ?? msg.mediaUrl ?? '',
+            status: status,
+          );
+      }
+    }).toList();
+  }
+
+  types.Status _mapStatus(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.pending:
+      case MessageStatus.sending:
+        return types.Status.sending;
+      case MessageStatus.sent:
+        return types.Status.sent;
+      case MessageStatus.delivered:
+        return types.Status.delivered;
+      case MessageStatus.seen:
+        return types.Status.seen;
+      case MessageStatus.error:
+        return types.Status.error;
+    }
+  }
 
   ChatState copyWith({
     ChatStatus? status,

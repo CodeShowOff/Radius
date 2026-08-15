@@ -113,6 +113,7 @@ for (const [name, def] of Object.entries(myFunctions) as [string, any][]) {
 // --- SETUP FIRESTORE TRIGGERS ---
 function setupTriggers() {
   const db = admin.firestore();
+  const serverStartTime = Date.now();
 
   registeredTriggers.forEach((trigger) => {
     if (trigger.type === 'schedule') {
@@ -150,6 +151,16 @@ function setupTriggers() {
         };
 
         if (trigger.type === 'created' && change.type === 'added') {
+           // Prevent processing old documents on server startup
+           // If the readTime (snapshot time) is close to the document create time, it's a new document.
+           // Since we can't reliably get create time from all docs, we'll check if the server just started.
+           // Actually, docChanges() gives us everything on first load. Let's use the create time.
+           const createTime = change.doc.createTime?.toMillis() || 0;
+           // If the document was created before the server started (with 10 sec buffer), skip it!
+           if (createTime > 0 && createTime < serverStartTime - 10000) {
+             return;
+           }
+
            event.data = change.doc; // DataSnapshot
            try { await trigger.callback(event); } catch(e) { console.error(e); }
         } 

@@ -92,6 +92,9 @@ class Message extends Equatable {
   /// Upload progress (0.0 to 1.0) for media uploads.
   final double? uploadProgress;
 
+  /// Local-only: path to local file for displaying media while uploading.
+  final String? localFilePath;
+
   /// Error description when status == MessageStatus.error.
   final String? errorReason;
 
@@ -114,6 +117,7 @@ class Message extends Equatable {
     this.isDeleted = false,
     this.localId,
     this.uploadProgress,
+    this.localFilePath,
     this.errorReason,
     this.retryCount = 0,
   });
@@ -154,6 +158,7 @@ class Message extends Equatable {
     bool? isDeleted,
     Object? localId = _sentinel,
     Object? uploadProgress = _sentinel,
+    Object? localFilePath = _sentinel,
     Object? errorReason = _sentinel,
     int? retryCount,
   }) {
@@ -181,6 +186,9 @@ class Message extends Equatable {
       uploadProgress: uploadProgress == _sentinel
           ? this.uploadProgress
           : uploadProgress as double?,
+      localFilePath: localFilePath == _sentinel
+          ? this.localFilePath
+          : localFilePath as String?,
       errorReason: errorReason == _sentinel
           ? this.errorReason
           : errorReason as String?,
@@ -205,6 +213,7 @@ class Message extends Equatable {
         isDeleted,
         localId,
         uploadProgress,
+        localFilePath,
         errorReason,
         retryCount,
       ];

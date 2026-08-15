@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../data/chat_cache_service.dart';
@@ -13,6 +14,7 @@ import '../../data/media_upload_service.dart';
 import '../../data/message_retry_service.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/entities/message.dart';
+import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 
 part 'chat_event.dart';
 part 'chat_state.dart';
@@ -229,7 +231,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // OPTIMISTIC UI: Create and display message IMMEDIATELY
     // This is the industry-standard pattern used by WhatsApp, Telegram, Slack
     // ========================================================================
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final optimisticMessage = Message(
       id: localId,
       conversationId: state.conversationId!,
@@ -359,7 +361,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Create optimistic pending message IMMEDIATELY for instant display
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final optimisticMessage = Message(
       id: localId,
       conversationId: state.conversationId!,
@@ -370,6 +372,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
+      localFilePath: event.file.path,
     );
 
     final pending = Map<String, Message>.from(state.pendingMessages);
@@ -423,7 +426,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Create optimistic pending message IMMEDIATELY for instant display
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final optimisticMessage = Message(
       id: localId,
       conversationId: state.conversationId!,
@@ -435,6 +438,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
+      localFilePath: event.file.path,
     );
 
     final pending = Map<String, Message>.from(state.pendingMessages);
@@ -489,7 +493,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Create optimistic pending message IMMEDIATELY for instant display
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final fileName = event.file.path.split(Platform.pathSeparator).last;
     final optimisticMessage = Message(
       id: localId,
@@ -502,6 +506,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
+      localFilePath: event.file.path,
     );
 
     final pending = Map<String, Message>.from(state.pendingMessages);
@@ -555,7 +560,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Create optimistic pending message IMMEDIATELY for instant display
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final optimisticMessage = Message(
       id: localId,
       conversationId: state.conversationId!,
@@ -566,6 +571,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       sentAt: DateTime.now(),
       localId: localId,
       uploadProgress: 0.0,
+      localFilePath: event.file.path,
     );
 
     final pending = Map<String, Message>.from(state.pendingMessages);
@@ -617,7 +623,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Create optimistic pending message IMMEDIATELY for instant display
-    final localId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localId = const Uuid().v4();
     final optimisticMessage = Message(
       id: localId,
       conversationId: state.conversationId!,
