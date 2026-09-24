@@ -42,6 +42,10 @@ const streamClient = StreamChat.getInstance(
 app.use(cors({ origin: true }));
 app.use(express.json());
 
+// Health check endpoint for uptime monitors (like cron-job.org)
+app.get('/', (req, res) => res.status(200).send('Backend is running!'));
+app.get('/health', (req, res) => res.status(200).json({ status: 'OK', timestamp: new Date() }));
+
 // Set up Multer for Local Storage
 const uploadDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) {
