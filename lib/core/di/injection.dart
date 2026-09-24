@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:injectable/injectable.dart';
@@ -7,8 +7,7 @@ import '../services/bluetooth/bluetooth_service.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/firebase/username_service.dart';
 import '../services/firebase/discovery_username_service.dart';
-import '../services/presence/presence_service.dart';
-import '../services/realtime/realtime_connection_service.dart';
+
 import '../services/realtime/realtime_data_manager.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/posts/data/services/post_service.dart';
@@ -70,12 +69,17 @@ import 'injection.config.dart';
 
 final getIt = GetIt.instance;
 
+bool _isInitialized = false;
+
 @InjectableInit(
   initializerName: 'init',
   preferRelativeImports: true,
   asExtension: true,
 )
-Future<void> configureDependencies() {
+Future<void> configureDependencies() async {
+  if (_isInitialized) return;
+  _isInitialized = true;
+
   // ---------------------------------------------------------------------------
   // Manual registrations
   //
@@ -89,13 +93,7 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<RouteObserver<PageRoute>>(() => RouteObserver<PageRoute>());
   }
 
-  if (!getIt.isRegistered<ProfileService>()) {
-    getIt.registerLazySingleton<ProfileService>(() => ProfileService());
-  }
 
-  if (!getIt.isRegistered<UsernameService>()) {
-    getIt.registerLazySingleton<UsernameService>(() => UsernameService());
-  }
 
   if (!getIt.isRegistered<BluetoothService>()) {
     getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
@@ -122,19 +120,7 @@ Future<void> configureDependencies() {
     );
   }
 
-  // Real-time connection monitoring service
-  if (!getIt.isRegistered<RealtimeConnectionService>()) {
-    getIt.registerLazySingleton<RealtimeConnectionService>(
-      () => RealtimeConnectionService(),
-    );
-  }
 
-  // Presence service for online/offline tracking via Firebase RTDB
-  if (!getIt.isRegistered<PresenceService>()) {
-    getIt.registerLazySingleton<PresenceService>(
-      () => PresenceService(),
-    );
-  }
 
   if (!getIt.isRegistered<IProfileRepository>()) {
     getIt.registerLazySingleton<IProfileRepository>(
@@ -419,8 +405,6 @@ Future<void> configureDependencies() {
   if (!getIt.isRegistered<RealTimeDataManager>()) {
     getIt.registerLazySingleton<RealTimeDataManager>(
       () => RealTimeDataManager(
-        connectionService: getIt<RealtimeConnectionService>(),
-        presenceService: getIt<PresenceService>(),
         connectionBloc: getIt<ConnectionBloc>(),
         discoveryBloc: getIt<DiscoveryBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),
@@ -431,5 +415,4 @@ Future<void> configureDependencies() {
     );
   }
 
-  return Future.value();
 }

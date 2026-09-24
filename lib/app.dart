@@ -1,7 +1,10 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:stream_chat_localizations/stream_chat_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
@@ -98,13 +101,28 @@ class RadiusApp extends StatelessWidget {
                 darkTheme: AppTheme.darkTheme,
                 themeMode: themeMode,
 
+                // Localizations for Stream Chat
+                supportedLocales: const [
+                  Locale('en', 'US'),
+                ],
+                localizationsDelegates: [
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                  GlobalStreamChatLocalizations.delegate,
+                ],
+
                 // Router configuration
                 routerConfig: appRouter,
 
                 // Builder to add app-wide listeners (like connection request notifications)
                 builder: (context, child) {
-                  return ConnectionRequestListener(
-                    child: child ?? const SizedBox.shrink(),
+                  return StreamChat(
+                    client: getIt<StreamChatClient>(),
+                    streamChatThemeData: StreamChatThemeData.fromTheme(Theme.of(context)),
+                    child: ConnectionRequestListener(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   );
                 },
               ),

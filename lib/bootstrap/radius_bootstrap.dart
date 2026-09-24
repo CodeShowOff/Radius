@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 import '../app.dart';
 import '../core/config/app_config.dart';
@@ -200,10 +199,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
   @override
   Widget build(BuildContext context) {
     if (_phase == _InitPhase.ready) {
-      return StreamChat(
-        client: getIt<StreamChatClient>(),
-        child: const RadiusApp(),
-      );
+      return const RadiusApp();
     }
 
     // Only show bootstrap screen on failure

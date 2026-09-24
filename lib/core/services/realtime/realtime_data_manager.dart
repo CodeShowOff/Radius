@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,8 +10,6 @@ import '../../../features/location_groups/presentation/bloc/location_group_bloc.
 import '../../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../../features/random_groups/presentation/bloc/random_group_bloc.dart';
-import '../presence/presence_service.dart';
-import 'realtime_connection_service.dart';
 
 /// Centralized manager for all real-time data streams in the app.
 ///
@@ -33,8 +31,7 @@ import 'realtime_connection_service.dart';
 /// This eliminates the loading-on-every-navigation anti-pattern and provides
 /// an industry-standard experience similar to WhatsApp, Slack, or Discord.
 class RealTimeDataManager {
-  final RealtimeConnectionService _connectionService;
-  final PresenceService? _presenceService;
+
   final ConnectionBloc _connectionBloc;
   final DiscoveryBloc _discoveryBloc;
   final LocationGroupBloc _locationGroupBloc;
@@ -49,18 +46,14 @@ class RealTimeDataManager {
   bool _isInitializing = false; // Guard against concurrent initialization
 
   RealTimeDataManager({
-    required RealtimeConnectionService connectionService,
     required ConnectionBloc connectionBloc,
     required DiscoveryBloc discoveryBloc,
     required LocationGroupBloc locationGroupBloc,
     required NearbyGroupBloc nearbyGroupBloc,
     required RandomGroupBloc randomGroupBloc,
     required ProfileBloc profileBloc,
-    PresenceService? presenceService,
     Logger? logger,
-  })  : _connectionService = connectionService,
-        _presenceService = presenceService,
-        _connectionBloc = connectionBloc,
+  })  : _connectionBloc = connectionBloc,
         _discoveryBloc = discoveryBloc,
         _locationGroupBloc = locationGroupBloc,
         _nearbyGroupBloc = nearbyGroupBloc,
@@ -74,15 +67,9 @@ class RealTimeDataManager {
   /// The current user ID that streams are initialized for.
   String? get currentUserId => _currentUserId;
 
-  /// Current connection status.
-  RealtimeConnectionStatus get connectionStatus => _connectionService.status;
-
-  /// Stream of connection status changes.
-  Stream<RealtimeConnectionStatus> get connectionStatusStream =>
-      _connectionService.statusStream;
 
   /// Access to presence service for watching other users' online status.
-  PresenceService? get presenceService => _presenceService;
+
 
   /// Initialize all real-time streams for a user.
   ///
@@ -145,16 +132,6 @@ class RealTimeDataManager {
         return;
       }
 
-      // Initialize connection monitoring (safe to call multiple times)
-      await _connectionService.initialize();
-
-      // Subscribe to reconnection events to refresh streams if needed
-      await _reconnectionSubscription?.cancel();
-      _reconnectionSubscription = _connectionService.onReconnection.listen((_) {
-        _logger.i(
-            'Reconnection detected, streams will auto-refresh via Firestore');
-        // Firestore streams automatically reconnect, but we can force refresh if needed
-      });
 
       // Initialize all BLoCs with persistent streams
       // These calls are idempotent - they won't reload if already loaded for this user
@@ -202,10 +179,7 @@ class RealTimeDataManager {
       _randomGroupBloc.add(WatchActiveRandomGroups());
       _randomGroupBloc.add(WatchUserRandomGroups(userId));
 
-      // 6. Initialize presence tracking (online/offline status via Firebase RTDB)
-      // This enables WhatsApp-style "last seen" and online indicators
-      // Non-blocking: presence is non-critical and should not delay preloading
-      _initPresence(userId);
+
 
       _isInitialized = true;
       _logger.i('RealTimeDataManager initialization complete');
@@ -216,19 +190,7 @@ class RealTimeDataManager {
     }
   }
 
-  /// Initialize presence tracking in the background (non-blocking).
-  void _initPresence(String userId) {
-    if (_presenceService == null) return;
-    Future.microtask(() async {
-      try {
-        await _presenceService.initialize(userId);
-        _logger.i('Presence service initialized for user $userId');
-      } catch (e) {
-        _logger.e('Failed to initialize presence service', error: e);
-        // Presence is non-critical, continue without it
-      }
-    });
-  }
+
 
 
 
@@ -290,7 +252,6 @@ class RealTimeDataManager {
     if (!_isInitialized || _currentUserId == null) return;
 
     _logger.i('Force refreshing all real-time streams');
-    _connectionService.forceReconnect();
   }
 
   /// Clean up when user signs out.
@@ -325,7 +286,7 @@ class RealTimeDataManager {
     // Timeout prevents sign-out from hanging if RTDB/Firestore operations
     // inside dispose() never complete (e.g., poor network conditions).
     try {
-      await _presenceService?.dispose().timeout(const Duration(seconds: 5));
+
     } catch (e) {
       _logger.e('Error or timeout disposing presence service', error: e);
     }
@@ -342,7 +303,6 @@ class RealTimeDataManager {
   /// Dispose of all resources.
   Future<void> dispose() async {
     await signOut();
-    await _connectionService.dispose();
     _logger.i('RealTimeDataManager disposed');
   }
 }
