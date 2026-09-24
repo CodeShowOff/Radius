@@ -12,7 +12,7 @@ class StreamTokenService {
   
   // Replace with your actual backend URL
   // If running on a physical device, use your computer's local IP address
-  final String _backendUrl = 'http://192.168.13.100:3000/api/getStreamToken';
+  final String _backendUrl = 'https://radius-backend-zr84.onrender.com/api/getStreamToken';
 
   StreamTokenService({required Logger logger}) : _logger = logger;
 
