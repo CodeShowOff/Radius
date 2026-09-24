@@ -1,4 +1,4 @@
-part of 'discovery_bloc.dart';
+﻿part of 'discovery_bloc.dart';
 
 /// Base class for discovery events.
 sealed class DiscoveryEvent extends Equatable {

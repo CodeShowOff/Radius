@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,8 +6,7 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../chat/domain/entities/conversation.dart';
-import '../../../chat/presentation/bloc/conversations_bloc.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../data/connection_service.dart';
 import '../../domain/entities/connection.dart';
@@ -334,7 +333,7 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
     Map<String, dynamic> profile,
   ) {
     final otherUserId = connection.getOtherUserId(currentUserId);
-    final conversationId = Conversation.createConversationId(currentUserId, otherUserId);
+    final conversationId = ChatUtils.getDirectMessageChannelId(currentUserId, otherUserId);
     context.push(
       Routes.chatWith(conversationId),
       extra: {
@@ -468,53 +467,31 @@ class _ConnectionsSliverList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ConversationsBloc, ConversationsState>(
-      builder: (context, conversationsState) {
-        final conversationMap = <String, Conversation>{
-          for (final conv in conversationsState.conversations) conv.id: conv,
-        };
+    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+      builder: (context, connectionState) {
+        final entries = <_SortedEntry>[];
 
-        return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-          builder: (context, connectionState) {
-            final entries = <_SortedEntry>[];
+        for (final connection in connections) {
+          final otherUserId = connection.getOtherUserId(currentUserId);
+          final cachedProfile = connectionState.getCachedProfile(otherUserId);
+          final profile = cachedProfile?.toMap() ?? {'id': otherUserId, 'displayName': 'User'};
+          final displayName = profile['displayName'] as String? ?? 'User';
 
-            for (final connection in connections) {
-              final otherUserId = connection.getOtherUserId(currentUserId);
-              final cachedProfile = connectionState.getCachedProfile(otherUserId);
-              final profile = cachedProfile?.toMap() ?? {'id': otherUserId, 'displayName': 'User'};
-              final displayName = profile['displayName'] as String? ?? 'User';
+          if (searchQuery.isNotEmpty) {
+            final query = searchQuery.toLowerCase();
+            if (!displayName.toLowerCase().contains(query)) continue;
+          }
 
-              if (searchQuery.isNotEmpty) {
-                final query = searchQuery.toLowerCase();
-                if (!displayName.toLowerCase().contains(query)) continue;
-              }
+          entries.add(_SortedEntry(
+            connection: connection,
+            profile: profile,
+            displayName: displayName,
+            photoUrl: profile['photoUrl'] as String?,
+            sortTime: connection.connectedAt,
+          ));
+        }
 
-              final conversationId = Conversation.createConversationId(
-                connection.userId1,
-                connection.userId2,
-              );
-
-              final conversation = conversationMap[conversationId] ??
-                  Conversation(
-                    id: conversationId,
-                    participantIds: [connection.userId1, connection.userId2],
-                    participantInfo: const {},
-                    createdAt: connection.connectedAt,
-                    lastMessageAt: null,
-                  );
-
-              final sortTime = conversation.lastMessageAt ?? connection.connectedAt;
-              entries.add(_SortedEntry(
-                connection: connection,
-                conversation: conversation,
-                profile: profile,
-                displayName: displayName,
-                photoUrl: profile['photoUrl'] as String?,
-                sortTime: sortTime,
-              ));
-            }
-
-            entries.sort((a, b) => b.sortTime.compareTo(a.sortTime));
+        entries.sort((a, b) => b.sortTime.compareTo(a.sortTime));
 
             return SliverList(
               delegate: SliverChildBuilderDelegate(
@@ -532,14 +509,12 @@ class _ConnectionsSliverList extends StatelessWidget {
             );
           },
         );
-      },
-    );
   }
 }
 
 class _SortedEntry {
   final Connection connection;
-  final Conversation conversation;
+
   final Map<String, dynamic> profile;
   final String displayName;
   final String? photoUrl;
@@ -547,7 +522,7 @@ class _SortedEntry {
 
   const _SortedEntry({
     required this.connection,
-    required this.conversation,
+
     required this.profile,
     required this.displayName,
     required this.photoUrl,
@@ -572,7 +547,7 @@ class _ModernConnectionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bio = entry.profile['bio'] as String?;
-    final unreadCount = entry.conversation.getUnreadCount(currentUserId);
+    final unreadCount = 0; // Removed Conversation dependency
     
     // Create a premium look
     return InkWell(
@@ -620,11 +595,9 @@ class _ModernConnectionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    entry.conversation.lastMessageText?.isNotEmpty == true
-                        ? entry.conversation.lastMessageText!
-                        : (bio != null && bio.isNotEmpty 
-                            ? bio 
-                            : 'Connected since ${_formatTime(entry.connection.connectedAt)}'),
+                    (bio != null && bio.isNotEmpty 
+                        ? bio 
+                        : 'Connected since ${_formatTime(entry.connection.connectedAt)}'),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: unreadCount > 0 ? theme.colorScheme.onSurface : theme.colorScheme.outline,
                       fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
@@ -764,7 +737,7 @@ class _UserDetailsSheet extends StatelessWidget {
           label: 'Message',
           onTap: () {
             Navigator.pop(context);
-            final conversationId = Conversation.createConversationId(currentUserId, otherUserId);
+            final conversationId = ChatUtils.getDirectMessageChannelId(currentUserId, otherUserId);
             context.push(Routes.chatWith(conversationId));
           },
         ),

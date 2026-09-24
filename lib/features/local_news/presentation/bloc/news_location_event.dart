@@ -1,4 +1,4 @@
-part of 'news_location_bloc.dart';
+﻿part of 'news_location_bloc.dart';
 
 /// Base class for news location events.
 abstract class NewsLocationEvent extends Equatable {

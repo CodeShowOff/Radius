@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// A Scaffold wrapper that properly handles safe areas and gesture navigation.
 /// 

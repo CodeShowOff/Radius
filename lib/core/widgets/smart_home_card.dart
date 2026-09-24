@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
 /// A themed card widget inspired by modern smart-home UIs.
 ///
-/// Uses colors exclusively from [ThemeData] — no inline color values.
+/// Uses colors exclusively from [ThemeData] â€” no inline color values.
 /// Pass [gradient] = true for a premium purple-gradient header effect.
 class SmartHomeCard extends StatelessWidget {
   const SmartHomeCard({
@@ -71,7 +71,7 @@ class SmartHomeCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Header row ──────────────────────────────────────────
+              // â”€â”€ Header row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               Row(
                 children: [
                   if (icon != null) ...[
@@ -108,7 +108,7 @@ class SmartHomeCard extends StatelessWidget {
                 ],
               ),
 
-              // ── Body ────────────────────────────────────────────────
+              // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               if (child != null) ...[
                 const SizedBox(height: 14),
                 child!,

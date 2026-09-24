@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
@@ -377,7 +377,7 @@ class PresenceService with WidgetsBindingObserver {
       // Best-effort: RTDB onDisconnect handler is the fallback
     }
 
-    // Firestore sync is best-effort and non-critical — the RTDB onDisconnect
+    // Firestore sync is best-effort and non-critical â€” the RTDB onDisconnect
     // handler is the source of truth for presence. Don't await this because
     // the Firestore .get() query defaults to server-first and can hang
     // indefinitely on slow/unreachable networks, blocking sign-out.

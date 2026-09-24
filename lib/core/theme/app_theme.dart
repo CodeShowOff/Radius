@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Modern smart-home style theme configuration.
@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 /// Provides premium dark & light themes with vibrant purple accents,
 /// strong contrast, and a cohesive Material 3 design language.
 abstract class AppTheme {
-  // ──────────────────────────── Brand Colors ────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Brand Colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Primary purple accent.
   static const Color primaryColor = Color(0xFF8B2FC9);
@@ -14,22 +14,22 @@ abstract class AppTheme {
   /// Secondary purple (lighter for gradients).
   static const Color secondaryColor = Color(0xFFA040D8);
 
-  /// Tertiary accent – electric cyan for highlights.
+  /// Tertiary accent â€“ electric cyan for highlights.
   static const Color accentColor = Color(0xFF00D9FF);
 
-  // ──────────────────────────── Semantic Colors ─────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Semantic Colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static const Color successColor = Color(0xFF22C55E);
   static const Color warningColor = Color(0xFFFBBF24);
   static const Color errorColor = Color(0xFFEF4444);
 
-  // ──────────────────────────── Proximity Colors ────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Proximity Colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static const Color nearbyCloseColor = Color(0xFF22C55E); // < 3 m
-  static const Color nearbyMediumColor = Color(0xFFFBBF24); // 3–7 m
-  static const Color nearbyFarColor = Color(0xFF8B2FC9); // 7–10 m
+  static const Color nearbyMediumColor = Color(0xFFFBBF24); // 3â€“7 m
+  static const Color nearbyFarColor = Color(0xFF8B2FC9); // 7â€“10 m
 
-  // ──────────────────────────── Surface palette ─────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Surface palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   // Dark mode surfaces
   static const Color _darkBg = Color(0xFF0B0B0F);
@@ -43,7 +43,7 @@ abstract class AppTheme {
   static const Color _lightCard = Color(0xFFF0F0F6);
   static const Color _lightCardBorder = Color(0xFFE2E2EC);
 
-  // ──────────────────────────── Gradient helpers ────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Gradient helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Vibrant purple gradient used for hero elements & CTA buttons.
   static const LinearGradient primaryGradient = LinearGradient(
@@ -59,9 +59,9 @@ abstract class AppTheme {
     end: Alignment.bottomCenter,
   );
 
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  DARK THEME
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   static ThemeData get darkTheme {
     const brightness = Brightness.dark;
@@ -108,9 +108,9 @@ abstract class AppTheme {
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  LIGHT THEME
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   static ThemeData get lightTheme {
     const brightness = Brightness.light;
@@ -157,9 +157,9 @@ abstract class AppTheme {
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   //  SHARED BUILDER
-  // ══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   static ThemeData _buildTheme({
     required ColorScheme colorScheme,
@@ -259,7 +259,7 @@ abstract class AppTheme {
       scaffoldBackgroundColor: scaffoldBg,
       textTheme: textTheme,
 
-      // ── AppBar ───────────────────────────────────────────────────────
+      // â”€â”€ AppBar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
@@ -278,7 +278,7 @@ abstract class AppTheme {
         iconTheme: IconThemeData(color: textColor, size: 22),
       ),
 
-      // ── Card ─────────────────────────────────────────────────────────
+      // â”€â”€ Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       cardTheme: CardThemeData(
         elevation: 0,
         color: cardColor,
@@ -290,7 +290,7 @@ abstract class AppTheme {
         margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
       ),
 
-      // ── Elevated Button ──────────────────────────────────────────────
+      // â”€â”€ Elevated Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: colorScheme.primary,
@@ -308,7 +308,7 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Filled Button ────────────────────────────────────────────────
+      // â”€â”€ Filled Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: colorScheme.primary,
@@ -324,7 +324,7 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Outlined Button ──────────────────────────────────────────────
+      // â”€â”€ Outlined Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: colorScheme.primary,
@@ -340,7 +340,7 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Text Button ──────────────────────────────────────────────────
+      // â”€â”€ Text Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: colorScheme.primary,
@@ -355,14 +355,14 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Icon Button ──────────────────────────────────────────────────
+      // â”€â”€ Icon Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           foregroundColor: textColor,
         ),
       ),
 
-      // ── Floating Action Button ───────────────────────────────────────
+      // â”€â”€ Floating Action Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: colorScheme.primary,
         foregroundColor: Colors.white,
@@ -372,10 +372,10 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Icon theme ───────────────────────────────────────────────────
+      // â”€â”€ Icon theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       iconTheme: IconThemeData(color: textColor, size: 22),
 
-      // ── Input decoration ─────────────────────────────────────────────
+      // â”€â”€ Input decoration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark ? _darkCard : _lightCard,
@@ -405,7 +405,7 @@ abstract class AppTheme {
         labelStyle: TextStyle(color: subtitleColor, fontSize: 14),
       ),
 
-      // ── Chip theme ───────────────────────────────────────────────────
+      // â”€â”€ Chip theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       chipTheme: ChipThemeData(
         backgroundColor: isDark ? _darkCard : _lightCard,
         selectedColor: colorScheme.primary,
@@ -419,7 +419,7 @@ abstract class AppTheme {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
 
-      // ── Bottom Navigation Bar ────────────────────────────────────────
+      // â”€â”€ Bottom Navigation Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: isDark ? _darkSurface : _lightSurface,
         selectedItemColor: colorScheme.primary,
@@ -432,7 +432,7 @@ abstract class AppTheme {
             const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
       ),
 
-      // ── Navigation Bar (M3) ──────────────────────────────────────────
+      // â”€â”€ Navigation Bar (M3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? _darkSurface : _lightSurface,
         indicatorColor: colorScheme.primary.withValues(alpha: 0.15),
@@ -460,14 +460,14 @@ abstract class AppTheme {
         }),
       ),
 
-      // ── Divider ──────────────────────────────────────────────────────
+      // â”€â”€ Divider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       dividerTheme: DividerThemeData(
         color: dividerColor,
         thickness: 1,
         space: 1,
       ),
 
-      // ── Dialog ───────────────────────────────────────────────────────
+      // â”€â”€ Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       dialogTheme: DialogThemeData(
         backgroundColor: isDark ? _darkCard : _lightSurface,
         surfaceTintColor: Colors.transparent,
@@ -487,7 +487,7 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Bottom Sheet ─────────────────────────────────────────────────
+      // â”€â”€ Bottom Sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: isDark ? _darkSurface : _lightSurface,
         surfaceTintColor: Colors.transparent,
@@ -498,7 +498,7 @@ abstract class AppTheme {
         dragHandleSize: const Size(40, 4),
       ),
 
-      // ── Snackbar ─────────────────────────────────────────────────────
+      // â”€â”€ Snackbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       snackBarTheme: SnackBarThemeData(
         backgroundColor: isDark ? const Color(0xFF2A2A36) : const Color(0xFF313033),
         contentTextStyle: const TextStyle(
@@ -513,7 +513,7 @@ abstract class AppTheme {
         elevation: 4,
       ),
 
-      // ── List Tile ────────────────────────────────────────────────────
+      // â”€â”€ List Tile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       listTileTheme: ListTileThemeData(
         tileColor: Colors.transparent,
         textColor: textColor,
@@ -524,7 +524,7 @@ abstract class AppTheme {
         ),
       ),
 
-      // ── Switch ───────────────────────────────────────────────────────
+      // â”€â”€ Switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return Colors.white;
@@ -539,7 +539,7 @@ abstract class AppTheme {
         trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
       ),
 
-      // ── Slider ───────────────────────────────────────────────────────
+      // â”€â”€ Slider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       sliderTheme: SliderThemeData(
         activeTrackColor: colorScheme.primary,
         inactiveTrackColor:
@@ -550,7 +550,7 @@ abstract class AppTheme {
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
       ),
 
-      // ── Progress Indicator ───────────────────────────────────────────
+      // â”€â”€ Progress Indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: colorScheme.primary,
         linearTrackColor:
@@ -559,7 +559,7 @@ abstract class AppTheme {
             isDark ? const Color(0xFF2A2A36) : const Color(0xFFD6D6E0),
       ),
 
-      // ── Tab Bar ──────────────────────────────────────────────────────
+      // â”€â”€ Tab Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       tabBarTheme: TabBarThemeData(
         labelColor: colorScheme.primary,
         unselectedLabelColor: subtitleColor,
@@ -572,7 +572,7 @@ abstract class AppTheme {
         dividerColor: Colors.transparent,
       ),
 
-      // ── Tooltip ──────────────────────────────────────────────────────
+      // â”€â”€ Tooltip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF2A2A36) : const Color(0xFF313033),
@@ -581,7 +581,7 @@ abstract class AppTheme {
         textStyle: const TextStyle(color: Colors.white, fontSize: 12),
       ),
 
-      // ── Page Transitions ─────────────────────────────────────────────
+      // â”€â”€ Page Transitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
@@ -589,7 +589,7 @@ abstract class AppTheme {
         },
       ),
 
-      // ── Splash / Highlight ───────────────────────────────────────────
+      // â”€â”€ Splash / Highlight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       splashColor: colorScheme.primary.withValues(alpha: 0.08),
       highlightColor: colorScheme.primary.withValues(alpha: 0.06),
       splashFactory: InkSparkle.splashFactory,

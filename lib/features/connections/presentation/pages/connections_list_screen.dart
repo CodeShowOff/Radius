@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
-import '../../../chat/domain/entities/conversation.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 
@@ -382,7 +382,7 @@ class _ConnectionTileState extends State<_ConnectionTile> {
             ],
           ),
           onTap: () {
-            final conversationId = Conversation.createConversationId(
+            final conversationId = ChatUtils.getDirectMessageChannelId(
               widget.currentUserId,
               otherUserId,
             );
@@ -429,7 +429,7 @@ class _ConnectionTileState extends State<_ConnectionTile> {
       case 'message':
         // Create conversation ID and navigate to chat
         final conversationId =
-            Conversation.createConversationId(widget.currentUserId, otherUserId);
+            ChatUtils.getDirectMessageChannelId(widget.currentUserId, otherUserId);
         context.push(
           Routes.chatWith(conversationId),
           extra: {

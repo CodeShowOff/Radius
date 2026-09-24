@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -166,7 +166,7 @@ class BluetoothService {
     } else {
       _setState(BluetoothServiceState.bluetoothOff);
       // Stop scanning when Bluetooth is turned off.
-      // Do NOT stop foreground advertising — the native service handles
+      // Do NOT stop foreground advertising â€” the native service handles
       // BT state changes itself and will auto-restart when BT comes back.
       stopScanning();
     }

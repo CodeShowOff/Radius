@@ -1,4 +1,4 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
+﻿import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:logger/logger.dart';
 
 import '../../router/app_router.dart';
@@ -48,7 +48,7 @@ class NotificationNavigationService {
 
     if (initialMessage != null) {
       _logger.i('App opened from terminated state via notification');
-      // Short delay to ensure splash → home router transition has settled.
+      // Short delay to ensure splash â†’ home router transition has settled.
       // 150ms is imperceptible but sufficient (down from 500ms).
       Future.delayed(const Duration(milliseconds: 150), () {
         _handleNotificationNavigation(initialMessage);

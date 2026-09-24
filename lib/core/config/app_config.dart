@@ -1,4 +1,4 @@
-/// Application environment configuration.
+﻿/// Application environment configuration.
 ///
 /// Manages different settings for dev, staging, and production.
 enum Environment {

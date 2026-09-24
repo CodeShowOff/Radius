@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -437,7 +437,7 @@ class LocationGroupService {
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
     bool isDisposed = false;
 
-    // Start the stream immediately — auth token is already validated by
+    // Start the stream immediately â€” auth token is already validated by
     // RealTimeDataManager before LoadUserGroups is dispatched.
     // No redundant _waitForAuthToken() call here.
     () async {
@@ -533,7 +533,7 @@ class LocationGroupService {
     StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
     bool isDisposed = false;
 
-    // Start the stream immediately — auth token is already validated by
+    // Start the stream immediately â€” auth token is already validated by
     // RealTimeDataManager before LoadUserGroups is dispatched.
     () async {
       // Use inverse index - MUCH faster than collection group query
@@ -559,7 +559,7 @@ class LocationGroupService {
 
             // Fetch full membership details in PARALLEL instead of sequentially.
             // Each _getMembership call is independent, so Future.wait eliminates
-            // the sequential delay (N * latency → max(latencies)).
+            // the sequential delay (N * latency â†’ max(latencies)).
             final membershipFutures = snapshot.docs.map((doc) {
               final groupId = doc.data()['groupId'] as String;
               return _getMembership(groupId, userId);

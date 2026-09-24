@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
@@ -9,7 +9,7 @@ part 'post_interaction_state.dart';
 
 /// Cubit managing per-post interaction state (likes & comments).
 ///
-/// One instance per post card — lightweight, focused on a single post.
+/// One instance per post card â€” lightweight, focused on a single post.
 class PostInteractionCubit extends Cubit<PostInteractionState> {
   final IPostInteractionRepository _repository;
   final Logger _logger;

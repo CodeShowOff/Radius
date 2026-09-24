@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,7 +19,7 @@ part 'create_news_post_state.dart';
 ///
 /// Posts are tagged with the user's saved location (set via manual setup).
 ///
-/// Flow: compose → submit → optimize media → upload → create doc
+/// Flow: compose â†’ submit â†’ optimize media â†’ upload â†’ create doc
 class CreateNewsPostBloc
     extends Bloc<CreateNewsPostEvent, CreateNewsPostState> {
   final INewsPostRepository _repository;
@@ -56,7 +56,7 @@ class CreateNewsPostBloc
     on<CreateNewsPostSubmitted>(_onSubmitted);
   }
 
-  // ─── User context (set before submitting) ──────────────────────────
+  // â”€â”€â”€ User context (set before submitting) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   String? _authorId;
   String? _authorName;
@@ -73,7 +73,7 @@ class CreateNewsPostBloc
     _authorPhotoUrl = authorPhotoUrl;
   }
 
-  // ─── Event handlers ────────────────────────────────────────────────
+  // â”€â”€â”€ Event handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Whether this BLoC is creating a reel.
   bool get isReel => postType == 'reel';
@@ -149,7 +149,7 @@ class CreateNewsPostBloc
   ) async {
     if (!state.canSubmit || _authorId == null) return;
 
-    // ─── Rate limit check ─────────────────────────────────────────────
+    // â”€â”€â”€ Rate limit check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     try {
       final todayCount =
           await _newsPostService.countTodayPostsByAuthor(_authorId!);
@@ -177,7 +177,7 @@ class CreateNewsPostBloc
       }
     }
 
-    // ─── Step 1: Get user's saved location ────────────────────────
+    // â”€â”€â”€ Step 1: Get user's saved location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final NewsLocation? location;
     try {
       location = await _locationService.getUserNewsLocation(_authorId!);
@@ -200,7 +200,7 @@ class CreateNewsPostBloc
 
     _logger.i('Using saved location: ${location.shortDisplayString}');
 
-    // ─── Step 2: Optimize media ───────────────────────────────────
+    // â”€â”€â”€ Step 2: Optimize media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final optimizedMedia = <SelectedNewsMedia>[];
 
     if (state.selectedMedia.isNotEmpty) {
@@ -250,7 +250,7 @@ class CreateNewsPostBloc
       }
     }
 
-    // ─── Step 3: Upload media ─────────────────────────────────────
+    // â”€â”€â”€ Step 3: Upload media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     emit(state.copyWith(
       status: CreateNewsPostStatus.uploading,
       progress: 0.0,
@@ -320,7 +320,7 @@ class CreateNewsPostBloc
         }
       }
 
-      // ─── Step 4: Create the Firestore document ────────────────────
+      // â”€â”€â”€ Step 4: Create the Firestore document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (isClosed) return;
       emit(state.copyWith(
         status: CreateNewsPostStatus.creating,

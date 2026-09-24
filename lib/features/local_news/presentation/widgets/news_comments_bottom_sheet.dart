@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
@@ -206,7 +206,7 @@ class _NewsCommentsBottomSheetState extends State<NewsCommentsBottomSheet> {
   }
 }
 
-// ─── Comment Tile ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Comment Tile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CommentTile extends StatelessWidget {
   final Comment comment;
@@ -293,7 +293,7 @@ class _CommentTile extends StatelessWidget {
   }
 }
 
-// ─── Comment Input ────────────────────────────────────────────────────────
+// â”€â”€â”€ Comment Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CommentInput extends StatelessWidget {
   final TextEditingController controller;

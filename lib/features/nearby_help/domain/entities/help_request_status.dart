@@ -1,4 +1,4 @@
-/// Status of a help request.
+﻿/// Status of a help request.
 enum HelpRequestStatus {
   /// Request is open and waiting for helpers.
   open,

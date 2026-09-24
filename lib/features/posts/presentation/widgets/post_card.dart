@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -89,7 +89,7 @@ class PostCard extends StatelessWidget {
   }
 }
 
-// ─── Post Action Bar (Like / Comment) ─────────────────────────────────────
+// â”€â”€â”€ Post Action Bar (Like / Comment) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PostActionBar extends StatelessWidget {
   final VoidCallback? onLikeTap;
@@ -195,7 +195,7 @@ class _PostActionBar extends StatelessWidget {
   }
 }
 
-// ─── Animated Like Button ─────────────────────────────────────────────────
+// â”€â”€â”€ Animated Like Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AnimatedLikeButton extends StatefulWidget {
   final bool isLiked;
@@ -258,7 +258,7 @@ class _AnimatedLikeButtonState extends State<_AnimatedLikeButton>
   }
 }
 
-// ─── Post Header ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Post Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PostHeader extends StatelessWidget {
   final String authorName;
@@ -315,7 +315,7 @@ class _PostHeader extends StatelessWidget {
                       _TimeAgoText(dateTime: createdAt),
                       const SizedBox(width: 4),
                       Text(
-                        '·',
+                        'Â·',
                         style: TextStyle(
                           color: theme.colorScheme.outline,
                           fontSize: 12,
@@ -389,7 +389,7 @@ class _PostHeader extends StatelessWidget {
   }
 }
 
-// ─── Time Ago ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Time Ago â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _TimeAgoText extends StatelessWidget {
   final DateTime dateTime;
@@ -424,7 +424,7 @@ class _TimeAgoText extends StatelessWidget {
   }
 }
 
-// ─── Single Media ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Single Media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SingleMedia extends StatelessWidget {
   final MediaItem mediaItem;
@@ -441,7 +441,7 @@ class _SingleMedia extends StatelessWidget {
   }
 }
 
-// ─── Post Image ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Post Image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PostImage extends StatelessWidget {
   final String imageUrl;
@@ -479,7 +479,7 @@ class _PostImage extends StatelessWidget {
   }
 }
 
-// ─── Video Thumbnail ──────────────────────────────────────────────────────
+// â”€â”€â”€ Video Thumbnail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _VideoThumbnail extends StatefulWidget {
   final MediaItem mediaItem;
@@ -536,7 +536,7 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
 
   Future<void> _initializeAndPlay() async {
     if (_controller != null) {
-      // Already initialized — toggle play/pause
+      // Already initialized â€” toggle play/pause
       if (_controller!.value.isPlaying) {
         _controller!.pause();
         setState(() => _isPlaying = false);
@@ -699,7 +699,7 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
   }
 }
 
-// ─── Media Carousel ───────────────────────────────────────────────────────
+// â”€â”€â”€ Media Carousel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MediaCarousel extends StatefulWidget {
   final List<MediaItem> mediaItems;

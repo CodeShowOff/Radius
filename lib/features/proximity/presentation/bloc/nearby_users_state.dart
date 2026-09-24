@@ -1,4 +1,4 @@
-part of 'nearby_users_bloc.dart';
+﻿part of 'nearby_users_bloc.dart';
 
 /// Status of nearby users screen.
 enum NearbyUsersStatus {

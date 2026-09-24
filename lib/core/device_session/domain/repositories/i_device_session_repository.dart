@@ -1,4 +1,4 @@
-import '../entities/device_session.dart';
+﻿import '../entities/device_session.dart';
 
 /// Repository interface for managing device session data.
 abstract class IDeviceSessionRepository {

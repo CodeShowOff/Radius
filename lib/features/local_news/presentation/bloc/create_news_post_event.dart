@@ -1,4 +1,4 @@
-part of 'create_news_post_bloc.dart';
+﻿part of 'create_news_post_bloc.dart';
 
 /// Base class for create news post events.
 abstract class CreateNewsPostEvent extends Equatable {
@@ -38,7 +38,7 @@ class CreateNewsPostTextChanged extends CreateNewsPostEvent {
   List<Object?> get props => [text];
 }
 
-/// User tapped the submit button — triggers optimize → upload → create.
+/// User tapped the submit button â€” triggers optimize â†’ upload â†’ create.
 class CreateNewsPostSubmitted extends CreateNewsPostEvent {
   const CreateNewsPostSubmitted();
 }

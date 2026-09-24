@@ -1,4 +1,4 @@
-part of 'random_group_bloc.dart';
+﻿part of 'random_group_bloc.dart';
 
 /// Events for the RandomGroupBloc.
 sealed class RandomGroupEvent extends Equatable {
@@ -383,11 +383,4 @@ class ResetRandomGroupState extends RandomGroupEvent {
   const ResetRandomGroupState();
 }
 
-class _UnreadCountsReceived extends RandomGroupEvent {
-  final Map<String, int> unreadCounts;
 
-  const _UnreadCountsReceived(this.unreadCounts);
-
-  @override
-  List<Object?> get props => [unreadCounts];
-}

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -273,7 +273,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     final latestState = state;
     if (latestState is! RandomChatLoaded) return;
 
-    // Remove from processing — use latestState (not pre-await currentState)
+    // Remove from processing â€” use latestState (not pre-await currentState)
     // to avoid losing concurrent processing completions.
     final updatedProcessing = {...latestState.processingUserIds}
       ..remove(event.receiverId);
@@ -334,7 +334,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
     switch (result) {
       case RandomChatSuccess<RandomChatConnection>(data: final connection):
-        // Clear ALL incoming requests — with an active connection,
+        // Clear ALL incoming requests â€” with an active connection,
         // the user can no longer accept any. This also closes the brief
         // window where expired requests may still appear before the
         // Cloud Function runs to expire them server-side.
@@ -391,7 +391,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
 
     // Only reload data (incoming requests, connections, stats).
     // Suggestions are pinned for the day in the user's profile and
-    // will NOT change — getDailySuggestions() returns the cached list.
+    // will NOT change â€” getDailySuggestions() returns the cached list.
     add(RandomChatLoadRequested(
       userId: _currentUserId,
       userGender: _currentUserGender,
@@ -465,7 +465,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
     final currentState = state;
 
     if (currentState is RandomChatLoaded && !_isToday(currentState.dateKey)) {
-      _logger.i('Midnight reset detected — reloading Random Chat');
+      _logger.i('Midnight reset detected â€” reloading Random Chat');
 
       // Clear cache (different day)
       _cacheService.clearCache();
@@ -489,7 +489,7 @@ class RandomChatBloc extends Bloc<RandomChatEvent, RandomChatState> {
   ) {
     _logger.i('Resetting Random Chat state (sign-out cleanup)');
     
-    // No need to clear cache here — AppDataClearer already wiped all
+    // No need to clear cache here â€” AppDataClearer already wiped all
     // Hive boxes and in-memory caches before sign-out.
     
     _cleanupAllSubscriptions();

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -94,11 +94,11 @@ class BleAdvertiser {
       if (_isAdvertising) {
         _lastAdvertiseTime = DateTime.now();
         _diagnostics.updateAdvertising(true);
-        _log('[BleAdvertiser] ✓ Advertising started!');
+        _log('[BleAdvertiser] âœ“ Advertising started!');
       } else {
         _lastError = 'Native advertising returned false';
         _diagnostics.updateError(_lastError);
-        _log('[BleAdvertiser] ✗ Native advertising returned false');
+        _log('[BleAdvertiser] âœ— Native advertising returned false');
       }
 
       return _isAdvertising;
@@ -106,7 +106,7 @@ class BleAdvertiser {
       _lastError = 'Failed to start advertising: $e';
       _isAdvertising = false;
       _diagnostics.updateError(_lastError);
-      _log('[BleAdvertiser] ✗ Failed: $e');
+      _log('[BleAdvertiser] âœ— Failed: $e');
       return false;
     }
   }
@@ -185,7 +185,7 @@ class BleAdvertiser {
         _isAdvertising = true;
         _lastAdvertiseTime = DateTime.now();
         _diagnostics.updateAdvertising(true);
-        _log('[BleAdvertiser] ✓ Foreground service started!');
+        _log('[BleAdvertiser] âœ“ Foreground service started!');
       } else {
         _lastError = 'Failed to start foreground service';
         _diagnostics.updateError(_lastError);
@@ -195,7 +195,7 @@ class BleAdvertiser {
     } catch (e) {
       _lastError = 'Failed to start foreground service: $e';
       _diagnostics.updateError(_lastError);
-      _log('[BleAdvertiser] ✗ Foreground service failed: $e');
+      _log('[BleAdvertiser] âœ— Foreground service failed: $e');
       return false;
     }
   }

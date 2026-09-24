@@ -1,4 +1,4 @@
-part of 'reels_feed_bloc.dart';
+﻿part of 'reels_feed_bloc.dart';
 
 /// Base class for reels feed events.
 abstract class ReelsFeedEvent extends Equatable {

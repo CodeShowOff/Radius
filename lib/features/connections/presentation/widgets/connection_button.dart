@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../chat/domain/entities/conversation.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../data/connection_service.dart';
 import '../bloc/connection_bloc.dart';
 
@@ -348,7 +348,7 @@ class _ConnectedButton extends StatelessWidget {
                   final authState = context.read<AuthBloc>().state;
                   if (authState is AuthAuthenticated) {
                     final currentUserId = authState.user.id;
-                    final conversationId = Conversation.createConversationId(
+                    final conversationId = ChatUtils.getDirectMessageChannelId(
                       currentUserId,
                       userId,
                     );

@@ -1,4 +1,4 @@
-import 'package:geocoding/geocoding.dart';
+﻿import 'package:geocoding/geocoding.dart';
 import 'package:logger/logger.dart';
 
 import '../../domain/entities/news_location.dart';
@@ -6,7 +6,7 @@ import '../../domain/entities/news_location.dart';
 /// Service for converting GPS coordinates into human-readable location names.
 ///
 /// Uses the `geocoding` package which relies on platform-native geocoding
-/// (Android Geocoder / iOS CLGeocoder) — no API key required.
+/// (Android Geocoder / iOS CLGeocoder) â€” no API key required.
 class GeocodingService {
   final Logger _logger;
 
@@ -15,10 +15,10 @@ class GeocodingService {
   /// Reverse-geocodes [latitude] and [longitude] into a [NewsLocation].
   ///
   /// Maps platform `Placemark` fields:
-  /// - `subAdministrativeArea` → district
-  /// - `locality` → city
-  /// - `subLocality` → locality (neighborhood / area)
-  /// - `country` → country
+  /// - `subAdministrativeArea` â†’ district
+  /// - `locality` â†’ city
+  /// - `subLocality` â†’ locality (neighborhood / area)
+  /// - `country` â†’ country
   ///
   /// Falls back to adjacent fields when a primary field is empty.
   /// Throws [GeocodingException] if no placemarks are returned.
@@ -44,7 +44,7 @@ class GeocodingService {
       final country = placemark.country ?? '';
 
       _logger.i(
-        'Geocoded ($latitude, $longitude) → '
+        'Geocoded ($latitude, $longitude) â†’ '
         'district=$district, city=$city, locality=$locality, country=$country',
       );
 
@@ -69,7 +69,7 @@ class GeocodingService {
 
   /// Resolves district from placemark with fallbacks.
   ///
-  /// Priority: subAdministrativeArea → administrativeArea
+  /// Priority: subAdministrativeArea â†’ administrativeArea
   String _resolveDistrict(Placemark placemark) {
     final sub = placemark.subAdministrativeArea;
     if (sub != null && sub.isNotEmpty) return sub;
@@ -82,7 +82,7 @@ class GeocodingService {
 
   /// Resolves city from placemark with fallbacks.
   ///
-  /// Priority: locality → subAdministrativeArea → administrativeArea
+  /// Priority: locality â†’ subAdministrativeArea â†’ administrativeArea
   String _resolveCity(Placemark placemark) {
     final loc = placemark.locality;
     if (loc != null && loc.isNotEmpty) return loc;
@@ -145,7 +145,7 @@ class GeocodingService {
 
   /// Resolves locality/neighborhood from placemark with fallbacks.
   ///
-  /// Priority: subLocality → thoroughfare → locality
+  /// Priority: subLocality â†’ thoroughfare â†’ locality
   String _resolveLocality(Placemark placemark) {
     final subLoc = placemark.subLocality;
     if (subLoc != null && subLoc.isNotEmpty) return subLoc;

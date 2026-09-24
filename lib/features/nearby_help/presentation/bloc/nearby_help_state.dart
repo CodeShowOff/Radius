@@ -1,4 +1,4 @@
-part of 'nearby_help_bloc.dart';
+﻿part of 'nearby_help_bloc.dart';
 
 /// Status of the nearby help bloc.
 enum NearbyHelpStatus {

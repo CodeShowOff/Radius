@@ -1,4 +1,4 @@
-part of 'news_feed_bloc.dart';
+﻿part of 'news_feed_bloc.dart';
 
 /// Status of the news feed.
 enum NewsFeedStatus {

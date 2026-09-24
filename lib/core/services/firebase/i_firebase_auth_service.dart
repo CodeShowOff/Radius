@@ -1,4 +1,4 @@
-/// Firebase Auth service interface.
+﻿/// Firebase Auth service interface.
 /// 
 /// Abstracts Firebase Auth SDK for easier testing and potential migration.
 /// Implementation will be added when Firebase is configured.

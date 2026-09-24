@@ -1,4 +1,4 @@
-part of 'news_feed_bloc.dart';
+﻿part of 'news_feed_bloc.dart';
 
 /// Base class for news feed events.
 abstract class NewsFeedEvent extends Equatable {

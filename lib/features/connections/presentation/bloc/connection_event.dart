@@ -1,4 +1,4 @@
-part of 'connection_bloc.dart';
+﻿part of 'connection_bloc.dart';
 
 /// Base class for connection events.
 sealed class ConnectionEvent extends Equatable {

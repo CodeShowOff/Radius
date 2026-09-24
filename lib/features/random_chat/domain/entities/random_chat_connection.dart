@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// An active random chat connection between two users for the current day.
 class RandomChatConnection extends Equatable {

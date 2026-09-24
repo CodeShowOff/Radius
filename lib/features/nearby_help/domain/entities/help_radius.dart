@@ -1,4 +1,4 @@
-/// Predefined radius options for help discovery.
+﻿/// Predefined radius options for help discovery.
 enum HelpRadius {
   /// 50 meters - very close proximity
   meters50(50, '50m'),
@@ -21,7 +21,7 @@ enum HelpRadius {
   const HelpRadius(this.meters, this.displayName);
 
   /// Convert radius in meters to approximate degrees for geospatial queries.
-  /// 1 degree of latitude ≈ 111,139 meters.
+  /// 1 degree of latitude â‰ˆ 111,139 meters.
   double get degreesLatitude => meters / 111139.0;
 
   /// Longitude degrees vary by latitude, but for simplicity we use the same approximation.

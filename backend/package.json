@@ -20,6 +20,7 @@
     "express": "^5.2.1",
     "firebase-admin": "^11.11.1",
     "multer": "^2.2.0",
+    "stream-chat": "^9.53.0",
     "ts-node": "^10.9.2",
     "typescript": "^7.0.2"
   },

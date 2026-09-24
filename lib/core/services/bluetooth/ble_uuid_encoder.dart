@@ -1,4 +1,4 @@
-import 'ble_constants.dart';
+﻿import 'ble_constants.dart';
 
 /// Encodes/decodes usernames into BLE Service UUIDs for iOS background advertising.
 ///
@@ -13,7 +13,7 @@ import 'ble_constants.dart';
 /// ```
 ///
 /// Base62 encoding (a-z=0-25, A-Z=26-51, 0-9=52-61)
-/// 7 chars × 62 values = 62^7 = 3,521,614,606,208 combinations
+/// 7 chars Ã— 62 values = 62^7 = 3,521,614,606,208 combinations
 /// Requires 42 bits (we use 56 bits for cleaner hex encoding)
 class BleUuidEncoder {
   // Base62 character set

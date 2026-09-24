@@ -1,4 +1,4 @@
-/// Local cache service interface using Hive.
+﻿/// Local cache service interface using Hive.
 /// 
 /// Provides local persistence for offline support and performance.
 abstract class ILocalCacheService {

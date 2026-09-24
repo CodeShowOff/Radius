@@ -1,8 +1,8 @@
-part of 'create_news_post_bloc.dart';
+﻿part of 'create_news_post_bloc.dart';
 
 /// Status of the news post creation process.
 enum CreateNewsPostStatus {
-  /// Initial idle state — user is composing.
+  /// Initial idle state â€” user is composing.
   idle,
 
   /// Media files are being optimized (compressed/resized).

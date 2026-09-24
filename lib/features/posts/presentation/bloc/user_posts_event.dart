@@ -1,4 +1,4 @@
-part of 'user_posts_bloc.dart';
+﻿part of 'user_posts_bloc.dart';
 
 /// Base class for user posts events.
 abstract class UserPostsEvent extends Equatable {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../domain/entities/help_request.dart';

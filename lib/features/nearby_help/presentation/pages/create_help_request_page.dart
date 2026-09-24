@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -306,7 +306,7 @@ class _CreateHelpRequestPageState extends State<CreateHelpRequestPage> with Widg
                         )
                       else if (_latitude != null) ...[
                         Text(
-                          'Location acquired ✓',
+                          'Location acquired âœ“',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.green,
                           ),

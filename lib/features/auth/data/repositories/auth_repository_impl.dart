@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dartz/dartz.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:injectable/injectable.dart';
@@ -67,7 +67,7 @@ class AuthRepositoryImpl implements IAuthRepository {
             doc = {'id': cachedSnap.id, ...cachedSnap.data()!};
           }
         } catch (_) {
-          // Cache miss (first install, cleared data) — fall through to network.
+          // Cache miss (first install, cleared data) â€” fall through to network.
         }
 
         // Fall back to network if no cached document.
@@ -123,7 +123,7 @@ class AuthRepositoryImpl implements IAuthRepository {
           doc = {'id': cachedSnap.id, ...cachedSnap.data()!};
         }
       } catch (_) {
-        // Cache miss (first install, cleared data) — fall through to network.
+        // Cache miss (first install, cleared data) â€” fall through to network.
       }
 
       // Fall back to network if no cached document.
@@ -379,7 +379,7 @@ class AuthRepositoryImpl implements IAuthRepository {
   Future<Either<Failure, void>> signOut() async {
     try {
       // NOTE: Device session logout recording is handled by AuthBloc BEFORE
-      // Firestore network is disabled. Do NOT record here — this method runs
+      // Firestore network is disabled. Do NOT record here â€” this method runs
       // after disableNetwork(), so Firestore writes would be queued and only
       // sent after enableNetwork(), by which time auth is already revoked.
 
@@ -479,7 +479,7 @@ class AuthRepositoryImpl implements IAuthRepository {
               'username_index/$username',
             );
           } catch (e) {
-            // Log but continue — username index cleanup is best-effort
+            // Log but continue â€” username index cleanup is best-effort
             assert(() {
               // ignore: avoid_print
               print('Warning: Failed to delete username index: $e');
@@ -636,7 +636,7 @@ class AuthRepositoryImpl implements IAuthRepository {
         );
         await _deviceSessionRepository.saveDeviceSession(session);
       } catch (_) {
-        // Silently swallow – crash reporting should handle this in production
+        // Silently swallow â€“ crash reporting should handle this in production
       }
     });
   }

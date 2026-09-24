@@ -1,4 +1,4 @@
-part of 'location_group_bloc.dart';
+﻿part of 'location_group_bloc.dart';
 
 /// Events for the LocationGroupBloc.
 abstract class LocationGroupEvent extends Equatable {

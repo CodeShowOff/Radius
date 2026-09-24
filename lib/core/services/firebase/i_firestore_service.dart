@@ -1,4 +1,4 @@
-/// Firestore database service interface.
+﻿/// Firestore database service interface.
 /// 
 /// Abstracts Firestore SDK for easier testing and potential migration.
 /// Implementation will be added when Firebase is configured.

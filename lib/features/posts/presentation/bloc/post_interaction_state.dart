@@ -1,4 +1,4 @@
-part of 'post_interaction_cubit.dart';
+﻿part of 'post_interaction_cubit.dart';
 
 /// State for post interaction (likes & comments) for a single post.
 class PostInteractionState extends Equatable {

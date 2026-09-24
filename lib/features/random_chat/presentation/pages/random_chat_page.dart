@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../chat/domain/entities/conversation.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../domain/entities/random_chat_request.dart';
 import '../../domain/entities/random_chat_user.dart';
@@ -46,7 +46,7 @@ class _RandomChatPageState extends State<RandomChatPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // No account-switch detection needed here — full app data is cleared
+    // No account-switch detection needed here â€” full app data is cleared
     // on sign-out via AppDataClearer, so stale data cannot exist.
   }
 
@@ -477,7 +477,7 @@ class _RandomChatPageState extends State<RandomChatPage>
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      final conversationId = Conversation.createConversationId(
+                      final conversationId = ChatUtils.getDirectMessageChannelId(
                           currentUserId, otherUserId);
                       context.push(
                         Routes.chatWith(conversationId),
@@ -821,7 +821,7 @@ class _RandomChatPageState extends State<RandomChatPage>
             ),
             const SizedBox(height: 8),
             Text(
-              'Check back later — new users join every day!',
+              'Check back later â€” new users join every day!',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -871,7 +871,7 @@ class _RandomChatPageState extends State<RandomChatPage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('•', style: TextStyle(color: theme.colorScheme.primary)),
+          Text('â€¢', style: TextStyle(color: theme.colorScheme.primary)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text, style: theme.textTheme.bodyMedium),

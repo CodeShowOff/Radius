@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -327,7 +327,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                   const SizedBox(height: 6),
                                   if (Platform.isAndroid)
                                     Text(
-                                      'Scan: ${_scanPermissionGranted ? 'granted' : 'missing'} · '
+                                      'Scan: ${_scanPermissionGranted ? 'granted' : 'missing'} Â· '
                                       'Advertise: ${_advertisePermissionGranted ? 'granted' : 'missing'}',
                                       style: TextStyle(
                                         color: Theme.of(context)
@@ -354,7 +354,7 @@ class _BluetoothSettingsPageState extends State<BluetoothSettingsPage>
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Advertising disabled (permission denied) — scanning still active',
+                                            'Advertising disabled (permission denied) â€” scanning still active',
                                             style: TextStyle(
                                               color: Theme.of(context)
                                                   .colorScheme

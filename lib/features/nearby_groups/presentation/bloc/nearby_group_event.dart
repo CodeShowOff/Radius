@@ -1,4 +1,4 @@
-part of 'nearby_group_bloc.dart';
+﻿part of 'nearby_group_bloc.dart';
 
 /// Events for NearbyGroupBloc.
 sealed class NearbyGroupEvent extends Equatable {

@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
@@ -157,7 +157,7 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
     result.fold(
       (failure) {
         _logger.e('Failed to delete reel: ${failure.message}');
-        // Restore on failure — re-fetch
+        // Restore on failure â€” re-fetch
         if (_country != null && _city != null) {
           add(const ReelsFeedRefreshRequested());
         }

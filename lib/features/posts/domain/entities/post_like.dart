@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// Domain entity representing a like on a post.
 class PostLike extends Equatable {

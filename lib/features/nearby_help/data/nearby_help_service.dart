@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -426,7 +426,7 @@ class NearbyHelpService {
   /// Only returns requests where [userId] is in the server-populated
   /// `notifiedUserIds` array. This means only users the Cloud Function
   /// verified as nearby (via `onHelpRequestCreated`) can discover requests
-  /// through browsing — exact GPS coordinates are never broadcast to all
+  /// through browsing â€” exact GPS coordinates are never broadcast to all
   /// authenticated users.
   ///
   /// Additional client-side filters:
@@ -482,7 +482,7 @@ class NearbyHelpService {
   /// Finds nearby users who can help based on their saved locations.
   ///
   /// Calls a server-side Cloud Function to perform the proximity query.
-  /// The server does all distance filtering — no other users' GPS coordinates
+  /// The server does all distance filtering â€” no other users' GPS coordinates
   /// are ever sent to the client. Only matching user IDs are returned.
   Future<List<String>> findNearbyHelpers({
     required double latitude,

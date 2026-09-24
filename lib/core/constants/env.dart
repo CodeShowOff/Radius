@@ -1,4 +1,4 @@
-/// Environment variables and configuration constants
+﻿/// Environment variables and configuration constants
 abstract class Env {
   /// The base URL for the backend API.
   /// Can be overridden at compile time using: --dart-define=BACKEND_URL=http://your-ip:3000/api

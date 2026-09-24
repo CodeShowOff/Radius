@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// Shimmer loading skeleton for a post card in the feed.
 class PostCardSkeleton extends StatefulWidget {

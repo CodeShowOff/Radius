@@ -1,23 +1,23 @@
-part of 'news_location_bloc.dart';
+﻿part of 'news_location_bloc.dart';
 
 /// Status of the news location setup flow.
 enum NewsLocationStatus {
-  /// Initial state — checking for saved location.
+  /// Initial state â€” checking for saved location.
   initial,
 
   /// Loading / checking saved location.
   loading,
 
-  /// No saved location — show setup UI.
+  /// No saved location â€” show setup UI.
   needsSetup,
 
-  /// Location selected — awaiting user confirmation.
+  /// Location selected â€” awaiting user confirmation.
   detected,
 
   /// Saving location to Firestore.
   saving,
 
-  /// Location saved and ready — navigate to feed.
+  /// Location saved and ready â€” navigate to feed.
   ready,
 
   /// An error occurred.

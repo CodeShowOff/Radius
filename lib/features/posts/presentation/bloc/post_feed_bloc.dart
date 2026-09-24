@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -110,7 +110,7 @@ class PostFeedBloc extends Bloc<PostFeedEvent, PostFeedState> {
   ) async {
     if (_userId == null) return;
 
-    // Don't show loading indicator — pull-to-refresh has its own
+    // Don't show loading indicator â€” pull-to-refresh has its own
     final result = await _postRepository.getFeedPosts(
       userId: _userId!,
       connectionIds: _connectionIds,

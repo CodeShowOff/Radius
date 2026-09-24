@@ -1,4 +1,4 @@
-part of 'random_chat_bloc.dart';
+﻿part of 'random_chat_bloc.dart';
 
 /// Base state for Random Chat feature.
 abstract class RandomChatState extends Equatable {

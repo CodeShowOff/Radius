@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 import '../app.dart';
 import '../core/config/app_config.dart';
@@ -28,7 +29,7 @@ class RadiusBootstrap extends StatefulWidget {
 
 class _RadiusBootstrapState extends State<RadiusBootstrap> {
   _InitPhase _phase = _InitPhase.starting;
-  String _message = 'Starting…';
+  String _message = 'Startingâ€¦';
   Object? _error;
   StackTrace? _stack;
 
@@ -44,11 +45,11 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
   Future<void> _initialize() async {
     try {
-      // ── Phase 1: Independent systems in parallel ─────────────────────
+      // â”€â”€ Phase 1: Independent systems in parallel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Firebase, Hive, and orientation lock have no mutual dependencies.
       // Running them concurrently instead of sequentially typically saves
       // 1-3 seconds on cold start (Firebase alone can take 2-4s).
-      _setPhase(_InitPhase.initializing, 'Starting up…');
+      _setPhase(_InitPhase.initializing, 'Starting upâ€¦');
 
       final firebaseFuture = Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -72,15 +73,15 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
 
       await Future.wait([firebaseFuture, hiveFuture, orientationFuture]);
 
-      // Firebase is ready — capture any pending notification immediately so
+      // Firebase is ready â€” capture any pending notification immediately so
       // it isn't lost during the rest of the init chain.
       NotificationNavigationService.captureInitialMessage();
 
       // Register background message handler (sync, fast).
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      // ── Phase 2: Dependent tasks in parallel ─────────────────────────
-      // Chain A (critical path): Settings registration → DI registration
+      // â”€â”€ Phase 2: Dependent tasks in parallel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Chain A (critical path): Settings registration â†’ DI registration
       //   (Hive box already opened in Phase 1)
       // Chain B (non-blocking): App Check (debug only)
       // Chain C (non-blocking): Crash reporting
@@ -130,21 +131,21 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
         }
       }();
 
-      // Only DI is on the critical path — the app cannot render without it.
+      // Only DI is on the critical path â€” the app cannot render without it.
       // AppCheck and CrashService are non-critical and complete in the
       // background so they don't add to perceived startup time.
       await diFuture;
       unawaited(appCheckFuture);
       unawaited(crashFuture);
 
-      // Show the app immediately — Phase 3 (diagnostics) is non-critical
+      // Show the app immediately â€” Phase 3 (diagnostics) is non-critical
       // and should not block the user from seeing the home page.
       if (!mounted) return;
       setState(() {
         _phase = _InitPhase.ready;
       });
 
-      // ── Phase 3: Final diagnostics (non-blocking) ───────────────────
+      // â”€â”€ Phase 3: Final diagnostics (non-blocking) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // DeviceLog initializes in the background. Its _log() method is
       // safe to call before init completes (it silently no-ops).
       unawaited(DeviceLog.instance.init().then((_) {
@@ -199,7 +200,10 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
   @override
   Widget build(BuildContext context) {
     if (_phase == _InitPhase.ready) {
-      return const RadiusApp();
+      return StreamChat(
+        client: getIt<StreamChatClient>(),
+        child: const RadiusApp(),
+      );
     }
 
     // Only show bootstrap screen on failure
@@ -217,7 +221,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
           onRetry: () {
             setState(() {
               _phase = _InitPhase.starting;
-              _message = 'Retrying…';
+              _message = 'Retryingâ€¦';
               _error = null;
               _stack = null;
             });

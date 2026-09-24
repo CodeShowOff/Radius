@@ -1,4 +1,4 @@
-part of 'random_chat_bloc.dart';
+﻿part of 'random_chat_bloc.dart';
 
 /// Base event for Random Chat feature.
 abstract class RandomChatEvent extends Equatable {

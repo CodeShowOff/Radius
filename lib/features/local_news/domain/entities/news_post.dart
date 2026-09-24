@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 import '../../../posts/domain/entities/media_item.dart';
 
@@ -22,7 +22,7 @@ class NewsPost extends Equatable {
   /// Denormalized author photo URL.
   final String? authorPhotoUrl;
 
-  // ─── Location fields ──────────────────────────────────────────────────
+  // â”€â”€â”€ Location fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Latitude where the post was created.
   final double latitude;
@@ -45,7 +45,7 @@ class NewsPost extends Equatable {
   /// Country name.
   final String country;
 
-  // ─── Metadata ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// When the post was created.
   final DateTime createdAt;

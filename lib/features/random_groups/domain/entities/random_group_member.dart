@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// Represents an approved member of a random group.
 class RandomGroupMember extends Equatable {

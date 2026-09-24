@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -101,7 +101,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── Header row: avatar + stats ──
+                          // â”€â”€ Header row: avatar + stats â”€â”€
                           Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 16),
@@ -180,7 +180,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                             ),
                           ),
 
-                          // ── Name ──
+                          // â”€â”€ Name â”€â”€
                           Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16),
@@ -192,7 +192,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                             ),
                           ),
 
-                          // ── Bio ──
+                          // â”€â”€ Bio â”€â”€
                           Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 4),
@@ -209,7 +209,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                             ),
                           ),
 
-                          // ── Vibe & Mood ──
+                          // â”€â”€ Vibe & Mood â”€â”€
                           if ((vibe?.isNotEmpty == true) || (mood?.isNotEmpty == true))
                             Padding(
                               padding: const EdgeInsets.symmetric(
@@ -284,7 +284,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
 
                           const SizedBox(height: 12),
 
-                          // ── Edit Profile button ──
+                          // â”€â”€ Edit Profile button â”€â”€
                           Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16),
@@ -302,7 +302,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
 
                           const SizedBox(height: 16),
 
-                          // ── Tab bar ──
+                          // â”€â”€ Tab bar â”€â”€
                           TabBar(
                             labelColor: theme.colorScheme.onSurface,
                             unselectedLabelColor:
@@ -319,7 +319,7 @@ class _OwnPublicProfilePageState extends State<OwnPublicProfilePage> {
                   ],
                   body: TabBarView(
                     children: [
-                      // Posts tab — own profile sees all posts
+                      // Posts tab â€” own profile sees all posts
                       BlocProvider(
                         create: (_) => getIt<UserPostsBloc>()
                           ..add(UserPostsLoadRequested(

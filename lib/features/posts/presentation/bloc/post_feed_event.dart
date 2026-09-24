@@ -1,4 +1,4 @@
-part of 'post_feed_bloc.dart';
+﻿part of 'post_feed_bloc.dart';
 
 /// Base class for post feed events.
 abstract class PostFeedEvent extends Equatable {

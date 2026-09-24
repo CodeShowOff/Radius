@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -82,7 +82,7 @@ class _PostFeedPageState extends State<PostFeedPage> {
   Future<void> _navigateToCreatePost() async {
     final result = await context.push<bool>(Routes.createPost);
     if (result == true && mounted) {
-      // Post was created — refresh feed
+      // Post was created â€” refresh feed
       context.read<PostFeedBloc>().add(const PostFeedRefreshRequested());
     }
   }
@@ -274,7 +274,7 @@ class _PostFeedPageState extends State<PostFeedPage> {
   }
 }
 
-// ─── Empty Feed ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Empty Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _EmptyFeedView extends StatelessWidget {
   final VoidCallback onCreatePost;
@@ -324,7 +324,7 @@ class _EmptyFeedView extends StatelessWidget {
   }
 }
 
-// ─── Error View ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Error View â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ErrorView extends StatelessWidget {
   final String message;

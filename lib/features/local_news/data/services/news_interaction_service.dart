@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 
 import '../../../posts/data/models/comment_model.dart';
@@ -7,8 +7,8 @@ import '../../../posts/data/models/post_like_model.dart';
 /// Service for Firestore operations on local news post likes and comments.
 ///
 /// Firestore Collections:
-/// - `local_news_posts/{postId}/likes/{userId}` — One doc per like, keyed by userId
-/// - `local_news_posts/{postId}/comments/{commentId}` — Auto-ID docs for comments
+/// - `local_news_posts/{postId}/likes/{userId}` â€” One doc per like, keyed by userId
+/// - `local_news_posts/{postId}/comments/{commentId}` â€” Auto-ID docs for comments
 ///
 /// Counter fields on the post doc (`likeCount`, `commentCount`) are maintained
 /// by Cloud Functions triggers for atomic consistency.
@@ -26,7 +26,7 @@ class NewsInteractionService {
     _postsRef = _firestore.collection('local_news_posts');
   }
 
-  // ─── Likes ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Likes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Toggles a like on a news post. Returns `true` if liked, `false` if unliked.
   Future<bool> toggleLike({
@@ -143,7 +143,7 @@ class NewsInteractionService {
     }
   }
 
-  // ─── Comments ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Comments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Adds a comment to a news post. Returns the created comment.
   Future<CommentModel> addComment({
@@ -237,7 +237,7 @@ class NewsInteractionService {
             .toList());
   }
 
-  // ─── Engagement Tracking ──────────────────────────────────────────────
+  // â”€â”€â”€ Engagement Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Records an engagement action and score for a news post.
   Future<void> recordEngagement({

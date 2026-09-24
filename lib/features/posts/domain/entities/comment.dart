@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// Domain entity representing a comment on a post.
 class Comment extends Equatable {

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 
 import '../models/comment_model.dart';
@@ -7,8 +7,8 @@ import '../models/post_like_model.dart';
 /// Service for Firestore operations on post likes and comments.
 ///
 /// Firestore Collections:
-/// - `posts/{postId}/likes/{userId}` — One doc per like, keyed by userId
-/// - `posts/{postId}/comments/{commentId}` — Auto-ID docs for comments
+/// - `posts/{postId}/likes/{userId}` â€” One doc per like, keyed by userId
+/// - `posts/{postId}/comments/{commentId}` â€” Auto-ID docs for comments
 ///
 /// Counter fields on the post doc (`likeCount`, `commentCount`) are maintained
 /// by Cloud Functions triggers for atomic consistency.
@@ -26,7 +26,7 @@ class PostInteractionService {
     _postsRef = _firestore.collection('posts');
   }
 
-  // ─── Likes ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Likes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Toggles a like on a post. Returns `true` if liked, `false` if unliked.
   Future<bool> toggleLike({
@@ -41,11 +41,11 @@ class PostInteractionService {
       final doc = await likeRef.get();
 
       if (doc.exists) {
-        // Unlike — remove the document
+        // Unlike â€” remove the document
         await likeRef.delete();
         return false;
       } else {
-        // Like — create the document
+        // Like â€” create the document
         final like = PostLikeModel(
           postId: postId,
           userId: userId,
@@ -145,7 +145,7 @@ class PostInteractionService {
     }
   }
 
-  // ─── Comments ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Comments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Adds a comment to a post. Returns the created comment.
   Future<CommentModel> addComment({

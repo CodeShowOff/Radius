@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -119,7 +119,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              Text('Location → Allow all the time'),
+              Text('Location â†’ Allow all the time'),
             ],
           ),
           actions: [

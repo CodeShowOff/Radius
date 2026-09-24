@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
@@ -154,9 +154,9 @@ class ProximityService {
     _isAdvertising = advStarted;
     
     if (advStarted) {
-      _log('[ProximityService] ✓ Advertising started successfully!');
+      _log('[ProximityService] âœ“ Advertising started successfully!');
     } else {
-      _log('[ProximityService] ✗ Failed to start advertising: ${_bluetoothService.lastError}');
+      _log('[ProximityService] âœ— Failed to start advertising: ${_bluetoothService.lastError}');
     }
 
     return advStarted;
@@ -176,14 +176,14 @@ class ProximityService {
     if (bleState == BluetoothServiceState.error) {
       _setError(_bluetoothService.lastError ?? 'Bluetooth error');
     } else if (bleState == BluetoothServiceState.bluetoothOff) {
-      _log('[ProximityService] ⚠️ Bluetooth turned OFF - advertising stopped');
+      _log('[ProximityService] âš ï¸ Bluetooth turned OFF - advertising stopped');
       // Don't show error to user - BT off is a normal state, not an error
       _isAdvertising = false;
     } else if (bleState == BluetoothServiceState.ready ||
         bleState == BluetoothServiceState.active) {
       // Bluetooth is back on - restart advertising if we have a username
       if (_currentUsername != null && !_isAdvertising) {
-        _log('[ProximityService] ✅ Bluetooth is ON! Restarting advertising for $_currentUsername');
+        _log('[ProximityService] âœ… Bluetooth is ON! Restarting advertising for $_currentUsername');
         final useBackground = _settingsStore.getBackgroundAdvertising();
         Future<bool> advertiseFuture;
         if (useBackground) {
@@ -194,15 +194,15 @@ class ProximityService {
         advertiseFuture.then((started) {
           _isAdvertising = started;
           if (started) {
-            _log('[ProximityService] ✓✓✓ Advertising SUCCESSFULLY restarted!');
+            _log('[ProximityService] âœ“âœ“âœ“ Advertising SUCCESSFULLY restarted!');
           } else {
-            _log('[ProximityService] ✗✗✗ FAILED to restart advertising: ${_bluetoothService.lastError}');
+            _log('[ProximityService] âœ—âœ—âœ— FAILED to restart advertising: ${_bluetoothService.lastError}');
           }
         });
       } else if (_currentUsername == null) {
-        _log('[ProximityService] ⏳ Bluetooth is ON but no username set yet (waiting for initialize)');
+        _log('[ProximityService] â³ Bluetooth is ON but no username set yet (waiting for initialize)');
       } else {
-        _log('[ProximityService] ℹ️ Bluetooth is ON and already advertising');
+        _log('[ProximityService] â„¹ï¸ Bluetooth is ON and already advertising');
       }
     }
   }
@@ -265,7 +265,7 @@ class ProximityService {
           lastSeen: now,
         );
         _log(
-            '[ProximityService]   ✓ Added new user: $username (display: ${profile?['displayName']})');
+            '[ProximityService]   âœ“ Added new user: $username (display: ${profile?['displayName']})');
       }
     }
 
@@ -334,7 +334,7 @@ class ProximityService {
     }
 
     _setState(ProximityServiceState.scanning);
-    _log('[ProximityService] ✓ Scan started! Will run for ${scanTime.inSeconds} seconds.');
+    _log('[ProximityService] âœ“ Scan started! Will run for ${scanTime.inSeconds} seconds.');
 
     // Auto-stop after specified duration
     _scanTimer?.cancel();
@@ -461,7 +461,7 @@ class ProximityService {
         return;
       }
 
-      // Switch from plain advertising → foreground service
+      // Switch from plain advertising â†’ foreground service
       _log('[ProximityService] Switching to foreground service...');
       await _bluetoothService.stopAdvertising();
       final started = await _bluetoothService.startForegroundAdvertising(_currentUsername!);

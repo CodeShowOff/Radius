@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../posts/data/models/media_item_model.dart';
 import '../../domain/entities/news_post.dart';
@@ -237,7 +237,7 @@ class NewsPostModel extends NewsPost {
     );
   }
 
-  // ─── Validation constants ─────────────────────────────────────────────
+  // â”€â”€â”€ Validation constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static const int maxTextLength = 2000;
   static const int maxNameLength = 50;

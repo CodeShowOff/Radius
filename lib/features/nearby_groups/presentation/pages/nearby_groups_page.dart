@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -288,7 +288,7 @@ class _MyActiveGroupCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Scanning • ${group.memberCount} nearby',
+                              'Scanning â€¢ ${group.memberCount} nearby',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: Colors.green,
                               ),
@@ -441,7 +441,7 @@ class _NearbyGroupCard extends StatelessWidget {
                   // Last message or creator info
                   Text(
                     group.lastMessagePreview ?? 
-                    'by ${group.creatorDisplayName ?? 'Anonymous'} • ${group.memberCount} nearby',
+                    'by ${group.creatorDisplayName ?? 'Anonymous'} â€¢ ${group.memberCount} nearby',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

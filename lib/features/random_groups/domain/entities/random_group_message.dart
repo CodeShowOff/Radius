@@ -1,6 +1,6 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
-import '../../../../core/widgets/group_message_bubble.dart';
+import '../../../../core/enums/group_message_status.dart';
 
 /// Type of message in a random group chat.
 enum RandomGroupMessageType {

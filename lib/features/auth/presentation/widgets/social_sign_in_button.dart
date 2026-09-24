@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// A button for social sign-in providers (Google, Apple, etc.)
 class SocialSignInButton extends StatelessWidget {

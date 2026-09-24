@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -853,7 +853,7 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-/// Strips leading emoji + space from vibe strings like '👋 Open to talk' → 'Open to talk'.
+/// Strips leading emoji + space from vibe strings like 'ðŸ‘‹ Open to talk' â†’ 'Open to talk'.
 String _stripVibeEmoji(String s) {
   final idx = s.indexOf(' ');
   return idx > 0 ? s.substring(idx + 1) : s;
@@ -870,21 +870,21 @@ class _VibeSelector extends StatelessWidget {
   });
 
   static const vibes = {
-    '👋 Open to talk': '👋 Open to talk',
-    '🎧 Busy': '🎧 Busy',
-    '🤝 Networking': '🤝 Networking',
-    '💬 Looking for conversation': '💬 Looking for conversation',
-    '☕ Coffee break': '☕ Coffee break',
-    '🎮 Gaming': '🎮 Gaming',
-    '📚 Studying': '📚 Studying',
-    '🎨 Being creative': '🎨 Being creative',
+    'ðŸ‘‹ Open to talk': 'ðŸ‘‹ Open to talk',
+    'ðŸŽ§ Busy': 'ðŸŽ§ Busy',
+    'ðŸ¤ Networking': 'ðŸ¤ Networking',
+    'ðŸ’¬ Looking for conversation': 'ðŸ’¬ Looking for conversation',
+    'â˜• Coffee break': 'â˜• Coffee break',
+    'ðŸŽ® Gaming': 'ðŸŽ® Gaming',
+    'ðŸ“š Studying': 'ðŸ“š Studying',
+    'ðŸŽ¨ Being creative': 'ðŸŽ¨ Being creative',
   };
 
   // Popular vibes to show upfront
   static const popularVibes = [
-    '👋 Open to talk',
-    '🎧 Busy',
-    '🤝 Networking',
+    'ðŸ‘‹ Open to talk',
+    'ðŸŽ§ Busy',
+    'ðŸ¤ Networking',
   ];
 
   @override
@@ -1014,10 +1014,10 @@ class _GenderSelector extends StatelessWidget {
   });
 
   static const genders = {
-    '👨 Male': 'Male',
-    '👩 Female': 'Female',
-    '⚧️ Non-binary': 'Non-binary',
-    '🤷 Prefer not to say': 'Prefer not to say',
+    'ðŸ‘¨ Male': 'Male',
+    'ðŸ‘© Female': 'Female',
+    'âš§ï¸ Non-binary': 'Non-binary',
+    'ðŸ¤· Prefer not to say': 'Prefer not to say',
   };
 
   Future<void> _showWarningAndSelect(
@@ -1145,7 +1145,7 @@ class _GenderSelector extends StatelessWidget {
                       Text(
                         isLocked
                             ? 'Gender cannot be changed once set'
-                            : '⚠️ Warning: Cannot be changed later',
+                            : 'âš ï¸ Warning: Cannot be changed later',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: isLocked
                               ? theme.colorScheme.outline

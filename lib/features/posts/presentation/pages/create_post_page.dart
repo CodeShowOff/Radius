@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -124,8 +124,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             horizontal: 16, vertical: 4),
                         child: Text(
                           state.status == CreatePostStatus.optimizing
-                              ? 'Optimizing media…'
-                              : 'Uploading…',
+                              ? 'Optimizing mediaâ€¦'
+                              : 'Uploadingâ€¦',
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
                       ),

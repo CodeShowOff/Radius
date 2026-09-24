@@ -1,13 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:logger/logger.dart';
 
-import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../data/random_group_chat_cache_service.dart';
-import '../../data/random_group_chat_service.dart';
+
 import '../../domain/entities/random_group.dart';
 import '../bloc/random_group_bloc.dart';
 
@@ -57,34 +54,6 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
     }
   }
 
-  /// Preload random group chat messages into cache directly via cache+chat services.
-  Future<void> _preloadRandomGroupChat(String groupId, String userId) async {
-    final cacheService = getIt<RandomGroupChatCacheService>();
-    final chatService = getIt<RandomGroupChatService>();
-    final logger = Logger();
-
-    if (cacheService.hasValidCache(groupId, ttl: RandomGroupChatCacheService.defaultTtl)) {
-      return;
-    }
-
-    try {
-      final canRead = await chatService.isActiveMember(groupId: groupId, userId: userId);
-      if (!canRead) return;
-
-      final messages = await chatService.getMessages(groupId: groupId, limit: 50);
-      if (messages.isNotEmpty) {
-        cacheService.updateCache(
-          groupId: groupId,
-          messages: messages,
-          hasMore: messages.length >= 50,
-          isPreload: true,
-        );
-        logger.d('Preloaded ${messages.length} messages for random group $groupId');
-      }
-    } catch (e) {
-      logger.d('Preload failed for random group $groupId: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +138,7 @@ class _RandomGroupsPageState extends State<RandomGroupsPage> {
                   },
                   onLongPress: userId != null
                       ? () {
-                          _preloadRandomGroupChat(group.id, userId);
+
                         }
                       : null,
                 );

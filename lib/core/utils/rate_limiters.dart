@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 /// Debouncer utility to limit how often a function can be called.
 /// 

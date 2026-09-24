@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -139,9 +139,9 @@ class RandomChatService {
         }
 
         if (cachedDate == dateKey && cachedIds.isEmpty) {
-          _logger.d('Profile-cached suggestions are empty — regenerating');
+          _logger.d('Profile-cached suggestions are empty â€” regenerating');
         } else {
-          _logger.d('Cached date ($cachedDate) != today ($dateKey) — regenerating');
+          _logger.d('Cached date ($cachedDate) != today ($dateKey) â€” regenerating');
         }
       }
 

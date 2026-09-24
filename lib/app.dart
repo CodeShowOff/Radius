@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,7 +12,7 @@ import 'core/services/realtime/realtime_data_manager.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
-import 'features/chat/presentation/bloc/conversations_bloc.dart';
+
 import 'features/connections/presentation/bloc/connection_bloc.dart';
 import 'features/connections/presentation/bloc/discovery_bloc.dart';
 import 'features/connections/presentation/widgets/connection_request_listener.dart';
@@ -52,10 +52,7 @@ class RadiusApp extends StatelessWidget {
           BlocProvider<DiscoveryBloc>(
             create: (_) => getIt<DiscoveryBloc>(),
           ),
-          // Conversations BLoC for chat list and unread counts (app-wide)
-          BlocProvider<ConversationsBloc>(
-            create: (_) => getIt<ConversationsBloc>(),
-          ),
+
           // Random Chat BLoC for managing random chat connections (app-wide)
           BlocProvider<RandomChatBloc>(
             create: (_) => getIt<RandomChatBloc>(),
@@ -79,7 +76,7 @@ class RadiusApp extends StatelessWidget {
             create: (_) => getIt<RandomGroupBloc>(),
           ),
 
-          // News Location BLoC (app-wide — shared across feed, setup, create)
+          // News Location BLoC (app-wide â€” shared across feed, setup, create)
           BlocProvider<NewsLocationBloc>(
             create: (_) => getIt<NewsLocationBloc>(),
           ),
@@ -169,20 +166,20 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     // When app resumes (user returns from home screen after turning on Bluetooth)
     // restart advertising if user is authenticated
     if (state == AppLifecycleState.resumed && _currentUserId != null) {
-      debugPrint('[RadiusApp] ⚡ App RESUMED - restarting BLE advertising');
+      debugPrint('[RadiusApp] âš¡ App RESUMED - restarting BLE advertising');
       try {
         context.read<NearbyUsersBloc>().add(const NearbyUsersAppResumed());
-        debugPrint('[RadiusApp] ✓ BLE advertising restart event sent');
+        debugPrint('[RadiusApp] âœ“ BLE advertising restart event sent');
       } catch (e) {
-        debugPrint('[RadiusApp] ✗ Failed to restart advertising: $e');
+        debugPrint('[RadiusApp] âœ— Failed to restart advertising: $e');
       }
     } else if (state == AppLifecycleState.paused) {
       debugPrint(
-          '[RadiusApp] 📱 App PAUSED (backgrounded) - advertising continues in background');
+          '[RadiusApp] ðŸ“± App PAUSED (backgrounded) - advertising continues in background');
     } else if (state == AppLifecycleState.inactive) {
-      debugPrint('[RadiusApp] ⏸️ App INACTIVE');
+      debugPrint('[RadiusApp] â¸ï¸ App INACTIVE');
     } else if (state == AppLifecycleState.detached) {
-      debugPrint('[RadiusApp] 🔌 App DETACHED');
+      debugPrint('[RadiusApp] ðŸ”Œ App DETACHED');
     }
   }
 
@@ -297,11 +294,11 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
             username: state.user.username,
           ));
           debugPrint(
-              '[RadiusApp] ✓ BLE advertising initialization started for ${state.user.username}');
+              '[RadiusApp] âœ“ BLE advertising initialization started for ${state.user.username}');
         } catch (e) {
           // This should never happen since NearbyUsersBloc is provided globally
           debugPrint(
-              '[RadiusApp] ✗✗✗ CRITICAL: Failed to initialize BLE advertising: $e');
+              '[RadiusApp] âœ—âœ—âœ— CRITICAL: Failed to initialize BLE advertising: $e');
           debugPrint(
               '[RadiusApp] This means the user will NOT be discoverable!');
         }
@@ -317,7 +314,7 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     }
 
     // Signed out or unauthenticated.
-    // Skip cleanup if AuthLoading — the AuthBloc._onSignOutRequested is still
+    // Skip cleanup if AuthLoading â€” the AuthBloc._onSignOutRequested is still
     // running its own cleanup. Only run fallback cleanup on final states.
     if (state is AuthLoading) return;
 
@@ -325,14 +322,14 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
       // Normal sign-out path: AuthBloc._onSignOutRequested already called
       // RealTimeDataManager.signOut() (which cancelled all 7 bloc subscriptions,
       // dispatched reset events, disposed presence, and cleared preload caches),
-      // then removed FCM token and cleared local data — all BEFORE Firebase Auth
+      // then removed FCM token and cleared local data â€” all BEFORE Firebase Auth
       // signed out. So by the time we get here, cleanup is already complete.
       //
       // Edge-case fallback: If we arrive here WITHOUT AuthBloc having run
       // (e.g., token expiry or forced server-side sign-out), RTDM will still
       // be in "initialized" state. In that case, do a best-effort cleanup.
       // Note: auth is already revoked in this path, so Firestore writes will
-      // fail — but cancelling local subscriptions and resetting state is safe.
+      // fail â€” but cancelling local subscriptions and resetting state is safe.
       try {
         final rtdm = getIt<RealTimeDataManager>();
         if (rtdm.isInitialized) {
@@ -355,7 +352,7 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     // Capture bloc references BEFORE any async operation to avoid context issues
     ProfileBloc? profileBloc;
     ConnectionBloc? connectionBloc;
-    ConversationsBloc? conversationsBloc;
+
     LocationGroupBloc? locationGroupBloc;
 
     try {
@@ -367,7 +364,7 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
     } catch (_) {}
 
     try {
-      conversationsBloc = context.read<ConversationsBloc>();
+
     } catch (_) {}
 
     try {
@@ -404,7 +401,7 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
       });
     }
 
-    conversationsBloc?.add(ConversationsLoad(userId: userId));
+
     locationGroupBloc?.add(LoadUserGroups(userId: userId));
   }
 

@@ -6,16 +6,12 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../di/injection.dart';
-import '../../features/chat/data/chat_cache_service.dart';
-import '../../features/location_groups/data/group_chat_cache_service.dart';
-import '../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
-import '../../features/random_chat/data/random_chat_cache_service.dart';
-import '../../features/random_groups/data/random_group_chat_cache_service.dart';
+
 import '../services/notifications/notification_service.dart';
 import 'logging/device_log.dart';
 
-/// Clears ALL local app data — the programmatic equivalent of
-/// Android Settings → Apps → Radius → Storage → Clear Data.
+/// Clears ALL local app data â€” the programmatic equivalent of
+/// Android Settings â†’ Apps â†’ Radius â†’ Storage â†’ Clear Data.
 ///
 /// Call this on sign-out so the next user session starts completely fresh
 /// with zero leftover state from the previous account.
@@ -24,7 +20,7 @@ class AppDataClearer {
 
   /// Wipe every local data store. Safe to call multiple times.
   static Future<void> clearAllAppData() async {
-    // ── Phase 1: Clear caches that own SQLite / file handles ─────────────
+    // â”€â”€ Phase 1: Clear caches that own SQLite / file handles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // These must complete BEFORE we delete directories, otherwise deleting
     // the underlying DB file while flutter_cache_manager still has it open
     // triggers SQLITE_READONLY_DBMOVED (code 1032).
@@ -36,18 +32,18 @@ class AppDataClearer {
       _clearDeviceLogs(),
     ]);
 
-    // ── Phase 2: Hive boxes (close first, then delete files) ────────────
+    // â”€â”€ Phase 2: Hive boxes (close first, then delete files) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     await _clearHiveBoxes();
 
-    // ── Phase 3: Delete directories (safe now — no open handles) ────────
+    // â”€â”€ Phase 3: Delete directories (safe now â€” no open handles) â”€â”€â”€â”€â”€â”€â”€â”€
     await Future.wait([
       _clearTempDirectory(),
       _clearApplicationDocumentsDirectory(),
       _clearApplicationSupportDirectory(),
     ]);
 
-    // ── Phase 4: Re-initialize Hive so subsequent box opens don't crash
-    // with PathNotFoundException (the directories were just deleted). ─────
+    // â”€â”€ Phase 4: Re-initialize Hive so subsequent box opens don't crash
+    // with PathNotFoundException (the directories were just deleted). â”€â”€â”€â”€â”€
     try {
       await Hive.initFlutter();
     } catch (_) {
@@ -55,29 +51,13 @@ class AppDataClearer {
     }
   }
 
-  // ── In-memory LRU caches ──────────────────────────────────────────────────
+  // â”€â”€ In-memory LRU caches â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearInMemoryCaches() async {
-    if (getIt.isRegistered<ChatCacheService>()) {
-      getIt<ChatCacheService>().clearAll();
-    }
-    if (getIt.isRegistered<GroupChatCacheService>()) {
-      getIt<GroupChatCacheService>().clearAll();
-    }
-    if (getIt.isRegistered<NearbyGroupChatCacheService>()) {
-      getIt<NearbyGroupChatCacheService>().clearAll();
-    }
-    if (getIt.isRegistered<RandomGroupChatCacheService>()) {
-      getIt<RandomGroupChatCacheService>().clearAll();
-    }
-    if (getIt.isRegistered<RandomChatCacheService>()) {
-      final randomChatCache = getIt<RandomChatCacheService>();
-      await randomChatCache.clearCache();
-      await randomChatCache.close();
-    }
+    // No legacy custom chat caches to clear.
   }
 
-  // ── Hive (all boxes) ─────────────────────────────────────────────────────
+  // â”€â”€ Hive (all boxes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearHiveBoxes() async {
     try {
@@ -111,7 +91,7 @@ class AppDataClearer {
     'random_chat_cache',
   ];
 
-  // ── Flutter image cache ───────────────────────────────────────────────────
+  // â”€â”€ Flutter image cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearImageCache() async {
     try {
@@ -120,7 +100,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── cached_network_image / flutter_cache_manager on-disk cache ───────────
+  // â”€â”€ cached_network_image / flutter_cache_manager on-disk cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearFileCacheManager() async {
     try {
@@ -128,7 +108,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── Temp directory ────────────────────────────────────────────────────────
+  // â”€â”€ Temp directory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearTempDirectory() async {
     try {
@@ -150,7 +130,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── Application Documents Directory ───────────────────────────────────────
+  // â”€â”€ Application Documents Directory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearApplicationDocumentsDirectory() async {
     try {
@@ -177,7 +157,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── Application Support Directory ─────────────────────────────────────────
+  // â”€â”€ Application Support Directory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearApplicationSupportDirectory() async {
     try {
@@ -214,7 +194,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── Notifications ─────────────────────────────────────────────────────────
+  // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearNotifications() async {
     try {
@@ -224,7 +204,7 @@ class AppDataClearer {
     } catch (_) {}
   }
 
-  // ── Device logs ───────────────────────────────────────────────────────────
+  // â”€â”€ Device logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Future<void> _clearDeviceLogs() async {
     try {

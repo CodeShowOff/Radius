@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:logger/logger.dart';
-
-import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../data/group_chat_cache_service.dart';
-import '../../data/group_chat_service.dart';
+
+
 import '../bloc/location_group_bloc.dart';
 import '../widgets/group_card.dart';
 
@@ -69,35 +66,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
     }
   }
 
-  /// Preload group chat messages into cache directly via cache+chat services.
-  Future<void> _preloadGroupChat(String groupId, String userId) async {
-    final cacheService = getIt<GroupChatCacheService>();
-    final chatService = getIt<GroupChatService>();
-    final logger = Logger();
 
-    if (cacheService.hasValidCache(groupId, ttl: GroupChatCacheService.defaultTtl)) {
-      return;
-    }
-
-    try {
-      final canRead = await chatService.isActiveMember(groupId: groupId, userId: userId);
-      if (!canRead) return;
-
-      final messages = await chatService.getMessages(groupId: groupId, limit: 50);
-      if (messages.isNotEmpty) {
-        cacheService.updateCache(
-          groupId: groupId,
-          messages: messages,
-          hasMore: messages.length >= 50,
-          isPreload: true,
-        );
-        logger.d('Preloaded ${messages.length} messages for group $groupId');
-      }
-    } catch (e) {
-      // Preload failures are silent
-      logger.d('Preload failed for group $groupId: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -217,9 +186,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
               itemBuilder: (context, index) {
                 final group = state.userGroups[index];
                 final unreadCount = state.userGroupUnreadCounts[group.id] ?? 0;
-                final authState = context.read<AuthBloc>().state;
-                final userId =
-                    authState is AuthAuthenticated ? authState.user.id : null;
+
 
                 return GroupCard(
                   group: group,
@@ -228,13 +195,7 @@ class _MyGroupsPageState extends State<MyGroupsPage> {
                   onTap: () {
                     context.push(Routes.locationGroupChatWith(group.id));
                   },
-                  onLongPress: userId != null
-                      ? () {
-                          // Preload group chat messages into cache on long-press
-                          // This makes navigation instant even on cache miss
-                          _preloadGroupChat(group.id, userId);
-                        }
-                      : null,
+                  onLongPress: null,
                 );
               },
             );

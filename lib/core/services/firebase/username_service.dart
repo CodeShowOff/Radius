@@ -1,13 +1,18 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:injectable/injectable.dart';
 import 'package:logger/logger.dart';
 
 /// Service for generating unique usernames using Firestore transactions.
 ///
 /// Usernames are exactly 7 bytes, Base62 encoded (a-z, A-Z, 0-9).
 /// Firestore guarantees uniqueness via atomic counter increment.
+@lazySingleton
 class UsernameService {
   final FirebaseFirestore _firestore;
   final Logger _logger = Logger();
+
+  UsernameService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   static const String _counterCollection = 'counters';
   static const String _counterDocument = 'usernames';
@@ -20,8 +25,6 @@ class UsernameService {
   static const String _base62Alphabet =
       '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
-  UsernameService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   /// Generates a unique username using Firestore transaction.
   ///

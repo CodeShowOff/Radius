@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,6 +8,8 @@ import '../../../../core/error/failures.dart';
 import '../../../../core/services/app_data_clearer.dart';
 import '../../../../core/services/notifications/notification_service.dart';
 import '../../../../core/services/realtime/realtime_data_manager.dart';
+import '../../../../core/services/stream_token_service.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart' hide User;
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
@@ -83,7 +85,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     // Start listening for external auth changes (token expiry, account
     // deletion, etc.) now that the initial check is done. On subscription,
-    // Firebase emits the current user — the asyncMap Firestore query still
+    // Firebase emits the current user â€” the asyncMap Firestore query still
     // runs, but _onAuthStateChanged will early-return because the state
     // already matches, so no visible state churn occurs.
     _startAuthStateSubscription();
@@ -408,6 +410,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return; // Already unauthenticated
       }
       emit(AuthUnauthenticated());
+    }
+  }
+
+  @override
+  void onChange(Change<AuthState> change) {
+    super.onChange(change);
+    
+    // Manage Stream Chat connection state
+    if (change.nextState is AuthAuthenticated && change.currentState is! AuthAuthenticated) {
+      // User just became authenticated, connect them to Stream
+      getIt<StreamTokenService>().connectUser(getIt<StreamChatClient>());
+    } else if (change.nextState is AuthUnauthenticated && change.currentState is! AuthUnauthenticated) {
+      // User just signed out, disconnect from Stream
+      getIt<StreamTokenService>().disconnectUser(getIt<StreamChatClient>());
     }
   }
 

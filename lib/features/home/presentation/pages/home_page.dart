@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -441,7 +441,7 @@ class _HomePageState extends State<HomePage>
         if (profileState is ProfileLoaded &&
             profileState.profile.mood != null) {
           final mood = profileState.profile.mood!;
-          // Support both old emoji keys ('😊 Chill') and new clean values ('Chill')
+          // Support both old emoji keys ('ðŸ˜Š Chill') and new clean values ('Chill')
           final cleanMood = MoodSelector.moods[mood] ?? mood;
           moodLabel = '$cleanMood Mood';
           const moodIcons = {

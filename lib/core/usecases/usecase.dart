@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+﻿import 'package:dartz/dartz.dart';
 import '../error/failures.dart';
 
 /// Base class for use cases with parameters.

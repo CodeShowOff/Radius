@@ -1,4 +1,4 @@
-part of 'user_posts_bloc.dart';
+﻿part of 'user_posts_bloc.dart';
 
 /// Status of user posts loading.
 enum UserPostsStatus {

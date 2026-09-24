@@ -1,4 +1,4 @@
-/// Centralized route paths for the application.
+﻿/// Centralized route paths for the application.
 ///
 /// All route strings are defined here to avoid magic strings
 /// and enable easy refactoring.

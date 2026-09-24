@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -557,7 +557,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _scanCycleTimer?.cancel();
     _scanCycleTimer = null;
 
-    // Cancel stream subscriptions (fire-and-forget — don't await .cancel()
+    // Cancel stream subscriptions (fire-and-forget â€” don't await .cancel()
     // because Firestore/BLE native cleanup can hang indefinitely).
     _activeGroupsSubscription?.cancel();
     _activeGroupsSubscription = null;

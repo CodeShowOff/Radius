@@ -1,4 +1,4 @@
-part of 'create_post_bloc.dart';
+﻿part of 'create_post_bloc.dart';
 
 /// Base class for create post events.
 abstract class CreatePostEvent extends Equatable {

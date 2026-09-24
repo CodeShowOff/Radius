@@ -1,4 +1,4 @@
-part of 'random_group_bloc.dart';
+﻿part of 'random_group_bloc.dart';
 
 /// Status of the RandomGroupBloc.
 enum RandomGroupBlocStatus {

@@ -1,4 +1,4 @@
-part of 'nearby_users_bloc.dart';
+﻿part of 'nearby_users_bloc.dart';
 
 /// Base class for nearby users events.
 abstract class NearbyUsersEvent extends Equatable {

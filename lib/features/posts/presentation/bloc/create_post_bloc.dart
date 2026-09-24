@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -100,7 +100,7 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
   ) async {
     if (!state.canSubmit) return;
 
-    // ─── Rate limit check ─────────────────────────────────────────────
+    // â”€â”€â”€ Rate limit check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (_authorId != null) {
       try {
         final todayCount = await _postService.countTodayPostsByAuthor(_authorId!);
@@ -117,7 +117,7 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
       }
     }
 
-    // ─── Optimize media ───────────────────────────────────────────────
+    // â”€â”€â”€ Optimize media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     emit(state.copyWith(
       status: CreatePostStatus.optimizing,
       uploadProgress: 0.0,
@@ -160,7 +160,7 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
       return;
     }
 
-    // ─── Upload ───────────────────────────────────────────────────────
+    // â”€â”€â”€ Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     emit(state.copyWith(
       status: CreatePostStatus.uploading,
       uploadProgress: 0.0,
@@ -264,7 +264,7 @@ class CreatePostBloc extends Bloc<CreatePostEvent, CreatePostState> {
     }
   }
 
-  // ─── User context (set before submitting) ──────────────────────────
+  // â”€â”€â”€ User context (set before submitting) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   String? _authorId;
   String? _authorName;

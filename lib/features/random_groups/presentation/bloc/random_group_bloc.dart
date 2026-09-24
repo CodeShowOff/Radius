@@ -1,10 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
-import '../../data/random_group_chat_service.dart';
+
 import '../../data/random_group_service.dart';
 import '../../domain/entities/join_request.dart';
 import '../../domain/entities/random_group.dart';
@@ -23,7 +23,7 @@ part 'random_group_state.dart';
 /// - Admin controls
 class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   final RandomGroupService _groupService;
-  final RandomGroupChatService? _chatService;
+
   final Logger _logger;
 
   StreamSubscription<List<RandomGroup>>? _activeGroupsSubscription;
@@ -32,14 +32,12 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   StreamSubscription<RandomGroup?>? _groupDetailsSubscription;
   StreamSubscription<List<JoinRequest>>? _pendingRequestsSubscription;
   StreamSubscription<List<RandomGroupMember>>? _membersSubscription;
-  StreamSubscription<Map<String, int>>? _unreadCountsSubscription;
+
 
   RandomGroupBloc({
     required RandomGroupService groupService,
-    RandomGroupChatService? chatService,
     Logger? logger,
   })  : _groupService = groupService,
-        _chatService = chatService,
         _logger = logger ?? Logger(),
         super(const RandomGroupState()) {
     on<WatchActiveRandomGroups>(_onWatchActiveRandomGroups);
@@ -70,7 +68,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<_PendingRequestsReceived>(_onPendingRequestsReceived);
     on<_MembersReceived>(_onMembersReceived);
     on<_RandomGroupStreamError>(_onRandomGroupStreamError);
-    on<_UnreadCountsReceived>(_onUnreadCountsReceived);
+
   }
 
   Future<void> _onWatchActiveRandomGroups(
@@ -149,16 +147,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
             },
           );
 
-      // Also start watching unread counts
-      await _unreadCountsSubscription?.cancel();
-      _unreadCountsSubscription = _groupService
-          .watchUserUnreadCounts(event.userId)
-          .listen(
-            (unreadCounts) => add(_UnreadCountsReceived(unreadCounts)),
-            onError: (error) {
-              _logger.w('Unread counts stream error: $error');
-            },
-          );
+
     } catch (e) {
       _logger.e('Failed to start watching user groups: $e');
       emit(state.copyWith(
@@ -305,14 +294,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Approved request: ${event.requestId}');
-        // Send system message for join notification
-        if (_chatService != null && event.requesterUsername != null) {
-          _chatService.sendSystemMessage(
-            groupId: event.groupId,
-            text: '${event.requesterUsername} joined the group',
-            delayBeforeSend: true,
-          );
-        }
+
       // State will update via stream
 
       case RandomGroupFailure(message: final msg):
@@ -367,15 +349,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
       switch (result) {
         case RandomGroupSuccess():
           _logger.i('Approved request: ${request.id}');
-          // Send system message for join notification
-          if (_chatService != null) {
-            _chatService.sendSystemMessage(
-              groupId: event.groupId,
-              text:
-                  '${request.requesterDisplayName ?? request.requesterUsername} joined the group',
-              delayBeforeSend: true,
-            );
-          }
+
 
         case RandomGroupFailure(message: final msg):
           _logger.w('Failed to approve request ${request.id}: $msg');
@@ -399,13 +373,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     switch (result) {
       case RandomGroupSuccess():
         _logger.i('Removed member: ${event.memberId}');
-        // Send system message for removal notification
-        if (_chatService != null && event.memberUsername != null) {
-          _chatService.sendSystemMessage(
-            groupId: event.groupId,
-            text: '${event.memberUsername} was removed from the group',
-          );
-        }
+
       // State will update via stream
 
       case RandomGroupFailure(message: final msg):
@@ -475,13 +443,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Leaving group: ${event.groupId}');
 
-    // Send system message before leaving (while still a member)
-    if (_chatService != null && event.username != null) {
-      await _chatService.sendSystemMessage(
-        groupId: event.groupId,
-        text: '${event.username} left the group',
-      );
-    }
+
 
     final result = await _groupService.leaveGroup(
       groupId: event.groupId,
@@ -667,7 +629,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
   ) async {
     _logger.d('Clearing chat for group: ${event.groupId}');
 
-    // Don't set global status to loading — clear chat is a background operation
+    // Don't set global status to loading â€” clear chat is a background operation
     // that shouldn't block the group list page with a loading/error state.
 
     final result = await _groupService.clearGroupMessages(
@@ -685,7 +647,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
 
       case RandomGroupFailure(message: final msg):
         _logger.w('Failed to clear chat: $msg');
-        // Stay in loaded state — don't emit global error that breaks
+        // Stay in loaded state â€” don't emit global error that breaks
         // other pages (like My Random Groups list showing error screen).
         // The error message is available for listeners to show a snackbar.
         emit(state.copyWith(
@@ -775,12 +737,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     ));
   }
 
-  void _onUnreadCountsReceived(
-    _UnreadCountsReceived event,
-    Emitter<RandomGroupState> emit,
-  ) {
-    emit(state.copyWith(userGroupUnreadCounts: event.unreadCounts));
-  }
+
 
   /// Handler for resetting the BLoC state when switching accounts.
   /// Cancels all subscriptions and clears state to prevent permission errors.
@@ -810,8 +767,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     if (event.userId != null) {
       await _userGroupsSubscription?.cancel();
       _userGroupsSubscription = null;
-      await _unreadCountsSubscription?.cancel();
-      _unreadCountsSubscription = null;
+
     }
 
     // Re-dispatch watch events which will now start fresh subscriptions
@@ -841,8 +797,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     _membersSubscription?.cancel();
     _membersSubscription = null;
 
-    _unreadCountsSubscription?.cancel();
-    _unreadCountsSubscription = null;
+
   }
 
   /// Directly cancels all Firestore stream subscriptions.

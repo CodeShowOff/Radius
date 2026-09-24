@@ -1,4 +1,4 @@
-/// Utility class for sanitizing user input to prevent security issues.
+﻿/// Utility class for sanitizing user input to prevent security issues.
 ///
 /// This includes protection against XSS, SQL injection patterns,
 /// and other malicious input.

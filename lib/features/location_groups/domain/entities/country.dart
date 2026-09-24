@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// Entity representing a country for location-scoped groups.
 /// Data sourced from bundled locations.json asset.

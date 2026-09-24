@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -16,17 +16,17 @@ class MoodSelector extends StatelessWidget {
   });
 
   static const moods = {
-    '😊 Chill': 'Chill',
-    '🤓 Focused': 'Focused',
-    '🧠 Deep talk': 'Deep talk',
-    '😂 Fun': 'Fun',
+    'ðŸ˜Š Chill': 'Chill',
+    'ðŸ¤“ Focused': 'Focused',
+    'ðŸ§  Deep talk': 'Deep talk',
+    'ðŸ˜‚ Fun': 'Fun',
   };
 
   static const _moodIcons = {
-    '😊 Chill': Icons.sentiment_satisfied_alt,
-    '🤓 Focused': Icons.psychology,
-    '🧠 Deep talk': Icons.forum,
-    '😂 Fun': Icons.celebration,
+    'ðŸ˜Š Chill': Icons.sentiment_satisfied_alt,
+    'ðŸ¤“ Focused': Icons.psychology,
+    'ðŸ§  Deep talk': Icons.forum,
+    'ðŸ˜‚ Fun': Icons.celebration,
   };
 
   void _updateMood(BuildContext context, String? mood) {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// Shows an error dialog for authentication failures.
 void showAuthErrorDialog(BuildContext context, String message) {

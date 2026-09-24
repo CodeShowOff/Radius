@@ -1,10 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:injectable/injectable.dart';
 
 import '../../../features/profile/data/models/profile_model.dart';
 
 /// Service for profile-related Firestore operations.
 /// Writes to both `users` and `profiles` collections to keep data mirrored.
 /// Consistent field names: photoUrl (not avatarUrl), displayName (not name)
+@lazySingleton
 class ProfileService {
   final FirebaseFirestore _firestore;
 

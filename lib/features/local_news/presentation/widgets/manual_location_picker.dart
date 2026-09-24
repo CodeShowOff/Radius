@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../../location_groups/data/location_data_service.dart';
 import '../../../location_groups/domain/entities/country.dart';
@@ -162,7 +162,7 @@ class _ManualLocationPickerState extends State<ManualLocationPicker> {
 }
 
 // ---------------------------------------------------------------------------
-// Picker field — styled tappable field
+// Picker field â€” styled tappable field
 // ---------------------------------------------------------------------------
 class _PickerField extends StatelessWidget {
   final String label;
@@ -234,7 +234,7 @@ class _PickerField extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Selection bottom sheet — search + list
+// Selection bottom sheet â€” search + list
 // ---------------------------------------------------------------------------
 class _SelectionSheet<T> extends StatefulWidget {
   final String title;

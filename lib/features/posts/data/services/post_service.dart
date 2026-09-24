@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -8,7 +8,7 @@ import '../models/post_model.dart';
 /// Service for Firestore operations on the posts collection.
 ///
 /// Firestore Collections:
-/// - `posts` — User posts with text, media, and visibility settings
+/// - `posts` â€” User posts with text, media, and visibility settings
 class PostService {
   final FirebaseFirestore _firestore;
   final Logger _logger;
@@ -111,7 +111,7 @@ class PostService {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      // Own profile — single query is allowed by Firestore rules
+      // Own profile â€” single query is allowed by Firestore rules
       // (authorId == request.auth.uid satisfies the read rule)
       if (viewerUserId != null && viewerUserId == authorId) {
         Query<Map<String, dynamic>> query = _postsRef
@@ -127,9 +127,9 @@ class PostService {
             .toList();
       }
 
-      // Connected viewer — two parallel queries to satisfy Firestore rules:
-      //   Query 1: visibility == 'public'  →  rule condition 1
-      //   Query 2: arrayContains viewer    →  rule condition 3
+      // Connected viewer â€” two parallel queries to satisfy Firestore rules:
+      //   Query 1: visibility == 'public'  â†’  rule condition 1
+      //   Query 2: arrayContains viewer    â†’  rule condition 3
       if (includeConnectionsVisibility && viewerUserId != null) {
         Query<Map<String, dynamic>> publicQuery = _postsRef
             .where('authorId', isEqualTo: authorId)
@@ -170,7 +170,7 @@ class PostService {
         return merged.take(limit).toList();
       }
 
-      // Non-connected viewer — public only
+      // Non-connected viewer â€” public only
       Query<Map<String, dynamic>> query = _postsRef
           .where('authorId', isEqualTo: authorId)
           .where('visibility', isEqualTo: 'public')

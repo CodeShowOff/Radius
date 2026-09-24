@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,7 +10,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/services/bluetooth/bluetooth_service.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../chat/domain/entities/conversation.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../../connections/data/connection_service.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
@@ -374,22 +374,22 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         key.contains('redmi') ||
         key.contains('poco')) {
       return const [
-        'Set Battery saver for Radius to “No restrictions”.',
+        'Set Battery saver for Radius to â€œNo restrictionsâ€.',
         'Enable Autostart for Radius (if available).',
-        'Lock Radius in Recents (tap the app icon → Lock).',
+        'Lock Radius in Recents (tap the app icon â†’ Lock).',
       ];
     }
 
     if (key.contains('huawei') || key.contains('honor')) {
       return const [
-        'Battery: set Radius to “Not allowed to optimize”.',
+        'Battery: set Radius to â€œNot allowed to optimizeâ€.',
         'App launch: manage manually; allow auto-launch + background activity.',
       ];
     }
 
     if (key.contains('samsung')) {
       return const [
-        'Battery: set Radius to “Unrestricted” (or disable “Put unused apps to sleep” for it).',
+        'Battery: set Radius to â€œUnrestrictedâ€ (or disable â€œPut unused apps to sleepâ€ for it).',
         'Ensure Bluetooth is allowed while the Nearby screen is open.',
       ];
     }
@@ -399,19 +399,19 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
         key.contains('vivo')) {
       return const [
         'Allow background activity / disable app sleep for Radius.',
-        'Battery: set Radius to “Don’t optimize” (or “No restrictions”).',
+        'Battery: set Radius to â€œDonâ€™t optimizeâ€ (or â€œNo restrictionsâ€).',
       ];
     }
 
     if (key.contains('oneplus')) {
       return const [
-        'Battery optimization: set Radius to “Don’t optimize”.',
+        'Battery optimization: set Radius to â€œDonâ€™t optimizeâ€.',
         'Disable aggressive sleep/hibernation for Radius if available.',
       ];
     }
 
     return const [
-      'Battery optimization: set Radius to “Don’t optimize” / “Unrestricted” if available.',
+      'Battery optimization: set Radius to â€œDonâ€™t optimizeâ€ / â€œUnrestrictedâ€ if available.',
       'Keep Radius open on the Nearby screen during discovery.',
     ];
   }
@@ -443,7 +443,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'If you see “no nearby users” even when phones are close, this is often caused by permissions, Bluetooth being off, or OEM battery management.',
+                    'If you see â€œno nearby usersâ€ even when phones are close, this is often caused by permissions, Bluetooth being off, or OEM battery management.',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
@@ -476,7 +476,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text('• '),
+                                      const Text('â€¢ '),
                                       Expanded(child: Text(s)),
                                     ],
                                   ),
@@ -509,12 +509,12 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                         children: [
                           Text('Tips', style: theme.textTheme.titleSmall),
                           const SizedBox(height: 8),
-                          const Text('• Make sure Bluetooth is turned on'),
-                          const Text('• Grant all Bluetooth permissions'),
+                          const Text('â€¢ Make sure Bluetooth is turned on'),
+                          const Text('â€¢ Grant all Bluetooth permissions'),
                           const Text(
-                              '• Disable battery optimization for this app'),
+                              'â€¢ Disable battery optimization for this app'),
                           const Text(
-                              '• Keep the app in foreground while scanning'),
+                              'â€¢ Keep the app in foreground while scanning'),
                         ],
                       ),
                     ),
@@ -976,17 +976,17 @@ class _NearbyUsersListState extends State<_NearbyUsersList> {
   String? _selectedGenderFilter;
 
   static const moods = {
-    '😊 Chill': '😊 Chill',
-    '🤓 Focused': '🤓 Focused',
-    '🧠 Deep talk': '🧠 Deep talk',
-    '😂 Fun': '😂 Fun',
+    'ðŸ˜Š Chill': 'ðŸ˜Š Chill',
+    'ðŸ¤“ Focused': 'ðŸ¤“ Focused',
+    'ðŸ§  Deep talk': 'ðŸ§  Deep talk',
+    'ðŸ˜‚ Fun': 'ðŸ˜‚ Fun',
   };
 
   static const genders = {
-    '👨 Male': 'Male',
-    '👩 Female': 'Female',
-    '⚧️ Non-binary': 'Non-binary',
-    '🤷 Prefer not to say': 'Prefer not to say',
+    'ðŸ‘¨ Male': 'Male',
+    'ðŸ‘© Female': 'Female',
+    'âš§ï¸ Non-binary': 'Non-binary',
+    'ðŸ¤· Prefer not to say': 'Prefer not to say',
   };
 
   List<NearbyUser> get _filteredUsers {
@@ -1656,7 +1656,7 @@ class _UserDetailsSheet extends StatelessWidget {
                           onPressed: () {
                             // Capture navigation data before popping
                             final conversationId =
-                                Conversation.createConversationId(
+                                ChatUtils.getDirectMessageChannelId(
                               currentUserId,
                               otherUserId,
                             );
@@ -1720,7 +1720,7 @@ class _UserDetailsSheet extends StatelessWidget {
 
                               // Prepare navigation data
                               final conversationId =
-                                  Conversation.createConversationId(
+                                  ChatUtils.getDirectMessageChannelId(
                                 currentUserId,
                                 otherUserId,
                               );

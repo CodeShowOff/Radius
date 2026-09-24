@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -317,7 +317,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
                 ),
               ),
 
-              // Bottom Left overlay — author, caption, audio track
+              // Bottom Left overlay â€” author, caption, audio track
               Positioned(
                 left: 16,
                 right: 70,
@@ -408,7 +408,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
-                            '${widget.reel.authorName} • Original Audio',
+                            '${widget.reel.authorName} â€¢ Original Audio',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: Colors.white,
                               fontSize: 13,
@@ -441,7 +441,7 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> with SingleTickerProvid
                 ),
               ),
 
-              // Right side — interaction buttons + mute
+              // Right side â€” interaction buttons + mute
               Positioned(
                 right: 8,
                 bottom: 24,

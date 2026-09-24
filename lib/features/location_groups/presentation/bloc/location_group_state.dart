@@ -1,4 +1,4 @@
-part of 'location_group_bloc.dart';
+﻿part of 'location_group_bloc.dart';
 
 /// Status of the group operations.
 enum GroupBlocStatus {

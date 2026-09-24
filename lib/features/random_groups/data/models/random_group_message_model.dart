@@ -1,6 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../../core/widgets/group_message_bubble.dart';
+import '../../../../core/enums/group_message_status.dart';
 import '../../domain/entities/random_group_message.dart';
 
 /// Firestore model for RandomGroupMessage entity.

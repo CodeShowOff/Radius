@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -157,7 +157,7 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     );
   }
 
-  // ─── Feed scaffold (location is ready) ─────────────────────────────
+  // â”€â”€â”€ Feed scaffold (location is ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildFeedScaffold(
       BuildContext context, NewsLocationState locationState) {
@@ -220,7 +220,7 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
     );
   }
 
-  // ─── Setup scaffold (location not yet configured) ──────────────────
+  // â”€â”€â”€ Setup scaffold (location not yet configured) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildSetupScaffold(
       BuildContext context, NewsLocationState locationState) {
@@ -274,7 +274,7 @@ class _CheckingLocationView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Manual setup view — show manual location picker directly
+// Manual setup view â€” show manual location picker directly
 // ---------------------------------------------------------------------------
 class _ManualSetupView extends StatelessWidget {
   @override

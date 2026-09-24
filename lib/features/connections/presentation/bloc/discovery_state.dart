@@ -1,4 +1,4 @@
-part of 'discovery_bloc.dart';
+﻿part of 'discovery_bloc.dart';
 
 /// Status of the discovery bloc.
 enum DiscoveryStatus {

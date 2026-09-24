@@ -1,4 +1,4 @@
-part of 'connection_bloc.dart';
+﻿part of 'connection_bloc.dart';
 
 /// Status of the connection bloc.
 enum ConnectionBlocStatus {

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -447,10 +447,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
         content: Text(
           'We\'ll prepare a copy of your data and send a download link to $email within 48 hours.\n\n'
           'This will include:\n'
-          '• Your profile information\n'
-          '• Your connections list\n'
-          '• Your chat history\n'
-          '• Your privacy settings',
+          'â€¢ Your profile information\n'
+          'â€¢ Your connections list\n'
+          'â€¢ Your chat history\n'
+          'â€¢ Your privacy settings',
         ),
         actions: [
           TextButton(
@@ -526,10 +526,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
         title: const Text('Delete Account?'),
         content: const Text(
           'This will permanently delete:\n\n'
-          '• Your profile and all personal data\n'
-          '• All your connections\n'
-          '• All your chat messages\n'
-          '• Your account credentials\n\n'
+          'â€¢ Your profile and all personal data\n'
+          'â€¢ All your connections\n'
+          'â€¢ All your chat messages\n'
+          'â€¢ Your account credentials\n\n'
           'This action cannot be undone.',
         ),
         actions: [

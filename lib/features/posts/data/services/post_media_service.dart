@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:typed_data';
 
 import '../../../../core/constants/env.dart';
@@ -183,7 +183,7 @@ class PostMediaService {
   /// (before the Firestore document is created).
   String generatePostId() => _uuid.v4();
 
-  // ─── Validation ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _validateFileSize(int fileSize, String storagePath) {
     const int maxImageSize = 10 * 1024 * 1024; // 10MB (post-compression)

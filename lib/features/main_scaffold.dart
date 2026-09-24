@@ -1,11 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+﻿import 'package:flutter/material.dart';
+
 import 'package:go_router/go_router.dart';
 
 import '../core/router/routes.dart';
-import 'chat/domain/entities/conversation.dart';
-import 'chat/presentation/bloc/conversations_bloc.dart';
-import 'random_chat/presentation/bloc/random_chat_bloc.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 /// Main scaffold with bottom navigation for the app.
 class MainScaffold extends StatefulWidget {
@@ -105,60 +103,29 @@ class _ConnectionsIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ConversationsBloc, ConversationsState>(
-      buildWhen: (previous, current) {
-        // Rebuild when conversations list changes, current user changes,
-        // or activeConversationId changes. The latter is critical because
-        // when a user leaves a chat, activeConversationId is cleared and
-        // the badge must recalculate to include that conversation's unreads.
-        return previous.conversations != current.conversations ||
-            previous.currentUserId != current.currentUserId ||
-            previous.activeConversationId != current.activeConversationId;
-      },
-      builder: (context, conversationsState) {
-        return BlocBuilder<RandomChatBloc, RandomChatState>(
-          buildWhen: (previous, current) {
-            // Rebuild when active connection changes
-            if (previous is RandomChatLoaded && current is RandomChatLoaded) {
-              return previous.activeConnection != current.activeConnection;
-            }
-            return previous.runtimeType != current.runtimeType;
-          },
-          builder: (context, randomChatState) {
-            // Get random chat conversation ID to exclude
-            String? randomChatConversationId;
-            if (randomChatState is RandomChatLoaded &&
-                randomChatState.activeConnection != null &&
-                conversationsState.currentUserId != null) {
-              final connection = randomChatState.activeConnection!;
-              final currentUserId = conversationsState.currentUserId!;
-              final otherUserId = connection.getOtherUserId(currentUserId);
-              randomChatConversationId =
-                  Conversation.createConversationId(currentUserId, otherUserId);
-            }
+    try {
+      final client = StreamChat.of(context).client;
+      return StreamBuilder<int>(
+        stream: client.state.totalUnreadCountStream,
+        builder: (context, snapshot) {
+          final unreadCount = snapshot.data ?? client.state.totalUnreadCount;
 
-            // Count the number of connection chats with unread messages
-            // (excluding random chat)
-            final userId = conversationsState.currentUserId ?? '';
-            final chatsWithUnread = conversationsState.conversations
-                .where((conversation) =>
-                    conversation.id != randomChatConversationId &&
-                    conversation.getUnreadCount(userId) > 0)
-                .length;
+          if (unreadCount == 0) {
+            return Icon(selected ? Icons.people : Icons.people_outlined);
+          }
 
-            if (chatsWithUnread == 0) {
-              return Icon(selected ? Icons.people : Icons.people_outlined);
-            }
-
-            return Badge(
-              backgroundColor: const Color(0xFF25D366), // WhatsApp green
-              label: Text(chatsWithUnread > 99 ? '99+' : chatsWithUnread.toString()),
-              child: Icon(selected ? Icons.people : Icons.people_outlined),
-            );
-          },
-        );
-      },
-    );
+          return Badge(
+            backgroundColor: const Color(0xFF25D366), // WhatsApp green
+            label: Text(
+              unreadCount > 99 ? '99+' : unreadCount.toString(),
+            ),
+            child: Icon(selected ? Icons.people : Icons.people_outlined),
+          );
+        },
+      );
+    } catch (_) {
+      return Icon(selected ? Icons.people : Icons.people_outlined);
+    }
   }
 }
 

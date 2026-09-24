@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -260,7 +260,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
       );
     }
 
-    // Not connected — show Connect button
+    // Not connected â€” show Connect button
     return FilledButton.icon(
       onPressed: _sendConnectRequest,
       icon: const Icon(Icons.person_add),
@@ -351,13 +351,13 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header row: avatar + stats ──
+                // â”€â”€ Header row: avatar + stats â”€â”€
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   child: Row(
                     children: [
-                      // Profile photo – left aligned with purple border
+                      // Profile photo â€“ left aligned with purple border
                       Container(
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
@@ -416,7 +416,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                   ),
                 ),
 
-                // ── Name ──
+                // â”€â”€ Name â”€â”€
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
@@ -427,7 +427,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                   ),
                 ),
 
-                // ── Bio ──
+                // â”€â”€ Bio â”€â”€
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -444,7 +444,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                   ),
                 ),
 
-                // ── Vibe & Mood ──
+                // â”€â”€ Vibe & Mood â”€â”€
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -563,7 +563,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
                 const SizedBox(height: 12),
 
-                // ── Connect & Block buttons (hide for own profile) ──
+                // â”€â”€ Connect & Block buttons (hide for own profile) â”€â”€
                 if (context.read<AuthBloc>().state
                     case AuthAuthenticated(:final user)
                     when user.id != widget.otherUserId)
@@ -646,7 +646,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
 
                 const SizedBox(height: 16),
 
-                // ── Tab bar (Posts) ──
+                // â”€â”€ Tab bar (Posts) â”€â”€
                 TabBar(
                   labelColor: theme.colorScheme.onSurface,
                   unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
@@ -693,7 +693,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
   }
 }
 
-/// Strips leading emoji + space from a string like '👋 Open to talk' → 'Open to talk'.
+/// Strips leading emoji + space from a string like 'ðŸ‘‹ Open to talk' â†’ 'Open to talk'.
 String _stripEmoji(String s) {
   final idx = s.indexOf(' ');
   return idx > 0 ? s.substring(idx + 1) : s;

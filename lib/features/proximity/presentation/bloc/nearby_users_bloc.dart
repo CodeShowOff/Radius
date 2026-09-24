@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,8 +12,8 @@ part 'nearby_users_state.dart';
 /// BLoC for managing nearby users discovery.
 ///
 /// Real-time discovery flow:
-/// 1. User clicks "Start Scan" → status becomes "scanning"
-/// 2. As soon as first user is discovered → switches to "results" and shows them immediately
+/// 1. User clicks "Start Scan" â†’ status becomes "scanning"
+/// 2. As soon as first user is discovered â†’ switches to "results" and shows them immediately
 /// 3. More users keep appearing in the list as they're discovered (live updates)
 /// 4. After 10 seconds, scan stops automatically but results remain visible
 /// 
@@ -223,7 +223,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     if (state.isScanning) {
       await _proximityService.stopScan();
     }
-    // Advertising continues via the foreground service — no action needed.
+    // Advertising continues via the foreground service â€” no action needed.
   }
 
   /// Handle app resuming.
@@ -231,7 +231,7 @@ class NearbyUsersBloc extends Bloc<NearbyUsersEvent, NearbyUsersState> {
     NearbyUsersAppResumed event,
     Emitter<NearbyUsersState> emit,
   ) async {
-    // Advertising is already running via foreground service — just sync state.
+    // Advertising is already running via foreground service â€” just sync state.
     emit(state.copyWith(isAdvertising: _proximityService.isAdvertising));
   }
 

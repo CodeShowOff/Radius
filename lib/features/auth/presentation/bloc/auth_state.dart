@@ -1,4 +1,4 @@
-part of 'auth_bloc.dart';
+﻿part of 'auth_bloc.dart';
 
 /// Base class for all authentication states.
 abstract class AuthState extends Equatable {

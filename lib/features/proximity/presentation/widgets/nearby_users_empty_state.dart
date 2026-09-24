@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// Empty state widget for nearby users screen.
 class NearbyUsersEmptyState extends StatelessWidget {

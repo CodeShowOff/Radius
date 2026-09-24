@@ -1,4 +1,4 @@
-/// Barrel export file for Bluetooth services.
+﻿/// Barrel export file for Bluetooth services.
 library;
 
 export 'ble_advertiser.dart';

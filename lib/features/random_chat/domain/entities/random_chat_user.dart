@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 /// A user suggestion in the daily random chat pool.
 class RandomChatUser extends Equatable {

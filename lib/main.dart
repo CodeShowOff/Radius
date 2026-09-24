@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'bootstrap/radius_bootstrap.dart';
@@ -37,7 +37,7 @@ Future<void> main() async {
 
   // Log app startup in debug mode
   if (kDebugMode) {
-    debugPrint('🚀 Radius app starting in ${AppConfig.environment.name} mode');
+    debugPrint('ðŸš€ Radius app starting in ${AppConfig.environment.name} mode');
   }
 
   // Render Flutter UI immediately, then perform async initialization.

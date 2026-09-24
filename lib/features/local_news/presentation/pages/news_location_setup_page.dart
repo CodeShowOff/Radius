@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/news_location.dart';
@@ -78,7 +78,7 @@ class _LoadingView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Manual entry view — wraps ManualLocationPicker
+// Manual entry view â€” wraps ManualLocationPicker
 // ---------------------------------------------------------------------------
 class _ManualEntryView extends StatelessWidget {
   final String userId;

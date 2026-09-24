@@ -1,4 +1,4 @@
-/// BLE configuration constants for the Radius app.
+﻿/// BLE configuration constants for the Radius app.
 abstract class BleConstants {
   /// Radius base service UUID (16-bit format).
   /// 16-bit UUID: 0xBEEF (2 bytes on-air).

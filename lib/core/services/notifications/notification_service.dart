@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -64,7 +64,7 @@ class NotificationService {
       // without waiting for permissions, channels, or FCM token setup.
       await _navigationService?.initialize();
 
-      // Permissions and local notification channels are independent — run in parallel.
+      // Permissions and local notification channels are independent â€” run in parallel.
       await Future.wait([
         _requestPermissions(),
         _initializeLocalNotifications(),
@@ -536,11 +536,11 @@ class NotificationService {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize Firebase if not already initialized.
   // Required on iOS when the app is terminated and a data-only message
-  // arrives — without this, Firestore and other Firebase calls would fail.
+  // arrives â€” without this, Firestore and other Firebase calls would fail.
   try {
     await Firebase.initializeApp();
   } catch (_) {
-    // Already initialized — safe to ignore.
+    // Already initialized â€” safe to ignore.
   }
 
   debugPrint('Background message: ${message.notification?.title}');

@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
@@ -47,7 +47,7 @@ class NewsLocationBloc extends Bloc<NewsLocationEvent, NewsLocationState> {
           location: saved,
         ));
       } else {
-        _logger.i('No saved news location — needs setup');
+        _logger.i('No saved news location â€” needs setup');
         emit(state.copyWith(status: NewsLocationStatus.needsSetup));
       }
     } catch (e, stack) {

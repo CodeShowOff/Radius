@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -478,7 +478,7 @@ class _UserResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
 
-              // Action button — BlocBuilder ensures proper reactivity
+              // Action button â€” BlocBuilder ensures proper reactivity
               // to ConnectionBloc state changes (new connections, request
               // updates) that would otherwise be missed by context.watch.
               BlocBuilder<ConnectionBloc, ConnectionBlocState>(

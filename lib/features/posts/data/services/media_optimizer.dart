@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:logger/logger.dart';
@@ -23,7 +23,7 @@ class OptimizedMedia {
 /// Service that optimizes media files before upload.
 ///
 /// - **Images**: compresses to JPEG, enforces max 10 MB, resizes to fit 1920px.
-/// - **Videos**: enforces max ~60 s duration, compresses via re‑encoding,
+/// - **Videos**: enforces max ~60 s duration, compresses via reâ€‘encoding,
 ///   enforces max 50 MB after compression.
 /// - **Reels**: enforces max 30 s duration, same compression pipeline,
 ///   max 50 MB. Any aspect ratio is accepted.
@@ -47,7 +47,7 @@ class MediaOptimizer {
 
   MediaOptimizer({Logger? logger}) : _logger = logger ?? Logger();
 
-  // ─── Image ──────────────────────────────────────────────────────────
+  // â”€â”€â”€ Image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Compresses an image file. Returns the optimized file.
   /// Throws [DatabaseException] if the result still exceeds limits.
@@ -59,7 +59,7 @@ class MediaOptimizer {
     final targetPath =
         '${tempDir.path}/opt_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-    // First pass — quality 85
+    // First pass â€” quality 85
     var result = await FlutterImageCompress.compressAndGetFile(
       file.absolute.path,
       targetPath,
@@ -70,7 +70,7 @@ class MediaOptimizer {
     );
 
     if (result == null) {
-      // Compression failed — fall back to original
+      // Compression failed â€” fall back to original
       _logger.w('Image compression returned null, using original');
       return OptimizedMedia(
         file: file,
@@ -114,7 +114,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Image optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
+      'Image optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(
@@ -124,7 +124,7 @@ class MediaOptimizer {
     );
   }
 
-  // ─── Video ──────────────────────────────────────────────────────────
+  // â”€â”€â”€ Video â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Validates duration and compresses a video file.
   /// Throws [DatabaseException] if the video exceeds duration or size limits.
@@ -180,7 +180,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Video optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
+      'Video optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(
@@ -205,7 +205,7 @@ class MediaOptimizer {
     }
   }
 
-  // ─── Reel ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Reel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Validates and compresses a reel video file.
   ///
@@ -269,7 +269,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Reel optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
+      'Reel optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(

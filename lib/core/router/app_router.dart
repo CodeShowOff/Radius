@@ -1,13 +1,14 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+
 
 import '../services/bluetooth/bluetooth_service.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/email_verification_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
-import '../../features/chat/presentation/bloc/chat_bloc.dart';
+
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/connections/presentation/pages/connection_requests_screen.dart';
@@ -18,14 +19,14 @@ import '../../features/connections/presentation/pages/discovery_search_page.dart
 import '../../features/connections/presentation/pages/discovery_requests_screen.dart';
 import '../../features/connections/presentation/bloc/discovery_bloc.dart';
 import '../../features/home/presentation/pages/home_page.dart';
-import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
+
 import '../../features/location_groups/presentation/pages/create_group_page.dart';
 import '../../features/location_groups/presentation/pages/find_groups_page.dart';
 import '../../features/location_groups/presentation/pages/group_chat_page.dart';
 import '../../features/location_groups/presentation/pages/group_detail_page.dart';
 import '../../features/location_groups/presentation/pages/my_groups_page.dart';
 import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
-import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.dart';
+
 import '../../features/nearby_groups/presentation/pages/create_nearby_group_page.dart';
 import '../../features/nearby_groups/presentation/pages/discover_nearby_groups_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_group_chat_page.dart';
@@ -40,7 +41,7 @@ import '../../features/nearby_help/presentation/pages/incoming_help_requests_pag
 import '../../features/random_chat/presentation/bloc/random_chat_bloc.dart';
 import '../../features/random_chat/presentation/pages/random_chat_page.dart';
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
-import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
+
 import '../../features/random_groups/presentation/pages/create_random_group_page.dart';
 import '../../features/random_groups/presentation/pages/discover_random_groups_page.dart';
 import '../../features/random_groups/presentation/pages/random_group_chat_page.dart';
@@ -429,19 +430,19 @@ GoRouter get appRouter {
 
           return ConversationsScreen(
             currentUserId: currentUserId,
-            onConversationTap: (conversation) {
-              final otherUserId =
-                  conversation.getOtherParticipantId(currentUserId);
-              final otherInfo =
-                  conversation.getOtherParticipantInfo(currentUserId);
+            onConversationTap: (channel) {
+              final otherMember = channel.state?.members.firstWhere(
+                (m) => m.userId != currentUserId,
+                orElse: () => channel.state!.members.first,
+              );
 
               context.push(
-                Routes.chatWith(conversation.id),
+                Routes.chatWith(channel.id!),
                 extra: {
                   'currentUserId': currentUserId,
-                  'otherUserId': otherUserId,
-                  'otherUserName': otherInfo?.displayName ?? 'Unknown',
-                  'otherUserPhotoUrl': otherInfo?.photoUrl,
+                  'otherUserId': otherMember?.userId ?? '',
+                  'otherUserName': otherMember?.user?.name ?? 'Unknown',
+                  'otherUserPhotoUrl': otherMember?.user?.image,
                 },
               );
             },
@@ -459,17 +460,12 @@ GoRouter get appRouter {
 
           final extra = state.extra as Map<String, dynamic>?;
 
-          // Create a new ChatBloc per screen — each conversation gets its own
-          // isolated instance. Auto-disposed when screen is popped.
-          return BlocProvider(
-            create: (_) => getIt<ChatBloc>(),
-            child: ChatScreen(
-              conversationId: conversationId,
-              currentUserId: currentUserId,
-              otherUserId: (extra?['otherUserId'] as String?) ?? '',
-              otherUserName: (extra?['otherUserName'] as String?) ?? 'Unknown',
-              otherUserPhotoUrl: extra?['otherUserPhotoUrl'] as String?,
-            ),
+          return ChatScreen(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            otherUserId: (extra?['otherUserId'] as String?) ?? '',
+            otherUserName: (extra?['otherUserName'] as String?) ?? 'Unknown',
+            otherUserPhotoUrl: extra?['otherUserPhotoUrl'] as String?,
           );
         },
       ),
@@ -502,10 +498,7 @@ GoRouter get appRouter {
         name: 'locationGroupChat',
         builder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return BlocProvider(
-            create: (_) => getIt<GroupChatBloc>(),
-            child: GroupChatPage(groupId: groupId),
-          );
+          return GroupChatPage(groupId: groupId);
         },
       ),
 
@@ -545,7 +538,6 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<NearbyGroupBloc>()),
-              BlocProvider(create: (_) => getIt<NearbyGroupChatBloc>()),
             ],
             child: NearbyGroupChatPage(groupId: groupId),
           );
@@ -607,7 +599,6 @@ GoRouter get appRouter {
           return MultiBlocProvider(
             providers: [
               BlocProvider.value(value: getIt<RandomGroupBloc>()),
-              BlocProvider(create: (_) => getIt<RandomGroupChatBloc>()),
             ],
             child: RandomGroupChatPage(groupId: groupId),
           );

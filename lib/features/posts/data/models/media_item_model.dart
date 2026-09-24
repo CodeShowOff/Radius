@@ -1,4 +1,4 @@
-import '../../domain/entities/media_item.dart';
+﻿import '../../domain/entities/media_item.dart';
 
 /// Firestore serialization for MediaItem entity.
 class MediaItemModel {

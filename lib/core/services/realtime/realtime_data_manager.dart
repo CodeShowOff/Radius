@@ -1,18 +1,14 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 
-import '../../../features/chat/data/chat_preload_service.dart';
-import '../../../features/chat/presentation/bloc/conversations_bloc.dart';
 import '../../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../../features/connections/presentation/bloc/discovery_bloc.dart';
-import '../../../features/location_groups/data/group_chat_preload_service.dart';
 import '../../../features/location_groups/presentation/bloc/location_group_bloc.dart';
 import '../../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import '../../../features/profile/presentation/bloc/profile_bloc.dart';
-import '../../../features/random_groups/data/random_group_chat_preload_service.dart';
 import '../../../features/random_groups/presentation/bloc/random_group_bloc.dart';
 import '../presence/presence_service.dart';
 import 'realtime_connection_service.dart';
@@ -39,12 +35,8 @@ import 'realtime_connection_service.dart';
 class RealTimeDataManager {
   final RealtimeConnectionService _connectionService;
   final PresenceService? _presenceService;
-  final ChatPreloadService? _chatPreloadService;
-  final GroupChatPreloadService? _groupChatPreloadService;
-  final RandomGroupChatPreloadService? _randomGroupChatPreloadService;
   final ConnectionBloc _connectionBloc;
   final DiscoveryBloc _discoveryBloc;
-  final ConversationsBloc _conversationsBloc;
   final LocationGroupBloc _locationGroupBloc;
   final NearbyGroupBloc _nearbyGroupBloc;
   final RandomGroupBloc _randomGroupBloc;
@@ -60,24 +52,16 @@ class RealTimeDataManager {
     required RealtimeConnectionService connectionService,
     required ConnectionBloc connectionBloc,
     required DiscoveryBloc discoveryBloc,
-    required ConversationsBloc conversationsBloc,
     required LocationGroupBloc locationGroupBloc,
     required NearbyGroupBloc nearbyGroupBloc,
     required RandomGroupBloc randomGroupBloc,
     required ProfileBloc profileBloc,
     PresenceService? presenceService,
-    ChatPreloadService? chatPreloadService,
-    GroupChatPreloadService? groupChatPreloadService,
-    RandomGroupChatPreloadService? randomGroupChatPreloadService,
     Logger? logger,
   })  : _connectionService = connectionService,
         _presenceService = presenceService,
-        _chatPreloadService = chatPreloadService,
-        _groupChatPreloadService = groupChatPreloadService,
-        _randomGroupChatPreloadService = randomGroupChatPreloadService,
         _connectionBloc = connectionBloc,
         _discoveryBloc = discoveryBloc,
-        _conversationsBloc = conversationsBloc,
         _locationGroupBloc = locationGroupBloc,
         _nearbyGroupBloc = nearbyGroupBloc,
         _randomGroupBloc = randomGroupBloc,
@@ -145,7 +129,7 @@ class RealTimeDataManager {
       // disableNetwork() is called in AuthBloc._onSignOutRequested to prevent
       // PERMISSION_DENIED errors from lingering listeners during the sign-out
       // window. By the time we reach here (next login), all old listeners are
-      // long gone, so it's safe to re-enable. This is idempotent — calling it
+      // long gone, so it's safe to re-enable. This is idempotent â€” calling it
       // when already enabled is a no-op.
       try {
         await FirebaseFirestore.instance.enableNetwork();
@@ -202,8 +186,7 @@ class RealTimeDataManager {
         photoUrl: photoUrl,
       ));
 
-      // 3. Load conversations (uses real-time Firestore streams)
-      _conversationsBloc.add(ConversationsLoad(userId: userId));
+      // 3. Removed Conversations Load - Stream handles this
 
       // 4. Load user's groups (uses real-time Firestore streams)
       // NOTE: The LocationGroupBloc streams will also wait for auth token internally
@@ -227,17 +210,7 @@ class RealTimeDataManager {
       _isInitialized = true;
       _logger.i('RealTimeDataManager initialization complete');
 
-      // 7. Preload recent/unread chats in the background (non-blocking)
-      // This warms the cache so first chat opens are instant
-      _triggerChatPreload(userId);
-
-      // 8. Preload recent group chats in the background (non-blocking)
-      // This warms the group chat cache so group chats open instantly
-      _triggerGroupChatPreload(userId);
-
-      // 9. Preload recent random group chats in the background (non-blocking)
-      // This warms the random group chat cache so random group chats open instantly
-      _triggerRandomGroupChatPreload(userId);
+      // Preloading removed because Stream handles this internally.
     } finally {
       _isInitializing = false;
     }
@@ -257,66 +230,7 @@ class RealTimeDataManager {
     });
   }
 
-  /// Trigger chat preloading in the background.
-  /// This is non-blocking and will not affect UI rendering.
-  void _triggerChatPreload(String userId) {
-    if (_chatPreloadService == null) {
-      _logger.d('Chat preload service not available, skipping preload');
-      return;
-    }
 
-    // Run preload asynchronously without awaiting
-    // This ensures UI is not blocked during startup
-    Future.microtask(() async {
-      try {
-        await _chatPreloadService.preloadOnStartup(userId);
-      } catch (e) {
-        _logger.e('Chat preload failed', error: e);
-        // Preload failures are silent - don't affect UX
-      }
-    });
-  }
-
-  /// Trigger group chat preloading in the background.
-  /// This is non-blocking and will not affect UI rendering.
-  void _triggerGroupChatPreload(String userId) {
-    if (_groupChatPreloadService == null) {
-      _logger.d('Group chat preload service not available, skipping preload');
-      return;
-    }
-
-    // Run preload asynchronously without awaiting
-    // This ensures UI is not blocked during startup
-    Future.microtask(() async {
-      try {
-        await _groupChatPreloadService.preloadOnStartup(userId);
-      } catch (e) {
-        _logger.e('Group chat preload failed', error: e);
-        // Preload failures are silent - don't affect UX
-      }
-    });
-  }
-
-  /// Trigger random group chat preloading in the background.
-  /// This is non-blocking and will not affect UI rendering.
-  void _triggerRandomGroupChatPreload(String userId) {
-    if (_randomGroupChatPreloadService == null) {
-      _logger
-          .d('Random group chat preload service not available, skipping preload');
-      return;
-    }
-
-    // Run preload asynchronously without awaiting
-    // This ensures UI is not blocked during startup
-    Future.microtask(() async {
-      try {
-        await _randomGroupChatPreloadService.preloadOnStartup(userId);
-      } catch (e) {
-        _logger.e('Random group chat preload failed', error: e);
-        // Preload failures are silent - don't affect UX
-      }
-    });
-  }
 
   /// Waits for the Firebase auth token to be available and valid.
   ///
@@ -395,7 +309,6 @@ class RealTimeDataManager {
     // so no timeout is needed.
     _connectionBloc.cancelSubscriptions();
     _discoveryBloc.cancelSubscriptions();
-    _conversationsBloc.cancelSubscriptions();
     _locationGroupBloc.cancelSubscriptions();
     _nearbyGroupBloc.cancelSubscriptions();
     _randomGroupBloc.cancelSubscriptions();
@@ -404,7 +317,6 @@ class RealTimeDataManager {
     // Now dispatch reset events to clear BLoC state (safe since listeners are gone)
     _connectionBloc.add(const ConnectionReset());
     _discoveryBloc.add(const DiscoveryReset());
-    _conversationsBloc.add(const ConversationsReset());
     _locationGroupBloc.add(const ResetGroupState());
     _nearbyGroupBloc.add(const ResetNearbyGroupState());
     _randomGroupBloc.add(const ResetRandomGroupState());
@@ -418,10 +330,7 @@ class RealTimeDataManager {
       _logger.e('Error or timeout disposing presence service', error: e);
     }
 
-    // Clear chat preload tracking
-    _chatPreloadService?.clear();
-    _groupChatPreloadService?.clear();
-    _randomGroupChatPreloadService?.clear();
+
 
     _currentUserId = null;
     _isInitialized = false;

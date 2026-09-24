@@ -1,4 +1,4 @@
-part of 'news_interaction_cubit.dart';
+﻿part of 'news_interaction_cubit.dart';
 
 /// State for news post interaction (likes & comments) for a single post.
 class NewsInteractionState extends Equatable {

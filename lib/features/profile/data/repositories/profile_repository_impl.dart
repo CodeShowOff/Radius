@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+﻿import 'package:dartz/dartz.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../core/error/failures.dart';
@@ -62,7 +62,7 @@ class ProfileRepositoryImpl implements IProfileRepository {
           await user.updateDisplayName(profile.name);
         }
       } catch (_) {
-        // Best-effort — don't fail profile save if Auth sync fails
+        // Best-effort â€” don't fail profile save if Auth sync fails
       }
 
       return const Right(null);

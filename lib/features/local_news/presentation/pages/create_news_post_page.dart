@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -215,7 +215,7 @@ class _CreateNewsPostPageState extends State<CreateNewsPostPage> {
   }
 }
 
-// ─── Location notice ────────────────────────────────────────────────
+// â”€â”€â”€ Location notice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _LocationNotice extends StatelessWidget {
   @override
@@ -250,7 +250,7 @@ class _LocationNotice extends StatelessWidget {
   }
 }
 
-// ─── Progress section ─────────────────────────────────────────────────
+// â”€â”€â”€ Progress section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ProgressSection extends StatelessWidget {
   final CreateNewsPostState state;
@@ -260,11 +260,11 @@ class _ProgressSection extends StatelessWidget {
   String get _statusLabel {
     switch (state.status) {
       case CreateNewsPostStatus.optimizing:
-        return 'Optimizing media…';
+        return 'Optimizing mediaâ€¦';
       case CreateNewsPostStatus.uploading:
-        return 'Uploading…';
+        return 'Uploadingâ€¦';
       case CreateNewsPostStatus.creating:
-        return 'Publishing…';
+        return 'Publishingâ€¦';
       default:
         return '';
     }
@@ -290,7 +290,7 @@ class _ProgressSection extends StatelessWidget {
   }
 }
 
-// ─── Media preview strip ──────────────────────────────────────────────
+// â”€â”€â”€ Media preview strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MediaPreviewStrip extends StatelessWidget {
   final List<SelectedNewsMedia> media;
@@ -400,7 +400,7 @@ class _MediaThumbnail extends StatelessWidget {
   }
 }
 
-// ─── Reel guidelines notice ───────────────────────────────────────────
+// â”€â”€â”€ Reel guidelines notice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ReelGuidelines extends StatelessWidget {
   @override

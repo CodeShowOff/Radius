@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:injectable/injectable.dart';
@@ -22,38 +22,29 @@ import '../../features/posts/domain/repositories/i_post_interaction_repository.d
 import '../../features/posts/presentation/bloc/create_post_bloc.dart';
 import '../../features/posts/presentation/bloc/post_feed_bloc.dart';
 import '../../features/posts/presentation/bloc/user_posts_bloc.dart';
-import '../../features/chat/data/chat_cache_service.dart';
-import '../../features/chat/data/chat_preload_service.dart';
-import '../../features/chat/data/chat_service.dart';
-import '../../features/chat/presentation/bloc/conversations_bloc.dart';
+
 import '../../features/connections/data/connection_service.dart';
 import '../../features/connections/presentation/bloc/connection_bloc.dart';
 import '../../features/connections/presentation/bloc/discovery_bloc.dart';
-import '../../features/location_groups/data/group_chat_cache_service.dart';
-import '../../features/location_groups/data/group_chat_preload_service.dart';
-import '../../features/location_groups/data/group_chat_service.dart';
-import '../../features/location_groups/data/group_media_upload_service.dart';
+
 import '../../features/location_groups/data/location_data_service.dart';
 import '../../features/location_groups/data/location_group_service.dart';
-import '../../features/location_groups/presentation/bloc/group_chat_bloc.dart';
+
 import '../../features/location_groups/presentation/bloc/location_group_bloc.dart';
-import '../../features/nearby_groups/data/nearby_group_chat_cache_service.dart';
-import '../../features/nearby_groups/data/nearby_group_chat_service.dart';
+
 import '../../features/nearby_groups/data/nearby_group_service.dart';
 import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
-import '../../features/nearby_groups/presentation/bloc/nearby_group_chat_bloc.dart';
+
 import '../../features/nearby_help/data/nearby_help_service.dart';
 import '../../features/nearby_help/data/user_location_service.dart';
 import '../../features/nearby_help/presentation/bloc/nearby_help_bloc.dart';
 import '../../features/random_chat/data/random_chat_cache_service.dart';
 import '../../features/random_chat/data/random_chat_service.dart';
 import '../../features/random_chat/presentation/bloc/random_chat_bloc.dart';
-import '../../features/random_groups/data/random_group_chat_cache_service.dart';
-import '../../features/random_groups/data/random_group_chat_preload_service.dart';
-import '../../features/random_groups/data/random_group_chat_service.dart';
+
 import '../../features/random_groups/data/random_group_service.dart';
 import '../../features/random_groups/presentation/bloc/random_group_bloc.dart';
-import '../../features/random_groups/presentation/bloc/random_group_chat_bloc.dart';
+
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/domain/repositories/i_profile_repository.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
@@ -185,7 +176,7 @@ Future<void> configureDependencies() {
     );
   }
 
-  // CreatePostBloc — factory (new instance per create-post page)
+  // CreatePostBloc â€” factory (new instance per create-post page)
   if (!getIt.isRegistered<CreatePostBloc>()) {
     getIt.registerFactory<CreatePostBloc>(
       () => CreatePostBloc(
@@ -197,7 +188,7 @@ Future<void> configureDependencies() {
     );
   }
 
-  // PostFeedBloc — factory (new instance per feed page visit)
+  // PostFeedBloc â€” factory (new instance per feed page visit)
   if (!getIt.isRegistered<PostFeedBloc>()) {
     getIt.registerFactory<PostFeedBloc>(
       () => PostFeedBloc(
@@ -206,7 +197,7 @@ Future<void> configureDependencies() {
     );
   }
 
-  // UserPostsBloc — factory (new instance per profile page)
+  // UserPostsBloc â€” factory (new instance per profile page)
   if (!getIt.isRegistered<UserPostsBloc>()) {
     getIt.registerFactory<UserPostsBloc>(
       () => UserPostsBloc(
@@ -278,25 +269,12 @@ Future<void> configureDependencies() {
     getIt.registerLazySingleton<LocationGroupService>(() => LocationGroupService());
   }
 
-  if (!getIt.isRegistered<GroupChatService>()) {
-    getIt.registerLazySingleton<GroupChatService>(() => GroupChatService());
-  }
 
   // Chat cache services - global in-memory caches for instant chat loading
   // NOTE: ChatCacheService is registered via injection.config.dart (ChatModule)
   // with proper Logger injection. Do NOT register it here to avoid duplicates.
 
-  if (!getIt.isRegistered<GroupChatCacheService>()) {
-    getIt.registerLazySingleton<GroupChatCacheService>(() => GroupChatCacheService());
-  }
 
-  // ChatPreloadService - preloads recent/unread chats on app startup
-  // Must be registered before RealTimeDataManager but after getIt.init() for ChatService
-  // Registration moved below getIt.init() to ensure ChatService is available
-
-  if (!getIt.isRegistered<GroupMediaUploadService>()) {
-    getIt.registerLazySingleton<GroupMediaUploadService>(() => GroupMediaUploadService());
-  }
 
   if (!getIt.isRegistered<LocationGroupBloc>()) {
     getIt.registerLazySingleton<LocationGroupBloc>(
@@ -306,28 +284,13 @@ Future<void> configureDependencies() {
     );
   }
 
-  if (!getIt.isRegistered<GroupChatBloc>()) {
-    getIt.registerFactory<GroupChatBloc>(
-      () => GroupChatBloc(
-        chatService: getIt<GroupChatService>(),
-        cacheService: getIt<GroupChatCacheService>(),
-        mediaUploadService: getIt<GroupMediaUploadService>(),
-      ),
-    );
-  }
 
   // Nearby Groups feature - Bluetooth-based proximity groups
   if (!getIt.isRegistered<NearbyGroupService>()) {
     getIt.registerLazySingleton<NearbyGroupService>(() => NearbyGroupService());
   }
 
-  if (!getIt.isRegistered<NearbyGroupChatService>()) {
-    getIt.registerLazySingleton<NearbyGroupChatService>(() => NearbyGroupChatService());
-  }
 
-  if (!getIt.isRegistered<NearbyGroupChatCacheService>()) {
-    getIt.registerLazySingleton<NearbyGroupChatCacheService>(() => NearbyGroupChatCacheService());
-  }
 
   if (!getIt.isRegistered<NearbyGroupBloc>()) {
     getIt.registerLazySingleton<NearbyGroupBloc>(
@@ -339,46 +302,22 @@ Future<void> configureDependencies() {
     );
   }
 
-  if (!getIt.isRegistered<NearbyGroupChatBloc>()) {
-    getIt.registerFactory<NearbyGroupChatBloc>(
-      () => NearbyGroupChatBloc(
-        chatService: getIt<NearbyGroupChatService>(),
-        cacheService: getIt<NearbyGroupChatCacheService>(),
-      ),
-    );
-  }
 
   // Random Groups feature - Admin-approved internet-based groups
   if (!getIt.isRegistered<RandomGroupService>()) {
     getIt.registerLazySingleton<RandomGroupService>(() => RandomGroupService());
   }
 
-  if (!getIt.isRegistered<RandomGroupChatService>()) {
-    getIt.registerLazySingleton<RandomGroupChatService>(() => RandomGroupChatService());
-  }
 
-  if (!getIt.isRegistered<RandomGroupChatCacheService>()) {
-    getIt.registerLazySingleton<RandomGroupChatCacheService>(() => RandomGroupChatCacheService());
-  }
 
   if (!getIt.isRegistered<RandomGroupBloc>()) {
     getIt.registerLazySingleton<RandomGroupBloc>(
       () => RandomGroupBloc(
         groupService: getIt<RandomGroupService>(),
-        chatService: getIt<RandomGroupChatService>(),
       ),
     );
   }
 
-  if (!getIt.isRegistered<RandomGroupChatBloc>()) {
-    getIt.registerFactory<RandomGroupChatBloc>(
-      () => RandomGroupChatBloc(
-        chatService: getIt<RandomGroupChatService>(),
-        cacheService: getIt<RandomGroupChatCacheService>(),
-        mediaUploadService: getIt<GroupMediaUploadService>(),
-      ),
-    );
-  }
 
   // Nearby Help feature
   if (!getIt.isRegistered<NearbyHelpService>()) {
@@ -474,41 +413,6 @@ Future<void> configureDependencies() {
   // Run generated registrations last so modules can override defaults if needed.
   getIt.init();
 
-  // ChatPreloadService - preloads recent/unread chats on app startup for instant loading
-  // Must be registered after getIt.init() to ensure ChatService and ConversationsBloc are available
-  if (!getIt.isRegistered<ChatPreloadService>()) {
-    getIt.registerLazySingleton<ChatPreloadService>(
-      () => ChatPreloadService(
-        chatService: getIt<ChatService>(),
-        cacheService: getIt<ChatCacheService>(),
-        conversationsBloc: getIt<ConversationsBloc>(),
-      ),
-    );
-  }
-
-  // GroupChatPreloadService - preloads recent group chat messages on app startup
-  // Eliminates the "No messages yet" flash when opening group chats
-  if (!getIt.isRegistered<GroupChatPreloadService>()) {
-    getIt.registerLazySingleton<GroupChatPreloadService>(
-      () => GroupChatPreloadService(
-        chatService: getIt<GroupChatService>(),
-        cacheService: getIt<GroupChatCacheService>(),
-        locationGroupBloc: getIt<LocationGroupBloc>(),
-      ),
-    );
-  }
-
-  // RandomGroupChatPreloadService - preloads recent random group chat messages on app startup
-  // Eliminates the "No messages yet" flash when opening random group chats
-  if (!getIt.isRegistered<RandomGroupChatPreloadService>()) {
-    getIt.registerLazySingleton<RandomGroupChatPreloadService>(
-      () => RandomGroupChatPreloadService(
-        chatService: getIt<RandomGroupChatService>(),
-        cacheService: getIt<RandomGroupChatCacheService>(),
-        randomGroupBloc: getIt<RandomGroupBloc>(),
-      ),
-    );
-  }
 
   // Register RealTimeDataManager after all BLoCs are registered
   // This needs to be registered after getIt.init() so that ConversationsBloc is available
@@ -517,12 +421,8 @@ Future<void> configureDependencies() {
       () => RealTimeDataManager(
         connectionService: getIt<RealtimeConnectionService>(),
         presenceService: getIt<PresenceService>(),
-        chatPreloadService: getIt<ChatPreloadService>(),
-        groupChatPreloadService: getIt<GroupChatPreloadService>(),
-        randomGroupChatPreloadService: getIt<RandomGroupChatPreloadService>(),
         connectionBloc: getIt<ConnectionBloc>(),
         discoveryBloc: getIt<DiscoveryBloc>(),
-        conversationsBloc: getIt<ConversationsBloc>(),
         locationGroupBloc: getIt<LocationGroupBloc>(),
         nearbyGroupBloc: getIt<NearbyGroupBloc>(),
         randomGroupBloc: getIt<RandomGroupBloc>(),

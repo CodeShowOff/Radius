@@ -1,4 +1,4 @@
-part of 'reels_feed_bloc.dart';
+﻿part of 'reels_feed_bloc.dart';
 
 /// Status of the reels feed.
 enum ReelsFeedStatus {

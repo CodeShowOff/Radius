@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+﻿import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
@@ -510,7 +510,7 @@ class _VideoThumbnailViewState extends State<_VideoThumbnailView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Video is initialized — show the player
+    // Video is initialized â€” show the player
     if (_isInitialized && _controller != null) {
       return GestureDetector(
         onTap: _initializeAndPlay,

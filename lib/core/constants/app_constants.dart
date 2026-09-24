@@ -1,4 +1,4 @@
-/// Application-wide constants
+﻿/// Application-wide constants
 abstract class AppConstants {
   // App info
   static const String appName = 'Radius';

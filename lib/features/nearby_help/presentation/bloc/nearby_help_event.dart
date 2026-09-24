@@ -1,4 +1,4 @@
-part of 'nearby_help_bloc.dart';
+﻿part of 'nearby_help_bloc.dart';
 
 /// Base class for all nearby help events.
 abstract class NearbyHelpEvent extends Equatable {

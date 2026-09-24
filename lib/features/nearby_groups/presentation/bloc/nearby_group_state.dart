@@ -1,4 +1,4 @@
-part of 'nearby_group_bloc.dart';
+﻿part of 'nearby_group_bloc.dart';
 
 /// Status of the nearby group bloc UI state.
 enum NearbyGroupBlocStatus {

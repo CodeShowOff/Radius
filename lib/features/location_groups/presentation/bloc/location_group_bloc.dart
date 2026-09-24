@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,10 +33,10 @@ part 'location_group_state.dart';
 ///
 /// ## Admin State Transitions Handled
 ///
-/// - User promoted to admin → `currentMembership.isAdmin` becomes true
-/// - User demoted from admin → `currentMembership.isAdmin` becomes false
-/// - User removed from group → `currentMembership` becomes null (not admin)
-/// - User leaves group → `currentMembership` cleared explicitly
+/// - User promoted to admin â†’ `currentMembership.isAdmin` becomes true
+/// - User demoted from admin â†’ `currentMembership.isAdmin` becomes false
+/// - User removed from group â†’ `currentMembership` becomes null (not admin)
+/// - User leaves group â†’ `currentMembership` cleared explicitly
 class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
   final LocationGroupService _groupService;
   final Logger _logger = Logger();

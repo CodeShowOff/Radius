@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../domain/entities/device_session.dart';
@@ -25,7 +25,7 @@ class DeviceSessionRepository implements IDeviceSessionRepository {
           .set(model.toFirestore());
     } catch (e) {
       // Log error but don't fail the authentication flow
-      // Silently swallow – crash reporting should handle this in production
+      // Silently swallow â€“ crash reporting should handle this in production
     }
   }
 
@@ -43,7 +43,7 @@ class DeviceSessionRepository implements IDeviceSessionRepository {
           .map((doc) => DeviceSessionModel.fromFirestore(doc).toEntity())
           .toList();
     } catch (e) {
-      // Silently swallow – crash reporting should handle this in production
+      // Silently swallow â€“ crash reporting should handle this in production
       return [];
     }
   }

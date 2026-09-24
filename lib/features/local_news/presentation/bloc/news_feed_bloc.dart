@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logger/logger.dart';
 
@@ -111,7 +111,7 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
   ) async {
     if (_country == null || _city == null) return;
 
-    // Don't show loading indicator — pull-to-refresh has its own
+    // Don't show loading indicator â€” pull-to-refresh has its own
     final result = await _repository.getNewsFeed(
       country: _country!,
       city: _city!,
@@ -149,13 +149,13 @@ class NewsFeedBloc extends Bloc<NewsFeedEvent, NewsFeedState> {
     result.fold(
       (failure) {
         _logger.e('Failed to delete news post: ${failure.message}');
-        // Restore the post on failure — re-fetch
+        // Restore the post on failure â€” re-fetch
         if (_country != null && _city != null) {
           add(NewsFeedRefreshRequested());
         }
       },
       (_) {
-        // Deletion succeeded — nothing more to do
+        // Deletion succeeded â€” nothing more to do
       },
     );
   }

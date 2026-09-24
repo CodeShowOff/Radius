@@ -1,4 +1,4 @@
-import '../../error/exceptions.dart';
+﻿import '../../error/exceptions.dart';
 
 /// Blocks accidental persistence of sensitive BLE identifiers/payloads.
 ///

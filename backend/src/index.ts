@@ -3,6 +3,39 @@ import {
   onSchedule, onCall, HttpsError, logger
 } from "./mock";
 import * as admin from "firebase-admin";
+import { StreamChat } from "stream-chat";
+
+// =============================================================================
+// STREAM CHAT - Token Generation
+// =============================================================================
+
+export const getStreamToken = onCall(
+  {
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      logger.error("Stream API keys are missing in environment variables.");
+      throw new HttpsError("internal", "Stream API keys are missing.");
+    }
+
+    try {
+      const serverClient = StreamChat.getInstance(apiKey, apiSecret);
+      const token = serverClient.createToken(request.auth.uid);
+      return { token };
+    } catch (error) {
+      logger.error("Error generating Stream token:", error);
+      throw new HttpsError("internal", "Failed to generate Stream token");
+    }
+  }
+);
 
 
 // =============================================================================

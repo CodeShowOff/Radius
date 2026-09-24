@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -186,7 +186,7 @@ class BleScanner {
           isRadiusDevice = true;
           username = BleUuidEncoder.decodeUuidToUsername(uuidStr);
           if (username != null) {
-            _log('[BleScanner] ✓ Decoded username from UUID: $username');
+            _log('[BleScanner] âœ“ Decoded username from UUID: $username');
             break;
           }
         }
@@ -223,7 +223,7 @@ class BleScanner {
             if (!RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(username)) {
               username = null;
             } else {
-              _log('[BleScanner] ✓ Decoded username from Service Data: $username');
+              _log('[BleScanner] âœ“ Decoded username from Service Data: $username');
             }
           } catch (e) {
             username = null;
@@ -236,7 +236,7 @@ class BleScanner {
         // Check if it looks like a Radius username and we saw the service UUID
         if (isRadiusDevice && RegExp(r'^[a-zA-Z0-9]{7}$').hasMatch(localName)) {
           username = localName;
-          _log('[BleScanner] ✓ Decoded username from LocalName: $username');
+          _log('[BleScanner] âœ“ Decoded username from LocalName: $username');
         }
       }
 
@@ -260,7 +260,7 @@ class BleScanner {
           rssi: result.rssi,
           lastSeen: now,
         );
-        _log('[BleScanner] ✓ RADIUS DEVICE: $username (RSSI: ${result.rssi})');
+        _log('[BleScanner] âœ“ RADIUS DEVICE: $username (RSSI: ${result.rssi})');
       }
     } catch (e) {
       // Silently ignore parsing errors
