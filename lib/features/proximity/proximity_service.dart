@@ -461,7 +461,7 @@ class ProximityService {
         return;
       }
 
-      // Switch from plain advertising â†’ foreground service
+      // Switch from plain advertising → foreground service
       _log('[ProximityService] Switching to foreground service...');
       await _bluetoothService.stopAdvertising();
       final started = await _bluetoothService.startForegroundAdvertising(_currentUsername!);

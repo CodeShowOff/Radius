@@ -38,7 +38,7 @@ class CreateNewsPostTextChanged extends CreateNewsPostEvent {
   List<Object?> get props => [text];
 }
 
-/// User tapped the submit button â€” triggers optimize â†’ upload â†’ create.
+/// User tapped the submit button â€” triggers optimize → upload → create.
 class CreateNewsPostSubmitted extends CreateNewsPostEvent {
   const CreateNewsPostSubmitted();
 }

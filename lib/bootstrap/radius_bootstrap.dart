@@ -80,7 +80,7 @@ class _RadiusBootstrapState extends State<RadiusBootstrap> {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       // â”€â”€ Phase 2: Dependent tasks in parallel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // Chain A (critical path): Settings registration â†’ DI registration
+      // Chain A (critical path): Settings registration → DI registration
       //   (Hive box already opened in Phase 1)
       // Chain B (non-blocking): App Check (debug only)
       // Chain C (non-blocking): Crash reporting

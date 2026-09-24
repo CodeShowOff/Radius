@@ -114,7 +114,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Image optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
+      'Image optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(
@@ -180,7 +180,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Video optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
+      'Video optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(
@@ -269,7 +269,7 @@ class MediaOptimizer {
     }
 
     _logger.i(
-      'Reel optimized: ${_mb(originalSize)} MB â†’ ${_mb(optimizedSize)} MB',
+      'Reel optimized: ${_mb(originalSize)} MB → ${_mb(optimizedSize)} MB',
     );
 
     return OptimizedMedia(

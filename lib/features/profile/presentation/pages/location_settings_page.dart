@@ -119,7 +119,7 @@ class _LocationSettingsPageState extends State<LocationSettingsPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              Text('Location â†’ Allow all the time'),
+              Text('Location → Allow all the time'),
             ],
           ),
           actions: [

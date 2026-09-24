@@ -693,7 +693,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
   }
 }
 
-/// Strips leading emoji + space from a string like 'ðŸ‘‹ Open to talk' â†’ 'Open to talk'.
+/// Strips leading emoji + space from a string like '👋 Open to talk' → 'Open to talk'.
 String _stripEmoji(String s) {
   final idx = s.indexOf(' ');
   return idx > 0 ? s.substring(idx + 1) : s;

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,7 +13,7 @@ import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 import '../bloc/suggested_connections_cubit.dart';
 import '../bloc/suggested_connections_state.dart';
-
+import '../../../chat/presentation/screens/conversations_screen.dart';
 /// Connections page showing suggested connections and your network.
 class ConnectionsPage extends StatelessWidget {
   const ConnectionsPage({super.key});
@@ -80,15 +80,6 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
     }
   }
 
-  Future<void> _refreshConnections() async {
-    final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
-      context.read<SuggestedConnectionsCubit>().loadSuggestions(authState.user.id);
-    }
-    context.read<ConnectionBloc>().add(const ConnectionForceRefresh());
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -101,173 +92,209 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
     final authState = context.read<AuthBloc>().state;
     final currentUserId = (authState is AuthAuthenticated) ? authState.user.id : '';
 
-    return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _refreshConnections,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            // --- Sliver App Bar ---
-            SliverAppBar(
-              floating: true,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: theme.colorScheme.surface,
-              surfaceTintColor: theme.colorScheme.surface,
-              title: _isSearching
-                  ? Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        style: theme.textTheme.bodyLarge,
-                        decoration: InputDecoration(
-                          hintText: 'Search network...',
-                          hintStyle: TextStyle(color: theme.colorScheme.outline),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              // --- Sliver App Bar ---
+              SliverAppBar(
+                floating: true,
+                pinned: true,
+                elevation: 0,
+                backgroundColor: theme.colorScheme.surface,
+                surfaceTintColor: theme.colorScheme.surface,
+                title: _isSearching
+                    ? Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        onChanged: (val) => setState(() => _searchQuery = val),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          style: theme.textTheme.bodyLarge,
+                          decoration: InputDecoration(
+                            hintText: 'Search network...',
+                            hintStyle: TextStyle(color: theme.colorScheme.outline),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onChanged: (val) => setState(() => _searchQuery = val),
+                        ),
+                      )
+                    : const Text(
+                        'Connections',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
                       ),
+                actions: [
+                  if (_isSearching)
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _isSearching = false;
+                          _searchQuery = '';
+                        });
+                      },
                     )
-                  : const Text(
-                      'Connections',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: 'Search Connections',
+                      onPressed: () => setState(() => _isSearching = true),
                     ),
-              actions: [
-                if (_isSearching)
                   IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() {
-                        _isSearching = false;
-                        _searchQuery = '';
-                      });
+                    icon: const Icon(Icons.person_add_alt_1),
+                    tooltip: 'Add Connection',
+                    onPressed: () => context.push(Routes.discoverySearch),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                bottom: const TabBar(
+                  tabs: [
+                    Tab(text: 'Messages'),
+                    Tab(text: 'Network'),
+                  ],
+                ),
+              ),
+            ];
+          },
+          body: TabBarView(
+            children: [
+              // Tab 1: Messages (Stream Chat UI)
+              ConversationsScreen(
+                currentUserId: currentUserId,
+                onConversationTap: (channel) {
+                  final otherMember = channel.state?.members.firstWhere(
+                    (m) => m.userId != currentUserId,
+                    orElse: () => channel.state!.members.first,
+                  );
+
+                  context.push(
+                    Routes.chatWith(channel.id!),
+                    extra: {
+                      'currentUserId': currentUserId,
+                      'otherUserId': otherMember?.userId ?? '',
+                      'otherUserName': otherMember?.user?.name ?? 'Unknown',
+                      'otherUserPhotoUrl': otherMember?.user?.image,
                     },
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    tooltip: 'Search Connections',
-                    onPressed: () => setState(() => _isSearching = true),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.person_add_alt_1),
-                  tooltip: 'Add Connection',
-                  onPressed: () => context.push(Routes.discoverySearch),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-
-            // --- Suggested Connections (People You May Know) ---
-            if (!_isSearching && _searchQuery.isEmpty)
-              SliverToBoxAdapter(
-                child: _buildSuggestedConnections(theme, currentUserId),
-              ),
-
-            // --- Your Network Header ---
-            if (!_isSearching && _searchQuery.isEmpty)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                  child: Text(
-                    'Your Network',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-              ),
-
-            // --- Connections List ---
-            BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-              builder: (context, state) {
-                if (state.status == ConnectionBlocStatus.initial ||
-                    (state.status == ConnectionBlocStatus.loading && state.connections.isEmpty)) {
-                  return const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
                   );
-                }
-
-                if (state.status == ConnectionBlocStatus.error) {
-                  return SliverToBoxAdapter(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 40),
-                          Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
-                          const SizedBox(height: 16),
-                          Text(state.errorMessage ?? 'Error', style: theme.textTheme.bodyLarge),
-                          const SizedBox(height: 16),
-                          FilledButton.tonal(
-                            onPressed: _loadConnections,
-                            child: const Text('Retry'),
-                          ),
-                        ],
+                },
+              ),
+              // Tab 2: Network (Suggested + List)
+              CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                    // --- Suggested Connections (People You May Know) ---
+                    if (!_isSearching && _searchQuery.isEmpty)
+                      SliverToBoxAdapter(
+                        child: _buildSuggestedConnections(theme, currentUserId),
                       ),
-                    ),
-                  );
-                }
 
-                if (state.connections.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.people_outline, size: 64, color: theme.colorScheme.outline),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No connections yet',
+                    // --- Your Network Header ---
+                    if (!_isSearching && _searchQuery.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                          child: Text(
+                            'Your Network',
                             style: theme.textTheme.titleMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant),
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSurface,
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Build your network by adding friends.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.outline),
-                          ),
-                          const SizedBox(height: 24),
-                          FilledButton.icon(
-                            onPressed: () => context.push(Routes.discoverySearch),
-                            icon: const Icon(Icons.person_add),
-                            label: const Text('Find People'),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  );
-                }
 
-                return _ConnectionsSliverList(
-                  connections: state.connections,
-                  currentUserId: state.userId ?? currentUserId,
-                  searchQuery: _searchQuery,
-                  onUserTap: (connection, profile) => _navigateToChat(context, connection, state.userId ?? currentUserId, profile),
-                  onProfilePhotoTap: (connection, profile) => _showUserDetails(context, connection, state.userId ?? currentUserId, profile),
-                );
-              },
-            ),
-            
-            // Bottom padding for scroll
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
+                    // --- Connections List ---
+                    BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                      builder: (context, state) {
+                        if (state.status == ConnectionBlocStatus.initial ||
+                            (state.status == ConnectionBlocStatus.loading && state.connections.isEmpty)) {
+                          return const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.all(40),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          );
+                        }
+
+                        if (state.status == ConnectionBlocStatus.error) {
+                          return SliverToBoxAdapter(
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(height: 40),
+                                  Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+                                  const SizedBox(height: 16),
+                                  Text(state.errorMessage ?? 'Error', style: theme.textTheme.bodyLarge),
+                                  const SizedBox(height: 16),
+                                  FilledButton.tonal(
+                                    onPressed: _loadConnections,
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        if (state.connections.isEmpty) {
+                          return SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(40),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.people_outline, size: 64, color: theme.colorScheme.outline),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No connections yet',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Build your network by adding friends.',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: theme.colorScheme.outline),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  FilledButton.icon(
+                                    onPressed: () => context.push(Routes.discoverySearch),
+                                    icon: const Icon(Icons.person_add),
+                                    label: const Text('Find People'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return _ConnectionsSliverList(
+                          connections: state.connections,
+                          currentUserId: state.userId ?? currentUserId,
+                          searchQuery: _searchQuery,
+                          onUserTap: (connection, profile) => _navigateToChat(context, connection, state.userId ?? currentUserId, profile),
+                          onProfilePhotoTap: (connection, profile) => _showUserDetails(context, connection, state.userId ?? currentUserId, profile),
+                        );
+                      },
+                    ),
+                    
+                    // Bottom padding for scroll
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
     );

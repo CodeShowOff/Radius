@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -223,7 +223,7 @@ class NewsPostService {
   }) async {
     try {
       final client = HttpClient();
-      // Use 192.168.13.105 to reach the local machine from a real device
+      // Use 192.168.13.112 to reach the local machine from a real device
       final request = await client.postUrl(Uri.parse('${Env.backendUrl}/getReelsFeed'));
       request.headers.contentType = ContentType.json;
       

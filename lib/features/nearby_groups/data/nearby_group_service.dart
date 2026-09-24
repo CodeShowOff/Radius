@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -388,7 +388,7 @@ class NearbyGroupService {
 
       await batch.commit();
 
-      _logger.d('Updated nearby members for group $groupId: ${updatedMemberIds.length} members');
+      _logger.t('Updated nearby members for group $groupId: ${updatedMemberIds.length} members');
     } on FirebaseException catch (e, stack) {
       _logger.e('Error updating nearby members', error: e, stackTrace: stack);
       // Don't throw - this is called frequently during scanning

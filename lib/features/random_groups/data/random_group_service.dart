@@ -269,7 +269,7 @@ class RandomGroupService {
   ///
   /// Uses a collection group query on 'members' to find all memberships,
   /// then extracts the unreadCount from each member document.
-  /// Returns a map of groupId â†’ unreadCount.
+  /// Returns a map of groupId → unreadCount.
   ///
   /// NOTE: Still uses `collectionGroup('members')` because unreadCount lives
   /// on the member docs and is incremented by the chat service. Moving it to

@@ -511,9 +511,9 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
         key.contains('redmi') ||
         key.contains('poco')) {
       return const [
-        'Settings â†’ Apps â†’ Radius â†’ Battery saver: set to â€œNo restrictionsâ€.',
+        'Settings → Apps → Radius → Battery saver: set to â€œNo restrictionsâ€.',
         'Enable Autostart for Radius (if available).',
-        'Lock Radius in Recents (app icon â†’ Lock) to reduce kills.',
+        'Lock Radius in Recents (app icon → Lock) to reduce kills.',
       ];
     }
 
@@ -829,7 +829,7 @@ class _FAQsPage extends StatelessWidget {
             question: 'How do I stop being discoverable?',
             answer:
                 'Simply close the app to stop advertising. '
-                'You can also go to Profile â†’ Privacy Settings to manage visibility. '
+                'You can also go to Profile → Privacy Settings to manage visibility. '
                 'If you have Background Advertising enabled, you can turn it off anytime in Bluetooth Settings. '
                 'Scanning only runs when you tap "Find People Nearby".',
           ),
@@ -848,7 +848,7 @@ class _FAQsPage extends StatelessWidget {
                 'â€¢ See you in their discovery\n'
                 'â€¢ Message you\n'
                 'Disconnecting preserves chat history but disables messaging. '
-                'Go to Privacy Settings â†’ Manage Blocked Users to view your blocked list.',
+                'Go to Privacy Settings → Manage Blocked Users to view your blocked list.',
           ),
           _FAQItem(
             question: 'What are Random Group Chatrooms?',

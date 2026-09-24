@@ -11,7 +11,7 @@ import '../services/notifications/notification_service.dart';
 import 'logging/device_log.dart';
 
 /// Clears ALL local app data â€” the programmatic equivalent of
-/// Android Settings â†’ Apps â†’ Radius â†’ Storage â†’ Clear Data.
+/// Android Settings → Apps → Radius → Storage → Clear Data.
 ///
 /// Call this on sign-out so the next user session starts completely fresh
 /// with zero leftover state from the previous account.

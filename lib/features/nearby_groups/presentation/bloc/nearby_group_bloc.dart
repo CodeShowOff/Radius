@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,6 +39,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   String? _currentGroupId;
   String? _currentCreatorId;
   bool _isScanningPhase = false;
+  DateTime? _lastFirestoreUpdate;
 
   /// Interval for sending heartbeat updates (keep group alive)
   static const Duration heartbeatInterval = Duration(seconds: 5);
@@ -458,7 +459,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _ActiveGroupsReceived event,
     Emitter<NearbyGroupState> emit,
   ) {
-    _logger.d('Received ${event.groups.length} active nearby groups');
+    _logger.t('Received ${event.groups.length} active nearby groups');
     emit(state.copyWith(
       status: NearbyGroupBlocStatus.loaded,
       activeGroups: event.groups,
@@ -469,7 +470,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _UserGroupsReceived event,
     Emitter<NearbyGroupState> emit,
   ) {
-    _logger.d('Received ${event.groups.length} user nearby groups');
+    _logger.t('Received ${event.groups.length} user nearby groups');
     emit(state.copyWith(
       userGroups: event.groups,
       status: NearbyGroupBlocStatus.loaded,
@@ -480,7 +481,7 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _GroupMembersReceived event,
     Emitter<NearbyGroupState> emit,
   ) {
-    _logger.d('Received ${event.members.length} group members');
+    _logger.t('Received ${event.members.length} group members');
     emit(state.copyWith(groupMembers: event.members));
   }
 
@@ -490,7 +491,13 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   ) async {
     if (_currentGroupId == null || _currentCreatorId == null) return;
 
-    _logger.d('Detected ${event.users.length} nearby users for group');
+    final now = DateTime.now();
+    if (_lastFirestoreUpdate != null && now.difference(_lastFirestoreUpdate!).inSeconds < 5) {
+      return; // Rate limit Firestore updates
+    }
+    _lastFirestoreUpdate = now;
+
+    _logger.t('Detected ${event.users.length} nearby users for group');
 
     // Update members in the database
     await _groupService.updateNearbyMembers(

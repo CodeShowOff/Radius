@@ -3075,7 +3075,7 @@ export const getReelsFeed = onCall({}, async (request: any) => {
       .where("postType", "==", "reel")
       .where("city", "==", city)
       .where("country", "==", country)
-      .orderBy("engagementScore", "desc")
+      .orderBy("trendingScore", "desc")
       .limit(limit)
       .get();
 
@@ -3119,7 +3119,7 @@ export const getLocalNewsFeed = onCall({}, async (request: any) => {
       .where("postType", "==", "post")
       .where("city", "==", city)
       .where("country", "==", country)
-      .orderBy("engagementScore", "desc")
+      .orderBy("trendingScore", "desc")
       .limit(limit)
       .get();
 

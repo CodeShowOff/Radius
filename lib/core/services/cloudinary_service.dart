@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 /// 1. Create a Cloudinary account at https://cloudinary.com
 /// 2. Get your Cloud Name from the dashboard
 /// 3. Enable unsigned uploads in Cloudinary dashboard:
-///    - Go to: Settings â†’ Upload â†’ Upload Presets
+///    - Go to: Settings → Upload → Upload Presets
 ///    - Click "Add upload preset" or edit existing one
 ///    - Set Preset name: "radius" (or update the constant below)
 ///    - Change "Signing Mode" to "Unsigned"

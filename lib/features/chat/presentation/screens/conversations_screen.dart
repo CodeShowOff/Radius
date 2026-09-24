@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 /// Screen showing the list of conversations for a user using Stream Chat.
@@ -35,46 +35,38 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: StreamChannelListView(
-        controller: _listController,
-        onChannelTap: (channel) {
-          widget.onConversationTap(channel);
-        },
-        emptyBuilder: (context) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'No conversations yet',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Start a chat with people nearby to begin messaging',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+    return StreamChannelListView(
+      controller: _listController,
+      onChannelTap: (channel) {
+        widget.onConversationTap(channel);
+      },
+      emptyBuilder: (context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline,
+                size: 80,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No conversations yet',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Start a chat with people nearby to begin messaging',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ),

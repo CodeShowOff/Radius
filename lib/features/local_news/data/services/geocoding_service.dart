@@ -15,10 +15,10 @@ class GeocodingService {
   /// Reverse-geocodes [latitude] and [longitude] into a [NewsLocation].
   ///
   /// Maps platform `Placemark` fields:
-  /// - `subAdministrativeArea` â†’ district
-  /// - `locality` â†’ city
-  /// - `subLocality` â†’ locality (neighborhood / area)
-  /// - `country` â†’ country
+  /// - `subAdministrativeArea` → district
+  /// - `locality` → city
+  /// - `subLocality` → locality (neighborhood / area)
+  /// - `country` → country
   ///
   /// Falls back to adjacent fields when a primary field is empty.
   /// Throws [GeocodingException] if no placemarks are returned.
@@ -44,7 +44,7 @@ class GeocodingService {
       final country = placemark.country ?? '';
 
       _logger.i(
-        'Geocoded ($latitude, $longitude) â†’ '
+        'Geocoded ($latitude, $longitude) → '
         'district=$district, city=$city, locality=$locality, country=$country',
       );
 
@@ -69,7 +69,7 @@ class GeocodingService {
 
   /// Resolves district from placemark with fallbacks.
   ///
-  /// Priority: subAdministrativeArea â†’ administrativeArea
+  /// Priority: subAdministrativeArea → administrativeArea
   String _resolveDistrict(Placemark placemark) {
     final sub = placemark.subAdministrativeArea;
     if (sub != null && sub.isNotEmpty) return sub;
@@ -82,7 +82,7 @@ class GeocodingService {
 
   /// Resolves city from placemark with fallbacks.
   ///
-  /// Priority: locality â†’ subAdministrativeArea â†’ administrativeArea
+  /// Priority: locality → subAdministrativeArea → administrativeArea
   String _resolveCity(Placemark placemark) {
     final loc = placemark.locality;
     if (loc != null && loc.isNotEmpty) return loc;
@@ -145,7 +145,7 @@ class GeocodingService {
 
   /// Resolves locality/neighborhood from placemark with fallbacks.
   ///
-  /// Priority: subLocality â†’ thoroughfare â†’ locality
+  /// Priority: subLocality → thoroughfare → locality
   String _resolveLocality(Placemark placemark) {
     final subLoc = placemark.subLocality;
     if (subLoc != null && subLoc.isNotEmpty) return subLoc;

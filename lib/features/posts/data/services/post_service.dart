@@ -128,8 +128,8 @@ class PostService {
       }
 
       // Connected viewer â€” two parallel queries to satisfy Firestore rules:
-      //   Query 1: visibility == 'public'  â†’  rule condition 1
-      //   Query 2: arrayContains viewer    â†’  rule condition 3
+      //   Query 1: visibility == 'public'  →  rule condition 1
+      //   Query 2: arrayContains viewer    →  rule condition 3
       if (includeConnectionsVisibility && viewerUserId != null) {
         Query<Map<String, dynamic>> publicQuery = _postsRef
             .where('authorId', isEqualTo: authorId)

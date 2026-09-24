@@ -559,7 +559,7 @@ class LocationGroupService {
 
             // Fetch full membership details in PARALLEL instead of sequentially.
             // Each _getMembership call is independent, so Future.wait eliminates
-            // the sequential delay (N * latency â†’ max(latencies)).
+            // the sequential delay (N * latency → max(latencies)).
             final membershipFutures = snapshot.docs.map((doc) {
               final groupId = doc.data()['groupId'] as String;
               return _getMembership(groupId, userId);

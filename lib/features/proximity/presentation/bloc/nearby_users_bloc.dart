@@ -12,8 +12,8 @@ part 'nearby_users_state.dart';
 /// BLoC for managing nearby users discovery.
 ///
 /// Real-time discovery flow:
-/// 1. User clicks "Start Scan" â†’ status becomes "scanning"
-/// 2. As soon as first user is discovered â†’ switches to "results" and shows them immediately
+/// 1. User clicks "Start Scan" → status becomes "scanning"
+/// 2. As soon as first user is discovered → switches to "results" and shows them immediately
 /// 3. More users keep appearing in the list as they're discovered (live updates)
 /// 4. After 10 seconds, scan stops automatically but results remain visible
 /// 

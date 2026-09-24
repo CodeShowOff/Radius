@@ -19,7 +19,7 @@ part 'create_news_post_state.dart';
 ///
 /// Posts are tagged with the user's saved location (set via manual setup).
 ///
-/// Flow: compose â†’ submit â†’ optimize media â†’ upload â†’ create doc
+/// Flow: compose → submit → optimize media → upload → create doc
 class CreateNewsPostBloc
     extends Bloc<CreateNewsPostEvent, CreateNewsPostState> {
   final INewsPostRepository _repository;

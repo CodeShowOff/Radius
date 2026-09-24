@@ -156,8 +156,8 @@ class PostRepositoryImpl implements IPostRepository {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      // Own profile or connected user â†’ show all posts
-      // Non-connected viewer â†’ show public only
+      // Own profile or connected user → show all posts
+      // Non-connected viewer → show public only
       final includeConnections = userId == viewerUserId || isConnection;
 
       final posts = await _postService.getPostsByAuthor(

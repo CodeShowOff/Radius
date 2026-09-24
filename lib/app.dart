@@ -193,11 +193,11 @@ class _AuthAwareAppState extends State<_AuthAwareApp>
       }
     } else if (state == AppLifecycleState.paused) {
       debugPrint(
-          '[RadiusApp] ðŸ“± App PAUSED (backgrounded) - advertising continues in background');
+          '[RadiusApp] 📱 App PAUSED (backgrounded) - advertising continues in background');
     } else if (state == AppLifecycleState.inactive) {
       debugPrint('[RadiusApp] â¸ï¸ App INACTIVE');
     } else if (state == AppLifecycleState.detached) {
-      debugPrint('[RadiusApp] ðŸ”Œ App DETACHED');
+      debugPrint('[RadiusApp] 🔌 App DETACHED');
     }
   }
 

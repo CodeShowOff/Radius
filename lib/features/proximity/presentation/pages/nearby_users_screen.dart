@@ -376,7 +376,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
       return const [
         'Set Battery saver for Radius to â€œNo restrictionsâ€.',
         'Enable Autostart for Radius (if available).',
-        'Lock Radius in Recents (tap the app icon â†’ Lock).',
+        'Lock Radius in Recents (tap the app icon → Lock).',
       ];
     }
 
@@ -976,17 +976,17 @@ class _NearbyUsersListState extends State<_NearbyUsersList> {
   String? _selectedGenderFilter;
 
   static const moods = {
-    'ðŸ˜Š Chill': 'ðŸ˜Š Chill',
-    'ðŸ¤“ Focused': 'ðŸ¤“ Focused',
-    'ðŸ§  Deep talk': 'ðŸ§  Deep talk',
-    'ðŸ˜‚ Fun': 'ðŸ˜‚ Fun',
+    '😊 Chill': '😊 Chill',
+    '🤓 Focused': '🤓 Focused',
+    '🧠 Deep talk': '🧠 Deep talk',
+    '😂 Fun': '😂 Fun',
   };
 
   static const genders = {
-    'ðŸ‘¨ Male': 'Male',
-    'ðŸ‘© Female': 'Female',
+    '👨 Male': 'Male',
+    '👩 Female': 'Female',
     'âš§ï¸ Non-binary': 'Non-binary',
-    'ðŸ¤· Prefer not to say': 'Prefer not to say',
+    '🤷 Prefer not to say': 'Prefer not to say',
   };
 
   List<NearbyUser> get _filteredUsers {

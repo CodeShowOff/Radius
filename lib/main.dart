@@ -37,7 +37,7 @@ Future<void> main() async {
 
   // Log app startup in debug mode
   if (kDebugMode) {
-    debugPrint('ðŸš€ Radius app starting in ${AppConfig.environment.name} mode');
+    debugPrint('🚀 Radius app starting in ${AppConfig.environment.name} mode');
   }
 
   // Render Flutter UI immediately, then perform async initialization.
