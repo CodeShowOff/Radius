@@ -25,6 +25,7 @@ class MediaPickerSheet {
           textDelegate: const EnglishAssetPickerTextDelegate(),
           themeColor: theme.colorScheme.primary,
           gridCount: 3, // Premium modern grid look
+          pageSize: 120, // Must be a multiple of gridCount (120 % 3 == 0)
         ),
       );
     } catch (e) {

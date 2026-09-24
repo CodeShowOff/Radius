@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 
 import '../../../posts/data/models/comment_model.dart';
@@ -247,34 +247,13 @@ class NewsInteractionService {
     required String actionType,
   }) async {
     try {
-      final postRef = _postsRef.doc(postId);
-      
-      // We run this in a transaction or just batch write. Let's use a batch
-      // to increment the score on the post, and log the action.
-      final batch = _firestore.batch();
-
-      // 1. Increment total engagement score on the post
-      batch.set(
-        postRef,
-        {'engagementScore': FieldValue.increment(score)},
-        SetOptions(merge: true),
-      );
-
-      // 2. Record the specific action to prevent double-counting or for analytics
-      // Use a subcollection for engagement logs. We use auto-id for the log doc.
-      final engagementRef = postRef.collection('engagements').doc();
-      batch.set(engagementRef, {
-        'userId': userId,
-        'actionType': actionType,
-        'score': score,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await batch.commit();
+      // Intentionally bypassed. 
+      // Firestore security rules prevent non-authors from updating the post document directly.
+      // Engagement and trending scores are handled securely by backend Cloud Functions 
+      // triggered when a like or comment document is created.
     } catch (e, stack) {
       _logger.e('Error recording engagement for news post $postId',
           error: e, stackTrace: stack);
-      rethrow;
     }
   }
 }

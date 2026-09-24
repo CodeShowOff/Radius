@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide User;
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
@@ -74,11 +75,15 @@ class StreamTokenService {
     final token = await fetchToken();
     if (token != null) {
       try {
+        // Fetch the latest profile data from Firestore to avoid overwriting with stale Auth data
+        final profileDoc = await FirebaseFirestore.instance.collection('profiles').doc(user.uid).get();
+        final profileData = profileDoc.data();
+        
         await client.connectUser(
           User(
             id: user.uid,
-            name: user.displayName ?? 'User',
-            image: user.photoURL,
+            name: profileData?['displayName'] ?? user.displayName ?? 'User',
+            image: profileData?['photoUrl'] ?? user.photoURL,
           ),
           token,
         );

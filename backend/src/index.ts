@@ -2305,7 +2305,7 @@ export const onConnectionStatusChanged = onDocumentUpdated(
         (oldStatus === "connected" && newStatus === "blocked")) {
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
-      if (apiKey && apiSecret) {
+      if (false && apiKey && apiSecret) {
         try {
           const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
           await client.feed("timeline", userId1).unfollow("user", userId2);
@@ -2406,7 +2406,7 @@ export const onConnectionCreated = onDocumentCreated(
       // STREAM FEED: Follow graph
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
-      if (apiKey && apiSecret) {
+      if (false && apiKey && apiSecret) {
         const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
         const userId1 = data.userId1 as string;
         const userId2 = data.userId2 as string;
@@ -2466,6 +2466,23 @@ export const onUserProfileUpdated = onDocumentUpdated(
       `name: "${oldDisplayName}" → "${newDisplayName}", ` +
       `photo: "${oldPhotoUrl}" → "${newPhotoUrl}"`
     );
+
+    // Update Stream Chat user profile
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+    if (apiKey && apiSecret) {
+      try {
+        const chatClient = StreamChat.getInstance(apiKey, apiSecret);
+        await chatClient.upsertUser({
+          id: userId,
+          name: newDisplayName || oldDisplayName || undefined,
+          image: newPhotoUrl || oldPhotoUrl || undefined,
+        });
+        logger.log(`Stream Chat profile updated for ${userId}`);
+      } catch (e) {
+        logger.error(`Error updating Stream Chat profile for ${userId}:`, e);
+      }
+    }
 
     const db = admin.firestore();
     const BATCH_LIMIT = 500;
@@ -2598,7 +2615,7 @@ export const onPostConnectionSync = onDocumentUpdated(
         (oldStatus === "connected" && newStatus === "blocked")) {
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
-      if (apiKey && apiSecret) {
+      if (false && apiKey && apiSecret) {
         try {
           const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
           await client.feed("timeline", userId1).unfollow("user", userId2);
@@ -2624,6 +2641,25 @@ export const onPostConnectionSync = onDocumentUpdated(
 
     try {
       if (newStatus === "connected" && oldStatus !== "connected") {
+        // Automatically create a Stream chat channel for the new connection
+        const apiKey = process.env.STREAM_API_KEY;
+        const apiSecret = process.env.STREAM_API_SECRET;
+        if (apiKey && apiSecret) {
+          try {
+            const chatClient = StreamChat.getInstance(apiKey, apiSecret);
+            const channelIds = [userId1, userId2].sort();
+            const channelId = `${channelIds[0]}_${channelIds[1]}_v2`;
+            const channel = chatClient.channel('messaging', channelId, {
+              members: [userId1, userId2],
+              created_by_id: userId1,
+            });
+            await channel.create();
+            logger.log(`Created Stream channel ${channelId} for new connection`);
+          } catch (e) {
+            logger.error("Error creating Stream channel for connection:", e);
+          }
+        }
+
         // New connection: add each user to the other's connections-only posts
         // User1's connections-only posts → add userId2
         const user1Posts = await db
@@ -3142,11 +3178,11 @@ export const getReelsFeed = onCall({}, async (request: any) => {
   const db = admin.firestore();
   
   try {
-    let useFallback = true;
+    let useFallback = true; /* Bypass Stream for now */
     const apiKey = process.env.STREAM_API_KEY;
     const apiSecret = process.env.STREAM_API_SECRET;
     
-    if (apiKey && apiSecret) {
+    if (false && apiKey && apiSecret) {
       try {
         const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
         const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
@@ -3208,11 +3244,11 @@ export const getLocalNewsFeed = onCall({}, async (request: any) => {
   const db = admin.firestore();
   
   try {
-    let useFallback = true;
+    let useFallback = true; /* Bypass Stream for now */
     const apiKey = process.env.STREAM_API_KEY;
     const apiSecret = process.env.STREAM_API_SECRET;
     
-    if (apiKey && apiSecret) {
+    if (false && apiKey && apiSecret) {
       try {
         const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
         const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
@@ -3633,11 +3669,11 @@ export const getTimelineFeed = onCall(
     const db = admin.firestore();
 
     try {
-      let useFallback = true;
+      let useFallback = true; /* Bypass Stream for now */
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
 
-      if (apiKey && apiSecret) {
+      if (false && apiKey && apiSecret) {
         try {
           const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
           const feed = client.feed('timeline', userId);

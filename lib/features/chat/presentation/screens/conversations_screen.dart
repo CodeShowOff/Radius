@@ -40,6 +40,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       onChannelTap: (channel) {
         widget.onConversationTap(channel);
       },
+      loadingBuilder: (context) => const SizedBox.shrink(),
       emptyBuilder: (context) => Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

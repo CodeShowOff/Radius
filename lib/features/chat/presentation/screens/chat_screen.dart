@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
+import '../../../../core/router/routes.dart';
+
 /// Main chat screen for a 1-to-1 conversation using Stream Chat.
 class ChatScreen extends StatelessWidget {
   final String conversationId; // Corresponds to Stream Channel ID
@@ -21,20 +23,19 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Obtain the channel from the Stream client using the conversationId
+    // Obtain the channel from the Stream client using the conversationId.
+    // We must pass the 'members' array in extraData, otherwise Stream Chat throws 
+    // a 403 Forbidden error because a user cannot create an empty channel.
     final channel = StreamChat.of(context).client.channel(
       'messaging',
       id: conversationId,
+      extraData: {
+        'members': [currentUserId, otherUserId],
+      },
     );
 
     // Watch the channel so we have realtime updates (if not already watched)
-    channel.watch().then((_) {
-      // If it's a freshly created implicit channel, it might only have 1 member.
-      // Ensure the other user is added so they receive notifications and the channel shows up for them.
-      if (channel.state?.members.length == 1) {
-        channel.addMembers([otherUserId]);
-      }
-    });
+    channel.watch();
 
     return StreamChannel(
       channel: channel,
@@ -44,7 +45,7 @@ class ChatScreen extends StatelessWidget {
           title: GestureDetector(
             onTap: () {
               if (otherUserId.isNotEmpty) {
-                context.push('/user-profile/$otherUserId');
+                context.push(Routes.userProfileWith(otherUserId));
               }
             },
             child: Row(
