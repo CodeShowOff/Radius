@@ -4,6 +4,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import * as admin from 'firebase-admin';
+import { StreamChat } from 'stream-chat';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // Initialize Firebase Admin first
 const serviceAccountPath = path.join(__dirname, '..', 'serviceAccountKey.json');
@@ -30,6 +34,11 @@ import { registeredTriggers, registeredCallables } from './mock';
 import * as myFunctions from './index'; 
 
 const app = express();
+
+const streamClient = StreamChat.getInstance(
+  process.env.STREAM_API_KEY || '9x8t84er452n', // API Key
+  process.env.STREAM_API_SECRET || '' // API Secret
+);
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -62,7 +71,28 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 // Serve static files
+// Serve static files
 app.use('/uploads', express.static(uploadDir));
+
+// Stream Token Generation Endpoint
+app.post('/api/getStreamToken', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+
+    const firebaseToken = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    const userId = decodedToken.uid;
+
+    const streamToken = streamClient.createToken(userId);
+    res.status(200).json({ token: streamToken });
+  } catch (error) {
+    console.error('Error generating stream token:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // --- MAP CALLABLE FUNCTIONS TO EXPRESS ENDPOINTS ---
 for (const [name, def] of Object.entries(myFunctions) as [string, any][]) {

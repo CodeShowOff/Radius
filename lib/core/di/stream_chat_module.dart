@@ -9,7 +9,7 @@ abstract class StreamChatModule {
     // We instantiate it here so it can be injected globally.
     // The key can be loaded from environment variables if needed.
     return StreamChatClient(
-      'YOUR_STREAM_API_KEY', // TODO: Load from environment or config
+      '9x8t84er452n',
       logLevel: Level.INFO,
     );
   }

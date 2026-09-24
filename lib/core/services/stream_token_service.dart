@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart' hide User;
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
@@ -10,8 +10,8 @@ class StreamTokenService {
   final Logger _logger;
   
   // TODO: Replace with your actual backend URL
-  // If running on Android emulator, use 10.0.2.2 instead of localhost
-  final String _backendUrl = 'http://10.0.2.2:3000/api/getStreamToken';
+  // If running on a physical device, use your computer's local IP address
+  final String _backendUrl = 'http://192.168.13.112:3000/api/getStreamToken';
 
   StreamTokenService({required Logger logger}) : _logger = logger;
 
