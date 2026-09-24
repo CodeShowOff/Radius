@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/random_group.dart';
 
@@ -21,9 +21,7 @@ import '../../domain/entities/random_group.dart';
 ///   - memberCount: int
 ///   - pendingRequestCount: int
 ///   - createdAt: timestamp
-///   - lastActiveAt: timestamp
-///   - lastMessagePreview: string?
-///   - lastMessageAt: timestamp?
+
 /// ```
 class RandomGroupModel extends RandomGroup {
   const RandomGroupModel({
@@ -41,9 +39,7 @@ class RandomGroupModel extends RandomGroup {
     required super.memberCount,
     super.pendingRequestCount,
     required super.createdAt,
-    required super.lastActiveAt,
-    super.lastMessagePreview,
-    super.lastMessageAt,
+
   });
 
   /// Creates a model from Firestore document snapshot.
@@ -65,11 +61,7 @@ class RandomGroupModel extends RandomGroup {
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
       pendingRequestCount: (data['pendingRequestCount'] as num?)?.toInt() ?? 0,
       createdAt: _parseTimestamp(data['createdAt']),
-      lastActiveAt: _parseTimestamp(data['lastActiveAt']),
-      lastMessagePreview: data['lastMessagePreview'] as String?,
-      lastMessageAt: data['lastMessageAt'] != null
-          ? _parseTimestamp(data['lastMessageAt'])
-          : null,
+
     );
   }
 
@@ -90,11 +82,7 @@ class RandomGroupModel extends RandomGroup {
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
       pendingRequestCount: (data['pendingRequestCount'] as num?)?.toInt() ?? 0,
       createdAt: _parseTimestamp(data['createdAt']),
-      lastActiveAt: _parseTimestamp(data['lastActiveAt']),
-      lastMessagePreview: data['lastMessagePreview'] as String?,
-      lastMessageAt: data['lastMessageAt'] != null
-          ? _parseTimestamp(data['lastMessageAt'])
-          : null,
+
     );
   }
 
@@ -116,12 +104,7 @@ class RandomGroupModel extends RandomGroup {
       'createdAt': useServerTimestamp
           ? FieldValue.serverTimestamp()
           : Timestamp.fromDate(createdAt),
-      'lastActiveAt': useServerTimestamp
-          ? FieldValue.serverTimestamp()
-          : Timestamp.fromDate(lastActiveAt),
-      if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
-      if (lastMessageAt != null)
-        'lastMessageAt': Timestamp.fromDate(lastMessageAt!),
+
     };
   }
 
@@ -142,9 +125,7 @@ class RandomGroupModel extends RandomGroup {
       memberCount: memberCount,
       pendingRequestCount: pendingRequestCount,
       createdAt: createdAt,
-      lastActiveAt: lastActiveAt,
-      lastMessagePreview: lastMessagePreview,
-      lastMessageAt: lastMessageAt,
+
     );
   }
 
@@ -174,7 +155,6 @@ class RandomGroupModel extends RandomGroup {
       memberCount: 1,
       pendingRequestCount: 0,
       createdAt: now,
-      lastActiveAt: now,
     );
   }
 

@@ -1,4 +1,4 @@
-﻿import 'package:equatable/equatable.dart';
+import 'package:equatable/equatable.dart';
 
 /// Status of a nearby group.
 enum NearbyGroupStatus {
@@ -50,11 +50,7 @@ class NearbyGroup extends Equatable {
   /// When the group was last active (last scan update)
   final DateTime lastActiveAt;
 
-  /// Preview of last message in group chat
-  final String? lastMessagePreview;
 
-  /// When the last message was sent
-  final DateTime? lastMessageAt;
 
   const NearbyGroup({
     required this.id,
@@ -68,8 +64,7 @@ class NearbyGroup extends Equatable {
     required this.memberCount,
     required this.createdAt,
     required this.lastActiveAt,
-    this.lastMessagePreview,
-    this.lastMessageAt,
+
   });
 
   /// Helper to check if group is active
@@ -94,8 +89,7 @@ class NearbyGroup extends Equatable {
     int? memberCount,
     DateTime? createdAt,
     DateTime? lastActiveAt,
-    String? lastMessagePreview,
-    DateTime? lastMessageAt,
+
   }) {
     return NearbyGroup(
       id: id ?? this.id,
@@ -109,8 +103,7 @@ class NearbyGroup extends Equatable {
       memberCount: memberCount ?? this.memberCount,
       createdAt: createdAt ?? this.createdAt,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
-      lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
-      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+
     );
   }
 
@@ -127,8 +120,7 @@ class NearbyGroup extends Equatable {
         memberCount,
         createdAt,
         lastActiveAt,
-        lastMessagePreview,
-        lastMessageAt,
+
       ];
 
   @override

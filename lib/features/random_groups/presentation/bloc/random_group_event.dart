@@ -1,4 +1,4 @@
-﻿part of 'random_group_bloc.dart';
+part of 'random_group_bloc.dart';
 
 /// Events for the RandomGroupBloc.
 sealed class RandomGroupEvent extends Equatable {
@@ -299,19 +299,7 @@ class CheckMembershipStatus extends RandomGroupEvent {
   List<Object?> get props => [groupId, userId];
 }
 
-/// Clear all chat messages in a group (admin only).
-class ClearRandomGroupChat extends RandomGroupEvent {
-  final String groupId;
-  final String adminUserId;
 
-  const ClearRandomGroupChat({
-    required this.groupId,
-    required this.adminUserId,
-  });
-
-  @override
-  List<Object?> get props => [groupId, adminUserId];
-}
 
 // Internal events for stream updates
 class _ActiveGroupsReceived extends RandomGroupEvent {

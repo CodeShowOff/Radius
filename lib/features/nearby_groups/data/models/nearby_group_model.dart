@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/nearby_group.dart';
 
@@ -18,8 +18,7 @@ import '../../domain/entities/nearby_group.dart';
 ///   - memberCount: int
 ///   - createdAt: timestamp
 ///   - lastActiveAt: timestamp
-///   - lastMessagePreview: string?
-///   - lastMessageAt: timestamp?
+
 /// ```
 class NearbyGroupModel extends NearbyGroup {
   const NearbyGroupModel({
@@ -34,8 +33,7 @@ class NearbyGroupModel extends NearbyGroup {
     required super.memberCount,
     required super.createdAt,
     required super.lastActiveAt,
-    super.lastMessagePreview,
-    super.lastMessageAt,
+
   });
 
   /// Creates a model from Firestore document snapshot.
@@ -53,10 +51,7 @@ class NearbyGroupModel extends NearbyGroup {
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
       createdAt: _parseTimestamp(data['createdAt']),
       lastActiveAt: _parseTimestamp(data['lastActiveAt']),
-      lastMessagePreview: data['lastMessagePreview'] as String?,
-      lastMessageAt: data['lastMessageAt'] != null
-          ? _parseTimestamp(data['lastMessageAt'])
-          : null,
+
     );
   }
 
@@ -74,10 +69,7 @@ class NearbyGroupModel extends NearbyGroup {
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 1,
       createdAt: _parseTimestamp(data['createdAt']),
       lastActiveAt: _parseTimestamp(data['lastActiveAt']),
-      lastMessagePreview: data['lastMessagePreview'] as String?,
-      lastMessageAt: data['lastMessageAt'] != null
-          ? _parseTimestamp(data['lastMessageAt'])
-          : null,
+
     );
   }
 
@@ -98,8 +90,7 @@ class NearbyGroupModel extends NearbyGroup {
       'lastActiveAt': useServerTimestamp
           ? FieldValue.serverTimestamp()
           : Timestamp.fromDate(lastActiveAt),
-      if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
-      if (lastMessageAt != null) 'lastMessageAt': Timestamp.fromDate(lastMessageAt!),
+
     };
   }
 
@@ -117,8 +108,7 @@ class NearbyGroupModel extends NearbyGroup {
       memberCount: memberCount,
       createdAt: createdAt,
       lastActiveAt: lastActiveAt,
-      lastMessagePreview: lastMessagePreview,
-      lastMessageAt: lastMessageAt,
+
     );
   }
 

@@ -1,4 +1,4 @@
-﻿import 'package:equatable/equatable.dart';
+import 'package:equatable/equatable.dart';
 
 /// Visibility types for location groups.
 enum GroupVisibility {
@@ -56,11 +56,7 @@ class LocationGroup extends Equatable {
   /// When the group was created
   final DateTime createdAt;
 
-  /// When the group was last active (last message)
-  final DateTime? lastActivityAt;
 
-  /// Preview of last message in group chat
-  final String? lastMessagePreview;
 
   /// Group avatar/icon URL (optional)
   final String? avatarUrl;
@@ -77,8 +73,7 @@ class LocationGroup extends Equatable {
     required this.status,
     required this.memberCount,
     required this.createdAt,
-    this.lastActivityAt,
-    this.lastMessagePreview,
+
     this.avatarUrl,
   });
 
@@ -112,8 +107,7 @@ class LocationGroup extends Equatable {
     GroupStatus? status,
     int? memberCount,
     DateTime? createdAt,
-    DateTime? lastActivityAt,
-    String? lastMessagePreview,
+
     String? avatarUrl,
   }) {
     return LocationGroup(
@@ -128,8 +122,7 @@ class LocationGroup extends Equatable {
       status: status ?? this.status,
       memberCount: memberCount ?? this.memberCount,
       createdAt: createdAt ?? this.createdAt,
-      lastActivityAt: lastActivityAt ?? this.lastActivityAt,
-      lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+
       avatarUrl: avatarUrl ?? this.avatarUrl,
     );
   }
@@ -147,8 +140,7 @@ class LocationGroup extends Equatable {
         status,
         memberCount,
         createdAt,
-        lastActivityAt,
-        lastMessagePreview,
+
         avatarUrl,
       ];
 }

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -1136,88 +1136,5 @@ class RandomGroupService {
     }
   }
 
-  /// Clears all messages in a group (admin only).
-  Future<RandomGroupResult<void>> clearGroupMessages({
-    required String groupId,
-    required String adminUserId,
-  }) async {
-    try {
-      final groupDoc = await _groupsRef.doc(groupId).get();
-      if (!groupDoc.exists) {
-        return const RandomGroupFailure(
-          'Group not found',
-          RandomGroupErrorType.notFound,
-        );
-      }
 
-      final group = RandomGroupModel.fromFirestore(groupDoc);
-      if (!group.adminIds.contains(adminUserId)) {
-        return const RandomGroupFailure(
-          'Only admins can clear chat',
-          RandomGroupErrorType.notAuthorized,
-        );
-      }
-
-      await _hardDeleteGroupMessages(groupId);
-
-      await _groupsRef.doc(groupId).update({
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'lastMessagePreview': FieldValue.delete(),
-        'lastMessageAt': FieldValue.delete(),
-      });
-
-      _logger.i('Cleared messages for group $groupId');
-      return const RandomGroupSuccess(null);
-    } on FirebaseException catch (e, stack) {
-      _logger.e('Error clearing group messages', error: e, stackTrace: stack);
-      final dbException = _mapFirestoreException(e);
-      return RandomGroupFailure(
-        dbException.message,
-        e.code == 'permission-denied'
-            ? RandomGroupErrorType.notAuthorized
-            : RandomGroupErrorType.networkError,
-      );
-    } catch (e, stack) {
-      _logger.e('Error clearing group messages', error: e, stackTrace: stack);
-      return RandomGroupFailure(
-        'Failed to clear chat: $e',
-        RandomGroupErrorType.unknown,
-      );
-    }
-  }
-
-  /// Hard-deletes all messages in a group in batches.
-  ///
-  /// Uses hard-delete (batch.delete) instead of soft-delete (batch.update)
-  /// because Firestore security rules block message updates:
-  ///   `allow update: if false; // No edits`
-  /// Soft-delete would fail with permission-denied.
-  Future<void> _hardDeleteGroupMessages(
-    String groupId, {
-    int batchSize = 450,
-  }) async {
-    try {
-      final collectionRef = _groupsRef.doc(groupId).collection('messages');
-
-      while (true) {
-        final snapshot = await collectionRef
-            .orderBy('sentAt')
-            .limit(batchSize)
-            .get();
-
-        if (snapshot.docs.isEmpty) break;
-
-        final batch = _firestore.batch();
-        for (final doc in snapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-
-        if (snapshot.size < batchSize) break;
-      }
-    } catch (e) {
-      _logger.e('Error deleting messages', error: e);
-      rethrow;
-    }
-  }
 }

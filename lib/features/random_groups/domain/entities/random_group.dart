@@ -1,4 +1,4 @@
-﻿import 'package:equatable/equatable.dart';
+import 'package:equatable/equatable.dart';
 
 /// Status of a random group.
 enum RandomGroupStatus {
@@ -59,14 +59,7 @@ class RandomGroup extends Equatable {
   /// When the group was created
   final DateTime createdAt;
 
-  /// When the group was last active
-  final DateTime lastActiveAt;
 
-  /// Preview of last message in group chat
-  final String? lastMessagePreview;
-
-  /// When the last message was sent
-  final DateTime? lastMessageAt;
 
   const RandomGroup({
     required this.id,
@@ -83,9 +76,7 @@ class RandomGroup extends Equatable {
     required this.memberCount,
     this.pendingRequestCount = 0,
     required this.createdAt,
-    required this.lastActiveAt,
-    this.lastMessagePreview,
-    this.lastMessageAt,
+
   });
 
   /// Helper to check if group is active
@@ -113,9 +104,7 @@ class RandomGroup extends Equatable {
     int? memberCount,
     int? pendingRequestCount,
     DateTime? createdAt,
-    DateTime? lastActiveAt,
-    String? lastMessagePreview,
-    DateTime? lastMessageAt,
+
   }) {
     return RandomGroup(
       id: id ?? this.id,
@@ -132,9 +121,7 @@ class RandomGroup extends Equatable {
       memberCount: memberCount ?? this.memberCount,
       pendingRequestCount: pendingRequestCount ?? this.pendingRequestCount,
       createdAt: createdAt ?? this.createdAt,
-      lastActiveAt: lastActiveAt ?? this.lastActiveAt,
-      lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
-      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+
     );
   }
 
@@ -154,8 +141,6 @@ class RandomGroup extends Equatable {
         memberCount,
         pendingRequestCount,
         createdAt,
-        lastActiveAt,
-        lastMessagePreview,
-        lastMessageAt,
+
       ];
 }

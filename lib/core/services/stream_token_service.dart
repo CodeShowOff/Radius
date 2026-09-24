@@ -9,7 +9,7 @@ import 'package:injectable/injectable.dart';
 class StreamTokenService {
   final Logger _logger;
   
-  // TODO: Replace with your actual backend URL
+  // Replace with your actual backend URL
   // If running on a physical device, use your computer's local IP address
   final String _backendUrl = 'http://192.168.13.112:3000/api/getStreamToken';
 

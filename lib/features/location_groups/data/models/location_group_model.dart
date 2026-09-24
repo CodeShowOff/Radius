@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/location_group.dart';
 
@@ -17,8 +17,7 @@ import '../../domain/entities/location_group.dart';
 ///   - status: string ('active' | 'archived')
 ///   - memberCount: number
 ///   - createdAt: timestamp
-///   - lastActivityAt: timestamp?
-///   - lastMessagePreview: string?
+
 ///   - avatarUrl: string?
 /// ```
 class LocationGroupModel extends LocationGroup {
@@ -34,8 +33,7 @@ class LocationGroupModel extends LocationGroup {
     required super.status,
     required super.memberCount,
     required super.createdAt,
-    super.lastActivityAt,
-    super.lastMessagePreview,
+
     super.avatarUrl,
   });
 
@@ -55,8 +53,7 @@ class LocationGroupModel extends LocationGroup {
       status: _parseStatus(data['status'] as String?),
       memberCount: (data['memberCount'] as num?)?.toInt() ?? 0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      lastActivityAt: (data['lastActivityAt'] as Timestamp?)?.toDate(),
-      lastMessagePreview: data['lastMessagePreview'] as String?,
+
       avatarUrl: data['avatarUrl'] as String?,
     );
   }
@@ -75,8 +72,7 @@ class LocationGroupModel extends LocationGroup {
       status: group.status,
       memberCount: group.memberCount,
       createdAt: group.createdAt,
-      lastActivityAt: group.lastActivityAt,
-      lastMessagePreview: group.lastMessagePreview,
+
       avatarUrl: group.avatarUrl,
     );
   }
@@ -94,9 +90,7 @@ class LocationGroupModel extends LocationGroup {
       'status': status.name,
       'memberCount': memberCount,
       'createdAt': Timestamp.fromDate(createdAt),
-      'lastActivityAt':
-          lastActivityAt != null ? Timestamp.fromDate(lastActivityAt!) : null,
-      'lastMessagePreview': lastMessagePreview,
+
       'avatarUrl': avatarUrl,
       // Search fields for queries
       'nameLowercase': name.toLowerCase(),
@@ -117,8 +111,7 @@ class LocationGroupModel extends LocationGroup {
       'status': status.name,
       'memberCount': 1, // Creator is first member
       'createdAt': FieldValue.serverTimestamp(),
-      'lastActivityAt': FieldValue.serverTimestamp(),
-      'lastMessagePreview': null,
+
       'avatarUrl': avatarUrl,
       'nameLowercase': name.toLowerCase(),
       'searchKey': '${countryName}_$cityName'.toLowerCase(),

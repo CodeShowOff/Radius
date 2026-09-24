@@ -75,7 +75,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     on<ResetGroupState>(_onResetGroupState);
     on<ChangeSortOption>(_onChangeSortOption);
     on<DeleteGroup>(_onDeleteGroup);
-    on<ClearGroupChat>(_onClearGroupChat);
+
     on<ForceRefreshUserGroups>(_onForceRefreshUserGroups);
 
     // Private events for stream updates
@@ -883,29 +883,7 @@ class LocationGroupBloc extends Bloc<LocationGroupEvent, LocationGroupState> {
     }
   }
 
-  Future<void> _onClearGroupChat(
-    ClearGroupChat event,
-    Emitter<LocationGroupState> emit,
-  ) async {
-    emit(state.copyWith(status: GroupBlocStatus.loading));
 
-    final result = await _groupService.clearGroupMessages(
-      groupId: event.groupId,
-      adminUserId: event.adminUserId,
-    );
-
-    switch (result) {
-      case GroupSuccess():
-        emit(state.copyWith(status: GroupBlocStatus.loaded));
-        break;
-      case GroupFailure(:final message):
-        emit(state.copyWith(
-          status: GroupBlocStatus.error,
-          errorMessage: message,
-        ));
-        break;
-    }
-  }
 
   Future<void> _cancelSubscriptions() async {
     _groupsSubscription?.cancel();

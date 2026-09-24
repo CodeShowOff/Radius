@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -59,7 +59,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     on<UpdateRandomGroup>(_onUpdateRandomGroup);
     on<WatchRandomGroupMembers>(_onWatchRandomGroupMembers);
     on<CheckMembershipStatus>(_onCheckMembershipStatus);
-    on<ClearRandomGroupChat>(_onClearRandomGroupChat);
+
     on<ResetRandomGroupState>(_onResetRandomGroupState);
     on<_ActiveGroupsReceived>(_onActiveGroupsReceived);
     on<_UserGroupsReceived>(_onUserGroupsReceived);
@@ -623,39 +623,7 @@ class RandomGroupBloc extends Bloc<RandomGroupEvent, RandomGroupState> {
     }
   }
 
-  Future<void> _onClearRandomGroupChat(
-    ClearRandomGroupChat event,
-    Emitter<RandomGroupState> emit,
-  ) async {
-    _logger.d('Clearing chat for group: ${event.groupId}');
 
-    // Don't set global status to loading â€” clear chat is a background operation
-    // that shouldn't block the group list page with a loading/error state.
-
-    final result = await _groupService.clearGroupMessages(
-      groupId: event.groupId,
-      adminUserId: event.adminUserId,
-    );
-
-    switch (result) {
-      case RandomGroupSuccess():
-        _logger.i('Cleared chat for group: ${event.groupId}');
-        emit(state.copyWith(
-          status: RandomGroupBlocStatus.loaded,
-          clearError: true,
-        ));
-
-      case RandomGroupFailure(message: final msg):
-        _logger.w('Failed to clear chat: $msg');
-        // Stay in loaded state â€” don't emit global error that breaks
-        // other pages (like My Random Groups list showing error screen).
-        // The error message is available for listeners to show a snackbar.
-        emit(state.copyWith(
-          status: RandomGroupBlocStatus.loaded,
-          errorMessage: msg,
-        ));
-    }
-  }
 
   void _onActiveGroupsReceived(
     _ActiveGroupsReceived event,

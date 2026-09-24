@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -371,31 +371,11 @@ class _NearbyGroupCard extends StatelessWidget {
     required this.group,
   });
 
-  String _formatTimestamp(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = DateTime(now.year, now.month, now.day - 1);
-    final messageDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
 
-    if (messageDate == today) {
-      // Today - show time
-      final hour = dateTime.hour;
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$displayHour:$minute $period';
-    } else if (messageDate == yesterday) {
-      return 'Yesterday';
-    } else {
-      // Older - show date
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final lastActivity = group.lastMessageAt ?? group.lastActiveAt;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -439,9 +419,9 @@ class _NearbyGroupCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   
                   // Last message or creator info
+                  // Creator info
                   Text(
-                    group.lastMessagePreview ?? 
-                    'by ${group.creatorDisplayName ?? 'Anonymous'} â€¢ ${group.memberCount} nearby',
+                    'by ${group.creatorDisplayName ?? 'Anonymous'} • ${group.memberCount} nearby',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -453,14 +433,6 @@ class _NearbyGroupCard extends StatelessWidget {
             ),
             
             const SizedBox(width: 8),
-            
-            // Right side - timestamp
-            Text(
-              _formatTimestamp(lastActivity),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
           ],
         ),
       ),

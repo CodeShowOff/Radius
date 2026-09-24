@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../domain/entities/location_group.dart';
 
@@ -104,7 +104,7 @@ class GroupCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            group.lastMessagePreview ?? 'No messages yet',
+                            '${group.memberCount} members',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -112,17 +112,6 @@ class GroupCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (group.lastActivityAt != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatTimestamp(group.lastActivityAt!),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: unreadCount > 0
-                                  ? const Color(0xFF25D366) // WhatsApp green
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ],
@@ -300,20 +289,18 @@ class GroupCard extends StatelessWidget {
 
                   const SizedBox(width: 16),
 
-                  if (group.lastActivityAt != null) ...[
-                    Icon(
-                      Icons.access_time,
-                      size: 16,
+                  Icon(
+                    Icons.access_time,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatLastActivity(group.createdAt),
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatLastActivity(group.lastActivityAt!),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ],
@@ -323,26 +310,6 @@ class GroupCard extends StatelessWidget {
     );
   }
 
-  String _formatTimestamp(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = DateTime(now.year, now.month, now.day - 1);
-    final messageDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
-
-    if (messageDate == today) {
-      // Today - show time
-      final hour = dateTime.hour;
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$displayHour:$minute $period';
-    } else if (messageDate == yesterday) {
-      return 'Yesterday';
-    } else {
-      // Older - show date
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
 
   String _formatLastActivity(DateTime time) {
     final now = DateTime.now();

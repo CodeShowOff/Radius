@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -182,7 +182,6 @@ class LocationGroupService {
         status: GroupStatus.active,
         memberCount: 1,
         createdAt: now,
-        lastActivityAt: now,
       );
 
       // Create admin membership
@@ -267,8 +266,6 @@ class LocationGroupService {
       // Apply sorting
       switch (sortBy) {
         case GroupSortOption.mostActive:
-          query = query.orderBy('lastActivityAt', descending: true);
-          break;
         case GroupSortOption.newest:
           query = query.orderBy('createdAt', descending: true);
           break;
@@ -317,8 +314,6 @@ class LocationGroupService {
     // Apply sorting
     switch (sortBy) {
       case GroupSortOption.mostActive:
-        query = query.orderBy('lastActivityAt', descending: true);
-        break;
       case GroupSortOption.newest:
         query = query.orderBy('createdAt', descending: true);
         break;
@@ -401,11 +396,9 @@ class LocationGroupService {
       // individual get calls. Reduces N round-trips to ceil(N/10).
       final groups = await _batchFetchGroups(groupIds);
 
-      // Sort by last activity
+      // Sort by creation time
       groups.sort((a, b) {
-        final aTime = a.lastActivityAt ?? a.createdAt;
-        final bTime = b.lastActivityAt ?? b.createdAt;
-        return bTime.compareTo(aTime);
+        return b.createdAt.compareTo(a.createdAt);
       });
 
       return groups;
@@ -478,9 +471,7 @@ class LocationGroupService {
             final groups = await _batchFetchGroups(groupIds);
 
             groups.sort((a, b) {
-              final aTime = a.lastActivityAt ?? a.createdAt;
-              final bTime = b.lastActivityAt ?? b.createdAt;
-              return bTime.compareTo(aTime);
+              return b.createdAt.compareTo(a.createdAt);
             });
 
             if (!isDisposed) {
@@ -693,19 +684,7 @@ class LocationGroupService {
         rethrow;
       }
 
-      // CRITICAL FIX: Send system message with delay to allow Firestore replication
-      // This prevents permission-denied errors when user tries to send first message
-      try {
-        final displayName = userName ?? 'Someone';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: '$displayName joined the group',
-          delayBeforeSend: true, // Wait for replication
-        );
-      } catch (e) {
-        _logger.w('Failed to send join system message', error: e);
-        // Don't fail the join operation if system message fails
-      }
+
 
       return GroupSuccess(membership);
     } on FirebaseException catch (e) {
@@ -964,17 +943,7 @@ class LocationGroupService {
       _logger
           .i('Admin $adminUserId approved $requestUserId for group $groupId');
 
-      // Send system message with delay for replication
-      try {
-        final displayName = requestData['userName'] as String? ?? 'Someone';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: '$displayName joined the group',
-          delayBeforeSend: true,
-        );
-      } catch (e) {
-        _logger.w('Failed to send join system message', error: e);
-      }
+
 
       return GroupSuccess(membership);
     } catch (e) {
@@ -1130,16 +1099,7 @@ class LocationGroupService {
         );
       }
 
-      // Send system message
-      try {
-        final displayName = membership.userName ?? 'Someone';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: '$displayName left the group',
-        );
-      } catch (e) {
-        _logger.w('Failed to send leave system message', error: e);
-      }
+
 
       return const GroupSuccess(null);
     } catch (e) {
@@ -1257,16 +1217,7 @@ class LocationGroupService {
 
       _logger.i('User $targetUserId promoted to admin in group $groupId');
 
-      // Send system message
-      try {
-        final displayName = targetMembership.userName ?? 'Someone';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: '$displayName was promoted to admin',
-        );
-      } catch (e) {
-        _logger.w('Failed to send promotion system message', error: e);
-      }
+
 
       return const GroupSuccess(null);
     } catch (e) {
@@ -1343,16 +1294,7 @@ class LocationGroupService {
 
       _logger.i('User $targetUserId demoted from admin in group $groupId');
 
-      // Send system message
-      try {
-        final displayName = targetMembership.userName ?? 'Someone';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: '$displayName was removed as admin',
-        );
-      } catch (e) {
-        _logger.w('Failed to send demotion system message', error: e);
-      }
+
 
       return const GroupSuccess(null);
     } catch (e) {
@@ -1436,17 +1378,7 @@ class LocationGroupService {
         );
       }
 
-      // Send system message
-      try {
-        final targetMembership = await _getMembership(groupId, targetUserId);
-        final displayName = targetMembership?.userName ?? 'A member';
-        await sendSystemMessage(
-          groupId: groupId,
-          text: ban ? '$displayName was banned' : '$displayName was removed',
-        );
-      } catch (e) {
-        _logger.w('Failed to send removal system message', error: e);
-      }
+
 
       return const GroupSuccess(null);
     } catch (e) {
@@ -1677,79 +1609,11 @@ class LocationGroupService {
     }
   }
 
-  /// Clears all messages in a group (admin only).
-  Future<GroupResult<void>> clearGroupMessages({
-    required String groupId,
-    required String adminUserId,
-  }) async {
-    try {
-      final callerMembership = await _getMembership(groupId, adminUserId);
-      if (callerMembership == null || !callerMembership.isAdmin) {
-        return const GroupFailure(
-          'Only admins can clear chat',
-          GroupErrorType.notAuthorized,
-        );
-      }
 
-      await _softDeleteGroupMessages(groupId);
-
-      await _groupsRef.doc(groupId).update({
-        'lastActivityAt': FieldValue.serverTimestamp(),
-        'lastMessagePreview': null,
-      });
-
-      return const GroupSuccess(null);
-    } catch (e) {
-      _logger.e('Error clearing group messages', error: e);
-      return const GroupFailure(
-        'Failed to clear chat',
-        GroupErrorType.unknown,
-      );
-    }
-  }
 
   // ==================== HELPER METHODS ====================
 
-  /// Sends a system message to the group (e.g., "X joined the group").
-  ///
-  /// IMPORTANT: Use delayBeforeSend=true when calling immediately after
-  /// membership changes to allow Firestore replication.
-  Future<void> sendSystemMessage({
-    required String groupId,
-    required String text,
-    bool delayBeforeSend = false,
-  }) async {
-    try {
-      // CRITICAL: Add delay if requested (e.g., after join to allow replication)
-      if (delayBeforeSend) {
-        _logger.d(
-            'Waiting 1s for Firestore replication before sending system message');
-        await Future.delayed(const Duration(milliseconds: 1000));
-      }
 
-      final messageData = {
-        'groupId': groupId,
-        'senderId': 'system',
-        'text': text,
-        'type': 'system',
-        'sentAt': FieldValue.serverTimestamp(),
-        'status': 'sent',
-        'isDeleted': false,
-      };
-
-      final batch = _firestore.batch();
-      final messageRef = _groupsRef.doc(groupId).collection('messages').doc();
-      batch.set(messageRef, messageData);
-      batch.update(_groupsRef.doc(groupId), {
-        'lastActivityAt': FieldValue.serverTimestamp(),
-        'lastMessagePreview': text,
-      });
-      await batch.commit();
-    } catch (e) {
-      _logger.e('Error sending system message', error: e);
-      // Don't rethrow - system messages are non-critical
-    }
-  }
 
   // ==================== RISK MITIGATION METHODS ====================
 
@@ -1908,18 +1772,7 @@ class LocationGroupService {
     return results.expand((list) => list).toList();
   }
 
-  /// Updates last activity timestamp for a group (called when messages are sent).
-  Future<void> updateLastActivity(
-      String groupId, String? messagePreview) async {
-    try {
-      await _groupsRef.doc(groupId).update({
-        'lastActivityAt': FieldValue.serverTimestamp(),
-        'lastMessagePreview': messagePreview,
-      });
-    } catch (e) {
-      _logger.w('Error updating last activity', error: e);
-    }
-  }
+
 
   Future<void> _deleteSubcollection(
     String groupId,
@@ -1947,32 +1800,5 @@ class LocationGroupService {
     }
   }
 
-  Future<void> _softDeleteGroupMessages(
-    String groupId, {
-    int batchSize = 450,
-  }) async {
-    try {
-      final collectionRef = _groupsRef.doc(groupId).collection('messages');
 
-      while (true) {
-        final snapshot = await collectionRef
-            .where('isDeleted', isEqualTo: false)
-            .limit(batchSize)
-            .get();
-
-        if (snapshot.docs.isEmpty) break;
-
-        final batch = _firestore.batch();
-        for (final doc in snapshot.docs) {
-          batch.update(doc.reference, const {'isDeleted': true});
-        }
-        await batch.commit();
-
-        if (snapshot.size < batchSize) break;
-      }
-    } catch (e) {
-      _logger.e('Error soft-deleting messages', error: e);
-      rethrow;
-    }
-  }
 }
