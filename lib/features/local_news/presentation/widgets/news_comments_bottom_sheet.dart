@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
@@ -28,6 +28,8 @@ class NewsCommentsBottomSheet extends StatefulWidget {
     required String currentUserName,
     String? currentUserPhotoUrl,
   }) {
+    final cubit = context.read<NewsInteractionCubit>();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -36,7 +38,7 @@ class NewsCommentsBottomSheet extends StatefulWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) => BlocProvider.value(
-        value: context.read<NewsInteractionCubit>(),
+        value: cubit,
         child: NewsCommentsBottomSheet(
           currentUserId: currentUserId,
           currentUserName: currentUserName,

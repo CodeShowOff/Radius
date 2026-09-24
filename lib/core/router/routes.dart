@@ -1,4 +1,4 @@
-﻿/// Centralized route paths for the application.
+/// Centralized route paths for the application.
 ///
 /// All route strings are defined here to avoid magic strings
 /// and enable easy refactoring.
@@ -69,7 +69,12 @@ abstract class Routes {
   static const String nearbyGroups = '/nearby-groups';
   static const String discoverNearbyGroups = '/nearby-groups/discover';
   static const String createNearbyGroup = '/nearby-groups/create';
+  static const String nearbyGroupDetail = '/nearby-groups/:groupId';
   static const String nearbyGroupChat = '/nearby-groups/:groupId/chat';
+
+  /// Helper to build a nearby group detail route with group ID.
+  static String nearbyGroupDetailWith(String groupId) =>
+      '/nearby-groups/$groupId';
 
   /// Helper to build a nearby group chat route with group ID.
   static String nearbyGroupChatWith(String groupId) =>

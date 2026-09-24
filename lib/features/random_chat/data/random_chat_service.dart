@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -202,7 +202,7 @@ class RandomChatService {
       }
 
       final jsonResponse = jsonDecode(response.body);
-      final data = jsonResponse['data'] ?? jsonResponse;
+      final data = jsonResponse['result'] ?? jsonResponse['data'] ?? jsonResponse;
       final suggestedIds = (data['suggestedIds'] as List<dynamic>?)
               ?.cast<String>() ??
           [];

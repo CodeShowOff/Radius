@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -30,6 +30,7 @@ import '../../features/nearby_groups/presentation/bloc/nearby_group_bloc.dart';
 import '../../features/nearby_groups/presentation/pages/create_nearby_group_page.dart';
 import '../../features/nearby_groups/presentation/pages/discover_nearby_groups_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_group_chat_page.dart';
+import '../../features/nearby_groups/presentation/pages/nearby_group_detail_page.dart';
 import '../../features/nearby_groups/presentation/pages/nearby_groups_page.dart';
 import '../../features/nearby_help/presentation/bloc/nearby_help_bloc.dart';
 import '../../features/nearby_help/presentation/pages/nearby_help_page.dart';
@@ -527,6 +528,19 @@ GoRouter get appRouter {
               value: getIt<NearbyGroupBloc>(),
               child: const CreateNearbyGroupPage(),
             ),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.nearbyGroupDetail,
+        name: 'nearbyGroupDetail',
+        builder: (context, state) {
+          final groupId = state.pathParameters['groupId']!;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: getIt<NearbyGroupBloc>()),
+            ],
+            child: NearbyGroupDetailPage(groupId: groupId),
           );
         },
       ),

@@ -318,7 +318,7 @@ class _NearbyGroupCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'by ${group.creatorDisplayName ?? 'Anonymous'} â€¢ ${group.memberCount} nearby',
+                      'by ${group.creatorDisplayName ?? 'Anonymous'} • ${group.memberCount} nearby',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

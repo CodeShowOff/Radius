@@ -1,4 +1,5 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -72,6 +73,22 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
             const Duration(seconds: 5),
             onTimeout: () => null,
           );
+          
+      // Fetch actual connection count
+      int actualConnectionCount = 0;
+      try {
+        final countQuery = await FirebaseFirestore.instance
+            .collection('connections')
+            .where('users', arrayContains: widget.otherUserId)
+            .where('status', isEqualTo: 'connected')
+            .count()
+            .get();
+        actualConnectionCount = countQuery.count ?? 0;
+      } catch (e) {
+        if (doc != null) {
+          actualConnectionCount = (doc['connectionCount'] as int?) ?? 0;
+        }
+      }
 
       Map<String, dynamic> normalized;
       if (doc == null) {
@@ -86,6 +103,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           'discoveryUsername': null,
           'isOnline': false,
           'lastSeen': null,
+          'connectionCount': actualConnectionCount,
         };
       } else {
         final displayName =
@@ -113,7 +131,7 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           'mood': mood,
           'gender': gender,
           'discoveryUsername': discoveryUsername,
-          'connectionCount': (doc['connectionCount'] as int?) ?? 0,
+          'connectionCount': actualConnectionCount,
         };
       }
 

@@ -164,7 +164,7 @@ class NewsPostService {
       }
 
       final jsonResponse = jsonDecode(responseBody);
-      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+      final rawData = (jsonResponse['result'] ?? jsonResponse['data']) as List<dynamic>? ?? [];
 
       return rawData.map((item) {
         final map = item as Map<String, dynamic>;
@@ -245,7 +245,7 @@ class NewsPostService {
       }
 
       final jsonResponse = jsonDecode(responseBody);
-      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+      final rawData = (jsonResponse['result'] ?? jsonResponse['data']) as List<dynamic>? ?? [];
 
       return rawData.map((item) {
         final map = item as Map<String, dynamic>;

@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 import '../../../../core/di/injection.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../../core/utils/chat_utils.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../data/connection_service.dart';
-import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 import '../bloc/suggested_connections_cubit.dart';
 import '../bloc/suggested_connections_state.dart';
@@ -159,24 +156,31 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
               ),
           ];
         },
-        body: ConversationsScreen(
-          currentUserId: currentUserId,
-          onConversationTap: (channel) {
-            final otherMember = channel.state?.members.firstWhere(
-              (m) => m.userId != currentUserId,
-              orElse: () => channel.state!.members.first,
-            );
+        body: MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: ConversationsScreen(
+            currentUserId: currentUserId,
+            onConversationTap: (channel) {
+              final otherMember = channel.state?.members.firstWhere(
+                (m) => m.userId != currentUserId,
+                orElse: () => channel.state!.members.first,
+              );
 
-            context.push(
-              Routes.chatWith(channel.id!),
-              extra: {
-                'currentUserId': currentUserId,
-                'otherUserId': otherMember?.userId ?? '',
-                'otherUserName': otherMember?.user?.name ?? 'Unknown',
-                'otherUserPhotoUrl': otherMember?.user?.image,
-              },
-            );
-          },
+              context.push(
+                Routes.chatWith(channel.id!),
+                extra: {
+                  'currentUserId': currentUserId,
+                  'otherUserId': otherMember?.userId ?? '',
+                  'otherUserName': otherMember?.user?.name ?? 'Unknown',
+                  'otherUserPhotoUrl': otherMember?.user?.image,
+                },
+              );
+            },
+          ),
+         ),
         ),
       ),
     );

@@ -11,6 +11,10 @@ class ReelPlayerCard extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onLikeTap;
   final VoidCallback? onCommentTap;
+  
+  final int? likeCount;
+  final int? commentCount;
+  final bool isLiked;
 
   const ReelPlayerCard({
     super.key,
@@ -19,6 +23,9 @@ class ReelPlayerCard extends StatefulWidget {
     this.onDelete,
     this.onLikeTap,
     this.onCommentTap,
+    this.likeCount,
+    this.commentCount,
+    this.isLiked = false,
   });
 
   @override
@@ -157,20 +164,21 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
 
           // Action Buttons
           Positioned(
-            bottom: 16,
+            bottom: 100,
             right: 8,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _ActionButton(
-                  icon: Icons.favorite,
-                  label: '${widget.post.likeCount}',
+                  icon: widget.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: widget.isLiked ? Colors.red : Colors.white,
+                  label: '${widget.likeCount ?? widget.post.likeCount}',
                   onTap: widget.onLikeTap,
                 ),
                 const SizedBox(height: 16),
                 _ActionButton(
                   icon: Icons.comment,
-                  label: '${widget.post.commentCount}',
+                  label: '${widget.commentCount ?? widget.post.commentCount}',
                   onTap: widget.onCommentTap,
                 ),
                 if (widget.isOwnPost)
@@ -194,9 +202,10 @@ class _ReelPlayerCardState extends State<ReelPlayerCard> {
 class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback? onTap;
 
-  const _ActionButton({required this.icon, required this.label, this.onTap});
+  const _ActionButton({required this.icon, required this.label, this.color = Colors.white, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +213,7 @@ class _ActionButton extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          Icon(icon, color: Colors.white, size: 32),
+          Icon(icon, color: color, size: 32),
           if (label.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),

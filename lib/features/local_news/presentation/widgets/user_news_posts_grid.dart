@@ -1,4 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -9,6 +9,7 @@ import '../../data/services/news_post_service.dart';
 import '../../domain/entities/news_post.dart';
 import '../../domain/repositories/i_news_interaction_repository.dart';
 import '../bloc/news_interaction_cubit.dart';
+import 'news_comments_bottom_sheet.dart';
 import 'news_post_card.dart';
 
 /// Grid view of a user's local news posts (Instagram-style thumbnails).
@@ -90,15 +91,35 @@ class _UserNewsPostsGridState extends State<UserNewsPostsGrid>
                       initialLikeCount: post.likeCount,
                       initialCommentCount: post.commentCount,
                     ),
-                  child: NewsPostCard(
-                    post: post,
-                    isOwnPost: isOwn,
-                    onDelete: isOwn
-                        ? () {
-                            Navigator.pop(dialogContext);
-                            _confirmDelete(context, post);
-                          }
-                        : null,
+                  child: Builder(
+                    builder: (cardContext) => NewsPostCard(
+                      post: post,
+                      isOwnPost: isOwn,
+                      onDelete: isOwn
+                          ? () {
+                              Navigator.pop(dialogContext);
+                              _confirmDelete(context, post);
+                            }
+                          : null,
+                      onLikeTap: () {
+                        if (authState is AuthAuthenticated) {
+                           cardContext.read<NewsInteractionCubit>().toggleLike(
+                             userName: authState.user.displayName ?? 'User',
+                             userPhotoUrl: authState.user.avatarUrl,
+                           );
+                        }
+                      },
+                      onCommentTap: () {
+                        if (authState is AuthAuthenticated) {
+                          NewsCommentsBottomSheet.show(
+                            context: cardContext,
+                            currentUserId: authState.user.id,
+                            currentUserName: authState.user.displayName ?? 'User',
+                            currentUserPhotoUrl: authState.user.avatarUrl,
+                          );
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),

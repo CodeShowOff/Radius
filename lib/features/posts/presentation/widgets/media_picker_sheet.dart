@@ -38,6 +38,8 @@ class MediaPickerSheet {
     }
 
     if (assets != null && assets.isNotEmpty) {
+      if (!context.mounted) return null;
+
       // Show loading overlay while extracting files
       showDialog(
         context: context,

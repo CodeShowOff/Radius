@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -727,13 +727,13 @@ class _RandomChatPageState extends State<RandomChatPage>
                       Icon(
                         Icons.check_circle,
                         size: 16,
-                        color: theme.colorScheme.primary,
+                        color: theme.colorScheme.onPrimaryContainer,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'Sent',
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.primary,
+                          color: theme.colorScheme.onPrimaryContainer,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -871,7 +871,7 @@ class _RandomChatPageState extends State<RandomChatPage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('â€¢', style: TextStyle(color: theme.colorScheme.primary)),
+          Text('•', style: TextStyle(color: theme.colorScheme.primary)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text, style: theme.textTheme.bodyMedium),

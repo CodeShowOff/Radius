@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import '../../../../core/constants/env.dart';
@@ -308,7 +308,7 @@ class PostService {
       }
 
       final jsonResponse = jsonDecode(responseBody);
-      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+      final rawData = (jsonResponse['result'] ?? jsonResponse['data']) as List<dynamic>? ?? [];
 
       return rawData.map((item) {
         final map = item as Map<String, dynamic>;

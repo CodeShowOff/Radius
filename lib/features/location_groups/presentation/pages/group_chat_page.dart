@@ -55,6 +55,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
         appBar: StreamChannelHeader(
           onImageTap: () => context.push(Routes.locationGroupDetailWith(widget.groupId)),
           onTitleTap: () => context.push(Routes.locationGroupDetailWith(widget.groupId)),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => context.push(Routes.locationGroupDetailWith(widget.groupId)),
+            ),
+          ],
         ),
         body: Column(
           children: [

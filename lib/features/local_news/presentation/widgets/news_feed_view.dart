@@ -10,6 +10,7 @@ import '../../domain/repositories/i_news_interaction_repository.dart';
 import '../bloc/news_feed_bloc.dart';
 import '../bloc/news_interaction_cubit.dart';
 import '../bloc/news_location_bloc.dart';
+import 'news_comments_bottom_sheet.dart';
 import 'news_post_card.dart';
 
 class NewsFeedView extends StatefulWidget {
@@ -32,9 +33,29 @@ class _NewsFeedViewState extends State<NewsFeedView> {
   @override
   void initState() {
     super.initState();
+    
+    // Sync initial state in case the bloc is already loaded when this tab is mounted
+    final currentState = context.read<NewsFeedBloc>().state;
+    if (currentState.status == NewsFeedStatus.loaded) {
+      _pagingController.value = isp.PagingState(
+        nextPageKey: currentState.hasMore ? currentState.posts.length : null,
+        itemList: currentState.posts,
+      );
+    } else if (currentState.status == NewsFeedStatus.error && currentState.posts.isEmpty) {
+      _pagingController.error = currentState.errorMessage ?? 'Error loading news feed';
+    }
+
     _pagingController.addPageRequestListener((pageKey) {
       if (pageKey > 0) {
         context.read<NewsFeedBloc>().add(const NewsFeedLoadMore());
+      } else if (currentState.status == NewsFeedStatus.initial || currentState.status == NewsFeedStatus.error) {
+        final loc = context.read<NewsLocationBloc>().state.location;
+        if (loc != null) {
+          context.read<NewsFeedBloc>().add(NewsFeedLoadRequested(
+            country: loc.country,
+            city: loc.city,
+          ));
+        }
       }
     });
   }
@@ -105,7 +126,14 @@ class _NewsFeedViewState extends State<NewsFeedView> {
                       }
                     },
                     onCommentTap: () {
-                       // Implement comments bottom sheet
+                      if (authState is AuthAuthenticated) {
+                        NewsCommentsBottomSheet.show(
+                          context: cardContext,
+                          currentUserId: authState.user.id,
+                          currentUserName: authState.user.displayName ?? 'User',
+                          currentUserPhotoUrl: authState.user.avatarUrl,
+                        );
+                      }
                     },
                   ),
                 ),

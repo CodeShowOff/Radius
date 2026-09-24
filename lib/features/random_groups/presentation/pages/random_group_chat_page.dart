@@ -56,6 +56,12 @@ class _RandomGroupChatPageState extends State<RandomGroupChatPage> {
         appBar: StreamChannelHeader(
           onImageTap: () => context.push(Routes.randomGroupDetailWith(widget.groupId)),
           onTitleTap: () => context.push(Routes.randomGroupDetailWith(widget.groupId)),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => context.push(Routes.randomGroupDetailWith(widget.groupId)),
+            ),
+          ],
         ),
         body: Column(
           children: [

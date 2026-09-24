@@ -10,6 +10,7 @@ import '../../domain/repositories/i_news_interaction_repository.dart';
 import '../bloc/reels_feed_bloc.dart';
 import '../bloc/news_interaction_cubit.dart';
 import '../bloc/news_location_bloc.dart';
+import 'news_comments_bottom_sheet.dart';
 import 'reel_player_card.dart';
 
 class ReelsFeedView extends StatefulWidget {
@@ -32,9 +33,30 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
   @override
   void initState() {
     super.initState();
+    
+    // Sync initial state in case the bloc is already loaded when this tab is mounted
+    final currentState = context.read<ReelsFeedBloc>().state;
+    if (currentState.status == ReelsFeedStatus.loaded) {
+      _pagingController.value = isp.PagingState(
+        nextPageKey: currentState.hasMore ? currentState.reels.length : null,
+        itemList: currentState.reels,
+      );
+    } else if (currentState.status == ReelsFeedStatus.error && currentState.reels.isEmpty) {
+      _pagingController.error = currentState.errorMessage ?? 'Error loading reels';
+    }
+
     _pagingController.addPageRequestListener((pageKey) {
       if (pageKey > 0) {
         context.read<ReelsFeedBloc>().add(const ReelsFeedLoadMore());
+      } else if (currentState.status == ReelsFeedStatus.initial || currentState.status == ReelsFeedStatus.error) {
+        // If it hasn't loaded yet (e.g. error on first load), retry
+        final loc = context.read<NewsLocationBloc>().state.location;
+        if (loc != null) {
+          context.read<ReelsFeedBloc>().add(ReelsFeedLoadRequested(
+            country: loc.country,
+            city: loc.city,
+          ));
+        }
       }
     });
   }
@@ -91,23 +113,37 @@ class _ReelsFeedViewState extends State<ReelsFeedView> {
                     initialCommentCount: post.commentCount,
                   ),
                 child: Builder(
-                  builder: (cardContext) => ReelPlayerCard(
-                    post: post,
-                    isOwnPost: isOwn,
-                    onDelete: isOwn ? () => widget.onConfirmDelete(context, post.id) : null,
-                    onLikeTap: () {
-                      if (authState is AuthAuthenticated) {
-                         cardContext.read<NewsInteractionCubit>().toggleLike(
-                           userName: authState.user.displayName ?? 'User',
-                           userPhotoUrl: authState.user.avatarUrl,
-                         );
+                  builder: (cardContext) => BlocBuilder<NewsInteractionCubit, NewsInteractionState>(
+                    builder: (context, interactionState) {
+                      return ReelPlayerCard(
+                        post: post,
+                        isOwnPost: isOwn,
+                        likeCount: interactionState.isLoaded ? interactionState.likeCount : post.likeCount,
+                        commentCount: interactionState.isLoaded ? interactionState.commentCount : post.commentCount,
+                        isLiked: interactionState.isLiked,
+                        onDelete: isOwn ? () => widget.onConfirmDelete(context, post.id) : null,
+                        onLikeTap: () {
+                          if (authState is AuthAuthenticated) {
+                             cardContext.read<NewsInteractionCubit>().toggleLike(
+                               userName: authState.user.displayName ?? 'User',
+                               userPhotoUrl: authState.user.avatarUrl,
+                             );
+                          }
+                        },
+                        onCommentTap: () {
+                          if (authState is AuthAuthenticated) {
+                            NewsCommentsBottomSheet.show(
+                          context: cardContext,
+                          currentUserId: authState.user.id,
+                          currentUserName: authState.user.displayName ?? 'User',
+                          currentUserPhotoUrl: authState.user.avatarUrl,
+                        );
                       }
                     },
-                    onCommentTap: () {
-                       // Implement comments bottom sheet
-                    },
-                  ),
+                  );
+                 },
                 ),
+               ),
               );
             },
             firstPageProgressIndicatorBuilder: (_) => const Center(child: CircularProgressIndicator()),

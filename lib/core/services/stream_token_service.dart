@@ -44,7 +44,8 @@ class StreamTokenService {
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        final token = body['data']?['token'] as String?;
+        final resultData = body['result'] ?? body['data'];
+        final token = resultData?['token'] as String?;
         if (token != null) {
           _logger.i('Successfully fetched Stream token.');
           return token;

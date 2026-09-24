@@ -288,7 +288,7 @@ class _MyActiveGroupCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Scanning â€¢ ${group.memberCount} nearby',
+                              'Scanning • ${group.memberCount} nearby',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: Colors.green,
                               ),

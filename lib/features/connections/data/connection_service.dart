@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import '../../../core/constants/env.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -456,7 +456,7 @@ class ConnectionService {
       }
 
       final jsonResponse = jsonDecode(responseBody);
-      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+      final rawData = (jsonResponse['result'] ?? jsonResponse['data']) as List<dynamic>? ?? [];
 
       return rawData.cast<Map<String, dynamic>>();
     } catch (e, stack) {

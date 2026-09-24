@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -476,7 +476,7 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text('â€¢ '),
+                                      const Text('• '),
                                       Expanded(child: Text(s)),
                                     ],
                                   ),
@@ -509,12 +509,12 @@ class _NearbyUsersScreenState extends State<NearbyUsersScreen>
                         children: [
                           Text('Tips', style: theme.textTheme.titleSmall),
                           const SizedBox(height: 8),
-                          const Text('â€¢ Make sure Bluetooth is turned on'),
-                          const Text('â€¢ Grant all Bluetooth permissions'),
+                          const Text('• Make sure Bluetooth is turned on'),
+                          const Text('• Grant all Bluetooth permissions'),
                           const Text(
-                              'â€¢ Disable battery optimization for this app'),
+                              '• Disable battery optimization for this app'),
                           const Text(
-                              'â€¢ Keep the app in foreground while scanning'),
+                              '• Keep the app in foreground while scanning'),
                         ],
                       ),
                     ),

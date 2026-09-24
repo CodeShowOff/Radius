@@ -40,6 +40,24 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       onChannelTap: (channel) {
         widget.onConversationTap(channel);
       },
+      itemBuilder: (context, channels, index, defaultWidget) {
+        final channel = channels[index];
+        return StreamChannelListTile(
+          channel: channel,
+          leading: StreamChannelAvatar(
+            channel: channel,
+            constraints: const BoxConstraints.tightFor(width: 56, height: 56),
+          ),
+          title: StreamChannelName(
+            channel: channel,
+            textStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          onTap: () => widget.onConversationTap(channel),
+        );
+      },
       loadingBuilder: (context) => const SizedBox.shrink(),
       emptyBuilder: (context) => Center(
         child: Padding(

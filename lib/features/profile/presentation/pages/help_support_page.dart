@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -666,7 +666,7 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'â€¢ ',
+                                    '• ',
                                     style: TextStyle(
                                       color: theme.colorScheme.onSurface,
                                     ),
@@ -704,10 +704,10 @@ class _BluetoothBatteryHelpPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'Try these quick checks:\n'
-                    'â€¢ Turn Bluetooth OFF then ON.\n'
-                    'â€¢ Ensure Location is not required (Radius uses Android 12+ Bluetooth permissions).\n'
-                    'â€¢ Keep the screen on and stay on the Nearby page during scanning.\n'
-                    'â€¢ Test with another phone using nRF Connect/LightBlue to confirm advertisements are visible.',
+                    '• Turn Bluetooth OFF then ON.\n'
+                    '• Ensure Location is not required (Radius uses Android 12+ Bluetooth permissions).\n'
+                    '• Keep the screen on and stay on the Nearby page during scanning.\n'
+                    '• Test with another phone using nRF Connect/LightBlue to confirm advertisements are visible.',
                     style: TextStyle(
                       color: theme.colorScheme.onSurface,
                     ),
@@ -807,11 +807,11 @@ class _FAQsPage extends StatelessWidget {
           _FAQItem(
             question: 'Is my data private and secure?',
             answer: 'Yes! Your privacy is our top priority:\n'
-                'â€¢ Your username is broadcast for discovery (visible to nearby Radius users)\n'
-                'â€¢ Only connected users can chat with you\n'
-                'â€¢ All chat messages are encrypted in transit\n'
-                'â€¢ You can disconnect from any user to disable chatting while preserving chat history\n'
-                'â€¢ We never sell your data to third parties',
+                '• Your username is broadcast for discovery (visible to nearby Radius users)\n'
+                '• Only connected users can chat with you\n'
+                '• All chat messages are encrypted in transit\n'
+                '• You can disconnect from any user to disable chatting while preserving chat history\n'
+                '• We never sell your data to third parties',
           ),
           _FAQItem(
             question: 'Do I need location permissions for Bluetooth?',
@@ -844,9 +844,9 @@ class _FAQsPage extends StatelessWidget {
             question: 'What if someone is bothering me?',
             answer:
                 'You can disconnect or block any user from their profile or chat. Blocked users cannot:\n'
-                'â€¢ Send you connection requests\n'
-                'â€¢ See you in their discovery\n'
-                'â€¢ Message you\n'
+                '• Send you connection requests\n'
+                '• See you in their discovery\n'
+                '• Message you\n'
                 'Disconnecting preserves chat history but disables messaging. '
                 'Go to Privacy Settings → Manage Blocked Users to view your blocked list.',
           ),
@@ -1078,11 +1078,11 @@ class _UserGuidePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'â€¢ Keep Bluetooth on for best results\n'
-                    'â€¢ Keep the app open while using Nearby\n'
-                    'â€¢ Upload a clear profile photo\n'
-                    'â€¢ Write an interesting bio\n'
-                    'â€¢ Be respectful to other users',
+                    '• Keep Bluetooth on for best results\n'
+                    '• Keep the app open while using Nearby\n'
+                    '• Upload a clear profile photo\n'
+                    '• Write an interesting bio\n'
+                    '• Be respectful to other users',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimaryContainer,
                       height: 1.6,
@@ -1224,71 +1224,71 @@ class _PrivacyPolicyPage extends StatelessWidget {
             title: '2. Information We Collect',
             content:
                 'We collect information that you provide directly to us:\n\n'
-                'â€¢ Account Information: Email address, display name, username, profile photo, and bio\n'
-                'â€¢ User-Generated Content: Messages, chat history, connection requests, and profile updates\n'
-                'â€¢ Device Information: Device model, operating system version, and app version (for bug reporting and support)\n\n'
+                '• Account Information: Email address, display name, username, profile photo, and bio\n'
+                '• User-Generated Content: Messages, chat history, connection requests, and profile updates\n'
+                '• Device Information: Device model, operating system version, and app version (for bug reporting and support)\n\n'
                 'Information collected automatically:\n\n'
-                'â€¢ Bluetooth Discovery: Your 7-character username is broadcast via Bluetooth Low Energy (BLE) for nearby user discovery\n'
-                'â€¢ Usage Data: App interactions, feature usage, and crash reports\n'
-                'â€¢ Authentication Data: Firebase Authentication tokens for secure login\n\n'
+                '• Bluetooth Discovery: Your 7-character username is broadcast via Bluetooth Low Energy (BLE) for nearby user discovery\n'
+                '• Usage Data: App interactions, feature usage, and crash reports\n'
+                '• Authentication Data: Firebase Authentication tokens for secure login\n\n'
                 'Device & Session Information (collected during login/registration for security purposes):\n\n'
-                'â€¢ Device Details: Brand, model, type (phone/tablet/emulator), screen resolution, screen density\n'
-                'â€¢ Operating System: Platform (Android/iOS), OS version, build number\n'
-                'â€¢ App Details: App version, build number, install source (Play Store/App Store/sideload)\n'
-                'â€¢ Network Information: IP address (IPv4/IPv6), network type (WiFi/cellular), carrier name\n'
-                'â€¢ Approximate Location: Country and city (derived from IP address, NOT GPS)\n'
-                'â€¢ ISP Information: Internet Service Provider name and ASN\n\n'
+                '• Device Details: Brand, model, type (phone/tablet/emulator), screen resolution, screen density\n'
+                '• Operating System: Platform (Android/iOS), OS version, build number\n'
+                '• App Details: App version, build number, install source (Play Store/App Store/sideload)\n'
+                '• Network Information: IP address (IPv4/IPv6), network type (WiFi/cellular), carrier name\n'
+                '• Approximate Location: Country and city (derived from IP address, NOT GPS)\n'
+                '• ISP Information: Internet Service Provider name and ASN\n\n'
                 'This device and session information is collected ONLY when you log in or register, and is used exclusively for:\n'
-                'â€¢ Detecting and preventing unauthorized account access\n'
-                'â€¢ Identifying suspicious login patterns and security threats\n'
-                'â€¢ Debugging technical issues and improving app stability\n'
-                'â€¢ Ensuring account security and fraud prevention\n\n'
+                '• Detecting and preventing unauthorized account access\n'
+                '• Identifying suspicious login patterns and security threats\n'
+                '• Debugging technical issues and improving app stability\n'
+                '• Ensuring account security and fraud prevention\n\n'
                 'We do NOT collect:\n\n'
-                'â€¢ GPS location or precise geographic coordinates\n'
-                'â€¢ Contact lists or phonebook data\n'
-                'â€¢ Microphone or camera access without your explicit permission\n'
-                'â€¢ Third-party social media data beyond Google Sign-In',
+                '• GPS location or precise geographic coordinates\n'
+                '• Contact lists or phonebook data\n'
+                '• Microphone or camera access without your explicit permission\n'
+                '• Third-party social media data beyond Google Sign-In',
           ),
           const _PolicySection(
             title: '3. How We Use Your Information',
             content: 'We use the collected information for:\n\n'
-                'â€¢ Providing Core Services: User discovery, connection management, and real-time messaging\n'
-                'â€¢ Account Management: Authentication, profile customization, and account recovery\n'
-                'â€¢ Communication: Sending notifications for connection requests and new messages\n'
-                'â€¢ Improvement: Analyzing usage patterns to enhance app features and performance\n'
-                'â€¢ Security: Detecting and preventing fraud, abuse, and technical issues\n'
-                'â€¢ Support: Responding to your inquiries and providing customer assistance',
+                '• Providing Core Services: User discovery, connection management, and real-time messaging\n'
+                '• Account Management: Authentication, profile customization, and account recovery\n'
+                '• Communication: Sending notifications for connection requests and new messages\n'
+                '• Improvement: Analyzing usage patterns to enhance app features and performance\n'
+                '• Security: Detecting and preventing fraud, abuse, and technical issues\n'
+                '• Support: Responding to your inquiries and providing customer assistance',
           ),
           const _PolicySection(
             title: '4. Bluetooth Discovery & Privacy',
             content:
                 'Radius uses Bluetooth Low Energy (BLE) for proximity-based user discovery:\n\n'
-                'â€¢ Your username is broadcast via BLE advertising when the app is open\n'
-                'â€¢ Other Radius users within approximately 30 meters can discover your username\n'
-                'â€¢ We do not collect or store your GPS location\n'
-                'â€¢ Discovery requires Bluetooth permissions but NOT location permissions (Android 12+)\n'
-                'â€¢ You can stop being discoverable by closing the app or adjusting privacy settings\n'
-                'â€¢ Only users you accept as connections can message you\n\n'
+                '• Your username is broadcast via BLE advertising when the app is open\n'
+                '• Other Radius users within approximately 30 meters can discover your username\n'
+                '• We do not collect or store your GPS location\n'
+                '• Discovery requires Bluetooth permissions but NOT location permissions (Android 12+)\n'
+                '• You can stop being discoverable by closing the app or adjusting privacy settings\n'
+                '• Only users you accept as connections can message you\n\n'
                 'Optional Background Advertising:\n\n'
-                'â€¢ You may choose to enable Background Advertising in Bluetooth Settings\n'
-                'â€¢ When enabled, your username continues to be broadcast via BLE even after the app is closed\n'
-                'â€¢ This is entirely optional and off by default â€” you are always in control\n'
-                'â€¢ Only your username is broadcast; no other personal data is shared\n'
-                'â€¢ You can disable it at any time from Bluetooth Settings\n\n'
+                '• You may choose to enable Background Advertising in Bluetooth Settings\n'
+                '• When enabled, your username continues to be broadcast via BLE even after the app is closed\n'
+                '• This is entirely optional and off by default â€” you are always in control\n'
+                '• Only your username is broadcast; no other personal data is shared\n'
+                '• You can disable it at any time from Bluetooth Settings\n\n'
                 'Bluetooth is also used for:\n\n'
-                'â€¢ Nearby Groups: Auto-detecting and adding members within Bluetooth range',
+                '• Nearby Groups: Auto-detecting and adding members within Bluetooth range',
           ),
           const _PolicySection(
             title: '5. Location-Based Features',
             content:
                 'Nearby Help is our only feature that uses GPS location data:\n\n'
-                'â€¢ Location access is requested ONLY when you use Nearby Help\n'
-                'â€¢ Your location is shared ONLY when you request help or accept a help request\n'
-                'â€¢ Helpers can navigate to your location only during an active help session\n'
-                'â€¢ You can set home and work locations (stored as coordinates) to receive alerts only when nearby\n'
-                'â€¢ Your approximate city is derived from IP address for help request radius calculations\n'
-                'â€¢ We do NOT track or store your location history\n'
-                'â€¢ Location permissions can be revoked anytime in device settings\n\n'
+                '• Location access is requested ONLY when you use Nearby Help\n'
+                '• Your location is shared ONLY when you request help or accept a help request\n'
+                '• Helpers can navigate to your location only during an active help session\n'
+                '• You can set home and work locations (stored as coordinates) to receive alerts only when nearby\n'
+                '• Your approximate city is derived from IP address for help request radius calculations\n'
+                '• We do NOT track or store your location history\n'
+                '• Location permissions can be revoked anytime in device settings\n\n'
                 'All other features (Nearby users, Nearby Groups, Random Groups) use only Bluetooth and do NOT access GPS.',
           ),
           const _PolicySection(
@@ -1296,42 +1296,42 @@ class _PrivacyPolicyPage extends StatelessWidget {
             content:
                 'Radius offers multiple group chat features with different privacy models:\n\n'
                 'Random Group Chatrooms:\n'
-                'â€¢ Internet-based groups visible to all Radius users\n'
-                'â€¢ Group names, topics, descriptions, and member counts are public\n'
-                'â€¢ Join requests and chat messages are visible only to approved members\n'
-                'â€¢ Admins can view pending join requests and member lists\n'
-                'â€¢ Chat history is stored until you leave the group or the group is deleted\n\n'
+                '• Internet-based groups visible to all Radius users\n'
+                '• Group names, topics, descriptions, and member counts are public\n'
+                '• Join requests and chat messages are visible only to approved members\n'
+                '• Admins can view pending join requests and member lists\n'
+                '• Chat history is stored until you leave the group or the group is deleted\n\n'
                 'Nearby Groups:\n'
-                'â€¢ Temporary Bluetooth-based groups for local gatherings\n'
-                'â€¢ Group information is visible to all users while active\n'
-                'â€¢ Members are auto-added based on Bluetooth proximity to creator\n'
-                'â€¢ Member presence data (RSSI signal strength, timestamps) is stored temporarily\n'
-                'â€¢ Groups and messages are deleted when the creator closes the group or after inactivity\n\n'
+                '• Temporary Bluetooth-based groups for local gatherings\n'
+                '• Group information is visible to all users while active\n'
+                '• Members are auto-added based on Bluetooth proximity to creator\n'
+                '• Member presence data (RSSI signal strength, timestamps) is stored temporarily\n'
+                '• Groups and messages are deleted when the creator closes the group or after inactivity\n\n'
                 'Location Groups:\n'
-                'â€¢ City/region-based community groups\n'
-                'â€¢ Join approval may be required depending on group settings\n'
-                'â€¢ Members can see other members\' profiles and chat history',
+                '• City/region-based community groups\n'
+                '• Join approval may be required depending on group settings\n'
+                '• Members can see other members\' profiles and chat history',
           ),
           const _PolicySection(
             title: '7. Nearby Help Data',
             content: 'When you use Nearby Help:\n\n'
-                'â€¢ Your GPS coordinates are collected when you request help\n'
-                'â€¢ Help requests include: your location, selected radius, topic, and contact info\n'
-                'â€¢ Nearby users within the radius receive push notifications with your name and topic\n'
-                'â€¢ Helpers who accept can see your real-time location for navigation\n'
-                'â€¢ Help session data (locations, chat messages, timestamps) is stored for 30 days\n'
-                'â€¢ You can mark requests as resolved or cancel them anytime\n'
-                'â€¢ Your saved home/work locations are stored as coordinates only\n\n'
+                '• Your GPS coordinates are collected when you request help\n'
+                '• Help requests include: your location, selected radius, topic, and contact info\n'
+                '• Nearby users within the radius receive push notifications with your name and topic\n'
+                '• Helpers who accept can see your real-time location for navigation\n'
+                '• Help session data (locations, chat messages, timestamps) is stored for 30 days\n'
+                '• You can mark requests as resolved or cancel them anytime\n'
+                '• Your saved home/work locations are stored as coordinates only\n\n'
                 'Location data is NOT used or accessed by any other app features.',
           ),
           const _PolicySection(
             title: '8. Data Storage & Security',
             content: 'We implement industry-standard security measures:\n\n'
-                'â€¢ All data is stored in Firebase Cloud Firestore with encryption at rest\n'
-                'â€¢ Messages are encrypted in transit using TLS/SSL protocols\n'
-                'â€¢ User passwords are hashed and never stored in plain text\n'
-                'â€¢ Access to user data is restricted to authorized personnel only\n'
-                'â€¢ Regular security audits and vulnerability assessments\n\n'
+                '• All data is stored in Firebase Cloud Firestore with encryption at rest\n'
+                '• Messages are encrypted in transit using TLS/SSL protocols\n'
+                '• User passwords are hashed and never stored in plain text\n'
+                '• Access to user data is restricted to authorized personnel only\n'
+                '• Regular security audits and vulnerability assessments\n\n'
                 'While we strive to protect your information, no method of transmission over the internet or electronic storage is 100% secure. '
                 'We cannot guarantee absolute security.',
           ),
@@ -1339,32 +1339,32 @@ class _PrivacyPolicyPage extends StatelessWidget {
             title: '9. Data Sharing & Disclosure',
             content:
                 'We do NOT sell your personal information to third parties. We may share your information only in the following circumstances:\n\n'
-                'â€¢ With Other Users: Your profile information (name, photo, bio) is visible to users you connect with\n'
-                'â€¢ Service Providers: Firebase (Google Cloud) for authentication, database, and cloud storage\n'
-                'â€¢ Legal Requirements: When required by law, court order, or government request\n'
-                'â€¢ Safety & Security: To prevent fraud, abuse, or threats to user safety\n'
-                'â€¢ Business Transfers: In the event of a merger, acquisition, or sale of assets (with notice)',
+                '• With Other Users: Your profile information (name, photo, bio) is visible to users you connect with\n'
+                '• Service Providers: Firebase (Google Cloud) for authentication, database, and cloud storage\n'
+                '• Legal Requirements: When required by law, court order, or government request\n'
+                '• Safety & Security: To prevent fraud, abuse, or threats to user safety\n'
+                '• Business Transfers: In the event of a merger, acquisition, or sale of assets (with notice)',
           ),
           const _PolicySection(
             title: '10. Your Privacy Rights',
             content: 'You have the following rights regarding your data:\n\n'
-                'â€¢ Access: Request a copy of your personal data\n'
-                'â€¢ Correction: Update or correct inaccurate information\n'
-                'â€¢ Deletion: Request deletion of your account and associated data\n'
-                'â€¢ Portability: Export your data in a machine-readable format\n'
-                'â€¢ Objection: Opt-out of certain data processing activities\n'
-                'â€¢ Revocation: Withdraw consent at any time\n\n'
+                '• Access: Request a copy of your personal data\n'
+                '• Correction: Update or correct inaccurate information\n'
+                '• Deletion: Request deletion of your account and associated data\n'
+                '• Portability: Export your data in a machine-readable format\n'
+                '• Objection: Opt-out of certain data processing activities\n'
+                '• Revocation: Withdraw consent at any time\n\n'
                 'To exercise these rights, contact us at support@radiusapp.tech. We will respond within 30 days.',
           ),
           const _PolicySection(
             title: '11. Data Retention',
             content:
                 'We retain your information for as long as your account is active or as needed to provide services:\n\n'
-                'â€¢ Account Data: Retained until you delete your account\n'
-                'â€¢ Chat Messages: Stored until manually deleted by you or your connection\n'
-                'â€¢ Device Session Logs: Retained for up to 90 days for security monitoring and debugging purposes\n'
-                'â€¢ Deleted Accounts: Data is permanently deleted within 90 days of account deletion\n'
-                'â€¢ Legal Requirements: Some data may be retained longer if required by law',
+                '• Account Data: Retained until you delete your account\n'
+                '• Chat Messages: Stored until manually deleted by you or your connection\n'
+                '• Device Session Logs: Retained for up to 90 days for security monitoring and debugging purposes\n'
+                '• Deleted Accounts: Data is permanently deleted within 90 days of account deletion\n'
+                '• Legal Requirements: Some data may be retained longer if required by law',
           ),
           const _PolicySection(
             title: '12. Children\'s Privacy',
@@ -1384,10 +1384,10 @@ class _PrivacyPolicyPage extends StatelessWidget {
             title: '14. Third-Party Services',
             content:
                 'Radius integrates with the following third-party services:\n\n'
-                'â€¢ Firebase Authentication: For secure login (Google Sign-In)\n'
-                'â€¢ Firebase Firestore: For data storage\n'
-                'â€¢ Firebase Cloud Storage: For profile photos and media\n'
-                'â€¢ Firebase Cloud Messaging: For push notifications\n\n'
+                '• Firebase Authentication: For secure login (Google Sign-In)\n'
+                '• Firebase Firestore: For data storage\n'
+                '• Firebase Cloud Storage: For profile photos and media\n'
+                '• Firebase Cloud Messaging: For push notifications\n\n'
                 'These services have their own privacy policies. We recommend reviewing Google\'s Privacy Policy at https://policies.google.com/privacy',
           ),
           const _PolicySection(
@@ -1466,29 +1466,29 @@ class _TermsOfServicePage extends StatelessWidget {
             title: '3. Account Registration',
             content:
                 'To use Radius, you must create an account by providing:\n\n'
-                'â€¢ A valid email address or Google account\n'
-                'â€¢ A unique display name and username\n'
-                'â€¢ A profile photo (optional)\n\n'
+                '• A valid email address or Google account\n'
+                '• A unique display name and username\n'
+                '• A profile photo (optional)\n\n'
                 'You are responsible for:\n\n'
-                'â€¢ Maintaining the confidentiality of your account credentials\n'
-                'â€¢ All activities that occur under your account\n'
-                'â€¢ Notifying us immediately of any unauthorized access\n\n'
+                '• Maintaining the confidentiality of your account credentials\n'
+                '• All activities that occur under your account\n'
+                '• Notifying us immediately of any unauthorized access\n\n'
                 'You agree to provide accurate, current, and complete information during registration and to update such information as necessary.',
           ),
           const _PolicySection(
             title: '4. Acceptable Use Policy',
             content:
                 'You agree to use Radius only for lawful purposes and in accordance with these Terms. You agree NOT to:\n\n'
-                'â€¢ Violate any applicable laws or regulations\n'
-                'â€¢ Harass, abuse, threaten, or intimidate other users\n'
-                'â€¢ Impersonate any person or entity or misrepresent your affiliation\n'
-                'â€¢ Post or transmit any content that is illegal, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, or otherwise objectionable\n'
-                'â€¢ Upload or share any content that infringes on intellectual property rights, privacy rights, or other rights of any party\n'
-                'â€¢ Transmit spam, unsolicited messages, or advertisements\n'
-                'â€¢ Attempt to gain unauthorized access to the App, other accounts, or computer systems\n'
-                'â€¢ Use the App for commercial purposes without our prior written consent\n'
-                'â€¢ Reverse engineer, decompile, or disassemble the App\n'
-                'â€¢ Use automated tools, bots, or scripts to access or interact with the App',
+                '• Violate any applicable laws or regulations\n'
+                '• Harass, abuse, threaten, or intimidate other users\n'
+                '• Impersonate any person or entity or misrepresent your affiliation\n'
+                '• Post or transmit any content that is illegal, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, or otherwise objectionable\n'
+                '• Upload or share any content that infringes on intellectual property rights, privacy rights, or other rights of any party\n'
+                '• Transmit spam, unsolicited messages, or advertisements\n'
+                '• Attempt to gain unauthorized access to the App, other accounts, or computer systems\n'
+                '• Use the App for commercial purposes without our prior written consent\n'
+                '• Reverse engineer, decompile, or disassemble the App\n'
+                '• Use automated tools, bots, or scripts to access or interact with the App',
           ),
           const _PolicySection(
             title: '5. User-Generated Content',
@@ -1496,25 +1496,25 @@ class _TermsOfServicePage extends StatelessWidget {
                 'You retain ownership of any content you create, post, or share through Radius ("User Content"). '
                 'By posting User Content, you grant us a worldwide, non-exclusive, royalty-free, transferable license to use, reproduce, modify, display, and distribute your User Content solely for the purpose of operating and improving the App.\n\n'
                 'You represent and warrant that:\n\n'
-                'â€¢ You own or have the necessary rights to your User Content\n'
-                'â€¢ Your User Content does not violate these Terms or any applicable laws\n'
-                'â€¢ Your User Content does not infringe on the rights of any third party\n\n'
+                '• You own or have the necessary rights to your User Content\n'
+                '• Your User Content does not violate these Terms or any applicable laws\n'
+                '• Your User Content does not infringe on the rights of any third party\n\n'
                 'We reserve the right to remove any User Content that violates these Terms or is otherwise objectionable, without prior notice.',
           ),
           const _PolicySection(
             title: '6. Bluetooth Discovery & Proximity Features',
             content:
                 'Radius uses Bluetooth Low Energy (BLE) for proximity-based user discovery:\n\n'
-                'â€¢ Your username is broadcast via BLE when the app is open, making you discoverable to nearby users\n'
-                'â€¢ By default, Bluetooth advertising runs while the app is in the foreground or recent apps\n'
-                'â€¢ You may optionally enable Background Advertising to stay discoverable after closing the app â€” this is off by default and fully under your control\n'
-                'â€¢ Scanning for nearby users runs for 10 seconds when you tap the "Scan" button\n'
-                'â€¢ We do not collect or track your GPS location\n'
-                'â€¢ You can control your discoverability by closing the app, disabling Background Advertising, or adjusting privacy settings\n\n'
+                '• Your username is broadcast via BLE when the app is open, making you discoverable to nearby users\n'
+                '• By default, Bluetooth advertising runs while the app is in the foreground or recent apps\n'
+                '• You may optionally enable Background Advertising to stay discoverable after closing the app â€” this is off by default and fully under your control\n'
+                '• Scanning for nearby users runs for 10 seconds when you tap the "Scan" button\n'
+                '• We do not collect or track your GPS location\n'
+                '• You can control your discoverability by closing the app, disabling Background Advertising, or adjusting privacy settings\n\n'
                 'You acknowledge and agree that:\n\n'
-                'â€¢ Bluetooth discovery is inherently proximity-based and may reveal your general location to nearby users\n'
-                'â€¢ We are not responsible for how other users use the proximity information\n'
-                'â€¢ Discovery functionality may vary based on device capabilities and environmental factors',
+                '• Bluetooth discovery is inherently proximity-based and may reveal your general location to nearby users\n'
+                '• We are not responsible for how other users use the proximity information\n'
+                '• Discovery functionality may vary based on device capabilities and environmental factors',
           ),
           const _PolicySection(
             title: '7. Privacy & Data Protection',
@@ -1527,53 +1527,53 @@ class _TermsOfServicePage extends StatelessWidget {
             title: '8. Connections & Messaging',
             content:
                 'Radius allows you to connect with nearby users and exchange messages:\n\n'
-                'â€¢ You can send connection requests to other users\n'
-                'â€¢ Other users can accept or decline your requests\n'
-                'â€¢ Only accepted connections can exchange messages\n'
-                'â€¢ You can disconnect from or block any user at any time\n'
-                'â€¢ Blocked users cannot send you connection requests or messages\n\n'
+                '• You can send connection requests to other users\n'
+                '• Other users can accept or decline your requests\n'
+                '• Only accepted connections can exchange messages\n'
+                '• You can disconnect from or block any user at any time\n'
+                '• Blocked users cannot send you connection requests or messages\n\n'
                 'We do not monitor the content of private messages between users. However, we may review reported content to enforce these Terms and take appropriate action against users who violate our policies.',
           ),
           const _PolicySection(
             title: '9. Group Features',
             content: 'Radius offers multiple group chat features:\n\n'
                 'Random Group Chatrooms:\n'
-                'â€¢ You can create or request to join internet-based groups\n'
-                'â€¢ Group admins review and approve/reject join requests\n'
-                'â€¢ Admins can remove members and manage group settings\n'
-                'â€¢ You agree not to create groups for illegal or harmful purposes\n'
-                'â€¢ Inappropriate group names, descriptions, or content may be removed\n\n'
+                '• You can create or request to join internet-based groups\n'
+                '• Group admins review and approve/reject join requests\n'
+                '• Admins can remove members and manage group settings\n'
+                '• You agree not to create groups for illegal or harmful purposes\n'
+                '• Inappropriate group names, descriptions, or content may be removed\n\n'
                 'Nearby Groups:\n'
-                'â€¢ Create temporary Bluetooth-based groups for local gatherings\n'
-                'â€¢ Your device automatically adds nearby users to the group\n'
-                'â€¢ Members are auto-removed when out of Bluetooth range\n'
-                'â€¢ Only the creator can close the group\n'
-                'â€¢ Groups expire after 30 minutes or when creator stops scanning\n\n'
+                '• Create temporary Bluetooth-based groups for local gatherings\n'
+                '• Your device automatically adds nearby users to the group\n'
+                '• Members are auto-removed when out of Bluetooth range\n'
+                '• Only the creator can close the group\n'
+                '• Groups expire after 30 minutes or when creator stops scanning\n\n'
                 'Location Groups:\n'
-                'â€¢ Community groups organized by city or region\n'
-                'â€¢ May require admin approval to join\n'
-                'â€¢ Subject to additional community guidelines set by admins',
+                '• Community groups organized by city or region\n'
+                '• May require admin approval to join\n'
+                '• Subject to additional community guidelines set by admins',
           ),
           const _PolicySection(
             title: '10. Nearby Help Feature',
             content:
                 'Nearby Help allows you to request or provide assistance:\n\n'
                 'When requesting help:\n'
-                'â€¢ You must allow location access to use this feature\n'
-                'â€¢ Your real-time location is shared with users who accept your request\n'
-                'â€¢ You agree to use this feature only for legitimate help requests\n'
-                'â€¢ False, frivolous, or inappropriate help requests are prohibited\n'
-                'â€¢ You can cancel requests at any time\n\n'
+                '• You must allow location access to use this feature\n'
+                '• Your real-time location is shared with users who accept your request\n'
+                '• You agree to use this feature only for legitimate help requests\n'
+                '• False, frivolous, or inappropriate help requests are prohibited\n'
+                '• You can cancel requests at any time\n\n'
                 'When providing help:\n'
-                'â€¢ You choose whether to accept or decline help requests\n'
-                'â€¢ You can navigate to the requester\'s location using in-app directions\n'
-                'â€¢ You agree to provide help in good faith and with genuine intent\n'
-                'â€¢ You can end help sessions at any time if you feel unsafe\n\n'
+                '• You choose whether to accept or decline help requests\n'
+                '• You can navigate to the requester\'s location using in-app directions\n'
+                '• You agree to provide help in good faith and with genuine intent\n'
+                '• You can end help sessions at any time if you feel unsafe\n\n'
                 'Important:\n'
-                'â€¢ Always prioritize your personal safety\n'
-                'â€¢ Meet in public places when possible\n'
-                'â€¢ We are not responsible for interactions between users\n'
-                'â€¢ Report any misuse or safety concerns immediately',
+                '• Always prioritize your personal safety\n'
+                '• Meet in public places when possible\n'
+                '• We are not responsible for interactions between users\n'
+                '• Report any misuse or safety concerns immediately',
           ),
           const _PolicySection(
             title: '11. Intellectual Property Rights',
@@ -1581,35 +1581,35 @@ class _TermsOfServicePage extends StatelessWidget {
                 'The App, including its design, features, functionality, graphics, logos, and underlying code, is owned by CodeShowOff and is protected by copyright, trademark, and other intellectual property laws. '
                 'You are granted a limited, non-exclusive, non-transferable, revocable license to use the App for personal, non-commercial purposes.\n\n'
                 'You may not:\n\n'
-                'â€¢ Copy, modify, distribute, sell, or lease any part of the App\n'
-                'â€¢ Reverse engineer or attempt to extract the source code of the App\n'
-                'â€¢ Remove or alter any copyright, trademark, or proprietary notices',
+                '• Copy, modify, distribute, sell, or lease any part of the App\n'
+                '• Reverse engineer or attempt to extract the source code of the App\n'
+                '• Remove or alter any copyright, trademark, or proprietary notices',
           ),
           const _PolicySection(
             title: '12. Prohibited Activities',
             content:
                 'You agree not to engage in any of the following prohibited activities:\n\n'
-                'â€¢ Using the App for any illegal or unauthorized purpose\n'
-                'â€¢ Attempting to interfere with, compromise, or disrupt the App or its servers\n'
-                'â€¢ Collecting or harvesting information about other users without their consent\n'
-                'â€¢ Creating multiple accounts to evade bans or restrictions\n'
-                'â€¢ Using the App to send spam, phishing attempts, or malicious software\n'
-                'â€¢ Engaging in any form of harassment, stalking, or threatening behavior\n'
-                'â€¢ Posting or distributing sexually explicit, violent, or otherwise inappropriate content\n'
-                'â€¢ Impersonating or falsely representing affiliation with any person or entity',
+                '• Using the App for any illegal or unauthorized purpose\n'
+                '• Attempting to interfere with, compromise, or disrupt the App or its servers\n'
+                '• Collecting or harvesting information about other users without their consent\n'
+                '• Creating multiple accounts to evade bans or restrictions\n'
+                '• Using the App to send spam, phishing attempts, or malicious software\n'
+                '• Engaging in any form of harassment, stalking, or threatening behavior\n'
+                '• Posting or distributing sexually explicit, violent, or otherwise inappropriate content\n'
+                '• Impersonating or falsely representing affiliation with any person or entity',
           ),
           const _PolicySection(
             title: '13. Account Suspension & Termination',
             content:
                 'We reserve the right to suspend or terminate your account at any time, without prior notice, for:\n\n'
-                'â€¢ Violation of these Terms\n'
-                'â€¢ Fraudulent, abusive, or illegal activity\n'
-                'â€¢ Extended periods of inactivity\n'
-                'â€¢ At our sole discretion if we believe it is in the best interest of the App or other users\n\n'
+                '• Violation of these Terms\n'
+                '• Fraudulent, abusive, or illegal activity\n'
+                '• Extended periods of inactivity\n'
+                '• At our sole discretion if we believe it is in the best interest of the App or other users\n\n'
                 'Upon termination:\n\n'
-                'â€¢ Your access to the App will be immediately revoked\n'
-                'â€¢ Your User Content may be deleted\n'
-                'â€¢ You may request deletion of your personal data as outlined in our Privacy Policy\n\n'
+                '• Your access to the App will be immediately revoked\n'
+                '• Your User Content may be deleted\n'
+                '• You may request deletion of your personal data as outlined in our Privacy Policy\n\n'
                 'You may also delete your account at any time through the App settings. Account deletion is permanent and cannot be undone.',
           ),
           const _PolicySection(
@@ -1617,30 +1617,30 @@ class _TermsOfServicePage extends StatelessWidget {
             content:
                 'THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.\n\n'
                 'We do not warrant that:\n\n'
-                'â€¢ The App will be uninterrupted, secure, or error-free\n'
-                'â€¢ The results obtained from using the App will be accurate or reliable\n'
-                'â€¢ Any errors or defects in the App will be corrected\n\n'
+                '• The App will be uninterrupted, secure, or error-free\n'
+                '• The results obtained from using the App will be accurate or reliable\n'
+                '• Any errors or defects in the App will be corrected\n\n'
                 'You use the App at your own risk. We are not responsible for any damage to your device, loss of data, or any other harm resulting from your use of the App.',
           ),
           const _PolicySection(
             title: '15. Limitation of Liability',
             content:
                 'TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, CODESHOWOFF SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO:\n\n'
-                'â€¢ Loss of profits, data, or goodwill\n'
-                'â€¢ Service interruptions or security breaches\n'
-                'â€¢ Unauthorized access to your account or User Content\n'
-                'â€¢ Interactions with other users (online or offline)\n'
-                'â€¢ Any damages arising from your use or inability to use the App\n\n'
+                '• Loss of profits, data, or goodwill\n'
+                '• Service interruptions or security breaches\n'
+                '• Unauthorized access to your account or User Content\n'
+                '• Interactions with other users (online or offline)\n'
+                '• Any damages arising from your use or inability to use the App\n\n'
                 'OUR TOTAL LIABILITY TO YOU FOR ANY CLAIMS ARISING FROM YOUR USE OF THE APP SHALL NOT EXCEED THE AMOUNT YOU PAID TO US IN THE PAST 12 MONTHS (WHICH IS CURRENTLY \$0).',
           ),
           const _PolicySection(
             title: '16. Indemnification',
             content:
                 'You agree to indemnify, defend, and hold harmless CodeShowOff, its affiliates, officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, costs, or expenses (including reasonable attorneys\' fees) arising out of or in connection with:\n\n'
-                'â€¢ Your use of the App\n'
-                'â€¢ Your violation of these Terms\n'
-                'â€¢ Your violation of any rights of another person or entity\n'
-                'â€¢ Your User Content',
+                '• Your use of the App\n'
+                '• Your violation of these Terms\n'
+                '• Your violation of any rights of another person or entity\n'
+                '• Your User Content',
           ),
           const _PolicySection(
             title: '17. Dispute Resolution',
@@ -1655,9 +1655,9 @@ class _TermsOfServicePage extends StatelessWidget {
             title: '18. Changes to Terms',
             content:
                 'We reserve the right to modify these Terms at any time. We will notify you of material changes by:\n\n'
-                'â€¢ Posting an updated version in the App\n'
-                'â€¢ Updating the "Last Updated" date\n'
-                'â€¢ Sending you a notification (email or in-app)\n\n'
+                '• Posting an updated version in the App\n'
+                '• Updating the "Last Updated" date\n'
+                '• Sending you a notification (email or in-app)\n\n'
                 'Your continued use of the App after changes constitutes your acceptance of the revised Terms. If you do not agree to the updated Terms, you must stop using the App and delete your account.',
           ),
           const _PolicySection(

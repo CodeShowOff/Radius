@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -325,13 +325,13 @@ class _HelperNavigationPageState extends State<HelperNavigationPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('â€¢ Tap "Navigate" to open maps with directions'),
+            Text('• Tap "Navigate" to open maps with directions'),
             SizedBox(height: 8),
-            Text('â€¢ Mark as "On The Way" to notify the seeker'),
+            Text('• Mark as "On The Way" to notify the seeker'),
             SizedBox(height: 8),
-            Text('â€¢ The seeker will mark the request as completed'),
+            Text('• The seeker will mark the request as completed'),
             SizedBox(height: 8),
-            Text('â€¢ The seeker can see your status in real-time'),
+            Text('• The seeker can see your status in real-time'),
           ],
         ),
         actions: [

@@ -3701,12 +3701,12 @@ export const getTimelineFeed = onCall(
       if (useFallback) {
         // Fetch user's connections for fallback timeline
         const connSnapshot = await db.collection("connections")
-          .where("participants", "array-contains", userId)
+          .where("users", "array-contains", userId)
           .get();
           
         const connectionIds = [userId]; // Include own posts
         connSnapshot.docs.forEach(doc => {
-          const p = doc.data().participants;
+          const p = doc.data().users;
           if (p) {
             const otherId = p.find((id: string) => id !== userId);
             if (otherId) connectionIds.push(otherId);

@@ -39,7 +39,6 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
   String? _currentGroupId;
   String? _currentCreatorId;
   bool _isScanningPhase = false;
-  DateTime? _lastFirestoreUpdate;
 
   /// Interval for sending heartbeat updates (keep group alive)
   static const Duration heartbeatInterval = Duration(seconds: 5);
@@ -282,6 +281,8 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _heartbeatTimer = null;
     _scanCycleTimer?.cancel();
     _scanCycleTimer = null;
+    _firestoreUpdateTimer?.cancel();
+    _firestoreUpdateTimer = null;
     _isScanningPhase = false;
 
     await _proximityService.stopScan();
@@ -485,26 +486,27 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     emit(state.copyWith(groupMembers: event.members));
   }
 
+  Timer? _firestoreUpdateTimer;
+
   Future<void> _onNearbyUsersDetected(
     _NearbyUsersDetected event,
     Emitter<NearbyGroupState> emit,
   ) async {
     if (_currentGroupId == null || _currentCreatorId == null) return;
 
-    final now = DateTime.now();
-    if (_lastFirestoreUpdate != null && now.difference(_lastFirestoreUpdate!).inSeconds < 5) {
-      return; // Rate limit Firestore updates
-    }
-    _lastFirestoreUpdate = now;
-
     _logger.t('Detected ${event.users.length} nearby users for group');
 
-    // Update members in the database
-    await _groupService.updateNearbyMembers(
-      groupId: _currentGroupId!,
-      creatorId: _currentCreatorId!,
-      nearbyUsers: event.users,
-    );
+    // Debounce Firestore updates to prevent spamming while ensuring we don't drop the latest discovered users
+    _firestoreUpdateTimer?.cancel();
+    _firestoreUpdateTimer = Timer(const Duration(seconds: 2), () async {
+      if (_currentGroupId == null || _currentCreatorId == null) return;
+      
+      await _groupService.updateNearbyMembers(
+        groupId: _currentGroupId!,
+        creatorId: _currentCreatorId!,
+        nearbyUsers: event.users,
+      );
+    });
   }
 
   void _onNearbyGroupStreamError(
@@ -563,6 +565,8 @@ class NearbyGroupBloc extends Bloc<NearbyGroupEvent, NearbyGroupState> {
     _heartbeatTimer = null;
     _scanCycleTimer?.cancel();
     _scanCycleTimer = null;
+    _firestoreUpdateTimer?.cancel();
+    _firestoreUpdateTimer = null;
 
     // Cancel stream subscriptions (fire-and-forget â€” don't await .cancel()
     // because Firestore/BLE native cleanup can hang indefinitely).
