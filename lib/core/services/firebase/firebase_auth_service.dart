@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart' as firebase;
+import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter/services.dart';
@@ -123,9 +123,9 @@ class FirebaseAuthService {
       if (!_isInitialized) {
         await _googleSignIn.initialize(
           // Required for google_sign_in 7.x on Android
-          // This is the web OAuth client ID from google-services.json
+          // Required for google_sign_in 7.x on Android if you need a server auth code
           serverClientId:
-              '486551872927-5d3eojdo88vsetpsob0osu26lm6m1ue8.apps.googleusercontent.com',
+              '1031419504649-rekahpkj80pe3qrk6abqr0rikp6n437j.apps.googleusercontent.com',
         );
         _isInitialized = true;
       }
