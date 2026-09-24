@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'dart:ui';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../connections/presentation/bloc/connection_bloc.dart';
@@ -83,23 +84,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
           backgroundColor: theme.colorScheme.surface,
           appBar: AppBar(
             elevation: 0,
+            scrolledUnderElevation: 0,
             backgroundColor: theme.colorScheme.surface,
             leading: IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => context.pop(),
             ),
-            title: const Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('New Post', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
             actions: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 0,
+                    backgroundColor: state.canSubmit && !isBusy ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest,
+                    foregroundColor: state.canSubmit && !isBusy ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                   ),
                   onPressed: state.canSubmit && !isBusy ? () => context.read<CreatePostBloc>().add(const CreatePostSubmitted()) : null,
                   child: isBusy 
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onSurfaceVariant))
                       : const Text('Share', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               )
@@ -116,16 +121,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: CircularProgressIndicator(color: theme.colorScheme.primary),
+          ),
+          const SizedBox(height: 32),
           Text(
-            state.status == CreatePostStatus.optimizing ? 'Optimizing Media...' : 'Uploading Post...',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            state.status == CreatePostStatus.optimizing ? 'Optimizing Media...' : 'Publishing Post...',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            child: LinearProgressIndicator(value: state.uploadProgress, borderRadius: BorderRadius.circular(4)),
+            padding: const EdgeInsets.symmetric(horizontal: 64),
+            child: LinearProgressIndicator(
+              value: state.uploadProgress, 
+              borderRadius: BorderRadius.circular(8),
+              minHeight: 6,
+            ),
           )
         ],
       ),
@@ -133,87 +149,107 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Widget _buildEditor(CreatePostState state, ThemeData theme) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Author Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-                  child: const Icon(Icons.person, color: Colors.grey), // Fallback if no cached avatar
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // Author Header
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                     children: [
-                      Text('You', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      PostVisibilitySelector(
-                        visibility: state.visibility,
-                        onChanged: (v) => context.read<CreatePostBloc>().add(CreatePostVisibilityChanged(v)),
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        child: const Icon(Icons.person, color: Colors.grey),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('You', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            PostVisibilitySelector(
+                              visibility: state.visibility,
+                              onChanged: (v) => context.read<CreatePostBloc>().add(CreatePostVisibilityChanged(v)),
+                            ),
+                          ],
+                        ),
+                      )
                     ],
                   ),
-                )
+                ),
+
+                // Caption Input
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _textController,
+                    maxLines: null,
+                    maxLength: 2000,
+                    style: theme.textTheme.bodyLarge?.copyWith(fontSize: 18),
+                    decoration: InputDecoration(
+                      hintText: "What's on your mind?",
+                      hintStyle: TextStyle(color: theme.colorScheme.outline, fontSize: 18),
+                      border: InputBorder.none,
+                      counterText: '',
+                    ),
+                    onChanged: (value) => context.read<CreatePostBloc>().add(CreatePostTextChanged(value)),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Premium Media Carousel
+                if (state.selectedMedia.isNotEmpty)
+                  _buildMediaCarousel(state, theme),
+
+                const SizedBox(height: 32),
               ],
             ),
           ),
-
-          // Caption Input
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _textController,
-              maxLines: null,
-              maxLength: 2000,
-              style: theme.textTheme.bodyLarge?.copyWith(fontSize: 18),
-              decoration: InputDecoration(
-                hintText: "Write a caption...",
-                hintStyle: TextStyle(color: theme.colorScheme.outline, fontSize: 18),
-                border: InputBorder.none,
-                counterText: '',
+        ),
+        
+        // Bottom Action Bar
+        Container(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 12, 
+            bottom: MediaQuery.of(context).padding.bottom + 12
+          ),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1))),
+          ),
+          child: Row(
+            children: [
+              Text('Add to your post', style: TextStyle(fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant)),
+              const Spacer(),
+              if (state.canAddMedia)
+                IconButton.filledTonal(
+                  icon: const Icon(Icons.photo_library_rounded),
+                  onPressed: () => _addMedia(state),
+                  tooltip: 'Add Photos/Videos',
+                ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                icon: const Icon(Icons.location_on_rounded),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location feature coming soon'))),
+                tooltip: 'Check in',
               ),
-              onChanged: (value) => context.read<CreatePostBloc>().add(CreatePostTextChanged(value)),
-            ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                icon: const Icon(Icons.person_add_rounded),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tagging feature coming soon'))),
+                tooltip: 'Tag people',
+              ),
+            ],
           ),
-
-          const SizedBox(height: 16),
-
-          // Premium Media Carousel
-          if (state.selectedMedia.isNotEmpty)
-            _buildMediaCarousel(state, theme),
-
-          const SizedBox(height: 16),
-
-          // Premium Action Menu
-          const Divider(height: 1),
-          if (state.canAddMedia)
-            ListTile(
-              leading: Icon(Icons.photo_library_outlined, color: theme.colorScheme.primary, size: 28),
-              title: const Text('Add Photos/Video', style: TextStyle(fontWeight: FontWeight.w500)),
-              onTap: () => _addMedia(state),
-            ),
-          ListTile(
-            leading: Icon(Icons.location_on_outlined, color: theme.colorScheme.primary, size: 28),
-            title: const Text('Add Location', style: TextStyle(fontWeight: FontWeight.w500)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location feature coming soon'))),
-          ),
-          ListTile(
-            leading: Icon(Icons.person_add_outlined, color: theme.colorScheme.primary, size: 28),
-            title: const Text('Tag People', style: TextStyle(fontWeight: FontWeight.w500)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tagging feature coming soon'))),
-          ),
-          const Divider(height: 1),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -239,12 +275,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       Positioned(
                         top: 16,
                         right: 16,
-                        child: GestureDetector(
-                          onTap: () => context.read<CreatePostBloc>().add(CreatePostMediaRemoved(index)),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 20),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: GestureDetector(
+                              onTap: () => context.read<CreatePostBloc>().add(CreatePostMediaRemoved(index)),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), shape: BoxShape.circle),
+                                child: const Icon(Icons.close, color: Colors.white, size: 20),
+                              ),
+                            ),
                           ),
                         ),
                       )
@@ -255,14 +297,24 @@ class _CreatePostPageState extends State<CreatePostPage> {
               if (state.selectedMedia.length > 1)
                 Positioned(
                   bottom: 16,
-                  child: SmoothPageIndicator(
-                    controller: _pageController,
-                    count: state.selectedMedia.length,
-                    effect: ScrollingDotsEffect(
-                      activeDotColor: theme.colorScheme.primary,
-                      dotColor: Colors.white54,
-                      dotHeight: 8,
-                      dotWidth: 8,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(12)),
+                        child: SmoothPageIndicator(
+                          controller: _pageController,
+                          count: state.selectedMedia.length,
+                          effect: ScrollingDotsEffect(
+                            activeDotColor: Colors.white,
+                            dotColor: Colors.white.withValues(alpha: 0.4),
+                            dotHeight: 6,
+                            dotWidth: 6,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

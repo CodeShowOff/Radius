@@ -25,7 +25,7 @@ export const getStreamFeedToken = onCall(
     }
 
     try {
-      const client = stream.connect(apiKey, apiSecret);
+      const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
       const token = client.createUserToken(request.auth.uid);
       return { token };
     } catch (error) {
@@ -2307,7 +2307,7 @@ export const onConnectionStatusChanged = onDocumentUpdated(
       const apiSecret = process.env.STREAM_API_SECRET;
       if (apiKey && apiSecret) {
         try {
-          const client = stream.connect(apiKey, apiSecret);
+          const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
           await client.feed("timeline", userId1).unfollow("user", userId2);
           await client.feed("timeline", userId2).unfollow("user", userId1);
         } catch(e) {
@@ -2407,7 +2407,7 @@ export const onConnectionCreated = onDocumentCreated(
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
       if (apiKey && apiSecret) {
-        const client = stream.connect(apiKey, apiSecret);
+        const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
         const userId1 = data.userId1 as string;
         const userId2 = data.userId2 as string;
         await client.feed("timeline", userId1).follow("user", userId2);
@@ -2600,7 +2600,7 @@ export const onPostConnectionSync = onDocumentUpdated(
       const apiSecret = process.env.STREAM_API_SECRET;
       if (apiKey && apiSecret) {
         try {
-          const client = stream.connect(apiKey, apiSecret);
+          const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
           await client.feed("timeline", userId1).unfollow("user", userId2);
           await client.feed("timeline", userId2).unfollow("user", userId1);
         } catch(e) {
@@ -3142,31 +3142,37 @@ export const getReelsFeed = onCall({}, async (request: any) => {
   const db = admin.firestore();
   
   try {
+    let useFallback = true;
     const apiKey = process.env.STREAM_API_KEY;
     const apiSecret = process.env.STREAM_API_SECRET;
     
     if (apiKey && apiSecret) {
-      const client = stream.connect(apiKey, apiSecret);
-      const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
-      const feed = client.feed('reels', locationKey);
-      
-      const streamRes = await feed.get({ limit: limit });
-      const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
-      
-      if (postIds.length === 0) return [];
-      
-      // Hydrate from Firestore
-      const snapshot = await db.collection("local_news_posts")
-        .where(admin.firestore.FieldPath.documentId(), "in", postIds)
-        .get();
+      try {
+        const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
+        const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
+        const feed = client.feed('reels', locationKey);
         
-      const docsMap = new Map();
-      snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
-      
-      // Return in Stream's order
-      return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
-    } else {
-      // Fallback
+        const streamRes = await feed.get({ limit: limit });
+        const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+        
+        if (postIds.length === 0) return [];
+        
+        // Hydrate from Firestore
+        const snapshot = await db.collection("local_news_posts")
+          .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+          .get();
+          
+        const docsMap = new Map();
+        snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+        
+        return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+      } catch (streamErr) {
+        logger.error("Stream API failed for reels, using Firestore fallback:", streamErr);
+        useFallback = true; // Fallback to Firestore
+      }
+    }
+    
+    if (useFallback) {
       const snapshot = await db.collection("local_news_posts")
         .where("postType", "==", "reel")
         .where("city", "==", city)
@@ -3202,31 +3208,37 @@ export const getLocalNewsFeed = onCall({}, async (request: any) => {
   const db = admin.firestore();
   
   try {
+    let useFallback = true;
     const apiKey = process.env.STREAM_API_KEY;
     const apiSecret = process.env.STREAM_API_SECRET;
     
     if (apiKey && apiSecret) {
-      const client = stream.connect(apiKey, apiSecret);
-      const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
-      const feed = client.feed('news', locationKey);
-      
-      const streamRes = await feed.get({ limit: limit });
-      const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
-      
-      if (postIds.length === 0) return [];
-      
-      // Hydrate from Firestore
-      const snapshot = await db.collection("local_news_posts")
-        .where(admin.firestore.FieldPath.documentId(), "in", postIds)
-        .get();
+      try {
+        const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
+        const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
+        const feed = client.feed('news', locationKey);
         
-      const docsMap = new Map();
-      snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
-      
-      // Return in Stream's order
-      return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
-    } else {
-      // Fallback
+        const streamRes = await feed.get({ limit: limit });
+        const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+        
+        if (postIds.length === 0) return [];
+        
+        // Hydrate from Firestore
+        const snapshot = await db.collection("local_news_posts")
+          .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+          .get();
+          
+        const docsMap = new Map();
+        snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+        
+        return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+      } catch (streamErr) {
+        logger.error("Stream API failed for news, using Firestore fallback:", streamErr);
+        useFallback = true; // Fallback
+      }
+    }
+    
+    if (useFallback) {
       const snapshot = await db.collection("local_news_posts")
         .where("postType", "==", "post")
         .where("city", "==", city)
@@ -3621,32 +3633,57 @@ export const getTimelineFeed = onCall(
     const db = admin.firestore();
 
     try {
+      let useFallback = true;
       const apiKey = process.env.STREAM_API_KEY;
       const apiSecret = process.env.STREAM_API_SECRET;
 
       if (apiKey && apiSecret) {
-        const client = stream.connect(apiKey, apiSecret);
-        const feed = client.feed('timeline', userId);
-        
-        const streamRes = await feed.get({ limit: limit });
-        const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
-        
-        if (postIds.length === 0) return [];
-        
-        // Hydrate from Firestore
-        const snapshot = await db.collection("posts")
-          .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+        try {
+          const client = stream.connect(apiKey, apiSecret, undefined, { location: 'mumbai' });
+          const feed = client.feed('timeline', userId);
+          
+          const streamRes = await feed.get({ limit: limit });
+          const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+          
+          if (postIds.length === 0) return [];
+          
+          // Hydrate from Firestore
+          const snapshot = await db.collection("posts")
+            .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+            .get();
+            
+          const docsMap = new Map();
+          snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+          
+          return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+        } catch (streamErr) {
+          logger.error("Stream API failed for timeline, using Firestore fallback:", streamErr);
+          useFallback = true;
+        }
+      }
+      
+      if (useFallback) {
+        // Fetch user's connections for fallback timeline
+        const connSnapshot = await db.collection("connections")
+          .where("participants", "array-contains", userId)
           .get();
           
-        const docsMap = new Map();
-        snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+        const connectionIds = [userId]; // Include own posts
+        connSnapshot.docs.forEach(doc => {
+          const p = doc.data().participants;
+          if (p) {
+            const otherId = p.find((id: string) => id !== userId);
+            if (otherId) connectionIds.push(otherId);
+          }
+        });
         
-        // Return in Stream's order
-        return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
-      } else {
-        // Fallback (just return the user's own posts if stream is missing)
+        // Firestore 'in' operator has a maximum of 30 items
+        if (connectionIds.length > 30) {
+          connectionIds.length = 30;
+        }
+
         const snapshot = await db.collection("posts")
-          .where("authorId", "==", userId)
+          .where("authorId", "in", connectionIds)
           .orderBy("createdAt", "desc")
           .limit(limit)
           .get();

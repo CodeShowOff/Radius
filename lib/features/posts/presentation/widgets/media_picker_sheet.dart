@@ -1,131 +1,66 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
-/// Bottom sheet for selecting media source (camera/gallery/video).
-///
-/// Returns a list of [File] objects selected by the user, or null if cancelled.
-class MediaPickerSheet extends StatelessWidget {
-  final int maxItems;
-
-  const MediaPickerSheet({
-    super.key,
-    this.maxItems = 10,
-  });
-
-  /// Shows the media picker bottom sheet and returns selected files.
+/// Bottom sheet/picker for selecting media source (camera/gallery/video).
+/// Uses premium wechat_assets_picker for a modern, Instagram-like experience.
+class MediaPickerSheet {
+  /// Opens the modern gallery picker and returns selected files.
   static Future<List<File>?> show(
     BuildContext context, {
     int maxItems = 10,
-  }) {
-    return showModalBottomSheet<List<File>>(
-      context: context,
-      builder: (_) => MediaPickerSheet(maxItems: maxItems),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
+    bool videoOnly = false,
+  }) async {
     final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text(
-              'Add Media',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery'),
-              subtitle: Text('Select up to $maxItems photos'),
-              onTap: () => _pickFromGallery(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Take a Photo'),
-              onTap: () => _takePhoto(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: const Text('Record a Video'),
-              onTap: () => _recordVideo(context),
-            ),
-          ],
+    
+    List<AssetEntity>? assets;
+    try {
+      // Pick assets using the modern picker
+      assets = await AssetPicker.pickAssets(
+        context,
+        pickerConfig: AssetPickerConfig(
+          maxAssets: maxItems,
+          requestType: videoOnly ? RequestType.video : RequestType.common,
+          textDelegate: const EnglishAssetPickerTextDelegate(),
+          themeColor: theme.colorScheme.primary,
+          gridCount: 3, // Premium modern grid look
         ),
-      ),
-    );
-  }
-
-  Future<void> _pickFromGallery(BuildContext context) async {
-    final picker = ImagePicker();
-    try {
-      final pickedFiles = await picker.pickMultiImage(
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 85,
-        limit: maxItems,
       );
-      if (pickedFiles.isNotEmpty && context.mounted) {
-        final files = pickedFiles.map((xf) => File(xf.path)).toList();
-        Navigator.of(context).pop(files);
-      } else if (context.mounted) {
-        Navigator.of(context).pop();
-      }
     } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open gallery: $e')),
+        );
+      }
+      return null;
     }
-  }
 
-  Future<void> _takePhoto(BuildContext context) async {
-    final picker = ImagePicker();
-    try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 85,
+    if (assets != null && assets.isNotEmpty) {
+      // Show loading overlay while extracting files
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (c) => const Center(
+          child: CircularProgressIndicator(),
+        ),
       );
-      if (pickedFile != null && context.mounted) {
-        Navigator.of(context).pop([File(pickedFile.path)]);
-      } else if (context.mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
-    }
-  }
 
-  Future<void> _recordVideo(BuildContext context) async {
-    final picker = ImagePicker();
-    try {
-      final pickedFile = await picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: const Duration(seconds: 60),
-      );
-      if (pickedFile != null && context.mounted) {
-        Navigator.of(context).pop([File(pickedFile.path)]);
-      } else if (context.mounted) {
-        Navigator.of(context).pop();
+      final List<File> files = [];
+      try {
+        for (final asset in assets) {
+          final file = await asset.file;
+          if (file != null) {
+            files.add(file);
+          }
+        }
+      } finally {
+        if (context.mounted) {
+          Navigator.of(context).pop(); // dismiss loading
+        }
       }
-    } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
+      return files;
     }
+    return null;
   }
 }

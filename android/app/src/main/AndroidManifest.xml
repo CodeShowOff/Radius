@@ -45,6 +45,10 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     
+    <!-- Android 13+ permissions for media files -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    
     <!-- Declare BLE feature -->
     <uses-feature android:name="android.hardware.bluetooth_le" 
         android:required="true" />
