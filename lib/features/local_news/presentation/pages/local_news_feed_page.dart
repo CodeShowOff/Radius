@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -210,11 +210,13 @@ class _LocalNewsFeedPageState extends State<LocalNewsFeedPage>
         controller: _tabController,
         children: [
           NewsFeedView(
-            scrollController: _scrollController,
             onRefresh: _onRefresh,
             onConfirmDelete: _confirmDelete,
           ),
-          const ReelsFeedView(),
+          ReelsFeedView(
+            onRefresh: _onRefresh,
+            onConfirmDelete: _confirmDelete,
+          ),
         ],
       ),
     );

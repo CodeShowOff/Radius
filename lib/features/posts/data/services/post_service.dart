@@ -1,4 +1,7 @@
 ﻿import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
+import '../../../../core/constants/env.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
@@ -274,5 +277,48 @@ class PostService {
         return null;
       }
     });
+  }
+
+
+  /// Fetches the user's timeline feed via Stream + Firestore hydration.
+  Future<List<PostModel>> getTimelineFeed({
+    required String userId,
+    int limit = 10,
+    DocumentSnapshot? startAfter,
+  }) async {
+    try {
+      final client = HttpClient();
+      final request = await client.postUrl(Uri.parse('${Env.backendUrl}/getTimelineFeed'));
+      request.headers.contentType = ContentType.json;
+      
+      final requestBody = jsonEncode({
+        'data': {
+          'userId': userId,
+          'limit': limit,
+          if (startAfter != null) 'startAfter': startAfter.id,
+        }
+      });
+      
+      request.write(requestBody);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      
+      if (response.statusCode != 200) {
+        throw Exception('API Error: $responseBody');
+      }
+
+      final jsonResponse = jsonDecode(responseBody);
+      final rawData = jsonResponse['data'] as List<dynamic>? ?? [];
+
+      return rawData.map((item) {
+        final map = item as Map<String, dynamic>;
+        final id = map['id'] as String;
+        return PostModel.fromMap(map, id);
+      }).toList();
+    } catch (e, stack) {
+      _logger.e('Error fetching timeline feed from API for $userId',
+          error: e, stackTrace: stack);
+      rethrow;
+    }
   }
 }

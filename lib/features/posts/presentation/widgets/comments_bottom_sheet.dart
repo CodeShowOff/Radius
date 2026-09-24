@@ -1,13 +1,12 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/widgets/cached_avatar.dart';
 import '../../domain/entities/comment.dart';
 import '../bloc/post_interaction_cubit.dart';
 
-/// Instagram-style comments bottom sheet.
-///
-/// Shows a scrollable list of comments with a text input at the bottom.
+/// Premium Instagram-style Comments Bottom Sheet
 class CommentsBottomSheet extends StatefulWidget {
   final String postId;
   final String currentUserId;
@@ -22,7 +21,6 @@ class CommentsBottomSheet extends StatefulWidget {
     this.currentUserPhotoUrl,
   });
 
-  /// Shows the comments bottom sheet.
   static void show({
     required BuildContext context,
     required String postId,
@@ -33,10 +31,7 @@ class CommentsBottomSheet extends StatefulWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => BlocProvider.value(
         value: context.read<PostInteractionCubit>(),
         child: CommentsBottomSheet(
@@ -73,13 +68,11 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   void _submitComment() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-
     context.read<PostInteractionCubit>().addComment(
           authorName: widget.currentUserName,
           authorPhotoUrl: widget.currentUserPhotoUrl,
           text: text,
         );
-
     _textController.clear();
     _focusNode.unfocus();
   }
@@ -87,154 +80,157 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) {
-        return Column(
-          children: [
-            // Handle bar
-            Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 4),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Title
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Comments',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-
-            Divider(
-                height: 1,
-                color: theme.dividerColor.withValues(alpha: 0.3)),
-
-            // Comments list
-            Expanded(
-              child: BlocBuilder<PostInteractionCubit, PostInteractionState>(
-                buildWhen: (prev, curr) =>
-                    prev.comments != curr.comments ||
-                    prev.isLoadingComments != curr.isLoadingComments,
-                builder: (context, state) {
-                  if (state.isLoadingComments && state.comments.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (state.comments.isEmpty) {
-                    return Center(
+                color: theme.colorScheme.surface.withValues(alpha: 0.9),
+                child: Column(
+                  children: [
+                    // Handle
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 8),
+                        height: 5,
+                        width: 40,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    Text('Comments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.1)),
+                    
+                    // Comments List
+                    Expanded(
+                      child: BlocBuilder<PostInteractionCubit, PostInteractionState>(
+                        builder: (context, state) {
+                          if (state.isLoadingComments && state.comments.isEmpty) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (state.comments.isEmpty) {
+                            return _buildEmptyState(theme);
+                          }
+                          return ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.only(top: 16, bottom: 16),
+                            itemCount: state.comments.length,
+                            itemBuilder: (context, index) {
+                              final comment = state.comments[index];
+                              return _CommentTile(
+                                comment: comment,
+                                isOwnComment: comment.authorId == widget.currentUserId,
+                                onDelete: () => context.read<PostInteractionCubit>().deleteComment(comment.id),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    // Input Area
+                    Container(
+                      padding: EdgeInsets.only(bottom: bottomInset > 0 ? bottomInset : MediaQuery.of(context).padding.bottom),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 48,
-                              color: theme.colorScheme.outline,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No comments yet',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            CachedAvatar(imageUrl: widget.currentUserPhotoUrl, name: widget.currentUserName, radius: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: TextField(
+                                  controller: _textController,
+                                  focusNode: _focusNode,
+                                  maxLines: 4,
+                                  minLines: 1,
+                                  textCapitalization: TextCapitalization.sentences,
+                                  decoration: InputDecoration(
+                                    hintText: 'Add a comment...',
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Be the first to comment!',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
-                              ),
-                            ),
+                            const SizedBox(width: 8),
+                            BlocBuilder<PostInteractionCubit, PostInteractionState>(
+                              builder: (context, state) {
+                                return state.isSubmittingComment
+                                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                                    : IconButton(
+                                        icon: Icon(Icons.send_rounded, color: theme.colorScheme.primary),
+                                        onPressed: _submitComment,
+                                      );
+                              }
+                            )
                           ],
                         ),
                       ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    controller: scrollController,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: state.comments.length,
-                    itemBuilder: (context, index) {
-                      final comment = state.comments[index];
-                      return _CommentTile(
-                        comment: comment,
-                        isOwnComment:
-                            comment.authorId == widget.currentUserId,
-                        onDelete: () {
-                          context
-                              .read<PostInteractionCubit>()
-                              .deleteComment(comment.id);
-                        },
-                      );
-                    },
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
 
-            // Input field
-            Divider(
-                height: 1,
-                color: theme.dividerColor.withValues(alpha: 0.3)),
-            _CommentInput(
-              controller: _textController,
-              focusNode: _focusNode,
-              userPhotoUrl: widget.currentUserPhotoUrl,
-              userName: widget.currentUserName,
-              onSubmit: _submitComment,
-            ),
-          ],
-        );
-      },
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline, size: 64, color: theme.colorScheme.outline.withValues(alpha: 0.5)),
+          const SizedBox(height: 16),
+          Text('No comments yet.', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Start the conversation.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline)),
+        ],
+      ),
     );
   }
 }
-
-// â”€â”€â”€ Comment Tile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CommentTile extends StatelessWidget {
   final Comment comment;
   final bool isOwnComment;
   final VoidCallback onDelete;
 
-  const _CommentTile({
-    required this.comment,
-    required this.isOwnComment,
-    required this.onDelete,
-  });
+  const _CommentTile({required this.comment, required this.isOwnComment, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CachedAvatar(
-            imageUrl: comment.authorPhotoUrl,
-            name: comment.authorName,
-            radius: 16,
-          ),
+          CachedAvatar(imageUrl: comment.authorPhotoUrl, name: comment.authorName, radius: 18),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -242,150 +238,41 @@ class _CommentTile extends StatelessWidget {
               children: [
                 RichText(
                   text: TextSpan(
+                    style: theme.textTheme.bodyMedium,
                     children: [
-                      TextSpan(
-                        text: comment.authorName,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const TextSpan(text: '  '),
-                      TextSpan(
-                        text: comment.text,
-                        style: theme.textTheme.bodyMedium,
-                      ),
+                      TextSpan(text: '${comment.authorName} ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: comment.text),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatTimeAgo(comment.createdAt),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(_formatTimeAgo(comment.createdAt), style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+                    const SizedBox(width: 16),
+                    Text('Reply', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline, fontWeight: FontWeight.bold)),
+                  ],
                 ),
               ],
             ),
           ),
           if (isOwnComment)
-            IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                size: 16,
-                color: theme.colorScheme.outline,
-              ),
-              onPressed: onDelete,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            GestureDetector(
+              onTap: onDelete,
+              child: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
             ),
+          const SizedBox(width: 8),
+          const Icon(Icons.favorite_border, size: 16, color: Colors.grey),
         ],
       ),
     );
   }
 
   String _formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inHours < 1) return '${difference.inMinutes}m';
-    if (difference.inDays < 1) return '${difference.inHours}h';
-    if (difference.inDays < 7) return '${difference.inDays}d';
-    return '${(difference.inDays / 7).floor()}w';
-  }
-}
-
-// â”€â”€â”€ Comment Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-class _CommentInput extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String? userPhotoUrl;
-  final String userName;
-  final VoidCallback onSubmit;
-
-  const _CommentInput({
-    required this.controller,
-    required this.focusNode,
-    this.userPhotoUrl,
-    required this.userName,
-    required this.onSubmit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 8, 8, 8 + bottomPadding),
-      child: Row(
-        children: [
-          CachedAvatar(
-            imageUrl: userPhotoUrl,
-            name: userName,
-            radius: 16,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: BlocBuilder<PostInteractionCubit, PostInteractionState>(
-              buildWhen: (prev, curr) =>
-                  prev.isSubmittingComment != curr.isSubmittingComment,
-              builder: (context, state) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  enabled: !state.isSubmittingComment,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSubmit(),
-                  maxLines: 3,
-                  minLines: 1,
-                  maxLength: 1000,
-                  decoration: InputDecoration(
-                    hintText: 'Add a comment...',
-                    hintStyle: TextStyle(color: theme.colorScheme.outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    counterText: '',
-                    isDense: true,
-                    suffixIcon: state.isSubmittingComment
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child:
-                                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                          )
-                        : IconButton(
-                            icon: Icon(
-                              Icons.send_rounded,
-                              color: theme.colorScheme.primary,
-                            ),
-                            onPressed: onSubmit,
-                          ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    return '${diff.inDays}d';
   }
 }

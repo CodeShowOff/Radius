@@ -4,6 +4,36 @@ import {
 } from "./mock";
 import * as admin from "firebase-admin";
 import { StreamChat } from "stream-chat";
+import * as stream from "getstream";
+
+// =============================================================================
+// STREAM FEED - Token Generation
+// =============================================================================
+
+export const getStreamFeedToken = onCall(
+  { enforceAppCheck: false },
+  async (request: any) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      throw new HttpsError("internal", "Stream API keys are missing.");
+    }
+
+    try {
+      const client = stream.connect(apiKey, apiSecret);
+      const token = client.createUserToken(request.auth.uid);
+      return { token };
+    } catch (error) {
+      logger.error("Error generating Stream Feed token:", error);
+      throw new HttpsError("internal", "Failed to generate Stream Feed token");
+    }
+  }
+);
 
 // =============================================================================
 // STREAM CHAT - Token Generation
@@ -2269,6 +2299,22 @@ export const onConnectionStatusChanged = onDocumentUpdated(
 
     const userId1 = after.userId1 as string;
     const userId2 = after.userId2 as string;
+
+    // STREAM FEED: Unfollow if disconnected or blocked
+    if ((oldStatus === "connected" && newStatus === "disconnected") || 
+        (oldStatus === "connected" && newStatus === "blocked")) {
+      const apiKey = process.env.STREAM_API_KEY;
+      const apiSecret = process.env.STREAM_API_SECRET;
+      if (apiKey && apiSecret) {
+        try {
+          const client = stream.connect(apiKey, apiSecret);
+          await client.feed("timeline", userId1).unfollow("user", userId2);
+          await client.feed("timeline", userId2).unfollow("user", userId1);
+        } catch(e) {
+            logger.error("Stream unfollow error:", e);
+        }
+      }
+    }
     const db = admin.firestore();
     const profilesRef = db.collection("profiles");
 
@@ -2356,6 +2402,17 @@ export const onConnectionCreated = onDocumentCreated(
       logger.log(
         `Incremented connectionCount for ${initiatedBy} (new connection created)`
       );
+
+      // STREAM FEED: Follow graph
+      const apiKey = process.env.STREAM_API_KEY;
+      const apiSecret = process.env.STREAM_API_SECRET;
+      if (apiKey && apiSecret) {
+        const client = stream.connect(apiKey, apiSecret);
+        const userId1 = data.userId1 as string;
+        const userId2 = data.userId2 as string;
+        await client.feed("timeline", userId1).follow("user", userId2);
+        await client.feed("timeline", userId2).follow("user", userId1);
+      }
     } catch (error) {
       logger.error("Error updating connectionCount on connection created:", error);
     }
@@ -2535,6 +2592,22 @@ export const onPostConnectionSync = onDocumentUpdated(
 
     const userId1 = after.userId1 as string;
     const userId2 = after.userId2 as string;
+
+    // STREAM FEED: Unfollow if disconnected or blocked
+    if ((oldStatus === "connected" && newStatus === "disconnected") || 
+        (oldStatus === "connected" && newStatus === "blocked")) {
+      const apiKey = process.env.STREAM_API_KEY;
+      const apiSecret = process.env.STREAM_API_SECRET;
+      if (apiKey && apiSecret) {
+        try {
+          const client = stream.connect(apiKey, apiSecret);
+          await client.feed("timeline", userId1).unfollow("user", userId2);
+          await client.feed("timeline", userId2).unfollow("user", userId1);
+        } catch(e) {
+            logger.error("Stream unfollow error:", e);
+        }
+      }
+    }
     const db = admin.firestore();
 
     const BATCH_LIMIT = 500;
@@ -3068,28 +3141,42 @@ export const getReelsFeed = onCall({}, async (request: any) => {
 
   const db = admin.firestore();
   
-  // The Feed Engine Algorithm
-  // Query all reels for the specified location, and rank them natively by their engagementScore.
   try {
-    const snapshot = await db.collection("local_news_posts")
-      .where("postType", "==", "reel")
-      .where("city", "==", city)
-      .where("country", "==", country)
-      .orderBy("trendingScore", "desc")
-      .limit(limit)
-      .get();
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+    
+    if (apiKey && apiSecret) {
+      const client = stream.connect(apiKey, apiSecret);
+      const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
+      const feed = client.feed('reels', locationKey);
+      
+      const streamRes = await feed.get({ limit: limit });
+      const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+      
+      if (postIds.length === 0) return [];
+      
+      // Hydrate from Firestore
+      const snapshot = await db.collection("local_news_posts")
+        .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+        .get();
+        
+      const docsMap = new Map();
+      snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+      
+      // Return in Stream's order
+      return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+    } else {
+      // Fallback
+      const snapshot = await db.collection("local_news_posts")
+        .where("postType", "==", "reel")
+        .where("city", "==", city)
+        .where("country", "==", country)
+        .orderBy("trendingScore", "desc")
+        .limit(limit)
+        .get();
 
-    const reels = snapshot.docs.map(doc => {
-      const docData = doc.data();
-      // Ensure timestamps are correctly converted if necessary for the client, 
-      // but typically the client parses the raw JSON if sent via REST.
-      return {
-        id: doc.id,
-        ...docData,
-      };
-    });
-
-    return reels;
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
   } catch (error) {
     logger.error("Error generating reels feed:", error);
     throw new Error('Failed to generate reels feed.');
@@ -3115,23 +3202,41 @@ export const getLocalNewsFeed = onCall({}, async (request: any) => {
   const db = admin.firestore();
   
   try {
-    const snapshot = await db.collection("local_news_posts")
-      .where("postType", "==", "post")
-      .where("city", "==", city)
-      .where("country", "==", country)
-      .orderBy("trendingScore", "desc")
-      .limit(limit)
-      .get();
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+    
+    if (apiKey && apiSecret) {
+      const client = stream.connect(apiKey, apiSecret);
+      const locationKey = `${country}_${city}`.replace(/\s+/g, '_');
+      const feed = client.feed('news', locationKey);
+      
+      const streamRes = await feed.get({ limit: limit });
+      const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+      
+      if (postIds.length === 0) return [];
+      
+      // Hydrate from Firestore
+      const snapshot = await db.collection("local_news_posts")
+        .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+        .get();
+        
+      const docsMap = new Map();
+      snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+      
+      // Return in Stream's order
+      return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+    } else {
+      // Fallback
+      const snapshot = await db.collection("local_news_posts")
+        .where("postType", "==", "post")
+        .where("city", "==", city)
+        .where("country", "==", country)
+        .orderBy("trendingScore", "desc")
+        .limit(limit)
+        .get();
 
-    const posts = snapshot.docs.map(doc => {
-      const docData = doc.data();
-      return {
-        id: doc.id,
-        ...docData,
-      };
-    });
-
-    return posts;
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
   } catch (error) {
     logger.error("Error generating local news feed:", error);
     throw new Error('Failed to generate local news feed.');
@@ -3491,5 +3596,66 @@ export const onLocalNewsPostDeleted = onDocumentDeleted(
       `Cleaned up ${totalDeleted} media files and subcollections ` +
       `for local news post ${postId}`
     );
+  }
+);
+
+// =============================================================================
+// TIMELINE FEED API
+// =============================================================================
+
+/**
+ * Endpoint: /api/getTimelineFeed
+ * Fetches the user's timeline from Stream and hydrates from Firestore.
+ */
+export const getTimelineFeed = onCall(
+  { enforceAppCheck: false },
+  async (request: any) => {
+    const data = request.data || {};
+    const userId = request.auth?.uid || data.userId;
+    const limit = data.limit || 10;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const db = admin.firestore();
+
+    try {
+      const apiKey = process.env.STREAM_API_KEY;
+      const apiSecret = process.env.STREAM_API_SECRET;
+
+      if (apiKey && apiSecret) {
+        const client = stream.connect(apiKey, apiSecret);
+        const feed = client.feed('timeline', userId);
+        
+        const streamRes = await feed.get({ limit: limit });
+        const postIds = streamRes.results.map((a: any) => a.foreign_id).filter(Boolean);
+        
+        if (postIds.length === 0) return [];
+        
+        // Hydrate from Firestore
+        const snapshot = await db.collection("posts")
+          .where(admin.firestore.FieldPath.documentId(), "in", postIds)
+          .get();
+          
+        const docsMap = new Map();
+        snapshot.docs.forEach(doc => docsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+        
+        // Return in Stream's order
+        return postIds.map((id: string) => docsMap.get(id)).filter(Boolean);
+      } else {
+        // Fallback (just return the user's own posts if stream is missing)
+        const snapshot = await db.collection("posts")
+          .where("authorId", "==", userId)
+          .orderBy("createdAt", "desc")
+          .limit(limit)
+          .get();
+
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+    } catch (error) {
+      logger.error("Error generating timeline feed:", error);
+      throw new HttpsError('internal', 'Failed to generate timeline feed.');
+    }
   }
 );

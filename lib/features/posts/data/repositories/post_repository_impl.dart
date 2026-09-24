@@ -187,51 +187,13 @@ class PostRepositoryImpl implements IPostRepository {
     DocumentSnapshot? startAfter,
   }) async {
     try {
-      // Three parallel queries:
-      // 1. User's own posts (all visibilities)
-      // 2. Public posts from connections
-      // 3. Connections-only posts visible to this user
-      final futures = <Future<List<PostModel>>>[
-        _postService.getPostsByAuthor(
-          authorId: userId,
-          includeConnectionsVisibility: true,
-          viewerUserId: userId,
-          limit: limit,
-          startAfter: startAfter,
-        ),
-      ];
-
-      if (connectionIds.isNotEmpty) {
-        futures.add(_postService.getPublicPostsByAuthors(
-          authorIds: connectionIds,
-          limit: limit,
-          startAfter: startAfter,
-        ));
-        futures.add(_postService.getConnectionsPostsForUser(
-          userId: userId,
-          limit: limit,
-          startAfter: startAfter,
-        ));
-      }
-
-      final results = await Future.wait(futures);
-
-      // Merge and deduplicate
-      final postMap = <String, PostModel>{};
-      for (final batch in results) {
-        for (final post in batch) {
-          postMap[post.id] = post;
-        }
-      }
-
-      // Sort by createdAt descending
-      final merged = postMap.values.toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      // Limit to requested page size
-      final limited = merged.take(limit).toList();
-
-      return Right(limited.map((p) => p.toEntity()).toList());
+      final posts = await _postService.getTimelineFeed(
+        userId: userId,
+        limit: limit,
+        startAfter: startAfter,
+      );
+      
+      return Right(posts.map((p) => p.toEntity()).toList());
     } on FirebaseException catch (e) {
       return Left(DatabaseFailure(
         message: e.message ?? 'Failed to get feed posts',

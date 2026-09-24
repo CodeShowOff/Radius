@@ -2,7 +2,7 @@ To test the app on a physical phone, your phone needs to connect to your compute
 
 `10.0.2.2` only works for emulators because it acts as a special proxy to your computer's `localhost`. For a real phone, you must use your computer's actual local IP address.
 
-I ran `ipconfig` on your machine and found your local Wi-Fi IP address is: **`192.168.13.112`**. 
+I ran `ipconfig` on your machine and found your local Wi-Fi IP address is: **`192.168.13.100`**. 
 I went ahead and updated `lib/core/services/stream_token_service.dart` for you to use this IP!
 
 ### How to start it up:
@@ -27,4 +27,4 @@ I went ahead and updated `lib/core/services/stream_token_service.dart` for you t
    flutter run
    ```
 
-When the app launches on your phone, it will hit `http://192.168.13.112:3000/api/getStreamToken`, successfully reach your computer, verify your Firebase user, generate the Stream token, and log you into the chat!
+When the app launches on your phone, it will hit `http://192.168.13.100:3000/api/getStreamToken`, successfully reach your computer, verify your Firebase user, generate the Stream token, and log you into the chat!

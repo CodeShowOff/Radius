@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/post.dart';
 import 'media_item_model.dart';
@@ -101,6 +101,48 @@ class PostModel extends Post {
       likeCount: post.likeCount,
       commentCount: post.commentCount,
       trendingScore: post.trendingScore,
+      authorConnections: authorConnections,
+    );
+  }
+
+  /// Creates model from a standard JSON map (useful for API responses).
+  factory PostModel.fromMap(Map<String, dynamic> data, String docId) {
+    // Parse media items
+    final rawMediaItems = data['mediaItems'] as List<dynamic>? ?? [];
+    final mediaItems = rawMediaItems
+        .map((item) => MediaItemModel.fromMap(item as Map<String, dynamic>).toEntity())
+        .toList();
+
+    // Parse author connections
+    final rawConnections = data['authorConnections'] as List<dynamic>? ?? [];
+    final authorConnections =
+        rawConnections.map((e) => e.toString()).toList();
+
+    // Parse dates (could be Timestamp or ISO string or epoch)
+    DateTime parseDate(dynamic val) {
+      if (val == null) return DateTime.now();
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+      if (val is Map && val['_seconds'] != null) {
+        return DateTime.fromMillisecondsSinceEpoch(val['_seconds'] * 1000);
+      }
+      return DateTime.now();
+    }
+
+    return PostModel(
+      id: docId,
+      authorId: data['authorId'] as String? ?? '',
+      text: data['text'] as String?,
+      mediaItems: mediaItems,
+      visibility: _parseVisibility(data['visibility'] as String? ?? 'public'),
+      authorName: data['authorName'] as String? ?? '',
+      authorPhotoUrl: data['authorPhotoUrl'] as String?,
+      createdAt: parseDate(data['createdAt']),
+      updatedAt: parseDate(data['updatedAt']),
+      likeCount: (data['likeCount'] as int?) ?? 0,
+      commentCount: (data['commentCount'] as int?) ?? 0,
+      trendingScore: (data['trendingScore'] as num?)?.toDouble() ?? 0.0,
       authorConnections: authorConnections,
     );
   }

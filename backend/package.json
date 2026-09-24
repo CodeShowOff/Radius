@@ -19,6 +19,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase-admin": "^11.11.1",
+    "getstream": "^8.15.0",
     "multer": "^2.2.0",
     "stream-chat": "^9.53.0",
     "ts-node": "^10.9.2",
