@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart' hide Logger, Uuid;
 import 'package:uuid/uuid.dart';
 
 import '../../../core/error/exceptions.dart';
@@ -56,6 +57,7 @@ class RandomGroupService {
   final FirebaseFirestore _firestore;
   final Logger _logger;
   final Uuid _uuid;
+  final StreamChatClient? _streamClient;
 
   late final CollectionReference<Map<String, dynamic>> _groupsRef;
 
@@ -65,8 +67,10 @@ class RandomGroupService {
   RandomGroupService({
     FirebaseFirestore? firestore,
     Logger? logger,
+    StreamChatClient? streamClient,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _logger = logger ?? Logger(),
+        _streamClient = streamClient,
         _uuid = const Uuid() {
     _groupsRef = _firestore.collection('random_groups');
   }
@@ -174,6 +178,16 @@ class RandomGroupService {
       );
 
       await batch.commit();
+
+      try {
+        if (_streamClient != null) {
+          final channel = _streamClient.channel('team', id: groupId);
+          await channel.watch(); // Create the channel in Stream
+          await channel.addMembers([creatorId]);
+        }
+      } catch (e) {
+        _logger.e('Failed to sync Stream Chat membership for createGroup', error: e);
+      }
 
       _logger.i('Created random group: $groupId with name: $trimmedName');
       return RandomGroupSuccess(group.toEntity());
@@ -424,6 +438,15 @@ class RandomGroupService {
 
       await batch.commit();
 
+      try {
+        if (_streamClient != null) {
+          final channel = _streamClient.channel('team', id: groupId);
+          await channel.removeMembers([memberId]);
+        }
+      } catch (e) {
+        _logger.e('Failed to sync Stream Chat membership for removeMember', error: e);
+      }
+
       _logger.i('Removed member $memberId from group $groupId');
       return const RandomGroupSuccess(null);
     } on FirebaseException catch (e, stack) {
@@ -619,6 +642,15 @@ class RandomGroupService {
       }
 
       await batch.commit();
+
+      try {
+        if (_streamClient != null) {
+          final channel = _streamClient.channel('team', id: groupId);
+          await channel.removeMembers([userId]);
+        }
+      } catch (e) {
+        _logger.e('Failed to sync Stream Chat membership for leaveGroup', error: e);
+      }
 
       _logger.i('User $userId left group $groupId');
       return const RandomGroupSuccess(null);
@@ -887,6 +919,15 @@ class RandomGroupService {
       });
 
       await batch.commit();
+
+      try {
+        if (_streamClient != null) {
+          final channel = _streamClient.channel('team', id: groupId);
+          await channel.addMembers([request.requesterId]);
+        }
+      } catch (e) {
+        _logger.e('Failed to sync Stream Chat membership for approveRequest', error: e);
+      }
 
       _logger.i('Approved request $requestId for group $groupId');
       return const RandomGroupSuccess(null);

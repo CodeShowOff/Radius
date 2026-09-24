@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart' hide Logger, Uuid;
 import 'package:uuid/uuid.dart';
 
 import '../domain/entities/location_group.dart';
@@ -62,6 +63,7 @@ class LocationGroupService {
   final FirebaseAuth _auth;
   final Logger _logger;
   final Uuid _uuid;
+  final StreamChatClient? _streamClient;
 
   // Collection references
   late final CollectionReference<Map<String, dynamic>> _groupsRef;
@@ -70,9 +72,11 @@ class LocationGroupService {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     Logger? logger,
+    StreamChatClient? streamClient,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _auth = auth ?? FirebaseAuth.instance,
         _logger = logger ?? Logger(),
+        _streamClient = streamClient,
         _uuid = const Uuid() {
     _groupsRef = _firestore.collection('location_groups');
   }
@@ -220,6 +224,16 @@ class LocationGroupService {
         },
       );
       await batch.commit();
+
+      try {
+        if (_streamClient != null) {
+          final channel = _streamClient.channel('team', id: groupId);
+          await channel.watch(); // Create the channel in Stream
+          await channel.addMembers([creatorUserId]);
+        }
+      } catch (e) {
+        _logger.e('Failed to sync Stream Chat membership for createGroup', error: e);
+      }
 
       _logger.i('Created group: $groupId in $cityName, $countryName');
 
@@ -922,6 +936,15 @@ class LocationGroupService {
 
       try {
         await batch.commit();
+
+        try {
+          if (_streamClient != null) {
+            final channel = _streamClient.channel('team', id: groupId);
+            await channel.addMembers([requestUserId]);
+          }
+        } catch (e) {
+          _logger.e('Failed to sync Stream Chat membership for approveJoinRequest', error: e);
+        }
       } catch (batchError) {
         _logger.e('Batch commit failed for approveJoinRequest',
             error: batchError);
@@ -1089,6 +1112,16 @@ class LocationGroupService {
 
       try {
         await batch.commit();
+        
+        try {
+          if (_streamClient != null) {
+            final channel = _streamClient.channel('team', id: groupId);
+            await channel.removeMembers([userId]);
+          }
+        } catch (e) {
+          _logger.e('Failed to sync Stream Chat membership for leaveGroup', error: e);
+        }
+
         _logger.i('User $userId left group $groupId');
       } catch (batchError) {
         _logger.e('Batch commit failed for leaveGroup', error: batchError);
@@ -1368,6 +1401,16 @@ class LocationGroupService {
 
       try {
         await batch.commit();
+
+        try {
+          if (_streamClient != null) {
+            final channel = _streamClient.channel('team', id: groupId);
+            await channel.removeMembers([targetUserId]);
+          }
+        } catch (e) {
+          _logger.e('Failed to sync Stream Chat membership for removeMember', error: e);
+        }
+
         _logger.i(
             'User $targetUserId ${ban ? "banned from" : "removed from"} group $groupId');
       } catch (batchError) {

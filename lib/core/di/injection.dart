@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:injectable/injectable.dart';
@@ -252,7 +253,9 @@ Future<void> configureDependencies() async {
   }
 
   if (!getIt.isRegistered<LocationGroupService>()) {
-    getIt.registerLazySingleton<LocationGroupService>(() => LocationGroupService());
+    getIt.registerLazySingleton<LocationGroupService>(() => LocationGroupService(
+      streamClient: getIt<StreamChatClient>(),
+    ));
   }
 
 
@@ -291,7 +294,9 @@ Future<void> configureDependencies() async {
 
   // Random Groups feature - Admin-approved internet-based groups
   if (!getIt.isRegistered<RandomGroupService>()) {
-    getIt.registerLazySingleton<RandomGroupService>(() => RandomGroupService());
+    getIt.registerLazySingleton<RandomGroupService>(() => RandomGroupService(
+      streamClient: getIt<StreamChatClient>(),
+    ));
   }
 
 
