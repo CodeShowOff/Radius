@@ -1,4 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -10,91 +10,20 @@ import '../../../../core/utils/chat_utils.dart';
 import '../../domain/entities/connection.dart';
 import '../bloc/connection_bloc.dart';
 
-/// Screen displaying user's connections list.
-class ConnectionsListScreen extends StatefulWidget {
-  const ConnectionsListScreen({super.key});
+/// View displaying user's connections list.
+class ConnectionsListView extends StatefulWidget {
+  const ConnectionsListView({super.key});
 
   @override
-  State<ConnectionsListScreen> createState() => _ConnectionsListScreenState();
+  State<ConnectionsListView> createState() => _ConnectionsListViewState();
 }
 
-class _ConnectionsListScreenState extends State<ConnectionsListScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _ConnectionsListViewState extends State<ConnectionsListView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'My Connections',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-            builder: (context, state) {
-              // Count only connection requests received from nearby
-              final nearbyRequestsCount = state.receivedRequests
-                  .where((req) => req.source == 'nearby')
-                  .length;
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.mail_outline),
-                    onPressed: () {
-                      context.push(Routes.connectionRequests);
-                    },
-                    tooltip: 'Requests',
-                  ),
-                  if (nearbyRequestsCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.error,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          nearbyRequestsCount > 9 ? '9+' : nearbyRequestsCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-      body: BlocBuilder<ConnectionBloc, ConnectionBlocState>(
-        builder: (context, state) {
+    return BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+      builder: (context, state) {
           if (state.status == ConnectionBlocStatus.loading) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -141,8 +70,7 @@ class _ConnectionsListScreenState extends State<ConnectionsListScreen>
             ),
           );
         },
-      ),
-    );
+      );
   }
 }
 
@@ -340,44 +268,52 @@ class _ConnectionTileState extends State<_ConnectionTile> {
                     color: theme.colorScheme.outline,
                   ),
                 ),
-          trailing: PopupMenuButton<String>(
-            onSelected: (value) => _handleMenuAction(
-              context,
-              value,
-              otherUserId,
-              otherUserName: displayName,
-              otherUserPhotoUrl: photoUrl,
-            ),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'message',
-                child: ListTile(
-                  leading: Icon(Icons.message_outlined),
-                  title: Text('Message'),
-                  contentPadding: EdgeInsets.zero,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.message_outlined),
+                color: theme.colorScheme.primary,
+                onPressed: () => _handleMenuAction(
+                  context,
+                  'message',
+                  otherUserId,
+                  otherUserName: displayName,
+                  otherUserPhotoUrl: photoUrl,
                 ),
               ),
-              const PopupMenuItem(
-                value: 'remove',
-                child: ListTile(
-                  leading: Icon(Icons.person_remove_outlined),
-                  title: Text('Remove'),
-                  contentPadding: EdgeInsets.zero,
+              PopupMenuButton<String>(
+                onSelected: (value) => _handleMenuAction(
+                  context,
+                  value,
+                  otherUserId,
+                  otherUserName: displayName,
+                  otherUserPhotoUrl: photoUrl,
                 ),
-              ),
-              PopupMenuItem(
-                value: 'block',
-                child: ListTile(
-                  leading: Icon(
-                    Icons.block,
-                    color: theme.colorScheme.error,
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: ListTile(
+                      leading: Icon(Icons.person_remove_outlined),
+                      title: Text('Remove'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                  title: Text(
-                    'Block',
-                    style: TextStyle(color: theme.colorScheme.error),
+                  PopupMenuItem(
+                    value: 'block',
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.block,
+                        color: theme.colorScheme.error,
+                      ),
+                      title: Text(
+                        'Block',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                  contentPadding: EdgeInsets.zero,
-                ),
+                ],
               ),
             ],
           ),

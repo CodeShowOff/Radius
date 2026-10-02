@@ -2,9 +2,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/router/routes.dart';
 import '../../../../core/services/firebase/firestore_service.dart';
+import '../../../../core/utils/chat_utils.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../nearby_help/data/nearby_help_service.dart';
 import '../../../local_news/presentation/widgets/user_news_posts_grid.dart';
@@ -360,6 +363,34 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
           '@$usernameDisplay',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          if (context.read<AuthBloc>().state
+              case AuthAuthenticated(:final user)
+              when user.id != widget.otherUserId)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'block') {
+                  _confirmBlock(context);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'block',
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.block,
+                      color: theme.colorScheme.error,
+                    ),
+                    title: Text(
+                      'Block',
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
       body: DefaultTabController(
         length: 2,
@@ -645,13 +676,28 @@ class _ConnectionProfilePageState extends State<ConnectionProfilePage> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () => _confirmBlock(context),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: theme.colorScheme.error,
-                                  ),
-                                  icon: const Icon(Icons.block, size: 18),
-                                  label: const Text('Block'),
+                                child: FilledButton.tonalIcon(
+                                  onPressed: () {
+                                    final authState = context.read<AuthBloc>().state;
+                                    if (authState is AuthAuthenticated) {
+                                      final currentUserId = authState.user.id;
+                                      final conversationId = ChatUtils.getDirectMessageChannelId(
+                                        currentUserId,
+                                        widget.otherUserId,
+                                      );
+                                      context.push(
+                                        Routes.chatWith(conversationId),
+                                        extra: {
+                                          'currentUserId': currentUserId,
+                                          'otherUserId': widget.otherUserId,
+                                          'otherUserName': displayName,
+                                          'otherUserPhotoUrl': photoUrl,
+                                        },
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.message_outlined, size: 18),
+                                  label: const Text('Message'),
                                 ),
                               ),
                             ],

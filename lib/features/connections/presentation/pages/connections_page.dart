@@ -12,6 +12,7 @@ import '../bloc/connection_bloc.dart';
 import '../bloc/suggested_connections_cubit.dart';
 import '../bloc/suggested_connections_state.dart';
 import '../../../chat/presentation/screens/conversations_screen.dart';
+import 'connections_list_screen.dart';
 
 /// Connections page showing suggested connections and active chats.
 class ConnectionsPage extends StatelessWidget {
@@ -33,14 +34,17 @@ class _ConnectionsView extends StatefulWidget {
   State<_ConnectionsView> createState() => _ConnectionsViewState();
 }
 
-class _ConnectionsViewState extends State<_ConnectionsView> {
+class _ConnectionsViewState extends State<_ConnectionsView>
+    with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   bool _isSearching = false;
   String _searchQuery = '';
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     
     final connectionState = context.read<ConnectionBloc>().state;
     final authState = context.read<AuthBloc>().state;
@@ -81,6 +85,7 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -147,8 +152,49 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
                   tooltip: 'Add Connection',
                   onPressed: () => context.push(Routes.discoverySearch),
                 ),
+                BlocBuilder<ConnectionBloc, ConnectionBlocState>(
+                  builder: (context, state) {
+                    final nearbyRequestsCount = state.receivedRequests
+                        .where((req) => req.source == 'nearby')
+                        .length;
+                    return Stack(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.mail_outline),
+                          onPressed: () => context.push(Routes.connectionRequests),
+                          tooltip: 'Requests',
+                        ),
+                        if (nearbyRequestsCount > 0)
+                          Positioned(
+                            right: 8,
+                            top: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.error,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              child: Text(
+                                nearbyRequestsCount > 9 ? '9+' : nearbyRequestsCount.toString(),
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
                 const SizedBox(width: 8),
               ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Chats'),
+                  Tab(text: 'New'),
+                ],
+              ),
             ),
             if (!_isSearching && _searchQuery.isEmpty)
               SliverToBoxAdapter(
@@ -161,25 +207,31 @@ class _ConnectionsViewState extends State<_ConnectionsView> {
           removeTop: true,
           child: Padding(
             padding: const EdgeInsets.only(top: 12.0),
-            child: ConversationsScreen(
-            currentUserId: currentUserId,
-            onConversationTap: (channel) {
-              final otherMember = channel.state?.members.firstWhere(
-                (m) => m.userId != currentUserId,
-                orElse: () => channel.state!.members.first,
-              );
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                ConversationsScreen(
+                  currentUserId: currentUserId,
+                  onConversationTap: (channel) {
+                    final otherMember = channel.state?.members.firstWhere(
+                      (m) => m.userId != currentUserId,
+                      orElse: () => channel.state!.members.first,
+                    );
 
-              context.push(
-                Routes.chatWith(channel.id!),
-                extra: {
-                  'currentUserId': currentUserId,
-                  'otherUserId': otherMember?.userId ?? '',
-                  'otherUserName': otherMember?.user?.name ?? 'Unknown',
-                  'otherUserPhotoUrl': otherMember?.user?.image,
-                },
-              );
-            },
-          ),
+                    context.push(
+                      Routes.chatWith(channel.id!),
+                      extra: {
+                        'currentUserId': currentUserId,
+                        'otherUserId': otherMember?.userId ?? '',
+                        'otherUserName': otherMember?.user?.name ?? 'Unknown',
+                        'otherUserPhotoUrl': otherMember?.user?.image,
+                      },
+                    );
+                  },
+                ),
+                const ConnectionsListView(),
+              ],
+            ),
          ),
         ),
       ),
